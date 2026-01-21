@@ -1,0 +1,164 @@
+<script setup lang="ts">
+import { onMounted, reactive, ref } from "vue";
+import { ElMessage } from "element-plus";
+import { api } from "../api";
+
+type UserRow = {
+  id: number;
+  username: string;
+  role: string;
+  full_name: string;
+  student_no: string;
+  class_name: string;
+  phone?: string | null;
+  wechat_openid?: string | null;
+};
+
+const loading = ref(false);
+const users = ref<UserRow[]>([]);
+const page = ref(1);
+const pageSize = 15;
+const total = ref(0);
+const dialogOpen = ref(false);
+const editing = ref<UserRow | null>(null);
+
+const form = reactive({
+  id: 0,
+  username: "",
+  role: "student",
+  full_name: "",
+  student_no: "",
+  class_name: "",
+  phone: "",
+  password: "",
+});
+
+async function load() {
+  loading.value = true;
+  try {
+    const res = await api.get(`/admin/users?page=${page.value}&page_size=${pageSize}`);
+    users.value = res.data.items ?? [];
+    total.value = Number(res.data.total ?? 0);
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "加载用户失败");
+  } finally {
+    loading.value = false;
+  }
+}
+
+function openEdit(row: UserRow) {
+  editing.value = row;
+  form.id = row.id;
+  form.username = row.username;
+  form.role = row.role;
+  form.full_name = row.full_name;
+  form.student_no = row.student_no;
+  form.class_name = row.class_name;
+  form.phone = row.phone ?? "";
+  form.password = "";
+  dialogOpen.value = true;
+}
+
+async function save() {
+  try {
+    await api.put(`/admin/users/${form.id}`, {
+      role: form.role,
+      full_name: form.full_name,
+      student_no: form.student_no,
+      class_name: form.class_name,
+      phone: form.phone || undefined,
+      password: form.password || undefined,
+    });
+    ElMessage.success("已保存");
+    dialogOpen.value = false;
+    await load();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "保存失败");
+  }
+}
+
+async function remove(row: UserRow) {
+  try {
+    await api.delete(`/admin/users/${row.id}`);
+    ElMessage.success("已删除");
+    await load();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "删除失败");
+  }
+}
+
+onMounted(() => load());
+</script>
+
+<template>
+  <el-card>
+    <template #header>
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <div>学生/用户管理</div>
+        <el-button @click="load" :loading="loading">刷新</el-button>
+      </div>
+    </template>
+
+    <el-table :data="users" size="small" v-loading="loading" style="width: 100%">
+      <el-table-column prop="id" label="ID" width="70" />
+      <el-table-column prop="username" label="用户名" width="140" />
+      <el-table-column prop="role" label="角色" width="100" />
+      <el-table-column prop="full_name" label="姓名" />
+      <el-table-column prop="student_no" label="学号" />
+      <el-table-column prop="class_name" label="班级" />
+      <el-table-column prop="phone" label="手机号" width="140" />
+      <el-table-column prop="wechat_openid" label="微信OpenID" width="180" />
+      <el-table-column label="操作" width="160">
+        <template #default="{ row }">
+          <el-button size="small" @click="openEdit(row)">编辑</el-button>
+          <el-button size="small" type="danger" @click="remove(row)" :disabled="row.username === 'admin'">删除</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <div style="display: flex; justify-content: flex-end; margin-top: 8px">
+      <el-pagination
+        background
+        layout="prev, pager, next"
+        :page-size="pageSize"
+        :total="total"
+        v-model:current-page="page"
+        @current-change="load"
+      />
+    </div>
+
+    <el-dialog v-model="dialogOpen" title="编辑用户" width="520px">
+      <el-form label-width="90px">
+        <el-form-item label="用户名">
+          <el-input v-model="form.username" disabled />
+        </el-form-item>
+        <el-form-item label="角色">
+          <el-select v-model="form.role" style="width: 100%">
+            <el-option label="admin" value="admin" />
+            <el-option label="teacher" value="teacher" />
+            <el-option label="student" value="student" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="姓名">
+          <el-input v-model="form.full_name" />
+        </el-form-item>
+        <el-form-item label="学号">
+          <el-input v-model="form.student_no" />
+        </el-form-item>
+        <el-form-item label="班级">
+          <el-input v-model="form.class_name" />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <el-input v-model="form.phone" placeholder="留空表示未绑定" />
+        </el-form-item>
+        <el-form-item label="重置密码">
+          <el-input v-model="form.password" placeholder="留空则不修改" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogOpen = false">取消</el-button>
+        <el-button type="primary" @click="save">保存</el-button>
+      </template>
+    </el-dialog>
+  </el-card>
+</template>
