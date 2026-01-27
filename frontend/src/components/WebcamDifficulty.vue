@@ -5,6 +5,8 @@ import { getToken } from "../token";
 
 const props = defineProps<{
   kpId: number | null;
+  compact?: boolean;
+  embedded?: boolean;
 }>();
 
 const videoRef = ref<HTMLVideoElement | null>(null);
@@ -19,10 +21,16 @@ const confidence = ref<number>(0);
 
 const isDragging = ref(false);
 const dragOffset = ref({ x: 0, y: 0 });
+const isFullscreen = ref(false);
+const baseWidth = 420;
+const compactWidth = 220;
+const margin = 16;
+const savedPos = ref<{ x: string; y: string; w: string } | null>(null);
 
 function onDragStart(ev: MouseEvent) {
   const target = ev.currentTarget as HTMLElement | null;
   if (!target) return;
+  if (isFullscreen.value || props.embedded) return;
   isDragging.value = true;
   dragOffset.value = { x: ev.offsetX, y: ev.offsetY };
 }
@@ -30,7 +38,8 @@ function onDragStart(ev: MouseEvent) {
 function onDragMove(ev: MouseEvent) {
   if (!isDragging.value) return;
   const win = window;
-  const x = Math.max(0, Math.min(win.innerWidth - 420, ev.clientX - dragOffset.value.x));
+  const width = isFullscreen.value ? compactWidth : baseWidth;
+  const x = Math.max(0, Math.min(win.innerWidth - width, ev.clientX - dragOffset.value.x));
   const y = Math.max(0, Math.min(win.innerHeight - 280, ev.clientY - dragOffset.value.y));
   win.document.documentElement.style.setProperty("--float-x", `${x}px`);
   win.document.documentElement.style.setProperty("--float-y", `${y}px`);
@@ -38,6 +47,35 @@ function onDragMove(ev: MouseEvent) {
 
 function onDragEnd() {
   isDragging.value = false;
+}
+
+function setFullscreenLayout(on: boolean) {
+  const root = document.documentElement;
+  if (on) {
+    if (!savedPos.value) {
+      savedPos.value = {
+        x: root.style.getPropertyValue("--float-x"),
+        y: root.style.getPropertyValue("--float-y"),
+        w: root.style.getPropertyValue("--float-w"),
+      };
+    }
+    const x = Math.max(0, window.innerWidth - compactWidth - margin);
+    root.style.setProperty("--float-x", `${x}px`);
+    root.style.setProperty("--float-y", `${margin}px`);
+    root.style.setProperty("--float-w", `${compactWidth}px`);
+  } else {
+    if (savedPos.value) {
+      if (savedPos.value.x) root.style.setProperty("--float-x", savedPos.value.x);
+      else root.style.removeProperty("--float-x");
+      if (savedPos.value.y) root.style.setProperty("--float-y", savedPos.value.y);
+      else root.style.removeProperty("--float-y");
+      if (savedPos.value.w) root.style.setProperty("--float-w", savedPos.value.w);
+      else root.style.removeProperty("--float-w");
+      savedPos.value = null;
+    } else {
+      root.style.removeProperty("--float-w");
+    }
+  }
 }
 
 const labelText = computed(() => {
@@ -165,6 +203,46 @@ function stopAll() {
   confidence.value = 0;
 }
 
+const onFs = () => {
+  isFullscreen.value = Boolean(document.fullscreenElement);
+  if (!props.embedded) {
+    setFullscreenLayout(isFullscreen.value);
+  }
+  if (!isFullscreen.value) {
+    window.requestAnimationFrame(() => {
+      void resumeCamera();
+    });
+  }
+};
+
+async function resumeCamera() {
+  if (!enabled.value) return;
+  const v = videoRef.value;
+  if (!v) return;
+  const stream = v.srcObject as MediaStream | null;
+  if (!stream) {
+    try {
+      await startCamera();
+    } catch {
+      // ignore
+    }
+    return;
+  }
+  if (v.paused || v.readyState < 2) {
+    try {
+      await v.play();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+const onVisibility = () => {
+  if (!document.hidden) {
+    void resumeCamera();
+  }
+};
+
 watch(
   () => enabled.value,
   (v) => {
@@ -177,59 +255,89 @@ watch(
 onMounted(async () => {
   window.addEventListener("mousemove", onDragMove);
   window.addEventListener("mouseup", onDragEnd);
+  document.addEventListener("fullscreenchange", onFs);
+  document.addEventListener("visibilitychange", onVisibility);
   await startAll();
+  onFs();
 });
 
 onBeforeUnmount(() => {
   stopAll();
   window.removeEventListener("mousemove", onDragMove);
   window.removeEventListener("mouseup", onDragEnd);
+  document.removeEventListener("fullscreenchange", onFs);
+  document.removeEventListener("visibilitychange", onVisibility);
 });
 </script>
 
 <template>
-  <el-card class="panel-card float-panel-card">
-    <template #header>
+  <el-card class="panel-card float-panel-card" :class="{ 'fullscreen-panel': isFullscreen, embedded: props.embedded }">
+    <template v-if="!props.embedded" #header>
       <div
         style="cursor: move; user-select: none"
         @mousedown="onDragStart"
       >
-        实时表情（不保存视频）
+        {{ props.compact || isFullscreen ? "人脸采集" : "实时表情（不保存视频）" }}
       </div>
     </template>
-    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 8px">
-      <el-text type="info">表情采集</el-text>
-      <el-switch v-model="enabled" active-text="开启" inactive-text="关闭" />
-    </div>
-    <el-alert
-      style="margin-bottom: 10px"
-      type="info"
-      :closable="false"
-      title="隐私提示"
-      description="仅在本机摄像头实时采集并上传低清压缩帧用于表情难度估计；系统不保存视频帧，只记录难度/置信度等数值。"
-      show-icon
-    />
-    <div style="display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: start">
-      <div>
-        <video
-          ref="videoRef"
-          style="width: 100%; border-radius: 8px; background: #000; transform: scaleX(-1)"
-          playsinline
-          muted
-        />
-        <canvas ref="canvasRef" style="display: none" />
+    <div v-if="props.compact || isFullscreen">
+      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 6px">
+        <el-text type="info">{{ running ? "采集中" : "未启动" }}</el-text>
+        <el-switch v-model="enabled" active-text="开" inactive-text="关" />
       </div>
-      <div>
-        <el-descriptions :column="1" border size="small">
-          <el-descriptions-item label="状态">{{ running ? "采集中" : "未启动" }}</el-descriptions-item>
-          <el-descriptions-item label="标签">{{ labelText }}</el-descriptions-item>
-          <el-descriptions-item label="困难度">{{ difficulty.toFixed(2) }}</el-descriptions-item>
-          <el-descriptions-item label="置信度">{{ confidence.toFixed(2) }}</el-descriptions-item>
-          <el-descriptions-item label="知识点">
-            <el-text type="info">{{ props.kpId ?? "未选择" }}</el-text>
-          </el-descriptions-item>
-        </el-descriptions>
+      <video
+        ref="videoRef"
+        style="width: 100%; border-radius: 8px; background: #000; transform: scaleX(-1)"
+        playsinline
+        muted
+      />
+      <canvas ref="canvasRef" style="display: none" />
+    </div>
+    <div v-else>
+      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 8px">
+        <el-text type="info">表情采集</el-text>
+        <el-switch v-model="enabled" active-text="开启" inactive-text="关闭" />
+      </div>
+      <el-alert
+        style="margin-bottom: 10px"
+        type="info"
+        :closable="false"
+        title="隐私提示"
+        description="仅在本机摄像头实时采集并上传低清压缩帧用于表情难度估计；系统不保存视频帧，只记录难度/置信度等数值。"
+        show-icon
+      />
+      <div style="display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: start">
+        <div>
+          <video
+            ref="videoRef"
+            style="width: 100%; border-radius: 8px; background: #000; transform: scaleX(-1)"
+            playsinline
+            muted
+          />
+          <canvas ref="canvasRef" style="display: none" />
+        </div>
+        <div>
+          <el-descriptions :column="1" border size="small">
+            <el-descriptions-item label="状态">{{ running ? "采集中" : "未启动" }}</el-descriptions-item>
+            <el-descriptions-item label="标签">{{ labelText }}</el-descriptions-item>
+            <el-descriptions-item label="困难度">{{ difficulty.toFixed(2) }}</el-descriptions-item>
+            <el-descriptions-item label="置信度">{{ confidence.toFixed(2) }}</el-descriptions-item>
+            <el-descriptions-item label="知识点">
+              <el-text type="info">{{ props.kpId ?? "未选择" }}</el-text>
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
       </div>
     </div>
   </el-card>
 </template>
+
+<style scoped>
+.fullscreen-panel {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+.embedded {
+  background: #0f1113;
+  color: #f5f7fa;
+}
+</style>

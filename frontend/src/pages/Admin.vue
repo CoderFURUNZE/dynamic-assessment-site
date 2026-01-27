@@ -53,6 +53,8 @@ const defaultWindow = {
   expression_influence: 1.0,
   video_complete_ratio: 0.8,
   video_min_ratio: 0.0,
+  max_difficulty_jump: 0.2,
+  stability_strength: 0.4,
 };
 
 const cfg = reactive({
@@ -295,6 +297,12 @@ onMounted(() => {
             </el-form-item>
             <el-form-item label="视频起始计入比例">
               <el-input-number v-model="cfg.window.video_min_ratio" :min="0" :max="1" :step="0.05" />
+            </el-form-item>
+            <el-form-item label="最大难度跳变">
+              <el-input-number v-model="cfg.window.max_difficulty_jump" :min="0" :max="0.5" :step="0.05" />
+            </el-form-item>
+            <el-form-item label="稳定区强度">
+              <el-input-number v-model="cfg.window.stability_strength" :min="0" :max="1" :step="0.05" />
             </el-form-item>
           </el-form>
 

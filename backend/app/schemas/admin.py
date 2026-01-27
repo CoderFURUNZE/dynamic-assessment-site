@@ -30,6 +30,9 @@ class QuestionOut(BaseModel):
     answer: str
     explanation: str
     difficulty: float
+    source: str | None = None
+    tags: str | None = None
+    version: str | None = None
     attempts: int | None = None
     correct_rate: float | None = None
 
@@ -42,6 +45,9 @@ class QuestionIn(BaseModel):
     answer: str
     explanation: str = ""
     difficulty: float = 0.5
+    source: str = ""
+    tags: str = ""
+    version: str = "v1"
 
 
 class KnowledgePointIn(BaseModel):

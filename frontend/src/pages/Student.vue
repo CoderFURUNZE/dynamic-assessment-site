@@ -8,6 +8,8 @@ import ResourcePane from "../components/ResourcePane.vue";
 import WebcamDifficulty from "../components/WebcamDifficulty.vue";
 import MiniQuizPane from "../components/MiniQuizPane.vue";
 import QuizPane from "../components/QuizPane.vue";
+import OverviewPane from "../components/OverviewPane.vue";
+import InterviewPane from "../components/InterviewPane.vue";
 import { getRole, getUsername } from "../token";
 
 type KP = { id: number; code: string; title: string; description: string; subject: string; grade: string };
@@ -27,11 +29,11 @@ const isStudent = computed(() => getRole() === "student");
 const lastVideoRefreshAt = ref<number>(0);
 const route = useRoute();
 const router = useRouter();
-const activeSection = computed<"resource" | "quiz" | "practice" | "notes">({
+const activeSection = computed<"overview" | "resource" | "quiz" | "practice" | "notes" | "interview">({
   get: () => {
     if (route.path.startsWith("/student/")) {
       const seg = route.path.split("/")[2];
-      if (seg === "quiz" || seg === "practice" || seg === "notes") return seg;
+      if (seg === "overview" || seg === "quiz" || seg === "practice" || seg === "notes" || seg === "interview") return seg;
     }
     return "resource";
   },
@@ -49,6 +51,34 @@ const recommendedNextId = computed<number | null>(() => {
 const recommendedNext = computed<KP | null>(() => {
   if (!recommendedNextId.value) return null;
   return kps.value.find((k) => k.id === recommendedNextId.value) ?? null;
+});
+const diagnosisSignals = computed(() => {
+  const reasons = reco.value?.diagnosis?.reasons ?? [];
+  const labels: Record<string, string> = {
+    quiz_accuracy: "小测正确率",
+    practice_accuracy: "练习正确率",
+    practice_completed: "练习完成",
+    mastery: "掌握度",
+    expression_difficulty: "表情困难度",
+  };
+  return reasons.map((r: any) => {
+    const signal = String(r.signal ?? "");
+    const value = r.value;
+    const threshold = r.threshold;
+    let pass = false;
+    if (typeof threshold === "boolean") {
+      pass = Boolean(value) === threshold;
+    } else if (typeof value === "number" && typeof threshold === "number") {
+      pass = signal === "expression_difficulty" ? value <= threshold : value >= threshold;
+    }
+    return {
+      signal,
+      label: labels[signal] ?? signal,
+      value,
+      threshold,
+      pass,
+    };
+  });
 });
 
 function kpStorageKey() {
@@ -179,6 +209,36 @@ function onKpChange() {
               推荐知识点：{{ recommendedNext.code }} {{ recommendedNext.title }}
             </el-text>
             <el-text v-else>推荐知识点：暂无</el-text>
+            <div style="margin-top: 6px">
+              <div style="font-weight: 600; margin-bottom: 4px">解锁依据</div>
+              <div style="display: grid; gap: 4px">
+                <div v-for="item in diagnosisSignals" :key="item.signal" style="display: flex; align-items: center; justify-content: space-between">
+                  <div style="font-size: 12px">{{ item.label }}</div>
+                  <div style="display: flex; align-items: center; gap: 6px">
+                    <el-text type="info" style="font-size: 12px">
+                      {{
+                        typeof item.value === "number"
+                          ? item.value.toFixed(2)
+                          : item.value === null || item.value === undefined
+                            ? "无"
+                            : String(item.value)
+                      }}
+                      /
+                      {{
+                        typeof item.threshold === "number"
+                          ? item.threshold.toFixed(2)
+                          : item.threshold === null || item.threshold === undefined
+                            ? "无"
+                            : String(item.threshold)
+                      }}
+                    </el-text>
+                    <el-tag size="small" :type="item.pass ? 'success' : 'warning'">
+                      {{ item.pass ? "达标" : "未达标" }}
+                    </el-tag>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div style="display: flex; gap: 8px; margin-top: 6px">
               <el-button type="default" @click="skipReco">跳过</el-button>
               <el-button type="primary" :disabled="!recommendedNextId || !unlockInfo.can_unlock_next" @click="goToRecommended">
@@ -192,6 +252,9 @@ function onKpChange() {
 
     <el-col :span="16">
       <el-tabs v-model="activeSection" type="border-card" class="panel-card">
+        <el-tab-pane label="学习总览" name="overview">
+          <OverviewPane :subject="subject" :grade="grade" />
+        </el-tab-pane>
         <el-tab-pane label="学习资源" name="resource">
           <ResourcePane :kp-id="currentKpId" @progress-updated="onVideoProgress" />
         </el-tab-pane>
@@ -200,6 +263,9 @@ function onKpChange() {
         </el-tab-pane>
         <el-tab-pane label="练习题" name="practice">
           <QuizPane :kp-id="currentKpId" @mastery-updated="refreshMastery" />
+        </el-tab-pane>
+        <el-tab-pane label="模拟复试" name="interview">
+          <InterviewPane :kp-id="currentKpId" />
         </el-tab-pane>
         <el-tab-pane label="笔记" name="notes">
           <NotePane :kp-id="currentKpId" />
@@ -246,7 +312,7 @@ function onKpChange() {
   <div
     v-if="isStudent"
     class="float-panel"
-    style="position: fixed; left: var(--float-x, auto); top: var(--float-y, auto); right: 20px; bottom: 20px; width: 420px; z-index: 1000"
+    style="position: fixed; left: var(--float-x, auto); top: var(--float-y, auto); right: 20px; bottom: 20px; width: var(--float-w, 420px); z-index: 1000"
   >
     <WebcamDifficulty :kp-id="currentKpId" />
   </div>

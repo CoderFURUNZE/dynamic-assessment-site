@@ -12,6 +12,7 @@ const kps = ref<KP[]>([]);
 const page = ref(1);
 const pageSize = 15;
 const total = ref(0);
+const keyword = ref("");
 
 const dialogOpen = ref(false);
 const editing = ref<KP | null>(null);
@@ -27,9 +28,16 @@ const isEdit = computed(() => Boolean(editing.value));
 async function load() {
   loading.value = true;
   try {
-    const res = await api.get(
-      `/admin/kps?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}&page=${page.value}&page_size=${pageSize}`
-    );
+    const query = new URLSearchParams({
+      subject: props.subject,
+      grade: props.grade,
+      page: String(page.value),
+      page_size: String(pageSize),
+    });
+    if (keyword.value.trim()) {
+      query.set("keyword", keyword.value.trim());
+    }
+    const res = await api.get(`/admin/kps?${query.toString()}`);
     kps.value = res.data.items ?? [];
     total.value = Number(res.data.total ?? 0);
   } catch (e: any) {
@@ -111,7 +119,15 @@ onMounted(() => load());
       <div style="display: flex; align-items: center; justify-content: space-between">
         <div>知识点管理</div>
         <div style="display: flex; gap: 8px">
-          <el-button @click="load" :loading="loading">刷新</el-button>
+          <el-input
+            v-model="keyword"
+            placeholder="搜索编码/标题/描述"
+            size="small"
+            style="width: 200px"
+            @keyup.enter="() => { page = 1; load(); }"
+          />
+          <el-button size="small" type="primary" @click="() => { page = 1; load(); }">搜索</el-button>
+          <el-button size="small" @click="load" :loading="loading">刷新</el-button>
           <el-button type="primary" @click="openAdd">新增</el-button>
         </div>
       </div>

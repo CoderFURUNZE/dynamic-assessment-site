@@ -5,7 +5,7 @@ from io import BytesIO
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 from docx import Document
 from sqlmodel import Session, select
 
@@ -28,7 +28,7 @@ from app.db.models import (
     UserRole,
 )
 from app.db.session import get_session
-from sqlalchemy import Integer, func
+from sqlalchemy import Integer, func, or_
 from app.schemas.admin import (
     KnowledgeEdgeIn,
     KnowledgeEdgeOut,
@@ -477,6 +477,7 @@ def delete_user(
 def list_kps_admin(
     subject: str | None = None,
     grade: str | None = None,
+    keyword: str | None = None,
     page: int = 1,
     page_size: int = 15,
     session: Session = Depends(get_session),
@@ -492,6 +493,23 @@ def list_kps_admin(
     if grade:
         q = q.where(KnowledgePoint.grade == grade)
         q_total = q_total.where(KnowledgePoint.grade == grade)
+    if keyword:
+        kw = keyword.strip()
+        if kw:
+            q = q.where(
+                or_(
+                    KnowledgePoint.code.contains(kw),
+                    KnowledgePoint.title.contains(kw),
+                    KnowledgePoint.description.contains(kw),
+                )
+            )
+            q_total = q_total.where(
+                or_(
+                    KnowledgePoint.code.contains(kw),
+                    KnowledgePoint.title.contains(kw),
+                    KnowledgePoint.description.contains(kw),
+                )
+            )
     total = session.exec(q_total).one()
     rows = session.exec(q.offset((page - 1) * page_size).limit(page_size)).all()
     return {"items": [r.model_dump() for r in rows], "total": int(total or 0), "page": page, "page_size": page_size}
@@ -668,6 +686,10 @@ def delete_edge(
 @router.get("/questions")
 def list_questions(
     kp_id: int | None = None,
+    keyword: str | None = None,
+    q_type: str | None = None,
+    min_difficulty: float | None = None,
+    max_difficulty: float | None = None,
     page: int = 1,
     page_size: int = 15,
     session: Session = Depends(get_session),
@@ -680,6 +702,20 @@ def list_questions(
     if kp_id is not None:
         q = q.where(Question.kp_id == kp_id)
         q_total = q_total.where(Question.kp_id == kp_id)
+    if keyword:
+        kw = keyword.strip()
+        if kw:
+            q = q.where(Question.prompt.contains(kw))
+            q_total = q_total.where(Question.prompt.contains(kw))
+    if q_type:
+        q = q.where(Question.type == q_type)
+        q_total = q_total.where(Question.type == q_type)
+    if min_difficulty is not None:
+        q = q.where(Question.difficulty >= float(min_difficulty))
+        q_total = q_total.where(Question.difficulty >= float(min_difficulty))
+    if max_difficulty is not None:
+        q = q.where(Question.difficulty <= float(max_difficulty))
+        q_total = q_total.where(Question.difficulty <= float(max_difficulty))
     total = session.exec(q_total).one()
     rows = session.exec(q.offset((page - 1) * page_size).limit(page_size)).all()
 
@@ -711,12 +747,56 @@ def list_questions(
             answer=r.answer,
             explanation=r.explanation,
             difficulty=r.difficulty,
+            source=r.source,
+            tags=r.tags,
+            version=r.version,
             attempts=stats_map.get(r.id, {}).get("attempts"),
             correct_rate=stats_map.get(r.id, {}).get("correct_rate"),
         )
         for r in rows
     ]
     return {"items": [i.model_dump() for i in items], "total": int(total or 0), "page": page, "page_size": page_size}
+
+
+@router.get("/questions/export")
+def export_questions(
+    kp_id: int | None = None,
+    keyword: str | None = None,
+    q_type: str | None = None,
+    min_difficulty: float | None = None,
+    max_difficulty: float | None = None,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    q = select(Question).order_by(Question.id.desc())
+    if kp_id is not None:
+        q = q.where(Question.kp_id == kp_id)
+    if keyword:
+        kw = keyword.strip()
+        if kw:
+            q = q.where(Question.prompt.contains(kw))
+    if q_type:
+        q = q.where(Question.type == q_type)
+    if min_difficulty is not None:
+        q = q.where(Question.difficulty >= float(min_difficulty))
+    if max_difficulty is not None:
+        q = q.where(Question.difficulty <= float(max_difficulty))
+
+    rows = session.exec(q).all()
+    lines = ["id,kp_id,type,prompt,options,answer,explanation,difficulty,source,tags,version"]
+    for r in rows:
+        prompt = r.prompt.replace('"', "'").replace(",", "，")
+        options = r.options_json.replace('"', "'").replace(",", "，")
+        answer = r.answer.replace('"', "'").replace(",", "，")
+        explanation = r.explanation.replace('"', "'").replace(",", "，")
+        source = (r.source or "").replace('"', "'").replace(",", "，")
+        tags = (r.tags or "").replace('"', "'").replace(",", "，")
+        version = (r.version or "").replace('"', "'").replace(",", "，")
+        lines.append(
+            f"{r.id},{r.kp_id},{r.type},\"{prompt}\",\"{options}\",\"{answer}\",\"{explanation}\",{r.difficulty},\"{source}\",\"{tags}\",\"{version}\""
+        )
+    csv = "\n".join(lines)
+    return Response(content=csv, media_type="text/csv")
 
 
 @router.post("/questions/recalibrate-difficulty")
@@ -893,6 +973,9 @@ def create_question(
         answer=payload.answer,
         explanation=payload.explanation,
         difficulty=float(payload.difficulty),
+        source=payload.source.strip(),
+        tags=payload.tags.strip(),
+        version=payload.version.strip() or "v1",
     )
     session.add(question)
     session.commit()
@@ -906,6 +989,9 @@ def create_question(
         answer=question.answer,
         explanation=question.explanation,
         difficulty=question.difficulty,
+        source=question.source,
+        tags=question.tags,
+        version=question.version,
     )
 
 
@@ -1112,6 +1198,9 @@ def update_question(
     q.answer = payload.answer
     q.explanation = payload.explanation
     q.difficulty = float(payload.difficulty)
+    q.source = payload.source.strip()
+    q.tags = payload.tags.strip()
+    q.version = payload.version.strip() or "v1"
     session.add(q)
     session.commit()
     session.refresh(q)
@@ -1124,6 +1213,9 @@ def update_question(
         answer=q.answer,
         explanation=q.explanation,
         difficulty=q.difficulty,
+        source=q.source,
+        tags=q.tags,
+        version=q.version,
     )
 
 

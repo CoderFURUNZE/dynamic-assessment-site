@@ -1,0 +1,572 @@
+INFO:     Started server process [80035]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:52431 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52433 - "GET /api/docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53243 - "OPTIONS /api/auth/login/student HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53243 - "POST /api/auth/login/student HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:53245 - "POST /api/auth/login/student HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "OPTIONS /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "OPTIONS /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53248 - "OPTIONS /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "OPTIONS /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53251 - "OPTIONS /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53248 - "OPTIONS /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53255 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53248 - "OPTIONS /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53255 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53256 - "GET /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53257 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53256 - "OPTIONS /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53251 - "GET /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53257 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "OPTIONS /api/reco?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53257 - "OPTIONS /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53251 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:53251 - "OPTIONS /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "OPTIONS /api/practice/wrong/page?kp_id=1&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53251 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53251 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53257 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53257 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:53257 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     ('127.0.0.1', 53267) - "WebSocket /api/vision/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHVkZW50MSIsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzY5NjE3MDY2fQ.9Z0yEp-YgD1XQ1PUuGiXpe9OhWe7ozDZsVWAJnhAJvU" [accepted]
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1769012276.275507 6663880 gl_context.cc:369] GL version: 2.1 (2.1 Metal - 90.5), renderer: Apple M1
+I0000 00:00:1769012276.280601 6663880 gl_context.cc:369] GL version: 2.1 (2.1 Metal - 90.5), renderer: Apple M1
+INFO: Created TensorFlow Lite XNNPACK delegate for CPU.
+W0000 00:00:1769012276.302548 6683219 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
+W0000 00:00:1769012276.304700 6683234 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
+W0000 00:00:1769012276.313197 6683219 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
+W0000 00:00:1769012276.314084 6683234 inference_feedback_manager.cc:114] Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors.
+INFO:     connection open
+W0000 00:00:1769012276.560569 6683222 landmark_projection_calculator.cc:186] Using NORM_RECT without IMAGE_DIMENSIONS is only supported for the square ROI. Provide IMAGE_DIMENSIONS or use PROJECTION_MATRIX.
+INFO:     connection closed
+[vision] ONNX providers available: ['CoreMLExecutionProvider', 'AzureExecutionProvider', 'CPUExecutionProvider']
+[vision] ONNX providers used: ['CPUExecutionProvider']
+INFO:     127.0.0.1:54093 - "OPTIONS /api/auth/login/student HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54093 - "POST /api/auth/login/student HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54093 - "OPTIONS /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "OPTIONS /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54093 - "OPTIONS /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "OPTIONS /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54101 - "OPTIONS /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "OPTIONS /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54103 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54101 - "GET /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54101 - "OPTIONS /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "GET /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "OPTIONS /api/reco?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54101 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:54101 - "OPTIONS /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54103 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54093 - "GET /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54093 - "OPTIONS /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54103 - "GET /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "OPTIONS /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54103 - "GET /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54103 - "OPTIONS /api/practice/wrong/page?kp_id=1&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:54095 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     ('127.0.0.1', 54113) - "WebSocket /api/vision/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHVkZW50MSIsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzY5NjU2NjI3fQ.4xQyhroBSnheHUTyKi4wI6XxFNM7xdBhAu4eOjYwnwA" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:54102 - "OPTIONS /api/graph/kps?subject=%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BB%84%E6%88%90%E5%8E%9F%E7%90%86&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "GET /api/graph/kps?subject=%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BB%84%E6%88%90%E5%8E%9F%E7%90%86&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "OPTIONS /api/eval/mastery?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "OPTIONS /api/content/resources?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54105 - "OPTIONS /api/content/resources?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "OPTIONS /api/practice/next?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54116 - "OPTIONS /api/practice/status?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/content/resources?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "GET /api/practice/status?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54116 - "OPTIONS /api/content/video/progress?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54105 - "GET /api/practice/next?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54105 - "OPTIONS /api/practice/history?kp_id=11&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54117 - "GET /api/eval/mastery?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "GET /api/content/video/progress?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/content/resources?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "OPTIONS /api/reco?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54117 - "GET /api/reco?kp_id=11 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:54117 - "OPTIONS /api/reco/?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54116 - "GET /api/practice/history?kp_id=11&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54116 - "OPTIONS /api/practice/stats?kp_id=11&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/content/video/progress?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54117 - "GET /api/practice/stats?kp_id=11&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54117 - "OPTIONS /api/practice/wrong/page?kp_id=11&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/practice/wrong/page?kp_id=11&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "GET /api/reco/?kp_id=11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/practice/wrong/page?kp_id=11&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "OPTIONS /api/eval/mastery?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "OPTIONS /api/content/resources?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54117 - "OPTIONS /api/content/resources?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54116 - "OPTIONS /api/practice/next?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54105 - "OPTIONS /api/practice/status?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/content/resources?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54105 - "OPTIONS /api/content/video/progress?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54117 - "GET /api/practice/status?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "GET /api/practice/next?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/content/resources?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54116 - "GET /api/content/video/progress?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54116 - "OPTIONS /api/practice/history?kp_id=17&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54119 - "GET /api/eval/mastery?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54119 - "OPTIONS /api/reco?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54116 - "GET /api/reco?kp_id=17 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:54116 - "OPTIONS /api/reco/?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "GET /api/practice/history?kp_id=17&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/content/video/progress?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "OPTIONS /api/practice/stats?kp_id=17&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "GET /api/practice/stats?kp_id=17&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54095 - "OPTIONS /api/practice/wrong/page?kp_id=17&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/practice/wrong/page?kp_id=17&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54119 - "GET /api/reco/?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/practice/wrong/page?kp_id=17&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54102 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     ('127.0.0.1', 54132) - "WebSocket /api/vision/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHVkZW50MSIsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzY5NjU2NjI3fQ.4xQyhroBSnheHUTyKi4wI6XxFNM7xdBhAu4eOjYwnwA" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:54142 - "OPTIONS /api/practice/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54142 - "POST /api/practice/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54144 - "GET /api/practice/history?kp_id=17&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54142 - "GET /api/eval/mastery?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54144 - "GET /api/reco?kp_id=17 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:54142 - "GET /api/practice/stats?kp_id=17&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54144 - "GET /api/practice/wrong/page?kp_id=17&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54142 - "GET /api/reco/?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54142 - "GET /api/practice/stats?kp_id=17&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54142 - "GET /api/practice/wrong/page?kp_id=17&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54142 - "GET /api/practice/next?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54142 - "POST /api/practice/submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54146 - "GET /api/practice/history?kp_id=17&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54142 - "GET /api/eval/mastery?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54146 - "GET /api/reco?kp_id=17 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:54142 - "GET /api/practice/stats?kp_id=17&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54142 - "GET /api/practice/wrong/page?kp_id=17&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54146 - "GET /api/reco/?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54146 - "GET /api/practice/stats?kp_id=17&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54146 - "GET /api/practice/wrong/page?kp_id=17&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54146 - "GET /api/practice/next?kp_id=17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54150 - "OPTIONS /api/practice/wrong/page?kp_id=17&page=1&page_size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54150 - "GET /api/practice/wrong/page?kp_id=17&page=1&page_size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54150 - "OPTIONS /api/practice/question/661 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54152 - "GET /api/practice/question/661 HTTP/1.1" 200 OK
+INFO:     ('127.0.0.1', 54254) - "WebSocket /api/vision/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHVkZW50MSIsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzY5NjU2NjI3fQ.4xQyhroBSnheHUTyKi4wI6XxFNM7xdBhAu4eOjYwnwA" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     127.0.0.1:54258 - "OPTIONS /api/auth/login/admin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "POST /api/auth/login/admin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54260 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54266 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54266 - "OPTIONS /api/admin/users?page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54269 - "OPTIONS /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54270 - "OPTIONS /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54266 - "OPTIONS /api/admin/config?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54265 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54260 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54266 - "GET /api/admin/config?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54270 - "GET /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54269 - "GET /api/admin/users?page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54260 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54270 - "GET /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54270 - "OPTIONS /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54270 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54260 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54265 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "GET /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54269 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54269 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54269 - "OPTIONS /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "GET /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54265 - "GET /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54265 - "GET /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54265 - "OPTIONS /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54265 - "OPTIONS /api/admin/practice/report?user_id=3&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54265 - "OPTIONS /api/admin/expression/report?user_id=3&days=14&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54265 - "OPTIONS /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54260 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54269 - "GET /api/admin/practice/report?user_id=3&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54270 - "GET /api/admin/expression/report?user_id=3&days=14&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54269 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54269 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54270 - "OPTIONS /api/admin/questions?kp_id=1&page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54260 - "OPTIONS /api/content/quiz/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54269 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54270 - "GET /api/content/quiz/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "GET /api/admin/questions?kp_id=1&page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54258 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54270 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "OPTIONS /api/auth/login/student HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "POST /api/auth/login/student HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "OPTIONS /api/eval/overview?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50939 - "OPTIONS /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "GET /api/eval/overview?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50937 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "OPTIONS /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50939 - "OPTIONS /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50941 - "OPTIONS /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "OPTIONS /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50946 - "OPTIONS /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50941 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50947 - "OPTIONS /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50939 - "GET /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50946 - "GET /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50946 - "OPTIONS /api/reco?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50946 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:50946 - "OPTIONS /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50941 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "GET /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "OPTIONS /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50947 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50947 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "GET /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "OPTIONS /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "GET /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "OPTIONS /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50946 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50946 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:50947 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50947 - "OPTIONS /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50937 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50937 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50946 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50961 - "GET /api/eval/overview?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50962 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50962 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50966 - "GET /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50965 - "GET /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50965 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:50961 - "GET /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50962 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50968 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50961 - "GET /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50962 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50961 - "GET /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50961 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50961 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50965 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50965 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:50961 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50961 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50965 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     ('127.0.0.1', 50986) - "WebSocket /api/vision/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHVkZW50MSIsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzY5NzAxNjIxfQ.YGJkjKOX0E8GoGEdo3tf4DGzl5P-_FJzkZ7CpiHSJuo" [accepted]
+INFO:     connection open
+INFO:     connection closed
+INFO:     ('127.0.0.1', 50996) - "WebSocket /api/vision/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHVkZW50MSIsInJvbGUiOiJzdHVkZW50IiwiZXhwIjoxNzY5NzAxNjIxfQ.YGJkjKOX0E8GoGEdo3tf4DGzl5P-_FJzkZ7CpiHSJuo" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:50998 - "GET /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     connection closed
+INFO:     127.0.0.1:51171 - "POST /api/auth/login/student HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:51171 - "OPTIONS /api/auth/login/admin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51171 - "POST /api/auth/login/admin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51171 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51173 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51177 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51173 - "OPTIONS /api/admin/users?page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51173 - "OPTIONS /api/admin/config?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "OPTIONS /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51182 - "OPTIONS /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51176 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51171 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51177 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "GET /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51173 - "GET /api/admin/users?page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51173 - "OPTIONS /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51176 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51177 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51171 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "GET /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51173 - "GET /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51176 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51171 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51171 - "OPTIONS /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51182 - "GET /api/admin/config?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51173 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51182 - "GET /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "GET /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51171 - "GET /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51173 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51173 - "OPTIONS /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "OPTIONS /api/admin/practice/report?user_id=3&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51171 - "OPTIONS /api/admin/expression/report?user_id=3&days=14&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51173 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "GET /api/admin/practice/report?user_id=3&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51171 - "GET /api/admin/expression/report?user_id=3&days=14&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "OPTIONS /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51171 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51181 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51192 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword=%E5%93%88%E5%B8%8C%E8%A1%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51192 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword=%E5%93%88%E5%B8%8C%E8%A1%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51194 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword=%E5%93%88%E5%B8%8C%E8%A1%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51211 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword=%E5%93%88%E5%B8%8C%E8%A1%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51219 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51219 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51219 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E2%9C%85&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51221 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E2%9C%85&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51221 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51223 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E5%A0%86&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51223 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E5%A0%86&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E5%A0%86&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=2&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=2&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq&min_difficulty=0.1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq&min_difficulty=0.1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq&min_difficulty=0.2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq&min_difficulty=0.2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq&min_difficulty=0.1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=20&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=2&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=2&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%28&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%28&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%282&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%282&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%2820&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%2820&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51227 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%2820%29&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%2820%29&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%2820%29&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%2820&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%282&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%28&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51225 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51230 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E5%A1%AB%E7%A9%BA&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51230 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E5%A1%AB%E7%A9%BA&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51230 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E5%A1%AB%E7%A9%BA&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51230 - "OPTIONS /api/admin/questions?kp_id=10&page=3&page_size=15&keyword=%E5%A1%AB%E7%A9%BA&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51232 - "GET /api/admin/questions?kp_id=10&page=3&page_size=15&keyword=%E5%A1%AB%E7%A9%BA&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51232 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E5%A1%AB&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51230 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E5%A1%AB&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51232 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E5%A1%AB&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51232 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=%E5%A1%AB&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51232 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51232 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=1&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51230 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=1&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51230 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=1&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51230 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=1&q_type=mcq&min_difficulty=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51294 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51294 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51294 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51294 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword= HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51294 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51294 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51294 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51294 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51319 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51321 - "OPTIONS /api/admin/questions?kp_id=10&page=3&page_size=15&keyword=&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51321 - "GET /api/admin/questions?kp_id=10&page=3&page_size=15&keyword=&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51323 - "OPTIONS /api/admin/questions?kp_id=10&page=2&page_size=15&keyword=&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51323 - "GET /api/admin/questions?kp_id=10&page=2&page_size=15&keyword=&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51323 - "GET /api/admin/questions?kp_id=10&page=3&page_size=15&keyword=&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51335 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=9&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51339 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=9&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51335 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=9&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51335 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=9&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51335 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=9&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51341 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=9&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51343 - "OPTIONS /api/admin/questions/recalibrate-difficulty HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51343 - "POST /api/admin/questions/recalibrate-difficulty HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51343 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15&keyword=9&q_type=mcq HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51345 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword=%E5%93%88%E5%B8%8C%E8%A1%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51345 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword=%E5%93%88%E5%B8%8C%E8%A1%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51345 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword=%E5%93%88%E5%B8%8C%E8%A1%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51471 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51472 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51472 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51472 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51483 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51483 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51483 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51485 - "OPTIONS /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51485 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51485 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51485 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51485 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51485 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51485 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51548 - "OPTIONS /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51547 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51546 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51548 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51550 - "GET /api/admin/users?page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51554 - "GET /api/admin/config?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51546 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51547 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51548 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51548 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51547 - "GET /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51547 - "GET /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51548 - "GET /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51548 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51548 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51547 - "GET /api/admin/practice/report?user_id=3&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51548 - "GET /api/admin/expression/report?user_id=3&days=14&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51553 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51565 - "OPTIONS /api/admin/questions?kp_id=10&page=2&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51565 - "GET /api/admin/questions?kp_id=10&page=2&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51567 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword=%E5%93%88%E5%B8%8C%E8%A1%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51567 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15&keyword=%E5%93%88%E5%B8%8C%E8%A1%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51615 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51620 - "OPTIONS /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51620 - "OPTIONS /api/admin/users?page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51622 - "OPTIONS /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51624 - "OPTIONS /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51620 - "OPTIONS /api/admin/config?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51615 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51617 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51619 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51622 - "GET /api/admin/users?page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51624 - "GET /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51620 - "GET /api/admin/config?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51615 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51617 - "GET /api/admin/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51620 - "GET /api/admin/users?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51622 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51622 - "OPTIONS /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51619 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51622 - "OPTIONS /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51620 - "GET /api/admin/questions?kp_id=10&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51617 - "GET /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51619 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51615 - "GET /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51615 - "GET /api/admin/kps?page=1&page_size=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51615 - "OPTIONS /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51617 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51619 - "GET /api/admin/edges?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8&page=1&page_size=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51619 - "GET /api/admin/kp-questions?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51619 - "OPTIONS /api/admin/practice/report?user_id=3&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51619 - "OPTIONS /api/admin/expression/report?user_id=3&days=14&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51619 - "OPTIONS /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51617 - "GET /api/admin/practice/report?user_id=3&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51615 - "GET /api/admin/expression/report?user_id=3&days=14&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51620 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51615 - "GET /api/admin/quiz?kp_id=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "OPTIONS /api/auth/login/student HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "POST /api/auth/login/student HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "OPTIONS /api/eval/overview?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "GET /api/eval/overview?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51629 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51629 - "OPTIONS /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "OPTIONS /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51631 - "OPTIONS /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51629 - "OPTIONS /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51636 - "OPTIONS /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51637 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51629 - "GET /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51631 - "GET /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51631 - "OPTIONS /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51629 - "OPTIONS /api/reco?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51631 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51631 - "OPTIONS /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51637 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51636 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "GET /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51636 - "OPTIONS /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51637 - "GET /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51637 - "OPTIONS /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "GET /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "OPTIONS /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51629 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51637 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51637 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51637 - "OPTIONS /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51627 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51627 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51629 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/eval/overview?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51758 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51758 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51764 - "GET /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51763 - "GET /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51763 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51757 - "GET /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51758 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51766 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51766 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51763 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51763 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51763 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51757 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/eval/overview?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51763 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51763 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51758 - "GET /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51766 - "GET /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51766 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51757 - "GET /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51763 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51758 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51758 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51766 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51766 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51757 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51757 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51766 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51815 - "GET /api/eval/overview?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51816 - "GET /api/graph/kps?subject=%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51816 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51820 - "GET /api/eval/mastery?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51818 - "GET /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51820 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51816 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51822 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51815 - "GET /api/practice/next?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51815 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51820 - "GET /api/practice/history?kp_id=1&limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51820 - "GET /api/practice/stats?kp_id=1&days=14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51820 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51820 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51822 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51822 - "GET /api/reco?kp_id=1 HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51820 - "GET /api/practice/wrong/page?kp_id=1&page=1&page_size=10&order=recent HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51820 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51822 - "GET /api/reco/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51996 - "GET /api/practice/review/queue?kp_id=1&days=7 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:51996 - "GET /favicon.ico HTTP/1.1" 404 Not Found
