@@ -47,3 +47,23 @@ class PracticeWrongOut(BaseModel):
     difficulty: float
     created_at: str
     options: list[str] = []
+    tags: list[str] = []
+
+
+class ReviewItemOut(BaseModel):
+    id: int
+    question_id: int
+    kp_id: int
+    prompt: str
+    type: str
+    difficulty: float
+    due_at: str
+    interval_days: int
+    last_result: str
+    overdue: bool = False
+
+
+class ReviewQueueOut(BaseModel):
+    total: int
+    due: int
+    items: list[ReviewItemOut]

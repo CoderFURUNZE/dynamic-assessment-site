@@ -1,8 +1,11 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    _backend_env = str(Path(__file__).resolve().parents[2] / ".env")
+    model_config = SettingsConfigDict(env_file=_backend_env, extra="ignore")
 
     app_name: str = "dynamic-assessment"
     api_prefix: str = "/api"

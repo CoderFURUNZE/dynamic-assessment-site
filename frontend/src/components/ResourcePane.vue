@@ -11,6 +11,7 @@ const emit = defineEmits<{ (e: "progress-updated"): void }>();
 const resources = ref<Resource[]>([]);
 const currentVideoId = ref<number | null>(null);
 const videoRef = ref<HTMLVideoElement | null>(null);
+const iframeRef = ref<HTMLIFrameElement | null>(null);
 const lastTick = ref<number>(Date.now());
 
 const progressById = ref<Record<number, { watched_seconds: number; duration_seconds: number; completed: boolean }>>({});
@@ -229,21 +230,23 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="currentVideo">
-        <iframe
-          v-if="isBilibiliEmbed"
-          :src="currentVideo.url"
-          style="width: 100%; height: 520px; border: 0; border-radius: 8px; background: #000"
-          allowfullscreen
-          @load="onEmbedVisible"
-        />
-        <video
-          v-else
-          ref="videoRef"
-          :src="videoSrc"
-          controls
-          style="width: 100%; border-radius: 8px; background: #000"
-          @play="onPlay"
-        />
+        <div>
+          <iframe
+            v-if="isBilibiliEmbed"
+            ref="iframeRef"
+            :src="currentVideo.url"
+            style="width: 100%; height: 520px; border: 0; border-radius: 8px; background: #000"
+            @load="onEmbedVisible"
+          />
+          <video
+            v-else
+            ref="videoRef"
+            :src="videoSrc"
+            controls
+            style="width: 100%; border-radius: 8px; background: #000"
+            @play="onPlay"
+          />
+        </div>
 
         <el-alert
           style="margin-top: 10px"
@@ -267,3 +270,6 @@ onBeforeUnmount(() => {
     </div>
   </el-card>
 </template>
+
+<style scoped>
+</style>

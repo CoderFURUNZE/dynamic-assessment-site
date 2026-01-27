@@ -13,6 +13,9 @@ type QuestionRow = {
   answer: string;
   explanation: string;
   difficulty: number;
+  source?: string | null;
+  tags?: string | null;
+  version?: string | null;
   attempts?: number | null;
   correct_rate?: number | null;
 };
@@ -31,6 +34,15 @@ const bankTotal = ref(0);
 const bankPage = ref(1);
 const bankPageSize = 15;
 const bankSelection = ref<number[]>([]);
+const bankKeyword = ref("");
+const bankType = ref("");
+const bankMinDiff = ref<number | null>(null);
+const bankMaxDiff = ref<number | null>(null);
+
+function searchBank() {
+  bankPage.value = 1;
+  loadBank();
+}
 
 const importFile = ref<File | null>(null);
 const importLoading = ref(false);
@@ -45,6 +57,9 @@ const editForm = reactive({
   answer: "",
   explanation: "",
   difficulty: 0.4,
+  source: "",
+  tags: "",
+  version: "v1",
 });
 
 const quizLoading = ref(false);
@@ -85,6 +100,17 @@ const assignedPaged = computed(() => {
   const start = (assignedPage.value - 1) * assignedPageSize;
   return assigned.value.slice(start, start + assignedPageSize);
 });
+const exportUrl = computed(() => {
+  if (!kpId.value) return "#";
+  const query = new URLSearchParams({
+    kp_id: String(kpId.value),
+    keyword: bankKeyword.value || "",
+  });
+  if (bankType.value) query.set("q_type", bankType.value);
+  if (bankMinDiff.value !== null) query.set("min_difficulty", String(bankMinDiff.value));
+  if (bankMaxDiff.value !== null) query.set("max_difficulty", String(bankMaxDiff.value));
+  return `/admin/questions/export?${query.toString()}`;
+});
 
 const form = reactive({
   type: "mcq",
@@ -93,6 +119,9 @@ const form = reactive({
   answer: "A",
   explanation: "",
   difficulty: 0.4,
+  source: "",
+  tags: "",
+  version: "v1",
 });
 
 const options = computed(() => {
@@ -157,7 +186,16 @@ async function loadBank() {
   if (!kpId.value) return;
   bankLoading.value = true;
   try {
-    const res = await api.get(`/admin/questions?kp_id=${kpId.value}&page=${bankPage.value}&page_size=${bankPageSize}`);
+    const query = new URLSearchParams({
+      kp_id: String(kpId.value),
+      page: String(bankPage.value),
+      page_size: String(bankPageSize),
+    });
+    if (bankKeyword.value.trim()) query.set("keyword", bankKeyword.value.trim());
+    if (bankType.value) query.set("q_type", bankType.value);
+    if (bankMinDiff.value !== null) query.set("min_difficulty", String(bankMinDiff.value));
+    if (bankMaxDiff.value !== null) query.set("max_difficulty", String(bankMaxDiff.value));
+    const res = await api.get(`/admin/questions?${query.toString()}`);
     bank.value = res.data.items ?? [];
     bankTotal.value = Number(res.data.total ?? 0);
     bankSelection.value = [];
@@ -362,6 +400,9 @@ async function addToBank() {
       answer: form.answer,
       explanation: form.explanation,
       difficulty: form.difficulty,
+      source: form.source,
+      tags: form.tags,
+      version: form.version,
     });
     ElMessage.success("已加入题库");
     form.prompt = "";
@@ -381,6 +422,9 @@ function openEdit(row: QuestionRow) {
   editForm.answer = row.answer;
   editForm.explanation = row.explanation;
   editForm.difficulty = row.difficulty;
+  editForm.source = row.source ?? "";
+  editForm.tags = row.tags ?? "";
+  editForm.version = row.version ?? "v1";
   editDialogOpen.value = true;
 }
 
@@ -403,6 +447,9 @@ async function saveEdit() {
       answer: editForm.answer,
       explanation: editForm.explanation,
       difficulty: editForm.difficulty,
+      source: editForm.source,
+      tags: editForm.tags,
+      version: editForm.version,
     });
     ElMessage.success("已更新");
     editDialogOpen.value = false;
@@ -511,6 +558,14 @@ watch(
   () => loadBank()
 );
 
+watch(
+  () => [bankKeyword.value, bankType.value, bankMinDiff.value, bankMaxDiff.value],
+  () => {
+    bankPage.value = 1;
+    loadBank();
+  }
+);
+
 onMounted(() => loadKps());
 </script>
 
@@ -559,11 +614,33 @@ onMounted(() => loadKps());
             <el-text type="info" style="font-size: 12px">基于历史正确率：difficulty≈1-正确率（按步长量化）</el-text>
           </div>
 
-          <el-table :data="bank" size="small" v-loading="bankLoading" style="width: 100%" height="520" row-height="70">
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px">
+            <el-input
+              v-model="bankKeyword"
+              size="small"
+              placeholder="搜索题干关键词"
+              style="width: 220px"
+              @keyup.enter="searchBank"
+            />
+            <el-select v-model="bankType" size="small" style="width: 120px">
+              <el-option label="全部题型" value="" />
+              <el-option label="选择题" value="mcq" />
+              <el-option label="填空题" value="blank" />
+            </el-select>
+            <el-input-number v-model="bankMinDiff" :min="0" :max="1" :step="0.1" size="small" style="width: 120px" />
+            <el-input-number v-model="bankMaxDiff" :min="0" :max="1" :step="0.1" size="small" style="width: 120px" />
+            <el-button size="small" type="primary" @click="searchBank" :disabled="!kpId">搜索</el-button>
+            <el-button size="small" type="success" :href="exportUrl" target="_blank">导出 CSV</el-button>
+          </div>
+
+          <el-table :data="bank" size="small" v-loading="bankLoading" style="width: 100%">
             <el-table-column prop="type" label="题型" width="70" />
             <el-table-column prop="prompt" label="题干" />
             <el-table-column prop="answer" label="答案" width="80" />
             <el-table-column prop="difficulty" label="难度" width="80" />
+            <el-table-column prop="source" label="来源" width="120" />
+            <el-table-column prop="tags" label="标签" width="140" />
+            <el-table-column prop="version" label="版本" width="80" />
             <el-table-column prop="attempts" label="次数" width="80" />
             <el-table-column label="正确率" width="90">
               <template #default="{ row }">
@@ -648,6 +725,15 @@ D. 平均值
             </el-form-item>
             <el-form-item label="题干">
               <el-input v-model="form.prompt" type="textarea" :rows="2" />
+            </el-form-item>
+            <el-form-item label="来源">
+              <el-input v-model="form.source" placeholder="例如：教材/真题/课堂例题" />
+            </el-form-item>
+            <el-form-item label="标签">
+              <el-input v-model="form.tags" placeholder="用逗号分隔，如：哈希表,冲突,负载因子" />
+            </el-form-item>
+            <el-form-item label="版本">
+              <el-input v-model="form.version" placeholder="如 v1/v2" />
             </el-form-item>
             <el-form-item v-if="form.type === 'mcq'" label="选项">
               <el-input v-model="form.optionsText" placeholder="用逗号分隔，例如A,B,C,D" />
@@ -765,6 +851,15 @@ D. 平均值
       </el-form-item>
       <el-form-item label="题干">
         <el-input v-model="editForm.prompt" type="textarea" :rows="2" />
+      </el-form-item>
+      <el-form-item label="来源">
+        <el-input v-model="editForm.source" placeholder="例如：教材/真题/课堂例题" />
+      </el-form-item>
+      <el-form-item label="标签">
+        <el-input v-model="editForm.tags" placeholder="用逗号分隔，如：哈希表,冲突,负载因子" />
+      </el-form-item>
+      <el-form-item label="版本">
+        <el-input v-model="editForm.version" placeholder="如 v1/v2" />
       </el-form-item>
       <el-form-item v-if="editForm.type === 'mcq'" label="选项">
         <el-input v-model="editForm.optionsText" placeholder="用逗号分隔，例如A,B,C,D" />

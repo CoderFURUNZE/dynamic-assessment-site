@@ -44,6 +44,14 @@ const wrongPage = ref(1);
 const wrongPageSize = 10;
 const wrongTotal = ref(0);
 const wrongDays = ref(0);
+const wrongType = ref("");
+const wrongMinDiff = ref<number | null>(null);
+const wrongMaxDiff = ref<number | null>(null);
+const wrongOrder = ref("recent");
+const reviewItems = ref<any[]>([]);
+const reviewLoading = ref(false);
+const reviewTotal = ref(0);
+const reviewDue = ref(0);
 const statsDetail = ref<{ total: number; correct: number; incorrect: number; accuracy: number; daily: any[] }>({
   total: 0,
   correct: 0,
@@ -115,6 +123,7 @@ async function load() {
     }
     wrongPage.value = 1;
     await loadWrong();
+    await loadReview();
     selected.value = "";
     blankAnswer.value = "";
     startedAt.value = Date.now();
@@ -158,6 +167,7 @@ async function loadHistory() {
     };
     await loadStats();
     await loadWrong();
+    await loadReview();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载做题记录失败");
   } finally {
@@ -193,6 +203,10 @@ async function loadWrong() {
     if (wrongDays.value > 0) {
       query.set("days", String(wrongDays.value));
     }
+    if (wrongType.value) query.set("q_type", wrongType.value);
+    if (wrongMinDiff.value !== null) query.set("min_difficulty", String(wrongMinDiff.value));
+    if (wrongMaxDiff.value !== null) query.set("max_difficulty", String(wrongMaxDiff.value));
+    if (wrongOrder.value) query.set("order", wrongOrder.value);
     const res = await api.get(`/practice/wrong/page?${query.toString()}`);
     wrongItems.value = res.data.items ?? [];
     wrongTotal.value = Number(res.data.total ?? 0);
@@ -200,6 +214,21 @@ async function loadWrong() {
     // ignore
   } finally {
     wrongLoading.value = false;
+  }
+}
+
+async function loadReview() {
+  if (!props.kpId) return;
+  reviewLoading.value = true;
+  try {
+    const res = await api.get(`/practice/review/queue?kp_id=${props.kpId}&days=7`);
+    reviewItems.value = res.data.items ?? [];
+    reviewTotal.value = Number(res.data.total ?? 0);
+    reviewDue.value = Number(res.data.due ?? 0);
+  } catch {
+    // ignore
+  } finally {
+    reviewLoading.value = false;
   }
 }
 
@@ -227,6 +256,7 @@ async function submit() {
     await loadHistory();
     await loadStats();
     await loadWrong();
+    await loadReview();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "提交失败");
   }
@@ -275,6 +305,10 @@ async function startWrongPractice() {
       page_size: String(pageSize),
     });
     if (days > 0) query.set("days", String(days));
+    if (wrongType.value) query.set("q_type", wrongType.value);
+    if (wrongMinDiff.value !== null) query.set("min_difficulty", String(wrongMinDiff.value));
+    if (wrongMaxDiff.value !== null) query.set("max_difficulty", String(wrongMaxDiff.value));
+    if (wrongOrder.value) query.set("order", wrongOrder.value);
     const res = await api.get(`/practice/wrong/page?${query.toString()}`);
     const items = res.data.items ?? [];
     queue.push(...items);
@@ -340,6 +374,14 @@ watch(
 
 watch(
   () => wrongDays.value,
+  () => {
+    wrongPage.value = 1;
+    loadWrong();
+  }
+);
+
+watch(
+  () => [wrongType.value, wrongMinDiff.value, wrongMaxDiff.value, wrongOrder.value],
   () => {
     wrongPage.value = 1;
     loadWrong();
@@ -539,11 +581,32 @@ watch(
                   <el-option label="近30天" :value="30" />
                   <el-option label="近90天" :value="90" />
                 </el-select>
+                <el-select v-model="wrongType" size="small" style="width: 120px">
+                  <el-option label="全部类型" value="" />
+                  <el-option label="选择题" value="mcq" />
+                  <el-option label="填空题" value="blank" />
+                </el-select>
+                <el-select v-model="wrongOrder" size="small" style="width: 140px">
+                  <el-option label="按时间" value="recent" />
+                  <el-option label="难度升序" value="difficulty_asc" />
+                  <el-option label="难度降序" value="difficulty_desc" />
+                </el-select>
+                <el-input-number v-model="wrongMinDiff" :min="0" :max="1" :step="0.1" size="small" style="width: 120px" placeholder="最小难度" />
+                <el-input-number v-model="wrongMaxDiff" :min="0" :max="1" :step="0.1" size="small" style="width: 120px" placeholder="最大难度" />
                 <el-button size="small" type="primary" @click="startWrongPractice">一键重练全部错题</el-button>
               </div>
               <el-table :data="wrongItems" size="small" style="width: 100%" max-height="240" v-loading="wrongLoading" empty-text="暂无错题">
                 <el-table-column prop="created_at" label="时间" width="160" />
                 <el-table-column prop="prompt" label="题干" />
+                <el-table-column label="归因" width="160">
+                  <template #default="{ row }">
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px">
+                      <el-tag v-for="(tag, i) in (row.tags || [])" :key="i" size="small" type="info">
+                        {{ tag }}
+                      </el-tag>
+                    </div>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="difficulty" label="难度" width="80" />
                 <el-table-column prop="type" label="类型" width="80" />
                 <el-table-column width="120" label="操作">
@@ -562,6 +625,35 @@ watch(
                   @current-change="loadWrong"
                 />
               </div>
+            </div>
+
+            <div style="margin-top: 12px">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px">
+                <div style="font-weight: 600">间隔复习</div>
+                <el-text type="info">未来 7 天待复习 {{ reviewTotal }}，已到期 {{ reviewDue }}</el-text>
+                <el-button size="small" @click="loadReview" :loading="reviewLoading">刷新</el-button>
+              </div>
+              <el-table
+                :data="reviewItems"
+                size="small"
+                style="width: 100%"
+                max-height="220"
+                v-loading="reviewLoading"
+                empty-text="暂无复习任务"
+              >
+                <el-table-column prop="due_at" label="到期时间" width="180" />
+                <el-table-column prop="prompt" label="题干" />
+                <el-table-column prop="difficulty" label="难度" width="80" />
+                <el-table-column prop="interval_days" label="间隔天数" width="90" />
+                <el-table-column prop="last_result" label="上次结果" width="90" />
+                <el-table-column label="状态" width="80">
+                  <template #default="{ row }">
+                    <el-tag size="small" :type="row.overdue ? 'danger' : 'info'">
+                      {{ row.overdue ? "已到期" : "待复习" }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
             </div>
 
             <div style="margin-top: 12px">

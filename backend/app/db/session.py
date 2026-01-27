@@ -13,6 +13,7 @@ engine = create_engine(settings.database_url, echo=False, connect_args=connect_a
 def init_db() -> None:
     SQLModel.metadata.create_all(engine)
     _ensure_kp_practice_total_column()
+    _ensure_question_meta_columns()
 
 
 def _ensure_kp_practice_total_column() -> None:
@@ -28,6 +29,24 @@ def _ensure_kp_practice_total_column() -> None:
             conn.execute(text("ALTER TABLE knowledgepoint ADD COLUMN practice_total INTEGER"))
     except Exception:
         # Best-effort; ignore if the column was added by another process.
+        pass
+
+
+def _ensure_question_meta_columns() -> None:
+    inspector = inspect(engine)
+    try:
+        cols = {c["name"] for c in inspector.get_columns("question")}
+    except Exception:
+        return
+    needed = ["source", "tags", "version"]
+    missing = [c for c in needed if c not in cols]
+    if not missing:
+        return
+    try:
+        with engine.begin() as conn:
+            for col in missing:
+                conn.execute(text(f"ALTER TABLE question ADD COLUMN {col} TEXT"))
+    except Exception:
         pass
 
 

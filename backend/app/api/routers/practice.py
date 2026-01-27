@@ -8,9 +8,17 @@ from sqlmodel import Session, select
 from sqlalchemy import delete, func
 
 from app.api.deps import get_current_user
-from app.db.models import EvalConfig, ExpressionEvent, KnowledgePoint, PracticeAttempt, Question
+from app.db.models import EvalConfig, ExpressionEvent, KnowledgePoint, PracticeAttempt, Question, ReviewSchedule
 from app.db.session import get_session
-from app.schemas.practice import PracticeNextOut, PracticeQuestionOut, PracticeSubmitIn, PracticeStatsOut, PracticeWrongOut
+from app.schemas.practice import (
+    PracticeNextOut,
+    PracticeQuestionOut,
+    PracticeSubmitIn,
+    PracticeStatsOut,
+    PracticeWrongOut,
+    ReviewItemOut,
+    ReviewQueueOut,
+)
 from app.services.eval import upsert_mastery
 from app.services.dl_reco import predict_one, score_questions, score_recent
 from app.services.practice import practice_status
@@ -39,6 +47,26 @@ def list_questions(
     ]
 
 
+def _infer_wrong_tags(*, prompt: str, q_type: str) -> list[str]:
+    p = prompt.lower()
+    tags: list[str] = []
+    if q_type == "mcq":
+        tags.append("选择题")
+    if q_type == "blank":
+        tags.append("填空题")
+    if any(k in p for k in ["概念", "定义", "性质", "含义", "公式", "定理"]):
+        tags.append("概念理解")
+    if any(k in p for k in ["计算", "求", "数值", "多少", "求解", "求出"]):
+        tags.append("计算")
+    if any(k in p for k in ["证明", "推导", "论证", "说明"]):
+        tags.append("推理")
+    if len(prompt) >= 80:
+        tags.append("题干较长")
+    if not tags:
+        tags.append("综合")
+    return tags
+
+
 @router.post("/submit")
 def submit(
     payload: PracticeSubmitIn,
@@ -59,6 +87,7 @@ def submit(
             duration_ms=payload.duration_ms,
         )
     )
+    _upsert_review_schedule(session, user_id=user.id, question=q, is_correct=is_correct)
     session.commit()
     mastery = upsert_mastery(
         session, user_id=user.id, kp_id=q.kp_id, subject=q.subject, grade=q.grade
@@ -68,6 +97,48 @@ def submit(
         "explanation": q.explanation,
         "mastery": {"kp_id": q.kp_id, "value": mastery.value},
     }
+
+
+def _next_interval_days(current: int) -> int:
+    ladder = [1, 3, 7, 14, 30]
+    for step in ladder:
+        if current < step:
+            return step
+    return 30
+
+
+def _upsert_review_schedule(*, session: Session, user_id: int, question: Question, is_correct: bool) -> None:
+    now = datetime.utcnow()
+    sched = session.exec(
+        select(ReviewSchedule).where(ReviewSchedule.user_id == user_id, ReviewSchedule.question_id == question.id)
+    ).first()
+
+    if sched is None:
+        if is_correct:
+            return
+        sched = ReviewSchedule(
+            user_id=user_id,
+            question_id=question.id,
+            kp_id=question.kp_id,
+            interval_days=1,
+            due_at=now + timedelta(days=1),
+            last_result="wrong",
+            updated_at=now,
+        )
+        session.add(sched)
+        return
+
+    if is_correct:
+        next_interval = _next_interval_days(int(sched.interval_days or 1))
+        sched.interval_days = next_interval
+        sched.due_at = now + timedelta(days=next_interval)
+        sched.last_result = "correct"
+    else:
+        sched.interval_days = 1
+        sched.due_at = now + timedelta(days=1)
+        sched.last_result = "wrong"
+    sched.updated_at = now
+    session.add(sched)
 
 
 @router.get("/next", response_model=PracticeNextOut)
@@ -124,6 +195,7 @@ def next_question(
 
     target = 0.0
     last_correct = True
+    last_diff = 0.5
     if last:
         attempt, question = last
         last_diff = float(question.difficulty) if question is not None else 0.5
@@ -150,6 +222,17 @@ def next_question(
     # Continuous adjustment: expr_ease in [0,1] -> delta in [-step*expr_influence, +step*expr_influence]
     # Higher ease -> harder next; lower ease -> easier next.
     target += (expr_ease - 0.5) * 2.0 * step * expr_influence
+
+    # Stability: pull target towards last difficulty and cap per-step jump.
+    stability_strength = float(window.get("stability_strength", 0.4))
+    stability_strength = max(0.0, min(1.0, stability_strength))
+    max_jump = float(window.get("max_difficulty_jump", 0.2))
+    max_jump = max(0.0, min(0.5, max_jump))
+
+    if last:
+        target = (1.0 - stability_strength) * target + stability_strength * last_diff
+        if max_jump > 0:
+            target = max(last_diff - max_jump, min(last_diff + max_jump, target))
 
     target = max(0.0, min(1.0, target))
 
@@ -404,16 +487,19 @@ def wrong_list(
     ).all()
     out: list[PracticeWrongOut] = []
     for attempt, question in rows:
+        prompt = question.prompt if question else ""
+        q_type = question.type if question else ""
         out.append(
             PracticeWrongOut(
                 id=attempt.id,
                 question_id=attempt.question_id,
                 kp_id=attempt.kp_id,
-                prompt=question.prompt if question else "",
-                type=question.type if question else "",
+                prompt=prompt,
+                type=q_type,
                 difficulty=float(question.difficulty) if question else 0.5,
                 created_at=attempt.created_at.isoformat(),
                 options=json.loads(question.options_json) if question else [],
+                tags=_infer_wrong_tags(prompt=prompt, q_type=q_type),
             )
         )
     return out
@@ -425,6 +511,10 @@ def wrong_page(
     page: int = 1,
     page_size: int = 20,
     days: int | None = None,
+    q_type: str | None = None,
+    min_difficulty: float | None = None,
+    max_difficulty: float | None = None,
+    order: str = "recent",
     session: Session = Depends(get_session),
     user=Depends(get_current_user),
 ):
@@ -452,6 +542,12 @@ def wrong_page(
     if days:
         since = datetime.utcnow() - timedelta(days=max(1, min(90, int(days))))
         base = base.where(PracticeAttempt.created_at >= since)
+    if q_type:
+        base = base.where(Question.type == q_type)
+    if min_difficulty is not None:
+        base = base.where(Question.difficulty >= float(min_difficulty))
+    if max_difficulty is not None:
+        base = base.where(Question.difficulty <= float(max_difficulty))
 
     count_q = (
         select(func.count())
@@ -461,29 +557,46 @@ def wrong_page(
             (PracticeAttempt.question_id == latest.c.question_id)
             & (PracticeAttempt.created_at == latest.c.max_created),
         )
+        .join(Question, PracticeAttempt.question_id == Question.id, isouter=True)
         .where(PracticeAttempt.correct == False)  # noqa: E712
     )
     if days:
         count_q = count_q.where(PracticeAttempt.created_at >= since)
+    if q_type:
+        count_q = count_q.where(Question.type == q_type)
+    if min_difficulty is not None:
+        count_q = count_q.where(Question.difficulty >= float(min_difficulty))
+    if max_difficulty is not None:
+        count_q = count_q.where(Question.difficulty <= float(max_difficulty))
     total = session.exec(count_q).one()
 
+    if order == "difficulty_asc":
+        order_by = Question.difficulty.asc().nullslast()
+    elif order == "difficulty_desc":
+        order_by = Question.difficulty.desc().nullslast()
+    else:
+        order_by = PracticeAttempt.created_at.desc()
+
     rows = session.exec(
-        base.order_by(PracticeAttempt.created_at.desc())
+        base.order_by(order_by)
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
     items: list[PracticeWrongOut] = []
     for attempt, question in rows:
+        prompt = question.prompt if question else ""
+        q_type = question.type if question else ""
         items.append(
             PracticeWrongOut(
                 id=attempt.id,
                 question_id=attempt.question_id,
                 kp_id=attempt.kp_id,
-                prompt=question.prompt if question else "",
-                type=question.type if question else "",
+                prompt=prompt,
+                type=q_type,
                 difficulty=float(question.difficulty) if question else 0.5,
                 created_at=attempt.created_at.isoformat(),
                 options=json.loads(question.options_json) if question else [],
+                tags=_infer_wrong_tags(prompt=prompt, q_type=q_type),
             )
         )
     return {"total": int(total or 0), "items": items, "page": page, "page_size": page_size}
@@ -530,6 +643,55 @@ def get_question_detail(
         options=json.loads(q.options_json),
         difficulty=q.difficulty,
     )
+
+
+@router.get("/review/queue", response_model=ReviewQueueOut)
+def review_queue(
+    kp_id: int | None = None,
+    days: int = 7,
+    due_only: bool = False,
+    session: Session = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    days = max(1, min(30, int(days)))
+    now = datetime.utcnow()
+    until = now + timedelta(days=days)
+
+    q = (
+        select(ReviewSchedule, Question)
+        .join(Question, ReviewSchedule.question_id == Question.id, isouter=True)
+        .where(ReviewSchedule.user_id == user.id)
+    )
+    if kp_id:
+        q = q.where(ReviewSchedule.kp_id == kp_id)
+    if due_only:
+        q = q.where(ReviewSchedule.due_at <= now)
+    else:
+        q = q.where(ReviewSchedule.due_at <= until)
+
+    rows = session.exec(q.order_by(ReviewSchedule.due_at.asc())).all()
+    items: list[ReviewItemOut] = []
+    due_count = 0
+    for sched, question in rows:
+        overdue = sched.due_at <= now
+        if overdue:
+            due_count += 1
+        items.append(
+            ReviewItemOut(
+                id=sched.id,
+                question_id=sched.question_id,
+                kp_id=sched.kp_id,
+                prompt=question.prompt if question else "",
+                type=question.type if question else "",
+                difficulty=float(question.difficulty) if question else 0.5,
+                due_at=sched.due_at.isoformat(),
+                interval_days=int(sched.interval_days),
+                last_result=sched.last_result,
+                overdue=overdue,
+            )
+        )
+
+    return ReviewQueueOut(total=len(items), due=due_count, items=items)
 
 @router.get("/status")
 def status(

@@ -108,6 +108,9 @@ class Question(SQLModel, table=True):
     answer: str
     explanation: str = ""
     difficulty: float = 0.5
+    source: str = ""
+    tags: str = ""
+    version: str = "v1"
 
 
 class PracticeAttempt(SQLModel, table=True):
@@ -118,6 +121,20 @@ class PracticeAttempt(SQLModel, table=True):
     correct: bool
     duration_ms: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class ReviewSchedule(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    question_id: int = Field(foreign_key="question.id", index=True)
+    kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
+    interval_days: int = Field(default=1)
+    due_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    last_result: str = "wrong"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "question_id"),)
 
 
 class ExpressionEvent(SQLModel, table=True):
@@ -151,7 +168,8 @@ class EvalConfig(SQLModel, table=True):
     window_json: str = (
         '{"practice_attempts":10,"expressions":20,"practice_total":10,'
         '"difficulty_step":0.1,"expression_conf_threshold":0.2,"expression_influence":1.0,'
-        '"video_complete_ratio":0.8,"video_min_ratio":0.0}'
+        '"video_complete_ratio":0.8,"video_min_ratio":0.0,'
+        '"max_difficulty_jump":0.2,"stability_strength":0.4}'
     )
 
     __table_args__ = (UniqueConstraint("subject", "grade"),)
@@ -189,3 +207,28 @@ class KpQuestionAssignment(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     __table_args__ = (UniqueConstraint("kp_id", "question_id"),)
+
+
+class InterviewSession(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
+    duration_minutes: int = 15
+    total_questions: int = 0
+    question_ids_json: str = "[]"
+    completed: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    completed_at: Optional[datetime] = Field(default=None, index=True)
+
+
+class InterviewAnswer(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="interviewsession.id", index=True)
+    question_id: int = Field(foreign_key="question.id", index=True)
+    kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
+    answer: str
+    correct: bool
+    rationale: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
