@@ -118,14 +118,17 @@ def upsert_mastery(session: Session, *, user_id: int, kp_id: int, subject: str, 
             w_expr = remaining * (w_expr / other_sum)
             w_video = remaining * (w_video / other_sum)
 
-    raw = (
-        w_quiz * quiz_accuracy
-        + w_practice * practice_accuracy
-        + w_expr * expression_ease
-        + w_video * video_completion
-        - w_penalty * duration_penalty
-    )
-    mastery_value = _clamp01(raw)
+    # Behavior-driven mastery: quiz + practice are strong signals.
+    behavior_sum = w_quiz + w_practice
+    if behavior_sum > 0:
+        behavior_score = (w_quiz * quiz_accuracy + w_practice * practice_accuracy) / behavior_sum
+    else:
+        behavior_score = 0.0
+
+    aux = w_expr * expression_ease + w_video * video_completion - w_penalty * duration_penalty
+    # Expression/video are weak signals: cap the adjustment.
+    aux = max(-0.1, min(0.1, aux))
+    mastery_value = _clamp01(behavior_score + aux)
 
     mastery = session.exec(
         select(Mastery).where(Mastery.user_id == user_id, Mastery.kp_id == kp_id)

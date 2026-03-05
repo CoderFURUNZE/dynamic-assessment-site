@@ -13,6 +13,7 @@ from app.api.deps import require_role
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.models import (
+    Course,
     EvalConfig,
     KnowledgeEdge,
     KnowledgePoint,
@@ -26,6 +27,7 @@ from app.db.models import (
     QuizItem,
     User,
     UserRole,
+    AuditLog,
 )
 from app.db.session import get_session
 from sqlalchemy import Integer, func, or_
@@ -34,24 +36,38 @@ from app.schemas.admin import (
     KnowledgeEdgeOut,
     KnowledgePointIn,
     KnowledgePointUpdateIn,
+    CourseIn,
+    CourseOut,
+    CourseUpdateIn,
     QuestionIn,
     QuestionOut,
     AdminPracticeReportOut,
     AdminExpressionReportOut,
+    AuditLogOut,
     UserOut,
     UserUpdateIn,
 )
+from app.schemas.paging import PageOut
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger("app.audit")
 
 
-def _log_action(user: User | None, action: str, detail: str = "") -> None:
+def _log_action(session: Session | None, user: User | None, action: str, detail: str = "") -> None:
     if user is None:
         logger.info("actor=system action=%s detail=%s", action, detail)
+        if session is None:
+            return
+        session.add(AuditLog(actor="system", role="system", action=action, detail=detail))
+        session.commit()
         return
     try:
         logger.info("actor=%s role=%s action=%s detail=%s", user.username, user.role.value, action, detail)
+        if session is not None:
+            session.add(
+                AuditLog(actor=user.username, role=user.role.value, action=action, detail=detail)
+            )
+            session.commit()
     except Exception:
         logger.info("action=%s detail=%s", action, detail)
 
@@ -100,7 +116,7 @@ def set_kp_bilibili_video(
 
     url = _bilibili_embed_url(bvid=bvid, page=page)
     r = _replace_kp_video(session=session, kp=kp, title=title, url=url)
-    _log_action(_admin, "kp_video_bind_bilibili", f"kp_id={kp_id} bvid={bvid} page={page}")
+    _log_action(session, _admin, "kp_video_bind_bilibili", f"kp_id={kp_id} bvid={bvid} page={page}")
     return {"ok": True, "resource_id": r.id, "url": r.url}
 
 
@@ -116,7 +132,7 @@ def clear_kp_video(
     for r in existing:
         session.delete(r)
     session.commit()
-    _log_action(_admin, "kp_video_clear", f"kp_id={kp_id} deleted={len(existing)}")
+    _log_action(session, _admin, "kp_video_clear", f"kp_id={kp_id} deleted={len(existing)}")
     return {"ok": True, "deleted": len(existing)}
 
 
@@ -150,7 +166,7 @@ def upload_kp_video_local(
     final_title = title.strip() or f"本地视频：{stored_name}"
     url = f"{settings.media_url}/videos/{stored_name}"
     r = _replace_kp_video(session=session, kp=kp, title=final_title, url=url)
-    _log_action(_admin, "kp_video_upload_local", f"kp_id={kp_id} file={stored_name}")
+    _log_action(session, _admin, "kp_video_upload_local", f"kp_id={kp_id} file={stored_name}")
     return {"ok": True, "resource_id": r.id, "url": r.url}
 
 
@@ -171,7 +187,7 @@ def set_kp_video_url(
         raise HTTPException(status_code=404, detail="Knowledge point not found")
 
     r = _replace_kp_video(session=session, kp=kp, title=title, url=url)
-    _log_action(_admin, "kp_video_bind_url", f"kp_id={kp_id} url={url}")
+    _log_action(session, _admin, "kp_video_bind_url", f"kp_id={kp_id} url={url}")
     return {"ok": True, "resource_id": r.id, "url": r.url}
 
 
@@ -209,8 +225,98 @@ def create_user(
     )
     session.add(user)
     session.commit()
-    _log_action(_admin, "user_create", f"username={username} role={role}")
+    _log_action(session, _admin, "user_create", f"username={username} role={role}")
     return {"ok": True, "user_id": user.id}
+
+
+@router.get("/courses")
+def list_courses(
+    page: int = 1,
+    page_size: int = 15,
+    keyword: str | None = None,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    q = select(Course)
+    if keyword:
+        like = f"%{keyword.strip()}%"
+        q = q.where(or_(Course.code.like(like), Course.title.like(like), Course.description.like(like)))
+    total = session.exec(select(func.count()).select_from(q.subquery())).one()
+    items = session.exec(q.order_by(Course.created_at.desc()).offset((page - 1) * page_size).limit(page_size)).all()
+    return {"items": [CourseOut(**i.model_dump()) for i in items], "total": total}
+
+
+@router.post("/courses", response_model=CourseOut)
+def create_course(
+    payload: CourseIn,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    code = payload.code.strip()
+    title = payload.title.strip()
+    if not code or not title:
+        raise HTTPException(status_code=400, detail="code/title required")
+    exists = session.exec(select(Course).where(Course.code == code)).first()
+    if exists:
+        raise HTTPException(status_code=400, detail="Course code exists")
+    course = Course(code=code, title=title, description=payload.description or "", active=bool(payload.active))
+    session.add(course)
+    session.commit()
+    session.refresh(course)
+    _log_action(session, _admin, "course_create", f"code={code} title={title}")
+    return CourseOut(**course.model_dump())
+
+
+@router.put("/courses/{course_id}", response_model=CourseOut)
+def update_course(
+    course_id: int,
+    payload: CourseUpdateIn,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    course = session.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if payload.code is not None:
+        code = payload.code.strip()
+        if not code:
+            raise HTTPException(status_code=400, detail="code required")
+        exists = session.exec(select(Course).where(Course.code == code, Course.id != course_id)).first()
+        if exists:
+            raise HTTPException(status_code=400, detail="Course code exists")
+        course.code = code
+    if payload.title is not None:
+        title = payload.title.strip()
+        if not title:
+            raise HTTPException(status_code=400, detail="title required")
+        course.title = title
+    if payload.description is not None:
+        course.description = payload.description
+    if payload.active is not None:
+        course.active = bool(payload.active)
+    session.add(course)
+    session.commit()
+    session.refresh(course)
+    _log_action(session, _admin, "course_update", f"id={course_id} code={course.code}")
+    return CourseOut(**course.model_dump())
+
+
+@router.delete("/courses/{course_id}")
+def delete_course(
+    course_id: int,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    course = session.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    kp_count = session.exec(select(func.count()).select_from(KnowledgePoint).where(KnowledgePoint.subject == course.title)).one()
+    if kp_count:
+        raise HTTPException(status_code=400, detail="Course has knowledge points, cannot delete")
+    session.delete(course)
+    session.commit()
+    _log_action(session, _admin, "course_delete", f"id={course_id} code={course.code}")
+    return {"ok": True}
 
 @router.get("/users")
 def list_users(
@@ -445,7 +551,7 @@ def update_user(
     session.add(u)
     session.commit()
     session.refresh(u)
-    _log_action(_admin, "user_update", f"user_id={user_id}")
+    _log_action(session, _admin, "user_update", f"user_id={user_id}")
     return UserOut(
         id=u.id,
         username=u.username,
@@ -469,7 +575,7 @@ def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     session.delete(u)
     session.commit()
-    _log_action(_admin, "user_delete", f"user_id={user_id} username={u.username}")
+    _log_action(session, _admin, "user_delete", f"user_id={user_id} username={u.username}")
     return {"ok": True}
 
 
@@ -1168,7 +1274,7 @@ def import_questions_docx(
         created += 1
 
     session.commit()
-    _log_action(_admin, "questions_import_docx", f"created={created} skipped={skipped} errors={len(errors)}")
+    _log_action(session, _admin, "questions_import_docx", f"created={created} skipped={skipped} errors={len(errors)}")
     return {"ok": True, "created": created, "skipped": skipped, "errors": errors[:50]}
 
 
@@ -1500,7 +1606,7 @@ def seed_derivative_demo(
         0.3,
     )
 
-    _log_action(_admin, "seed_demo", f"subject={subject} kps={len(kps)}")
+    _log_action(session, _admin, "seed_demo", f"subject={subject} kps={len(kps)}")
     return {"ok": True, "kps": len(kps)}
 
 
@@ -1601,6 +1707,12 @@ def seed_full_system(
             session.add(EvalConfig(subject=subj, grade=grade_name))
             session.commit()
 
+    def ensure_course(subj: str, code: str) -> None:
+        exists = session.exec(select(Course).where(Course.code == code)).first()
+        if exists is None:
+            session.add(Course(code=code, title=subj, description=f"{subj}课程"))
+            session.commit()
+
     def ensure_kp(subj: str, code: str, title: str) -> KnowledgePoint:
         kp = session.exec(select(KnowledgePoint).where(KnowledgePoint.code == code)).first()
         if kp is None:
@@ -1699,6 +1811,7 @@ def seed_full_system(
 
     for subj_name, _subj_code, kp_list in subjects:
         ensure_eval_config(subj_name)
+        ensure_course(subj_name, _subj_code)
         kp_objs: list[KnowledgePoint] = []
         for code, title in kp_list:
             kp = ensure_kp(subj_name, code, title)
@@ -1774,7 +1887,41 @@ def seed_full_system(
                 },
             )
 
-    _log_action(_admin, "seed_full", f"created_kp={created_kp} created_questions={created_questions}")
+    _log_action(session, _admin, "seed_full", f"created_kp={created_kp} created_questions={created_questions}")
+
+
+@router.get("/audit", response_model=PageOut)
+def audit_logs(
+    page: int = 1,
+    page_size: int = 20,
+    actor: str | None = None,
+    action: str | None = None,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    stmt = select(AuditLog)
+    if actor:
+        stmt = stmt.where(AuditLog.actor == actor)
+    if action:
+        stmt = stmt.where(AuditLog.action.contains(action))
+    total = session.exec(select(func.count()).select_from(stmt.subquery())).first() or 0
+    rows = session.exec(
+        stmt.order_by(AuditLog.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    items = [
+        AuditLogOut(
+            id=r.id,
+            actor=r.actor,
+            role=r.role,
+            action=r.action,
+            detail=r.detail,
+            created_at=r.created_at.isoformat(),
+        )
+        for r in rows
+    ]
+    return PageOut(items=items, total=int(total), page=page, page_size=page_size)
     return {"ok": True, "created_kp": created_kp, "created_questions": created_questions}
 
 

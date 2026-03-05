@@ -28,6 +28,17 @@ class User(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("username"), UniqueConstraint("phone"), UniqueConstraint("wechat_openid"))
 
 
+class Course(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    code: str = Field(index=True)
+    title: str
+    description: str = ""
+    active: bool = True
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("code"),)
+
+
 class KnowledgePoint(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     subject: str = Field(index=True)
@@ -119,6 +130,7 @@ class PracticeAttempt(SQLModel, table=True):
     question_id: int = Field(foreign_key="question.id", index=True)
     kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
     correct: bool
+    self_report: str = Field(default="unknown")
     duration_ms: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
@@ -168,6 +180,7 @@ class EvalConfig(SQLModel, table=True):
     window_json: str = (
         '{"practice_attempts":10,"expressions":20,"practice_total":10,'
         '"difficulty_step":0.1,"expression_conf_threshold":0.2,"expression_influence":1.0,'
+        '"evidence_sure_ratio":0.5,'
         '"video_complete_ratio":0.8,"video_min_ratio":0.0,'
         '"max_difficulty_jump":0.2,"stability_strength":0.4}'
     )
@@ -231,4 +244,13 @@ class InterviewAnswer(SQLModel, table=True):
     answer: str
     correct: bool
     rationale: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class AuditLog(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    actor: str = Field(index=True)
+    role: str = Field(index=True)
+    action: str = Field(index=True)
+    detail: str = ""
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)

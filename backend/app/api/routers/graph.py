@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from app.api.deps import get_current_user
-from app.db.models import KnowledgeEdge, KnowledgePoint
+from app.db.models import Course, KnowledgeEdge, KnowledgePoint
 from app.db.session import get_session
 from app.schemas.graph import GraphPathOut, KnowledgeEdgeOut, KnowledgePointOut
 
@@ -19,6 +19,15 @@ def list_kps(
     return session.exec(
         select(KnowledgePoint).where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)
     ).all()
+
+
+@router.get("/courses")
+def list_courses(
+    session: Session = Depends(get_session),
+    _user=Depends(get_current_user),
+):
+    courses = session.exec(select(Course).order_by(Course.created_at.desc())).all()
+    return [{"id": c.id, "code": c.code, "title": c.title, "description": c.description, "active": c.active} for c in courses]
 
 
 @router.get("/edges", response_model=list[KnowledgeEdgeOut])
@@ -50,4 +59,3 @@ def path(
         blocked_prereqs=prereq_ids,
         next_candidates=next_ids,
     )
-

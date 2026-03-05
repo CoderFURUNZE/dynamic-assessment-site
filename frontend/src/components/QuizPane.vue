@@ -27,6 +27,7 @@ const predictedCorrect = ref<number | null>(null);
 const reason = ref<string | null>(null);
 const selected = ref<string>("");
 const blankAnswer = ref<string>("");
+const selfReport = ref<"guess" | "sure" | "unknown">("unknown");
 const startedAt = ref<number>(0);
 const lastResult = ref<{ correct: boolean; explanation: string } | null>(null);
 const viewTab = ref<"practice" | "history">("practice");
@@ -83,12 +84,11 @@ const trendItems = computed(() => {
     if (trendMode.value === "monthly") {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     }
-    // weekly
     const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
     const dayNum = tmp.getUTCDay() || 7;
     tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
     const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
-    const weekNo = Math.ceil((((tmp.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    const weekNo = Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
     return `${tmp.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
   };
   for (const item of daily) {
@@ -126,6 +126,7 @@ async function load() {
     await loadReview();
     selected.value = "";
     blankAnswer.value = "";
+    selfReport.value = "unknown";
     startedAt.value = Date.now();
     lastResult.value = null;
   } catch (e: any) {
@@ -149,6 +150,7 @@ async function loadNext() {
   reason.value = res.data.reason ?? null;
   selected.value = "";
   blankAnswer.value = "";
+  selfReport.value = "unknown";
   startedAt.value = Date.now();
   lastResult.value = null;
 }
@@ -239,12 +241,17 @@ async function submit() {
     ElMessage.warning("请作答后提交");
     return;
   }
+  if (selfReport.value === "unknown") {
+    ElMessage.warning("请选择“蒙的 / 确定”");
+    return;
+  }
   const duration_ms = Math.max(0, Date.now() - startedAt.value);
   try {
     const res = await api.post("/practice/submit", {
       kp_id: props.kpId,
       question_id: current.value.id,
       answer,
+      self_report: selfReport.value,
       duration_ms,
     });
     ElMessage.success(res.data.correct ? "回答正确" : "回答错误");
@@ -285,6 +292,7 @@ async function loadWrongQuestionByIndex() {
     reason.value = "错题重练";
     selected.value = "";
     blankAnswer.value = "";
+    selfReport.value = "unknown";
     startedAt.value = Date.now();
     lastResult.value = null;
   } catch (e: any) {
@@ -308,7 +316,7 @@ async function startWrongPractice() {
     if (wrongType.value) query.set("q_type", wrongType.value);
     if (wrongMinDiff.value !== null) query.set("min_difficulty", String(wrongMinDiff.value));
     if (wrongMaxDiff.value !== null) query.set("max_difficulty", String(wrongMaxDiff.value));
-    if (wrongOrder.value) query.set("order", wrongOrder.value);
+    if (wrongOrder.value) query.set("order", String(wrongOrder.value));
     const res = await api.get(`/practice/wrong/page?${query.toString()}`);
     const items = res.data.items ?? [];
     queue.push(...items);
@@ -420,7 +428,7 @@ watch(
       <el-tabs v-model="viewTab" type="border-card">
         <el-tab-pane label="作答" name="practice">
           <div v-if="done">
-            <el-result icon="success" title="已完成本知识点题目" sub-title="可点击“推荐下一步”查看建议" />
+            <el-result icon="success" title="已完成本知识点练习" sub-title="可点击“推荐下一步”查看建议" />
             <div style="margin-top: 10px; display: flex; gap: 8px">
               <el-button type="primary" @click="resetPractice">重做</el-button>
             </div>
@@ -433,6 +441,10 @@ watch(
                 <el-tag size="small" :type="modelUsed ? 'success' : 'info'">
                   {{ modelUsed ? "模型推荐" : "规则推荐" }}
                 </el-tag>
+                <el-text v-if="reason" type="info" style="font-size: 12px">({{ reason }})</el-text>
+                <el-text v-if="predictedCorrect !== null" type="info" style="font-size: 12px">
+                  预测正确率 {{ Math.round(predictedCorrect * 100) }}%
+                </el-text>
               </div>
             </div>
             <div
@@ -455,6 +467,12 @@ watch(
             </div>
             <div v-else>
               <el-input v-model="blankAnswer" placeholder="输入你的答案" />
+            </div>
+            <div style="margin-top: 10px">
+              <el-radio-group v-model="selfReport">
+                <el-radio label="guess">蒙的</el-radio>
+                <el-radio label="sure">确定</el-radio>
+              </el-radio-group>
             </div>
             <div v-if="lastResult" style="margin-top: 10px">
               <el-alert
@@ -659,7 +677,7 @@ watch(
             <div style="margin-top: 12px">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px">
                 <div style="font-weight: 600">全部作答记录</div>
-                <el-text type="info">最多展示 50 条</el-text>
+                <el-text type="info">最多显示 50 条</el-text>
               </div>
               <el-table :data="historyItems" size="small" style="width: 100%" max-height="260">
                 <el-table-column prop="created_at" label="时间" width="180" />

@@ -17,6 +17,12 @@ from app.db.models import (
 )
 from app.services.eval import upsert_mastery
 from app.services.practice import practice_status
+from app.services.reco_policy import (
+    evidence_checklist,
+    infer_guess_slip,
+    recent_expression_state,
+    recent_wrong_streak,
+)
 
 
 def _get_config(session: Session, subject: str, grade: str) -> EvalConfig:
@@ -88,9 +94,50 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
         expression_difficulty = None
 
     mastery_threshold = 0.7
+    sure_ratio_threshold = float(window.get("evidence_sure_ratio", 0.5))
+    evidence = evidence_checklist(
+        session,
+        user_id=user_id,
+        kp_id=kp_id,
+        sure_ratio_threshold=sure_ratio_threshold,
+    )
+    evidence_threshold = float(window.get("evidence_threshold", 0.75))
+    evidence_ok = evidence.get("score", 0.0) >= evidence_threshold
     # Unlock is driven by mastery + assessment outcomes (quiz + practice).
     # Expression is kept only as a weak diagnostic signal (not a gate).
-    unlocked = quiz_ok and practice_ok and (mastery.value >= mastery_threshold)
+    unlocked = quiz_ok and practice_ok and (mastery.value >= mastery_threshold) and evidence_ok
+
+    # Remedial decision helper (soft guidance)
+    expr_state = recent_expression_state(
+        session,
+        user_id=user_id,
+        kp_id=kp_id,
+        window=expr_n,
+        conf_threshold=float(window.get("expression_conf_threshold", 0.2)),
+    )
+    wrong_streak = recent_wrong_streak(session, user_id=user_id, kp_id=kp_id, window=5)
+    last_attempt = session.exec(
+        select(PracticeAttempt)
+        .where(PracticeAttempt.user_id == user_id, PracticeAttempt.kp_id == kp_id)
+        .order_by(desc(PracticeAttempt.created_at))
+        .limit(1)
+    ).first()
+    guess_slip = {"guess_score": 0.0, "slip_score": 0.0}
+    if last_attempt and not last_attempt.correct:
+        fast_ms = int(window.get("guess_fast_ms", 8000))
+        slow_ms = int(window.get("slip_slow_ms", 45000))
+        guess_slip = infer_guess_slip(
+            duration_ms=int(last_attempt.duration_ms or 0),
+            expr_diff=float(expr_state.get("difficulty_avg", 0.5)),
+            fast_ms=fast_ms,
+            slow_ms=slow_ms,
+            self_report=str(getattr(last_attempt, "self_report", "unknown") or "unknown"),
+        )
+    remedy_action = "none"
+    if guess_slip["slip_score"] >= 0.7:
+        remedy_action = "retry_same_level"
+    elif guess_slip["guess_score"] >= 0.7 or float(expr_state.get("difficulty_avg", 0.5)) >= 0.6 or wrong_streak >= 2:
+        remedy_action = "remedial_path"
 
     prereqs = session.exec(select(KnowledgeEdge).where(KnowledgeEdge.next_id == kp_id)).all()
     blocked = []
@@ -124,7 +171,16 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
                 {"signal": "practice_completed", "value": practice_completed, "threshold": True},
                 {"signal": "mastery", "value": mastery.value, "threshold": mastery_threshold},
                 {"signal": "expression_difficulty", "value": expression_difficulty, "threshold": unlock_max_difficulty},
+                {"signal": "evidence_score", "value": evidence.get("score", 0.0), "threshold": evidence_threshold},
             ],
+        },
+        "evidence": evidence,
+        "remedy": {
+            "action": remedy_action,
+            "guess_score": guess_slip["guess_score"],
+            "slip_score": guess_slip["slip_score"],
+            "wrong_streak": wrong_streak,
+            "expression_difficulty": expr_state.get("difficulty_avg", 0.5),
         },
         "remedy_path": {"blocked_prereqs": blocked, "path": blocked + [kp_id] if blocked else [kp_id]},
         "resources": resource_list,

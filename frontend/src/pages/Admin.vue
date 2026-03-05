@@ -9,30 +9,38 @@ import AdminUserManager from "../components/AdminUserManager.vue";
 import AdminKpManager from "../components/AdminKpManager.vue";
 import AdminPracticeReport from "../components/AdminPracticeReport.vue";
 import AdminExpressionReport from "../components/AdminExpressionReport.vue";
+import AdminCourseManager from "../components/AdminCourseManager.vue";
+import AdminAuditLog from "../components/AdminAuditLog.vue";
 import { getRole } from "../token";
 
 const seeding = ref(false);
 const loading = ref(false);
-const subject = ref("数据结构");
+const subject = ref("");
 const grade = ref("通用");
 const role = ref(getRole());
 const isPrivileged = computed(() => role.value === "admin" || role.value === "teacher");
 const route = useRoute();
 const router = useRouter();
-const activeTab = computed({
-  get: () => {
+const adminTabs = ["config", "video", "questions", "kps", "edges", "users", "report", "expression", "courses", "audit"];
+const activeTab = computed<string>({
+  get() {
     if (route.path.startsWith("/admin/")) {
       const seg = route.path.split("/")[2];
-      if (["video", "questions", "kps", "edges", "users", "report", "expression"].includes(seg)) return seg;
+      if (adminTabs.includes(seg)) return seg;
     }
     return "config";
   },
-  set: (value) => {
-    router.push(`/admin/${value}`);
+  set(value) {
+    const tab = String(value || "config");
+    const safe = adminTabs.includes(tab) ? tab : "config";
+    const target = `/admin/${safe}`;
+    if (route.path !== target) router.push(target);
   },
 });
 
 type KP = { id: number; code: string; title: string };
+type Course = { id: number; code: string; title: string };
+const courses = ref<Course[]>([]);
 const kps = ref<KP[]>([]);
 const selectedKpId = ref<number | null>(null);
 const bilibili = reactive({
@@ -95,7 +103,20 @@ async function seedFull() {
   }
 }
 
+async function loadCourses() {
+  try {
+    const res = await api.get("/graph/courses");
+    courses.value = res.data ?? [];
+    if (!subject.value && courses.value.length) {
+      subject.value = courses.value[0].title;
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "加载课程失败");
+  }
+}
+
 async function loadConfig() {
+  if (!subject.value) return;
   loading.value = true;
   try {
     const res = await api.get(
@@ -112,6 +133,7 @@ async function loadConfig() {
 }
 
 async function loadKps() {
+  if (!subject.value) return;
   try {
     const res = await api.get(
       `/graph/kps?subject=${encodeURIComponent(subject.value)}&grade=${encodeURIComponent(grade.value)}`
@@ -214,185 +236,237 @@ async function saveConfig() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!isPrivileged.value) {
     ElMessage.warning("仅管理员/教师可访问管理端");
     router.push("/student/resource");
     return;
   }
-  loadConfig();
-  loadKps();
+  await loadCourses();
+  await loadConfig();
+  await loadKps();
 });
 </script>
 
 <template>
-  <el-card v-if="isPrivileged" class="panel-card" shadow="never">
-    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between">
-      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
-        <el-select v-model="subject" size="small" style="width: 180px" @change="() => { loadConfig(); loadKps(); }">
-          <el-option label="数据结构" value="数据结构" />
-          <el-option label="计算机组成原理" value="计算机组成原理" />
-          <el-option label="操作系统" value="操作系统" />
-          <el-option label="计算机网络" value="计算机网络" />
-        </el-select>
-        <el-button size="small" type="primary" :loading="seeding" @click="seed">Seed 数据结构 Demo</el-button>
-        <el-button size="small" type="success" :loading="seeding" @click="seedFull">Seed 全科数据</el-button>
+  <div v-if="isPrivileged" class="admin-shell">
+    <el-card class="panel-card" shadow="never">
+      <div class="topbar">
+        <div class="topbar-left">
+          <el-select v-model="subject" size="small" style="width: 200px" @change="() => { loadConfig(); loadKps(); }">
+            <el-option v-for="c in courses" :key="c.id" :label="c.title" :value="c.title" />
+          </el-select>
+          <el-button size="small" type="primary" :loading="seeding" @click="seed">Seed 数据结构 Demo</el-button>
+          <el-button size="small" type="success" :loading="seeding" @click="seedFull">Seed 全科数据</el-button>
+        </div>
+        <el-text type="info">admin/admin123; student1/student123</el-text>
       </div>
-      <el-text type="info">admin/admin123；student1/student123</el-text>
-    </div>
-  </el-card>
+    </el-card>
 
-  <div style="height: 10px" />
+    <div class="space" />
 
-  <el-tabs v-model="activeTab" type="border-card">
-    <el-tab-pane label="评价配置" name="config">
-      <el-card shadow="never">
-        <template #header>动态评价配置</template>
-        <el-skeleton v-if="loading" :rows="6" animated />
-        <div v-else style="display: grid; gap: 8px">
-          <el-form label-width="180px" size="small">
-            <el-form-item label="小测正确率权重">
-              <el-input-number v-model="cfg.weights.quiz_accuracy" :min="0" :max="1" :step="0.05" />
-            </el-form-item>
-            <el-form-item label="练习正确率权重">
-              <el-input-number v-model="cfg.weights.practice_accuracy" :min="0" :max="1" :step="0.05" />
-            </el-form-item>
-            <el-form-item label="表情轻松度权重">
-              <el-input-number v-model="cfg.weights.expression_ease" :min="0" :max="1" :step="0.05" />
-            </el-form-item>
-            <el-form-item label="视频完成度权重">
-              <el-input-number v-model="cfg.weights.video_completion" :min="0" :max="1" :step="0.05" />
-            </el-form-item>
-            <el-form-item label="耗时惩罚权重">
-              <el-input-number v-model="cfg.weights.duration_penalty" :min="0" :max="1" :step="0.05" />
-            </el-form-item>
+    <el-tabs v-model="activeTab" type="border-card" class="dify-tabs">
+      <el-tab-pane label="评价配置" name="config">
+        <el-card class="panel-card" shadow="never">
+          <template #header>动态评价配置</template>
+          <el-skeleton v-if="loading" :rows="6" animated />
+          <div v-else class="config-grid">
+            <el-form label-width="180px" size="small">
+              <el-form-item label="小测正确率权重">
+                <el-input-number v-model="cfg.weights.quiz_accuracy" :min="0" :max="1" :step="0.05" />
+              </el-form-item>
+              <el-form-item label="练习正确率权重">
+                <el-input-number v-model="cfg.weights.practice_accuracy" :min="0" :max="1" :step="0.05" />
+              </el-form-item>
+              <el-form-item label="表情轻松度权重">
+                <el-input-number v-model="cfg.weights.expression_ease" :min="0" :max="1" :step="0.05" />
+              </el-form-item>
+              <el-form-item label="视频完成度权重">
+                <el-input-number v-model="cfg.weights.video_completion" :min="0" :max="1" :step="0.05" />
+              </el-form-item>
+              <el-form-item label="耗时惩罚权重">
+                <el-input-number v-model="cfg.weights.duration_penalty" :min="0" :max="1" :step="0.05" />
+              </el-form-item>
 
-            <el-form-item label="解锁练习正确率阈值">
-              <el-input-number v-model="cfg.thresholds.unlock_accuracy" :min="0" :max="1" :step="0.01" />
-            </el-form-item>
-            <el-form-item label="解锁最大困难度阈值">
-              <el-input-number v-model="cfg.thresholds.unlock_max_difficulty" :min="0" :max="1" :step="0.01" />
-            </el-form-item>
+              <el-form-item label="解锁练习正确率阈值">
+                <el-input-number v-model="cfg.thresholds.unlock_accuracy" :min="0" :max="1" :step="0.01" />
+              </el-form-item>
+              <el-form-item label="解锁最大困难度阈值">
+                <el-input-number v-model="cfg.thresholds.unlock_max_difficulty" :min="0" :max="1" :step="0.01" />
+              </el-form-item>
 
-            <el-form-item label="练习统计窗口(题数)">
-              <el-input-number v-model="cfg.window.practice_attempts" :min="1" :max="200" :step="1" />
+              <el-form-item label="练习统计窗口(题数)">
+                <el-input-number v-model="cfg.window.practice_attempts" :min="1" :max="200" :step="1" />
+              </el-form-item>
+              <el-form-item label="表情统计窗口(次数)">
+                <el-input-number v-model="cfg.window.expressions" :min="1" :max="200" :step="1" />
+              </el-form-item>
+              <el-form-item label="练习题总量(自动推荐)">
+                <el-input-number v-model="cfg.window.practice_total" :min="1" :max="200" :step="1" />
+              </el-form-item>
+              <el-form-item label="难度区间步长">
+                <el-input-number v-model="cfg.window.difficulty_step" :min="0.05" :max="0.5" :step="0.05" />
+              </el-form-item>
+              <el-form-item label="表情置信度阈值">
+                <el-input-number v-model="cfg.window.expression_conf_threshold" :min="0" :max="1" :step="0.01" />
+              </el-form-item>
+              <el-form-item label="表情影响系数">
+                <el-input-number v-model="cfg.window.expression_influence" :min="0" :max="2" :step="0.1" />
+              </el-form-item>
+              <el-form-item label="视频完成阈值">
+                <el-input-number v-model="cfg.window.video_complete_ratio" :min="0" :max="1" :step="0.05" />
+              </el-form-item>
+              <el-form-item label="视频起始计入比例">
+                <el-input-number v-model="cfg.window.video_min_ratio" :min="0" :max="1" :step="0.05" />
+              </el-form-item>
+              <el-form-item label="最大难度跳升">
+                <el-input-number v-model="cfg.window.max_difficulty_jump" :min="0" :max="0.5" :step="0.05" />
+              </el-form-item>
+              <el-form-item label="稳定区强度">
+                <el-input-number v-model="cfg.window.stability_strength" :min="0" :max="1" :step="0.05" />
+              </el-form-item>
+            </el-form>
+
+            <div class="action-row">
+              <el-button size="small" type="success" @click="saveConfig">保存</el-button>
+              <el-button size="small" @click="loadConfig">重新加载</el-button>
+            </div>
+          </div>
+        </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane label="视频绑定" name="video">
+        <el-card class="panel-card" shadow="never">
+          <template #header>知识点绑定 B 站选集</template>
+          <el-form label-width="120px" size="small">
+            <el-form-item label="知识点">
+              <el-select v-model="selectedKpId" style="width: 100%" filterable @visible-change="loadKps">
+                <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
+              </el-select>
             </el-form-item>
-            <el-form-item label="表情统计窗口(次数)">
-              <el-input-number v-model="cfg.window.expressions" :min="1" :max="200" :step="1" />
+            <el-form-item label="bvid">
+              <el-input v-model="bilibili.bvid" placeholder="例如 BV1ct4y1t7pv" />
             </el-form-item>
-            <el-form-item label="练习题总量(自动推荐)">
-              <el-input-number v-model="cfg.window.practice_total" :min="1" :max="200" :step="1" />
+            <el-form-item label="选集(page)">
+              <el-input-number v-model="bilibili.page" :min="1" :max="200" :step="1" />
             </el-form-item>
-            <el-form-item label="难度区间步长">
-              <el-input-number v-model="cfg.window.difficulty_step" :min="0.05" :max="0.5" :step="0.05" />
+            <el-form-item label="标题(可选)">
+              <el-input v-model="bilibili.title" placeholder="留空将自动生成" />
             </el-form-item>
-            <el-form-item label="表情置信度阈值">
-              <el-input-number v-model="cfg.window.expression_conf_threshold" :min="0" :max="1" :step="0.01" />
-            </el-form-item>
-            <el-form-item label="表情影响系数">
-              <el-input-number v-model="cfg.window.expression_influence" :min="0" :max="2" :step="0.1" />
-            </el-form-item>
-            <el-form-item label="视频完成阈值">
-              <el-input-number v-model="cfg.window.video_complete_ratio" :min="0" :max="1" :step="0.05" />
-            </el-form-item>
-            <el-form-item label="视频起始计入比例">
-              <el-input-number v-model="cfg.window.video_min_ratio" :min="0" :max="1" :step="0.05" />
-            </el-form-item>
-            <el-form-item label="最大难度跳变">
-              <el-input-number v-model="cfg.window.max_difficulty_jump" :min="0" :max="0.5" :step="0.05" />
-            </el-form-item>
-            <el-form-item label="稳定区强度">
-              <el-input-number v-model="cfg.window.stability_strength" :min="0" :max="1" :step="0.05" />
+            <el-form-item>
+              <el-button size="small" type="success" @click="bindBilibili">绑定</el-button>
+              <el-button size="small" type="danger" @click="clearVideo">清除</el-button>
+              <el-button size="small" @click="loadKps">刷新</el-button>
             </el-form-item>
           </el-form>
+        </el-card>
 
-          <div style="display: flex; gap: 8px">
-            <el-button size="small" type="success" @click="saveConfig">保存</el-button>
-            <el-button size="small" @click="loadConfig">重新加载</el-button>
-          </div>
-        </div>
-      </el-card>
-    </el-tab-pane>
+        <div class="space" />
 
-    <el-tab-pane label="视频绑定" name="video">
-      <el-card shadow="never">
-        <template #header>知识点绑定B站选集</template>
-        <el-form label-width="120px" size="small">
-          <el-form-item label="知识点">
-            <el-select v-model="selectedKpId" style="width: 100%" filterable @visible-change="loadKps">
-              <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="bvid">
-            <el-input v-model="bilibili.bvid" placeholder="例如 BV1ct4y1t7pv" />
-          </el-form-item>
-          <el-form-item label="选集(page)">
-            <el-input-number v-model="bilibili.page" :min="1" :max="200" :step="1" />
-          </el-form-item>
-          <el-form-item label="标题(可选)">
-            <el-input v-model="bilibili.title" placeholder="留空将自动生成" />
-          </el-form-item>
-          <el-form-item>
-            <el-button size="small" type="success" @click="bindBilibili">绑定</el-button>
-            <el-button size="small" type="danger" @click="clearVideo">清除</el-button>
-            <el-button size="small" @click="loadKps">刷新</el-button>
-          </el-form-item>
-        </el-form>
-      </el-card>
+        <el-card class="panel-card" shadow="never">
+          <template #header>本地/自托管视频</template>
+          <el-form label-width="120px" size="small">
+            <el-form-item label="知识点">
+              <el-select v-model="selectedKpId" style="width: 100%" filterable @visible-change="loadKps">
+                <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="标题(可选)">
+              <el-input v-model="localVideoTitle" placeholder="留空将自动生成" />
+            </el-form-item>
+            <el-form-item label="上传 MP4">
+              <el-upload :auto-upload="false" :show-file-list="true" :limit="1" @change="onLocalFileChange">
+                <el-button size="small">选择文件</el-button>
+              </el-upload>
+              <el-button size="small" type="success" style="margin-left: 8px" @click="uploadLocalVideo">
+                上传并绑定
+              </el-button>
+            </el-form-item>
+            <el-form-item label="自托管链接">
+              <el-input v-model="localVideoUrl" placeholder="可填 mp4 或 m3u8 地址" />
+            </el-form-item>
+            <el-form-item>
+              <el-button size="small" type="primary" @click="bindLocalUrl">绑定链接</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-tab-pane>
 
-      <div style="height: 12px" />
+      <el-tab-pane label="题库" name="questions">
+        <AdminQuestionManager :subject="subject" :grade="grade" />
+      </el-tab-pane>
 
-      <el-card shadow="never">
-        <template #header>本地/自托管视频</template>
-        <el-form label-width="120px" size="small">
-          <el-form-item label="知识点">
-            <el-select v-model="selectedKpId" style="width: 100%" filterable @visible-change="loadKps">
-              <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="标题(可选)">
-            <el-input v-model="localVideoTitle" placeholder="留空将自动生成" />
-          </el-form-item>
-          <el-form-item label="上传 MP4">
-            <el-upload :auto-upload="false" :show-file-list="true" :limit="1" @change="onLocalFileChange">
-              <el-button size="small">选择文件</el-button>
-            </el-upload>
-            <el-button size="small" type="success" style="margin-left: 8px" @click="uploadLocalVideo">
-              上传并绑定
-            </el-button>
-          </el-form-item>
-          <el-form-item label="自托管链接">
-            <el-input v-model="localVideoUrl" placeholder="可填写 mp4 或 m3u8 地址" />
-          </el-form-item>
-          <el-form-item>
-            <el-button size="small" type="primary" @click="bindLocalUrl">绑定链接</el-button>
-          </el-form-item>
-        </el-form>
-      </el-card>
-    </el-tab-pane>
+      <el-tab-pane label="课程" name="courses">
+        <AdminCourseManager />
+      </el-tab-pane>
 
-    <el-tab-pane label="题库" name="questions">
-      <AdminQuestionManager :subject="subject" :grade="grade" />
-    </el-tab-pane>
+      <el-tab-pane label="知识点" name="kps">
+        <AdminKpManager :subject="subject" :grade="grade" />
+      </el-tab-pane>
 
-    <el-tab-pane label="知识点" name="kps">
-      <AdminKpManager :subject="subject" :grade="grade" />
-    </el-tab-pane>
+      <el-tab-pane label="先修边" name="edges">
+        <AdminEdgeManager :subject="subject" :grade="grade" />
+      </el-tab-pane>
 
-    <el-tab-pane label="先修边" name="edges">
-      <AdminEdgeManager :subject="subject" :grade="grade" />
-    </el-tab-pane>
+      <el-tab-pane label="用户" name="users">
+        <AdminUserManager />
+      </el-tab-pane>
 
-    <el-tab-pane label="用户" name="users">
-      <AdminUserManager />
-    </el-tab-pane>
-
-    <el-tab-pane label="练习报表" name="report">
-      <AdminPracticeReport />
-    </el-tab-pane>
+      <el-tab-pane label="练习报表" name="report">
+        <AdminPracticeReport />
+      </el-tab-pane>
 
     <el-tab-pane label="表情报表" name="expression">
       <AdminExpressionReport />
     </el-tab-pane>
+
+    <el-tab-pane label="操作日志" name="audit">
+      <AdminAuditLog />
+    </el-tab-pane>
   </el-tabs>
+  </div>
 </template>
+
+<style scoped>
+.admin-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.topbar-left {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.space {
+  height: 12px;
+}
+
+.config-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+}
+
+.dify-tabs :deep(.el-tabs__header) {
+  margin-bottom: 12px;
+}
+
+.dify-tabs :deep(.el-tabs__nav-wrap::after) {
+  background: var(--app-border);
+}
+</style>

@@ -14,6 +14,7 @@ class PracticeSubmitIn(BaseModel):
     question_id: int
     kp_id: int
     answer: str
+    self_report: str = "unknown"
     duration_ms: int = 0
 
 

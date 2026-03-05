@@ -1,8 +1,8 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
-import { setRole, setToken } from "../token";
+import { setRole, setToken, validateInput } from "../token";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
@@ -44,7 +44,39 @@ function goAfterLogin(role: string, username: string) {
   else router.push("/admin/config");
 }
 
+// 验证登录表单
+function validateLoginForm(): boolean {
+  if (!validateInput(loginForm.username, 'username')) {
+    ElMessage.error('用户名长度至少3位，只能包含字母、数字、下划线和连字符');
+    return false;
+  }
+  if (!validateInput(loginForm.password, 'password')) {
+    ElMessage.error('密码长度至少6位');
+    return false;
+  }
+  return true;
+}
+
+// 验证注册表单
+function validateRegisterForm(): boolean {
+  if (!validateInput(registerForm.username, 'username')) {
+    ElMessage.error('用户名长度至少3位，只能包含字母、数字、下划线和连字符');
+    return false;
+  }
+  if (!validateInput(registerForm.password, 'password')) {
+    ElMessage.error('密码长度至少6位');
+    return false;
+  }
+  if (registerForm.phone && !/^1[3-9]\d{9}$/.test(registerForm.phone)) {
+    ElMessage.error('请输入有效的11位手机号');
+    return false;
+  }
+  return true;
+}
+
 async function submitLogin() {
+  if (!validateLoginForm()) return;
+  
   loading.value = true;
   try {
     const endpoint = loginForm.role === "student" ? "/auth/login/student" : "/auth/login/admin";
@@ -61,6 +93,8 @@ async function submitLogin() {
 }
 
 async function submitRegister() {
+  if (!validateRegisterForm()) return;
+  
   loading.value = true;
   try {
     const endpoint = registerForm.role === "student" ? "/auth/register/student" : "/auth/register/teacher";
@@ -77,22 +111,28 @@ async function submitRegister() {
     loading.value = false;
   }
 }
-
 </script>
 
 <template>
-  <el-row justify="center" class="login-shell">
-    <el-col :span="12" class="login-col">
-      <el-card class="login-card">
-        <template #header>
-          <div class="login-header">
-            <div>
-              <div class="login-title">账号系统</div>
-              <div class="login-subtitle">清新学习风 · 轻松开始</div>
-            </div>
-          </div>
-        </template>
-        <el-tabs v-model="activeTab">
+  <div class="login-page">
+    <div class="login-bg" />
+    <div class="login-shell">
+      <div class="brand-panel">
+        <div class="brand-logo">CS</div>
+        <div class="brand-title">动态评价系统</div>
+        <div class="brand-sub">知识图谱 · 自适应练习 · 行为信号</div>
+        <div class="brand-desc">
+          集成课程、题库与推荐策略，面向计算机专业课程的学习诊断与路径优化。
+        </div>
+      </div>
+
+      <el-card class="login-card" shadow="never">
+        <div class="card-header">
+          <div class="card-title">账号系统</div>
+          <div class="card-sub">登录后进入学习/管理工作台</div>
+        </div>
+
+        <el-tabs v-model="activeTab" class="login-tabs">
           <el-tab-pane label="登录" name="login">
             <el-form label-width="90px" class="login-form">
               <el-form-item label="登录类型">
@@ -111,10 +151,10 @@ async function submitRegister() {
                 <el-switch v-model="loginForm.remember" active-text="7天" inactive-text="仅本次" />
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" :loading="loading" @click="submitLogin">登录</el-button>
+                <el-button type="primary" :loading="loading" class="full-btn" @click="submitLogin">登录</el-button>
               </el-form-item>
               <div class="login-tip">
-                默认账号：admin/admin123；图谱与题库需在管理端 Seed
+                默认账号：admin/admin123；图谱与题库需在管理端 Seed。
               </div>
             </el-form>
           </el-tab-pane>
@@ -137,49 +177,115 @@ async function submitRegister() {
                 <el-input v-model="registerForm.phone" placeholder="可选，11位手机号" />
               </el-form-item>
               <el-form-item>
-                <el-button type="primary" :loading="loading" @click="submitRegister">注册</el-button>
+                <el-button type="primary" :loading="loading" class="full-btn" @click="submitRegister">注册</el-button>
               </el-form-item>
             </el-form>
           </el-tab-pane>
-
         </el-tabs>
       </el-card>
-    </el-col>
-  </el-row>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.login-shell {
-  margin-top: 70px;
+.login-page {
+  min-height: 100vh;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
 }
 
-.login-col {
-  max-width: 720px;
+.login-bg {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(900px 500px at 15% 20%, rgba(79, 140, 255, 0.08), transparent 60%),
+    radial-gradient(800px 480px at 85% 25%, rgba(86, 191, 255, 0.06), transparent 60%),
+    linear-gradient(160deg, var(--app-bg) 0%, var(--app-bg-alt) 45%, #f0f2f5 100%);
+  z-index: 0;
+}
+
+.login-shell {
+  position: relative;
+  z-index: 1;
+  width: min(1100px, 100%);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+}
+
+.brand-panel {
+  padding: 28px 24px;
+  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--app-shadow);
+}
+
+.brand-logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--app-green), #7fb0ff);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(79, 140, 255, 0.2);
+}
+
+.brand-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--app-ink);
+}
+
+.brand-sub {
+  color: var(--app-ink-soft);
+  margin-bottom: 16px;
+}
+
+.brand-desc {
+  color: var(--app-ink-soft);
+  line-height: 1.7;
+  font-size: 14px;
 }
 
 .login-card {
-  border-radius: 20px;
-  border: 1px solid rgba(46, 88, 63, 0.14);
-  box-shadow: 0 20px 50px rgba(27, 55, 40, 0.12);
+  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--app-shadow);
 }
 
-.login-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.card-header {
+  margin-bottom: 12px;
 }
 
-.login-title {
+.card-title {
   font-size: 20px;
   font-weight: 700;
-  letter-spacing: 0.4px;
+  color: var(--app-ink);
 }
 
-.login-subtitle {
+.card-sub {
   font-size: 12px;
-  color: #6b7d72;
-  margin-top: 4px;
+  color: var(--app-ink-soft);
+  margin-top: 6px;
+}
+
+.login-tabs :deep(.el-tabs__header) {
+  margin-bottom: 18px;
+}
+
+.login-tabs :deep(.el-tabs__nav-wrap::after) {
+  background: var(--app-border);
 }
 
 .login-form :deep(.el-form-item) {
@@ -187,37 +293,51 @@ async function submitRegister() {
 }
 
 .login-form :deep(.el-input__inner) {
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.9);
+  border-radius: var(--app-radius);
+  background: transparent;
+  border-color: transparent;
+  color: var(--app-ink);
+}
+
+.login-form :deep(.el-input__inner::placeholder) {
+  color: var(--el-text-color-placeholder);
+}
+
+.login-form :deep(.el-input__wrapper) {
+  background: #f8f9fa;
+  box-shadow: inset 0 0 0 1px var(--app-border);
 }
 
 .login-form :deep(.el-radio) {
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: 8px;
   border: 1px solid transparent;
 }
 
 .login-form :deep(.el-radio.is-checked) {
-  background: rgba(95, 191, 122, 0.12);
-  border-color: rgba(95, 191, 122, 0.35);
+  background: rgba(79, 140, 255, 0.08);
+  border-color: rgba(79, 140, 255, 0.3);
+}
+
+.full-btn {
+  width: 100%;
+  border-radius: var(--app-radius);
+  padding: 10px 0;
 }
 
 .login-tip {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 12px;
-  color: #6b7d72;
+  color: var(--app-ink-soft);
   padding: 8px 12px;
-  background: rgba(95, 191, 122, 0.08);
-  border-radius: 12px;
+  background: rgba(79, 140, 255, 0.05);
+  border-radius: var(--app-radius);
+  border: 1px solid rgba(79, 140, 255, 0.1);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 980px) {
   .login-shell {
-    margin-top: 40px;
-    padding: 0 12px;
-  }
-  .login-col {
-    max-width: 100%;
+    grid-template-columns: 1fr;
   }
 }
 </style>

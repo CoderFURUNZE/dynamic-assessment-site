@@ -9,9 +9,11 @@ import QuizPane from "../components/QuizPane.vue";
 import { getUsername } from "../token";
 
 type KP = { id: number; code: string; title: string; subject: string; grade: string };
+type Course = { id: number; code: string; title: string };
 
 const router = useRouter();
-const subject = ref("数据结构");
+const courses = ref<Course[]>([]);
+const subject = ref("");
 const grade = ref("通用");
 const kps = ref<KP[]>([]);
 const currentKpId = ref<number | null>(null);
@@ -22,8 +24,17 @@ function kpStorageKey() {
   return `da_kp_preview_${username}_${subject.value}`;
 }
 
+async function loadCourses() {
+  const res = await api.get("/graph/courses");
+  courses.value = res.data ?? [];
+  if (!subject.value && courses.value.length) {
+    subject.value = courses.value[0].title;
+  }
+}
+
 async function loadKps() {
   try {
+    if (!subject.value) return;
     const res = await api.get(`/graph/kps?subject=${encodeURIComponent(subject.value)}&grade=${encodeURIComponent(grade.value)}`);
     kps.value = res.data;
     const saved = localStorage.getItem(kpStorageKey());
@@ -47,18 +58,21 @@ function onKpChange() {
   }
 }
 
-onMounted(() => loadKps());
+onMounted(async () => {
+  await loadCourses();
+  await loadKps();
+});
 </script>
 
 <template>
   <el-card class="panel-card" shadow="never">
     <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap">
+      <div v-if="courses.length === 0" style="margin-bottom: 8px">
+        <el-alert type="warning" title="暂无课程，请在管理端添加课程" show-icon />
+      </div>
       <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
         <el-select v-model="subject" style="width: 180px" @change="loadKps">
-          <el-option label="数据结构" value="数据结构" />
-          <el-option label="计算机组成原理" value="计算机组成原理" />
-          <el-option label="操作系统" value="操作系统" />
-          <el-option label="计算机网络" value="计算机网络" />
+          <el-option v-for="c in courses" :key="c.id" :label="c.title" :value="c.title" />
         </el-select>
         <el-select v-model="currentKpId" placeholder="选择知识点" style="width: 320px" @change="onKpChange">
           <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />

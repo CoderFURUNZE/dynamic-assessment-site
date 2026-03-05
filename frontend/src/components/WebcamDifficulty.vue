@@ -27,6 +27,29 @@ const compactWidth = 220;
 const margin = 16;
 const savedPos = ref<{ x: string; y: string; w: string } | null>(null);
 
+// 节流函数
+function throttle<T extends (...args: any[]) => any>(func: T, delay: number): (...args: Parameters<T>) => void {
+  let lastCall = 0;
+  return (...args: Parameters<T>) => {
+    const now = Date.now();
+    if (now - lastCall >= delay) {
+      lastCall = now;
+      func(...args);
+    }
+  };
+}
+
+// 优化的拖拽移动函数
+const throttledDragMove = throttle((ev: MouseEvent) => {
+  if (!isDragging.value) return;
+  const win = window;
+  const width = isFullscreen.value ? compactWidth : baseWidth;
+  const x = Math.max(0, Math.min(win.innerWidth - width, ev.clientX - dragOffset.value.x));
+  const y = Math.max(0, Math.min(win.innerHeight - 280, ev.clientY - dragOffset.value.y));
+  win.document.documentElement.style.setProperty("--float-x", `${x}px`);
+  win.document.documentElement.style.setProperty("--float-y", `${y}px`);
+}, 16); // 约60fps
+
 function onDragStart(ev: MouseEvent) {
   const target = ev.currentTarget as HTMLElement | null;
   if (!target) return;
@@ -36,13 +59,7 @@ function onDragStart(ev: MouseEvent) {
 }
 
 function onDragMove(ev: MouseEvent) {
-  if (!isDragging.value) return;
-  const win = window;
-  const width = isFullscreen.value ? compactWidth : baseWidth;
-  const x = Math.max(0, Math.min(win.innerWidth - width, ev.clientX - dragOffset.value.x));
-  const y = Math.max(0, Math.min(win.innerHeight - 280, ev.clientY - dragOffset.value.y));
-  win.document.documentElement.style.setProperty("--float-x", `${x}px`);
-  win.document.documentElement.style.setProperty("--float-y", `${y}px`);
+  throttledDragMove(ev);
 }
 
 function onDragEnd() {
@@ -91,7 +108,14 @@ const labelText = computed(() => {
 });
 
 async function startCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  const stream = await navigator.mediaDevices.getUserMedia({ 
+    video: { 
+      width: 640, 
+      height: 480, 
+      frameRate: 15 // 降低帧率以减少性能消耗
+    }, 
+    audio: false 
+  });
   if (!videoRef.value) return;
   videoRef.value.srcObject = stream;
   await videoRef.value.play();
@@ -141,7 +165,14 @@ function connectWs() {
   };
 }
 
+// 优化的帧发送函数
+let lastFrameSent = 0;
+const FRAME_INTERVAL = 500; // 增加帧间隔到 500ms，减少网络请求
+
 function sendFrame() {
+  const now = Date.now();
+  if (now - lastFrameSent < FRAME_INTERVAL) return;
+  
   const ws = wsRef.value;
   const v = videoRef.value;
   const c = canvasRef.value;
@@ -149,28 +180,49 @@ function sendFrame() {
   if (!v || !c) return;
   if (!props.kpId) return;
 
-  const w = 480;
+  // 减小图像尺寸以减少数据传输量
+  const w = 320;
   const h = Math.round((v.videoHeight / v.videoWidth) * w) || 240;
-  c.width = w;
-  c.height = h;
+  
+  // 只在尺寸变化时重新设置 Canvas 大小
+  if (c.width !== w || c.height !== h) {
+    c.width = w;
+    c.height = h;
+  }
+  
   const ctx = c.getContext("2d");
   if (!ctx) return;
   ctx.drawImage(v, 0, 0, w, h);
-  const dataUrl = c.toDataURL("image/jpeg", 0.6);
+  
+  // 进一步降低图像质量以减少数据传输量
+  const dataUrl = c.toDataURL("image/jpeg", 0.5);
   const image_b64 = dataUrl.split(",")[1];
   ws.send(JSON.stringify({ type: "frame", image_b64, kp_id: props.kpId, ts: Date.now() }));
+  
+  lastFrameSent = now;
 }
 
-let timer: number | null = null;
+let animationId: number | null = null;
 
+// 使用 requestAnimationFrame 代替 setInterval
 function startLoop() {
-  if (timer) window.clearInterval(timer);
-  timer = window.setInterval(() => sendFrame(), 350);
+  if (animationId) cancelAnimationFrame(animationId);
+  
+  function loop() {
+    if (enabled.value && running.value) {
+      sendFrame();
+    }
+    animationId = requestAnimationFrame(loop);
+  }
+  
+  animationId = requestAnimationFrame(loop);
 }
 
 function stopLoop() {
-  if (timer) window.clearInterval(timer);
-  timer = null;
+  if (animationId) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
 }
 
 watch(
@@ -238,7 +290,14 @@ async function resumeCamera() {
 }
 
 const onVisibility = () => {
-  if (!document.hidden) {
+  if (document.hidden) {
+    // 当页面不可见时，暂停发送帧
+    stopLoop();
+  } else {
+    // 当页面可见时，恢复发送帧
+    if (enabled.value && running.value) {
+      startLoop();
+    }
     void resumeCamera();
   }
 };
@@ -334,10 +393,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .fullscreen-panel {
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 .embedded {
-  background: #0f1113;
-  color: #f5f7fa;
+  background: #ffffff;
+  color: var(--app-ink);
+  border: 1px solid var(--app-border);
 }
 </style>

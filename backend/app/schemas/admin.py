@@ -77,6 +77,28 @@ class KnowledgeEdgeOut(BaseModel):
     next_id: int
 
 
+class CourseOut(BaseModel):
+    id: int
+    code: str
+    title: str
+    description: str = ""
+    active: bool
+
+
+class CourseIn(BaseModel):
+    code: str
+    title: str
+    description: str = ""
+    active: bool = True
+
+
+class CourseUpdateIn(BaseModel):
+    code: str | None = None
+    title: str | None = None
+    description: str | None = None
+    active: bool | None = None
+
+
 class AdminPracticeReportOut(BaseModel):
     user_id: int
     kp_id: int | None = None
@@ -97,3 +119,12 @@ class AdminExpressionReportOut(BaseModel):
     by_label: list[dict] = []
     daily: list[dict] = []
     items: list[dict] = []
+
+
+class AuditLogOut(BaseModel):
+    id: int
+    actor: str
+    role: str
+    action: str
+    detail: str
+    created_at: str

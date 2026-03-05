@@ -22,6 +22,7 @@ from app.schemas.practice import (
 from app.services.eval import upsert_mastery
 from app.services.dl_reco import predict_one, score_questions, score_recent
 from app.services.practice import practice_status
+from app.services.reco_policy import evidence_checklist, recent_expression_state, recent_wrong_streak, difficulty_band
 
 router = APIRouter(prefix="/practice", tags=["practice"])
 
@@ -78,12 +79,16 @@ def submit(
         raise HTTPException(status_code=400, detail="Invalid question")
     answer = payload.answer.strip()
     is_correct = answer.upper() == q.answer.strip().upper()
+    self_report = (payload.self_report or "unknown").strip().lower()
+    if self_report not in {"guess", "sure", "unknown"}:
+        self_report = "unknown"
     session.add(
         PracticeAttempt(
             user_id=user.id,
             question_id=q.id,
             kp_id=q.kp_id,
             correct=is_correct,
+            self_report=self_report,
             duration_ms=payload.duration_ms,
         )
     )
@@ -202,6 +207,7 @@ def next_question(
         last_correct = bool(attempt.correct)
         target = last_diff + (step if last_correct else -step)
 
+    evidence = evidence_checklist(session, user_id=user.id, kp_id=kp_id)
     expr_n = int(window.get("expressions", 20))
     expr_conf_threshold = float(window.get("expression_conf_threshold", 0.2))
     expr_influence = float(window.get("expression_influence", 1.0))
@@ -233,6 +239,18 @@ def next_question(
         target = (1.0 - stability_strength) * target + stability_strength * last_diff
         if max_jump > 0:
             target = max(last_diff - max_jump, min(last_diff + max_jump, target))
+
+    # Remedial: if frustration is high or wrong streak, bias to easier range.
+    wrong_streak = recent_wrong_streak(session, user_id=user.id, kp_id=kp_id, window=5)
+    expr_state = recent_expression_state(
+        session,
+        user_id=user.id,
+        kp_id=kp_id,
+        window=expr_n,
+        conf_threshold=expr_conf_threshold,
+    )
+    if (not last_correct) and (wrong_streak >= 2 or float(expr_state.get("difficulty_avg", 0.5)) >= 0.6):
+        target = max(0.0, target - step)
 
     target = max(0.0, min(1.0, target))
 
@@ -272,6 +290,39 @@ def next_question(
     predicted_correct = None
     model_used = False
     reason = None
+    w_need = float(window.get("w_need", 0.45))
+    w_gain = float(window.get("w_gain", 0.4))
+    w_risk = float(window.get("w_risk", 0.15))
+
+    missing = set(evidence.get("missing", []))
+    missing_types = set()
+    missing_bands = set()
+    for item in missing:
+        if "mcq" in item:
+            missing_types.add("mcq")
+        if "blank" in item:
+            missing_types.add("blank")
+        if "medium" in item:
+            missing_bands.add("medium")
+        if "hard" in item:
+            missing_bands.add("hard")
+
+    risk = min(1.0, 0.6 * float(expr_state.get("difficulty_avg", 0.5)) + 0.4 * min(1.0, wrong_streak / 3))
+
+    def rule_score(q: Question, target_value: float) -> float:
+        need = 0.2
+        if q.type in missing_types:
+            need += 0.4
+        band = difficulty_band(float(q.difficulty))
+        if band in missing_bands:
+            need += 0.4
+        need = min(1.0, need)
+        learn_gain = 1.0 - min(1.0, abs(float(q.difficulty) - target_value) * 1.5)
+        return w_need * need + w_gain * learn_gain - w_risk * risk
+
+    def learn_gain_from_prob(p: float) -> float:
+        return max(0.0, 1.0 - abs(p - 0.65) / 0.65)
+
     for start in ranges:
         if start < 0 or start > 1.0:
             continue
@@ -279,17 +330,26 @@ def next_question(
         if cand:
             scored = score_questions(session, user_id=user.id, kp_id=kp_id, questions=cand)
             if scored:
-                scored_sorted = sorted(scored, key=lambda x: x[0], reverse=True)
+                scored_with_policy = []
+                for prob, q in scored:
+                    policy_score = rule_score(q, target)
+                    gain_ml = learn_gain_from_prob(float(prob))
+                    final = 0.7 * policy_score + 0.3 * gain_ml
+                    scored_with_policy.append((final, prob, q))
+                scored_sorted = sorted(scored_with_policy, key=lambda x: x[0], reverse=True)
                 top_n = min(5, len(scored_sorted))
-                best_score, best_q = rng.choice(scored_sorted[:top_n])
+                final_score, best_prob, best_q = rng.choice(scored_sorted[:top_n])
                 picked = best_q
-                predicted_correct = float(best_score)
+                predicted_correct = float(best_prob)
                 model_used = True
-                reason = "model_best_in_range"
+                reason = "policy+model"
             else:
-                picked = rng.choice(cand)
+                cand_scored = [(rule_score(q, target), q) for q in cand]
+                cand_sorted = sorted(cand_scored, key=lambda x: x[0], reverse=True)
+                top_n = min(5, len(cand_sorted))
+                picked = rng.choice(cand_sorted[:top_n])[1]
                 model_used = False
-                reason = "rule_best_in_range"
+                reason = "policy_rule"
             picked_range = start
             break
 
@@ -306,10 +366,10 @@ def next_question(
             if pred is not None:
                 predicted_correct = pred
                 model_used = True
-                reason = "model_fallback"
+                reason = "policy+model_fallback"
             else:
                 model_used = False
-                reason = "rule_fallback"
+                reason = "policy_fallback"
 
     if picked is None:
         return PracticeNextOut(done=True, total_questions=total_n, attempted_questions=attempted_n, question=None)

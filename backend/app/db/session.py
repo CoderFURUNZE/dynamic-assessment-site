@@ -14,6 +14,7 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
     _ensure_kp_practice_total_column()
     _ensure_question_meta_columns()
+    _ensure_practice_attempt_columns()
 
 
 def _ensure_kp_practice_total_column() -> None:
@@ -46,6 +47,21 @@ def _ensure_question_meta_columns() -> None:
         with engine.begin() as conn:
             for col in missing:
                 conn.execute(text(f"ALTER TABLE question ADD COLUMN {col} TEXT"))
+    except Exception:
+        pass
+
+
+def _ensure_practice_attempt_columns() -> None:
+    inspector = inspect(engine)
+    try:
+        cols = {c["name"] for c in inspector.get_columns("practiceattempt")}
+    except Exception:
+        return
+    if "self_report" in cols:
+        return
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE practiceattempt ADD COLUMN self_report TEXT"))
     except Exception:
         pass
 

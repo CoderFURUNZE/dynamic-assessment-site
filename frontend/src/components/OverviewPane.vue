@@ -46,9 +46,9 @@ function formatTime(value?: string | null) {
 }
 
 function masteryColor(value: number) {
-  if (value >= 0.85) return "#5fbf7a";
-  if (value >= 0.5) return "#f6b45a";
-  return "#f2807e";
+  if (value >= 0.85) return "#6aa7ff";
+  if (value >= 0.5) return "#4f8cff";
+  return "#2f6fd6";
 }
 
 async function load() {
@@ -158,11 +158,11 @@ watch(
             <div
               v-for="kp in masteryMap"
               :key="kp.kp_id"
-              style="border-radius: 12px; padding: 10px; color: #1c2c24; border: 1px solid rgba(0,0,0,0.04)"
-              :style="{ background: `linear-gradient(135deg, ${masteryColor(kp.mastery)}22, ${masteryColor(kp.mastery)}55)` }"
+              style="border-radius: 12px; padding: 10px; color: var(--app-ink); border: 1px solid rgba(255,255,255,0.08)"
+              :style="{ background: `linear-gradient(135deg, ${masteryColor(kp.mastery)}18, ${masteryColor(kp.mastery)}55)` }"
             >
               <div style="font-weight: 600; font-size: 13px">{{ kp.code }}</div>
-              <div style="font-size: 12px; color: #375046">{{ kp.title }}</div>
+              <div style="font-size: 12px; color: var(--app-ink-soft)">{{ kp.title }}</div>
               <div style="margin-top: 6px; font-weight: 700">{{ Math.round((kp.mastery || 0) * 100) }}%</div>
             </div>
           </div>

@@ -650,18 +650,12 @@ onMounted(() => loadKps());
                 <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="150" align="center" header-align="center">
+            <el-table-column label="&#25805;&#20316;" width="300" align="center" header-align="center">
               <template #default="{ row }">
-                <div class="op-btn-wrap">
-                  <el-button size="small" class="op-btn" @click="openEdit(row)">修改</el-button>
-                  <el-button size="small" type="danger" class="op-btn" @click="removeQuestion(row)">删除</el-button>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="小测" width="150" align="center" header-align="center">
-              <template #default="{ row }">
-                <div class="op-btn-wrap">
-                  <el-button size="small" class="op-btn primary" type="primary" @click="addBankToQuiz(row)">加入小测</el-button>
+                <div class="op-actions-inline">
+                  <el-button size="small" @click="openEdit(row)">&#20462;&#25913;</el-button>
+                  <el-button size="small" type="danger" @click="removeQuestion(row)">&#21024;&#38500;</el-button>
+                  <el-button size="small" type="primary" @click="addBankToQuiz(row)">&#21152;&#20837;&#23567;&#27979;</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -685,8 +679,9 @@ onMounted(() => loadKps());
           <el-alert type="info" :closable="false" show-icon>
             <template #default>
               <div style="white-space: pre-line; font-size: 12px; line-height: 1.5">
-每题一个块，示例：
-【题目】知识点编码 MATH-G2-DER-001
+每题一个块，示例如下：
+【题目】
+知识点编码: MATH-G2-DER-001
 题型: 选择
 题干: 导数的几何意义是？
 选项:
@@ -707,7 +702,7 @@ D. 平均值
             </el-upload>
             <el-button size="small" type="primary" :loading="importLoading" @click="importDocx">导入</el-button>
             <span v-if="importResult" style="font-size: 12px">
-              已导入{{ importResult.created }}，跳过{{ importResult.skipped }}，错误{{ importResult.errors?.length || 0 }}
+              已导入 {{ importResult.created }}，跳过 {{ importResult.skipped }}，错误 {{ importResult.errors?.length || 0 }}
             </span>
           </div>
         </el-card>
@@ -736,7 +731,7 @@ D. 平均值
               <el-input v-model="form.version" placeholder="如 v1/v2" />
             </el-form-item>
             <el-form-item v-if="form.type === 'mcq'" label="选项">
-              <el-input v-model="form.optionsText" placeholder="用逗号分隔，例如A,B,C,D" />
+              <el-input v-model="form.optionsText" placeholder="用逗号分隔，例如 A,B,C,D" />
             </el-form-item>
             <el-form-item label="答案">
               <el-input v-model="form.answer" placeholder="选择题填 A/B/C/D；填空题填具体答案" />
@@ -791,7 +786,7 @@ D. 平均值
               <el-input v-model="quizForm.prompt" type="textarea" :rows="2" />
             </el-form-item>
             <el-form-item v-if="quizForm.type === 'mcq'" label="选项">
-              <el-input v-model="quizForm.optionsText" placeholder="用逗号分隔，例如A,B,C,D" />
+              <el-input v-model="quizForm.optionsText" placeholder="用逗号分隔，例如 A,B,C,D" />
             </el-form-item>
             <el-form-item label="答案">
               <el-input v-model="quizForm.answer" placeholder="选择题填 A/B/C/D；填空题填具体答案" />
@@ -823,7 +818,7 @@ D. 平均值
         <el-input v-model="quizEditForm.prompt" type="textarea" :rows="2" />
       </el-form-item>
       <el-form-item v-if="quizEditForm.type === 'mcq'" label="选项">
-        <el-input v-model="quizEditForm.optionsText" placeholder="用逗号分隔，例如A,B,C,D" />
+        <el-input v-model="quizEditForm.optionsText" placeholder="用逗号分隔，例如 A,B,C,D" />
       </el-form-item>
       <el-form-item label="答案">
         <el-input v-model="quizEditForm.answer" placeholder="选择题填 A/B/C/D；填空题填具体答案" />
@@ -862,7 +857,7 @@ D. 平均值
         <el-input v-model="editForm.version" placeholder="如 v1/v2" />
       </el-form-item>
       <el-form-item v-if="editForm.type === 'mcq'" label="选项">
-        <el-input v-model="editForm.optionsText" placeholder="用逗号分隔，例如A,B,C,D" />
+        <el-input v-model="editForm.optionsText" placeholder="用逗号分隔，例如 A,B,C,D" />
       </el-form-item>
       <el-form-item label="答案">
         <el-input v-model="editForm.answer" placeholder="选择题填 A/B/C/D；填空题填具体答案" />
