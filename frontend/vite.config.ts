@@ -8,14 +8,8 @@ export default defineConfig({
   },
   build: {
     // 优化构建输出
-    target: 'es2015',
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-      },
-    },
+    target: "es2015",
+    minify: "esbuild",
     // 启用 gzip 压缩
     cssCodeSplit: true,
     // 配置代码分割
@@ -39,4 +33,3 @@ export default defineConfig({
     },
   },
 });
-

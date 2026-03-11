@@ -3,6 +3,18 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _normalize_database_url(database_url: str) -> str:
+    if not database_url.startswith("sqlite:///"):
+        return database_url
+    raw = database_url.removeprefix("sqlite:///")
+    db_path = Path(raw)
+    if db_path.is_absolute():
+        return database_url
+    backend_dir = Path(__file__).resolve().parents[2]
+    resolved = (backend_dir / db_path).resolve()
+    return f"sqlite:///{resolved}"
+
+
 class Settings(BaseSettings):
     _backend_env = str(Path(__file__).resolve().parents[2] / ".env")
     model_config = SettingsConfigDict(env_file=_backend_env, extra="ignore")
@@ -19,3 +31,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+settings.database_url = _normalize_database_url(settings.database_url)

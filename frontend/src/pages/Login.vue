@@ -35,12 +35,17 @@ function goAfterLogin(role: string, username: string) {
       router.push(last);
       return;
     }
-    if ((role === "admin" || role === "teacher") && last.startsWith("/admin/")) {
+    if (role === "admin" && last.startsWith("/admin/")) {
+      router.push(last);
+      return;
+    }
+    if (role === "teacher" && last.startsWith("/teacher/")) {
       router.push(last);
       return;
     }
   }
-  if (role === "student") router.push("/student/resource");
+  if (role === "student") router.push("/student/overview");
+  else if (role === "teacher") router.push("/teacher/courses");
   else router.push("/admin/config");
 }
 
@@ -138,7 +143,7 @@ async function submitRegister() {
               <el-form-item label="登录类型">
                 <el-radio-group v-model="loginForm.role">
                   <el-radio label="student">学生登录</el-radio>
-                  <el-radio label="admin">管理员登录</el-radio>
+                  <el-radio label="admin">教师/管理员登录</el-radio>
                 </el-radio-group>
               </el-form-item>
               <el-form-item label="用户名">

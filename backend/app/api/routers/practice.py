@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from sqlalchemy import delete, func
 
 from app.api.deps import get_current_user
-from app.db.models import EvalConfig, ExpressionEvent, KnowledgePoint, PracticeAttempt, Question, ReviewSchedule
+from app.db.models import EvalConfig, KnowledgePoint, LearningBehaviorEvent, PracticeAttempt, Question, ReviewSchedule
 from app.db.session import get_session
 from app.schemas.practice import (
     PracticeNextOut,
@@ -21,8 +21,9 @@ from app.schemas.practice import (
 )
 from app.services.eval import upsert_mastery
 from app.services.dl_reco import predict_one, score_questions, score_recent
+from app.services.learner_profile import log_behavior_event, recalculate_profile_snapshot
 from app.services.practice import practice_status
-from app.services.reco_policy import evidence_checklist, recent_expression_state, recent_wrong_streak, difficulty_band
+from app.services.reco_policy import evidence_checklist, recent_wrong_streak, difficulty_band
 
 router = APIRouter(prefix="/practice", tags=["practice"])
 
@@ -96,6 +97,28 @@ def submit(
     session.commit()
     mastery = upsert_mastery(
         session, user_id=user.id, kp_id=q.kp_id, subject=q.subject, grade=q.grade
+    )
+    log_behavior_event(
+        session,
+        user_id=user.id,
+        event_type="practice_submit",
+        subject=q.subject,
+        grade=q.grade,
+        kp_id=q.kp_id,
+        payload={
+            "question_id": q.id,
+            "correct": is_correct,
+            "difficulty": q.difficulty,
+            "duration_ms": payload.duration_ms,
+        },
+    )
+    recalculate_profile_snapshot(
+        session,
+        user_id=user.id,
+        subject=q.subject,
+        grade=q.grade,
+        refresh_mastery=False,
+        persist=True,
     )
     return {
         "correct": is_correct,
@@ -208,27 +231,6 @@ def next_question(
         target = last_diff + (step if last_correct else -step)
 
     evidence = evidence_checklist(session, user_id=user.id, kp_id=kp_id)
-    expr_n = int(window.get("expressions", 20))
-    expr_conf_threshold = float(window.get("expression_conf_threshold", 0.2))
-    expr_influence = float(window.get("expression_influence", 1.0))
-    expr_influence = max(0.0, min(3.0, expr_influence))
-    expr = session.exec(
-        select(ExpressionEvent)
-        .where(ExpressionEvent.user_id == user.id, ExpressionEvent.kp_id == kp_id)
-        .order_by(ExpressionEvent.created_at.desc())
-        .limit(expr_n)
-    ).all()
-    if expr:
-        diff_avg = sum(e.difficulty for e in expr) / len(expr)
-        conf_avg = sum(e.confidence for e in expr) / len(expr)
-        expr_diff = diff_avg if conf_avg >= expr_conf_threshold else 0.5
-    else:
-        expr_diff = 0.5
-    expr_ease = 1.0 - expr_diff
-    # Continuous adjustment: expr_ease in [0,1] -> delta in [-step*expr_influence, +step*expr_influence]
-    # Higher ease -> harder next; lower ease -> easier next.
-    target += (expr_ease - 0.5) * 2.0 * step * expr_influence
-
     # Stability: pull target towards last difficulty and cap per-step jump.
     stability_strength = float(window.get("stability_strength", 0.4))
     stability_strength = max(0.0, min(1.0, stability_strength))
@@ -242,14 +244,7 @@ def next_question(
 
     # Remedial: if frustration is high or wrong streak, bias to easier range.
     wrong_streak = recent_wrong_streak(session, user_id=user.id, kp_id=kp_id, window=5)
-    expr_state = recent_expression_state(
-        session,
-        user_id=user.id,
-        kp_id=kp_id,
-        window=expr_n,
-        conf_threshold=expr_conf_threshold,
-    )
-    if (not last_correct) and (wrong_streak >= 2 or float(expr_state.get("difficulty_avg", 0.5)) >= 0.6):
+    if (not last_correct) and wrong_streak >= 2:
         target = max(0.0, target - step)
 
     target = max(0.0, min(1.0, target))
@@ -307,7 +302,7 @@ def next_question(
         if "hard" in item:
             missing_bands.add("hard")
 
-    risk = min(1.0, 0.6 * float(expr_state.get("difficulty_avg", 0.5)) + 0.4 * min(1.0, wrong_streak / 3))
+    risk = min(1.0, wrong_streak / 3)
 
     def rule_score(q: Question, target_value: float) -> float:
         need = 0.2
@@ -410,10 +405,31 @@ def reset_practice(
         kp_id = int(kp_id)
     except Exception:
         raise HTTPException(status_code=400, detail="kp_id required")
+    kp = session.get(KnowledgePoint, kp_id)
     session.exec(
         delete(PracticeAttempt).where(PracticeAttempt.user_id == user.id, PracticeAttempt.kp_id == kp_id)
     )
+    session.exec(
+        delete(ReviewSchedule).where(ReviewSchedule.user_id == user.id, ReviewSchedule.kp_id == kp_id)
+    )
+    session.exec(
+        delete(LearningBehaviorEvent).where(
+            LearningBehaviorEvent.user_id == user.id,
+            LearningBehaviorEvent.kp_id == kp_id,
+            LearningBehaviorEvent.event_type == "practice_submit",
+        )
+    )
     session.commit()
+    if kp is not None:
+        upsert_mastery(session, user_id=user.id, kp_id=kp_id, subject=kp.subject, grade=kp.grade)
+        recalculate_profile_snapshot(
+            session,
+            user_id=user.id,
+            subject=kp.subject,
+            grade=kp.grade,
+            refresh_mastery=False,
+            persist=True,
+        )
     return {"ok": True}
 
 

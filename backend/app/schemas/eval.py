@@ -5,21 +5,92 @@ class MasteryOut(BaseModel):
     kp_id: int
     value: float
     label: str
+    direct_value: float = 0.0
+    status: str = "not_started"
+    reason_summary: str = ""
+
+
+class ProfileTrendPointOut(BaseModel):
+    updated_at: str
+    dynamic_score: float
+    course_mastery: float
+    persona_type: str
+    stage_title: str | None = None
+    trend_label: str | None = None
+
+
+class StageDimensionConfigOut(BaseModel):
+    key: str
+    label: str
+    enabled: bool = True
+    weight: float = 0.0
+
+
+class TeacherFeedbackOut(BaseModel):
+    stage_id: int
+    feedback_tag: str = ""
+    comment: str = ""
+    updated_by: str = ""
+    updated_at: str | None = None
+
+
+class CurrentStageOut(BaseModel):
+    course_id: int | None = None
+    stage_id: int
+    stage_title: str
+    stage_order: int
+    engagement: float = 0.0
+    achievement: float = 0.0
+    habit: float = 0.0
+    characteristic: float = 0.0
+    dynamic_score: float = 0.0
+    course_mastery: float = 0.0
+    trend_label: str = "持平"
+    risk_level: str = "预警"
+    reason_summary: str = ""
+    portrait_dimensions: list[dict] = []
+    portrait_indicators: list[dict] = []
 
 
 class ProfileOut(BaseModel):
     user_id: int
+    course_id: int | None = None
     subject: str
     grade: str
     mastery_map: list[dict]
     weak_points: list[int]
+    persona_type: str = "steady_progress"
+    persona_label: str = "平稳发展型"
+    engagement: float = 0.0
+    achievement: float = 0.0
+    habit: float = 0.0
+    characteristic: float = 0.0
+    efficiency: float = 0.0
+    risk: float = 0.0
+    course_mastery: float = 0.0
+    dynamic_score: float = 0.0
+    stability: float = 0.0
+    risk_level: str = "预警"
+    override_source: str = "auto"
+    reason_summary: str = ""
+    trend: list[ProfileTrendPointOut] = []
+    current_stage: CurrentStageOut | None = None
+    stage_history: list[CurrentStageOut] = []
+    dimension_config: list[StageDimensionConfigOut] = []
+    teacher_feedback: TeacherFeedbackOut | None = None
+    portrait_dimensions: list[dict] = []
+    portrait_indicators: list[dict] = []
 
 
 class MasteryMapItem(BaseModel):
     kp_id: int
     code: str
     title: str
+    chapter: str = ""
     mastery: float
+    direct_value: float = 0.0
+    status: str = "not_started"
+    reason_summary: str = ""
 
 
 class OverviewSummaryOut(BaseModel):
@@ -28,13 +99,14 @@ class OverviewSummaryOut(BaseModel):
     in_progress: int
     not_mastered: int
     avg_mastery: float
+    dynamic_score: float = 0.0
+    risk_level: str = "预警"
 
 
 class OverviewRecentOut(BaseModel):
     last_practice_at: str | None = None
     last_quiz_at: str | None = None
     last_video_at: str | None = None
-    last_expression_at: str | None = None
 
 
 class OverviewPracticeOut(BaseModel):
@@ -52,3 +124,4 @@ class OverviewOut(BaseModel):
     recent_activity: OverviewRecentOut
     practice_7d: OverviewPracticeOut
     review_due: int = 0
+    profile: ProfileOut | None = None

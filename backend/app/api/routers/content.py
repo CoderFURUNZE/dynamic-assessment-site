@@ -15,6 +15,7 @@ from app.schemas.content import (
     VideoProgressOut,
 )
 from app.services.eval import upsert_mastery
+from app.services.learner_profile import log_behavior_event, recalculate_profile_snapshot
 
 router = APIRouter(prefix="/content", tags=["content"])
 
@@ -111,6 +112,23 @@ def submit_quiz(
     )
     session.commit()
     upsert_mastery(session, user_id=user.id, kp_id=quiz.kp_id, subject=quiz.subject, grade=quiz.grade)
+    log_behavior_event(
+        session,
+        user_id=user.id,
+        event_type="quiz_submit",
+        subject=quiz.subject,
+        grade=quiz.grade,
+        kp_id=quiz.kp_id,
+        payload={"accuracy": accuracy, "passed": passed},
+    )
+    recalculate_profile_snapshot(
+        session,
+        user_id=user.id,
+        subject=quiz.subject,
+        grade=quiz.grade,
+        refresh_mastery=False,
+        persist=True,
+    )
     return QuizSubmitOut(passed=passed, accuracy=accuracy, details=details)
 
 
@@ -146,6 +164,28 @@ def upsert_video_progress(
     session.commit()
     session.refresh(progress)
     upsert_mastery(session, user_id=user.id, kp_id=progress.kp_id, subject=resource.subject, grade=resource.grade)
+    log_behavior_event(
+        session,
+        user_id=user.id,
+        event_type="video_progress",
+        subject=resource.subject,
+        grade=resource.grade,
+        kp_id=progress.kp_id,
+        payload={
+            "resource_id": progress.resource_id,
+            "watched_seconds": progress.watched_seconds,
+            "duration_seconds": progress.duration_seconds,
+            "completed": progress.completed,
+        },
+    )
+    recalculate_profile_snapshot(
+        session,
+        user_id=user.id,
+        subject=resource.subject,
+        grade=resource.grade,
+        refresh_mastery=False,
+        persist=True,
+    )
     return VideoProgressOut(
         kp_id=progress.kp_id,
         resource_id=progress.resource_id,

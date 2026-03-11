@@ -70,6 +70,17 @@ npm run dev
 ## 首次 Demo 数据
 登录 `admin`，管理端点击 **Seed 数据结构 Demo** / **Seed 全科数据**。
 
+## 当前 V1 主线
+- 教师创建阶段并导入阶段数据
+- 系统生成学习者画像与动态评价
+- 教师查看班级分析和单学生成长轨迹
+- 学生查看课程总览、知识图谱、推荐建议和学习报告
+
+## 演示与答辩材料
+- 演示路径文档：`docs/demo_walkthrough.md`
+- 管理员端占位入口：`/admin/extensions`
+- 教师端占位入口：`/teacher/extensions`
+
 ## 健康检查与日志
 - Health: `http://localhost:8000/health`
 - 日志文件：`backend/logs/app.log`（包含管理端关键操作审计）
