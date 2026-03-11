@@ -8,10 +8,12 @@ const route = useRoute();
 const router = useRouter();
 
 const role = computed(() => getRole() || "");
-const isAdmin = computed(() => role.value === "admin" || role.value === "teacher");
+const isAdmin = computed(() => role.value === "admin");
+const isTeacher = computed(() => role.value === "teacher");
 
-const routeGroup = computed<"admin" | "student" | "start" | "login">(() => {
+const routeGroup = computed<"admin" | "teacher" | "student" | "start" | "login">(() => {
   if (route.path.startsWith("/admin")) return "admin";
+  if (route.path.startsWith("/teacher")) return "teacher";
   if (route.path.startsWith("/student")) return "student";
   if (route.path === "/start") return "start";
   return "login";
@@ -29,9 +31,11 @@ function logout() {
   <el-container class="app-shell" :class="{ 'login-container': isAuthPage }">
     <el-header v-if="!isAuthPage" class="app-header">
       <div class="app-brand">动态评价系统</div>
-      <div class="app-menu-label">{{ routeGroup === "admin" ? "管理端" : "学习者端" }}</div>
+      <div class="app-menu-label">
+        {{ routeGroup === "admin" ? "管理端" : routeGroup === "teacher" ? "教师端" : "学习者端" }}
+      </div>
       <div style="display: flex; align-items: center; gap: 10px">
-        <el-button v-if="routeGroup === 'admin' && isAdmin" size="small" @click="router.push('/admin/preview')">
+        <el-button v-if="(routeGroup === 'admin' && isAdmin) || (routeGroup === 'teacher' && isTeacher)" size="small" @click="router.push('/student/overview')">
           学习者端预览
         </el-button>
         <el-button v-if="getToken()" type="default" @click="logout">退出</el-button>

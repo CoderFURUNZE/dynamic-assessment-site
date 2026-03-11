@@ -4,7 +4,7 @@ import { ElMessage } from "element-plus";
 import { api } from "../api";
 
 type KP = { id: number; code: string; title: string };
-type EdgeRow = { id: number; prereq_id: number; next_id: number };
+type EdgeRow = { id: number; prereq_id: number; next_id: number; relation_type: string };
 
 const props = defineProps<{ subject: string; grade: string }>();
 
@@ -17,6 +17,7 @@ const total = ref(0);
 
 const prereqId = ref<number | null>(null);
 const nextId = ref<number | null>(null);
+const relationType = ref("prerequisite");
 
 const kpMap = computed(() => {
   const m = new Map<number, KP>();
@@ -40,7 +41,7 @@ async function loadEdges() {
     edges.value = res.data.items ?? [];
     total.value = Number(res.data.total ?? 0);
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "加载先修边失败");
+    ElMessage.error(e?.response?.data?.detail ?? "加载知识边失败");
   } finally {
     loading.value = false;
   }
@@ -58,6 +59,7 @@ async function addEdge() {
       grade: props.grade,
       prereq_id: prereqId.value,
       next_id: nextId.value,
+      relation_type: relationType.value,
     });
     ElMessage.success("已添加");
     await loadEdges();
@@ -93,20 +95,23 @@ onMounted(async () => {
 </script>
 
 <template>
-  <el-card>
+  <el-card class="panel-card" shadow="never">
     <template #header>
       <div style="display: flex; align-items: center; justify-content: space-between">
-        <div>先修关系（边）管理</div>
+        <div>知识边管理</div>
         <el-button @click="loadEdges" :loading="loading">刷新</el-button>
       </div>
     </template>
 
-    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px">
-      <el-select v-model="prereqId" filterable style="width: 45%" placeholder="前置知识点">
+    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap">
+      <el-select v-model="prereqId" filterable style="width: 30%" placeholder="起点知识点">
         <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
       </el-select>
-      <el-text type="info">→</el-text>
-      <el-select v-model="nextId" filterable style="width: 45%" placeholder="后继知识点">
+      <el-select v-model="relationType" style="width: 18%">
+        <el-option label="前置关系" value="prerequisite" />
+        <el-option label="关联关系" value="related" />
+      </el-select>
+      <el-select v-model="nextId" filterable style="width: 30%" placeholder="目标知识点">
         <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
       </el-select>
       <el-button type="primary" @click="addEdge">添加</el-button>
@@ -114,12 +119,19 @@ onMounted(async () => {
 
     <el-table :data="edges" size="small" v-loading="loading" style="width: 100%">
       <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column label="前置">
+      <el-table-column label="起点">
         <template #default="{ row }">
           {{ kpMap.get(row.prereq_id)?.code ?? row.prereq_id }} {{ kpMap.get(row.prereq_id)?.title ?? "" }}
         </template>
       </el-table-column>
-      <el-table-column label="后继">
+      <el-table-column label="关系" width="110">
+        <template #default="{ row }">
+          <el-tag :type="row.relation_type === 'prerequisite' ? 'primary' : 'success'">
+            {{ row.relation_type === "prerequisite" ? "前置" : "关联" }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="目标">
         <template #default="{ row }">
           {{ kpMap.get(row.next_id)?.code ?? row.next_id }} {{ kpMap.get(row.next_id)?.title ?? "" }}
         </template>

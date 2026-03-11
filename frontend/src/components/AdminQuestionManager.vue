@@ -650,7 +650,7 @@ onMounted(() => loadKps());
                 <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column label="&#25805;&#20316;" width="300" align="center" header-align="center">
+            <el-table-column label="操作" width="300" align="center" header-align="center">
               <template #default="{ row }">
                 <div class="op-actions-inline">
                   <el-button size="small" @click="openEdit(row)">&#20462;&#25913;</el-button>
@@ -752,7 +752,7 @@ D. 平均值
       <el-tab-pane label="小测管理">
         <el-card shadow="never">
           <template #header>小测管理</template>
-          <el-form label-width="110px" size="small">
+          <el-form label-width="100px" size="small">
             <el-form-item label="小测通过阈值">
               <el-input-number v-model="quizPassAccuracy" :min="0" :max="1" :step="0.05" />
               <el-button size="small" style="margin-left: 8px" @click="saveQuizPassAccuracy">保存</el-button>

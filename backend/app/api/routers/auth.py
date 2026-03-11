@@ -16,6 +16,7 @@ from app.schemas.auth import (
     WechatBindRequest,
     WechatLoginRequest,
 )
+from app.services.learner_profile import log_behavior_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -98,6 +99,7 @@ def login(payload: LoginRequest, session: Session = Depends(get_session)):
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Invalid username or password")
     token = create_access_token(subject=user.username, role=user.role.value)
+    log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return Token(access_token=token, role=user.role.value)
 
 
@@ -109,6 +111,7 @@ def login_student(payload: LoginRequest, session: Session = Depends(get_session)
     if user.role != UserRole.student:
         raise HTTPException(status_code=403, detail="Not a student account")
     token = create_access_token(subject=user.username, role=user.role.value)
+    log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return Token(access_token=token, role=user.role.value)
 
 
@@ -120,6 +123,7 @@ def login_admin(payload: LoginRequest, session: Session = Depends(get_session)):
     if user.role not in {UserRole.admin, UserRole.teacher}:
         raise HTTPException(status_code=403, detail="Not an admin/teacher account")
     token = create_access_token(subject=user.username, role=user.role.value)
+    log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return Token(access_token=token, role=user.role.value)
 
 
@@ -155,6 +159,7 @@ def wechat_login(payload: WechatLoginRequest, session: Session = Depends(get_ses
         session.add(user)
         session.commit()
     token = create_access_token(subject=user.username, role=user.role.value)
+    log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return {"ok": True, "need_bind_phone": False, "access_token": token, "role": user.role.value}
 
 
@@ -183,6 +188,7 @@ def wechat_bind(payload: WechatBindRequest, session: Session = Depends(get_sessi
     session.add(user)
     session.commit()
     token = create_access_token(subject=user.username, role=user.role.value)
+    log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return {"ok": True, "access_token": token, "role": user.role.value}
 
 

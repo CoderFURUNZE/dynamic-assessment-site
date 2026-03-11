@@ -1,12 +1,28 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import { getRole } from "../token";
 
-type Course = { id: number; code: string; title: string; description: string; active: boolean };
+type Course = {
+  id: number;
+  code: string;
+  title: string;
+  description: string;
+  active: boolean;
+  teacher_id?: number | null;
+};
+
+type Teacher = {
+  id: number;
+  username: string;
+  full_name: string;
+  role: string;
+};
 
 const loading = ref(false);
 const courses = ref<Course[]>([]);
+const teachers = ref<Teacher[]>([]);
 const page = ref(1);
 const pageSize = 15;
 const total = ref(0);
@@ -20,9 +36,27 @@ const form = reactive({
   title: "",
   description: "",
   active: true,
+  teacher_id: null as number | null,
 });
 
 const isEdit = computed(() => Boolean(editing.value));
+const isAdmin = computed(() => getRole() === "admin");
+const teacherNameMap = computed(() => {
+  const map = new Map<number, string>();
+  for (const item of teachers.value) {
+    map.set(item.id, item.full_name || item.username);
+  }
+  return map;
+});
+
+async function loadTeachers() {
+  if (!isAdmin.value) {
+    teachers.value = [];
+    return;
+  }
+  const res = await api.get("/admin/users?page=1&page_size=200");
+  teachers.value = (res.data.items ?? []).filter((item: Teacher) => item.role === "teacher");
+}
 
 async function load() {
   loading.value = true;
@@ -49,6 +83,7 @@ function openAdd() {
   form.title = "";
   form.description = "";
   form.active = true;
+  form.teacher_id = null;
   dialogOpen.value = true;
 }
 
@@ -59,6 +94,7 @@ function openEdit(row: Course) {
   form.title = row.title;
   form.description = row.description;
   form.active = row.active;
+  form.teacher_id = row.teacher_id ?? null;
   dialogOpen.value = true;
 }
 
@@ -70,6 +106,7 @@ async function save() {
         title: form.title,
         description: form.description,
         active: form.active,
+        teacher_id: form.teacher_id,
       });
       ElMessage.success("已更新");
     } else {
@@ -78,6 +115,7 @@ async function save() {
         title: form.title,
         description: form.description,
         active: form.active,
+        teacher_id: form.teacher_id,
       });
       ElMessage.success("已新增");
     }
@@ -108,7 +146,7 @@ async function toggleActive(row: Course, value: boolean) {
   }
 }
 
-load();
+Promise.all([loadTeachers(), load()]);
 </script>
 
 <template>
@@ -136,6 +174,17 @@ load();
       <el-table-column prop="code" label="课程编码" width="140" />
       <el-table-column prop="title" label="课程名称" width="220" />
       <el-table-column prop="description" label="课程简介" />
+      <el-table-column label="负责人" width="160">
+        <template #default="{ row }">
+          {{
+            row.teacher_id
+              ? teacherNameMap.get(row.teacher_id) || (isAdmin ? `教师#${row.teacher_id}` : "当前教师")
+              : isAdmin
+                ? "未分配"
+                : "当前教师"
+          }}
+        </template>
+      </el-table-column>
       <el-table-column prop="active" label="状态" width="140">
         <template #default="{ row }">
           <el-switch v-model="row.active" @change="(v: boolean) => toggleActive(row, v)" />
@@ -167,6 +216,16 @@ load();
         </el-form-item>
         <el-form-item label="课程名称">
           <el-input v-model="form.title" placeholder="如 数据结构" />
+        </el-form-item>
+        <el-form-item v-if="isAdmin" label="负责人">
+          <el-select v-model="form.teacher_id" clearable placeholder="选择教师" style="width: 100%">
+            <el-option
+              v-for="teacher in teachers"
+              :key="teacher.id"
+              :label="teacher.full_name || teacher.username"
+              :value="teacher.id"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="课程简介">
           <el-input v-model="form.description" type="textarea" :rows="3" />

@@ -11,15 +11,35 @@ type Summary = {
   in_progress: number;
   not_mastered: number;
   avg_mastery: number;
+  dynamic_score?: number;
+  risk_level?: string;
 };
-type MasteryItem = { kp_id: number; code: string; title: string; mastery: number };
+type MasteryItem = { kp_id: number; code: string; title: string; mastery: number; status?: string; chapter?: string };
 type Recent = {
   last_practice_at?: string | null;
   last_quiz_at?: string | null;
   last_video_at?: string | null;
-  last_expression_at?: string | null;
 };
 type Practice7d = { total: number; correct: number; accuracy: number };
+type StageInfo = {
+  stage_id: number;
+  stage_title: string;
+  stage_order: number;
+  dynamic_score: number;
+  course_mastery: number;
+  trend_label: string;
+  risk_level: string;
+  reason_summary: string;
+};
+type Profile = {
+  persona_label?: string;
+  dynamic_score?: number;
+  risk_level?: string;
+  course_mastery?: number;
+  reason_summary?: string;
+  current_stage?: StageInfo | null;
+  stage_history?: StageInfo[];
+};
 
 const loading = ref(false);
 const summary = ref<Summary>({
@@ -34,9 +54,12 @@ const weakPoints = ref<MasteryItem[]>([]);
 const recent = ref<Recent>({});
 const practice7d = ref<Practice7d>({ total: 0, correct: 0, accuracy: 0 });
 const reviewDue = ref(0);
+const profile = ref<Profile | null>(null);
 
 const avgPercent = computed(() => Math.round((summary.value.avg_mastery || 0) * 100));
 const hasKps = computed(() => masteryMap.value.length > 0);
+const currentStage = computed(() => profile.value?.current_stage ?? null);
+const stageHistory = computed(() => profile.value?.stage_history ?? []);
 
 function formatTime(value?: string | null) {
   if (!value) return "暂无";
@@ -63,6 +86,7 @@ async function load() {
     recent.value = res.data.recent_activity ?? {};
     practice7d.value = res.data.practice_7d ?? practice7d.value;
     reviewDue.value = Number(res.data.review_due ?? 0);
+    profile.value = res.data.profile ?? null;
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载总览失败");
   } finally {
@@ -108,12 +132,80 @@ watch(
           <div style="font-weight: 700; font-size: 22px">{{ summary.not_mastered }}</div>
         </el-card>
         <el-card shadow="never">
+          <div style="font-size: 12px; color: #6b7d72">当前画像</div>
+          <div style="font-weight: 700; font-size: 20px">{{ profile?.persona_label ?? "未生成" }}</div>
+        </el-card>
+        <el-card shadow="never">
           <div style="font-size: 12px; color: #6b7d72">平均掌握度</div>
           <div style="font-weight: 700; font-size: 22px">{{ avgPercent }}%</div>
         </el-card>
         <el-card shadow="never">
+          <div style="font-size: 12px; color: #6b7d72">动态评分</div>
+          <div style="font-weight: 700; font-size: 22px">{{ Math.round((summary.dynamic_score || 0) * 100) }}%</div>
+        </el-card>
+        <el-card shadow="never">
           <div style="font-size: 12px; color: #6b7d72">待复习任务</div>
           <div style="font-weight: 700; font-size: 22px">{{ reviewDue }}</div>
+        </el-card>
+      </div>
+
+      <el-alert
+        v-if="profile?.reason_summary"
+        style="margin-top: 12px"
+        type="info"
+        :title="profile.reason_summary"
+        :closable="false"
+        show-icon
+      />
+
+      <div v-if="currentStage" style="margin-top: 12px; display: grid; gap: 12px; grid-template-columns: minmax(320px, 1.1fr) minmax(260px, 0.9fr);">
+        <el-card shadow="never">
+          <div style="font-weight: 600; margin-bottom: 8px">当前阶段概览</div>
+          <div style="display: grid; gap: 8px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+              <div>
+                <div style="font-size: 12px; color: #5b7797;">阶段 {{ currentStage.stage_order }}</div>
+                <div style="font-size: 18px; font-weight: 700; color: var(--app-ink);">{{ currentStage.stage_title }}</div>
+              </div>
+              <el-tag :type="currentStage.trend_label === '进步' ? 'success' : currentStage.trend_label === '退步' ? 'danger' : 'info'">
+                {{ currentStage.trend_label }}
+              </el-tag>
+            </div>
+            <div style="display:grid; gap:8px; grid-template-columns: repeat(3, minmax(0, 1fr));">
+              <div style="padding: 10px 12px; border-radius: 14px; background:#f7fafc; border:1px solid #e1e8ef;">
+                <div style="font-size:12px; color:#5b7797;">阶段评分</div>
+                <div style="font-size:20px; font-weight:800;">{{ Math.round((currentStage.dynamic_score || 0) * 100) }}%</div>
+              </div>
+              <div style="padding: 10px 12px; border-radius: 14px; background:#f7fafc; border:1px solid #e1e8ef;">
+                <div style="font-size:12px; color:#5b7797;">阶段掌握度</div>
+                <div style="font-size:20px; font-weight:800;">{{ Math.round((currentStage.course_mastery || 0) * 100) }}%</div>
+              </div>
+              <div style="padding: 10px 12px; border-radius: 14px; background:#f7fafc; border:1px solid #e1e8ef;">
+                <div style="font-size:12px; color:#5b7797;">阶段等级</div>
+                <div style="font-size:20px; font-weight:800;">{{ currentStage.risk_level }}</div>
+              </div>
+            </div>
+            <div style="padding: 10px 12px; border-radius: 14px; background:#f7fafc; border:1px solid #e1e8ef; color: var(--app-ink); line-height: 1.7;">
+              {{ currentStage.reason_summary }}
+            </div>
+          </div>
+        </el-card>
+
+        <el-card shadow="never">
+          <div style="font-weight: 600; margin-bottom: 8px">阶段趋势</div>
+          <el-empty v-if="stageHistory.length === 0" description="暂无阶段数据" />
+          <div v-else style="display:grid; gap:8px;">
+            <div v-for="item in stageHistory" :key="item.stage_id" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding: 10px 12px; border-radius: 14px; background:#f7fafc; border:1px solid #e1e8ef;">
+              <div>
+                <div style="font-size:12px; color:#5b7797;">阶段 {{ item.stage_order }}</div>
+                <div style="font-weight:700; color:var(--app-ink);">{{ item.stage_title }}</div>
+              </div>
+              <div style="display:grid; justify-items:end; gap:4px;">
+                <el-tag size="small" :type="item.trend_label === '进步' ? 'success' : item.trend_label === '退步' ? 'danger' : 'info'">{{ item.trend_label }}</el-tag>
+                <span style="font-size:12px; color:#5b7797;">{{ Math.round((item.dynamic_score || 0) * 100) }}%</span>
+              </div>
+            </div>
+          </div>
         </el-card>
       </div>
 
@@ -132,7 +224,6 @@ watch(
             <el-text>最近练习：{{ formatTime(recent.last_practice_at) }}</el-text>
             <el-text>最近小测：{{ formatTime(recent.last_quiz_at) }}</el-text>
             <el-text>最近视频：{{ formatTime(recent.last_video_at) }}</el-text>
-            <el-text>最近表情：{{ formatTime(recent.last_expression_at) }}</el-text>
           </div>
         </el-card>
       </div>

@@ -6,7 +6,7 @@ from typing import Iterable
 from sqlalchemy import func
 from sqlmodel import Session, desc, select
 
-from app.db.models import ExpressionEvent, PracticeAttempt, Question
+from app.db.models import PracticeAttempt, Question
 
 
 def difficulty_band(difficulty: float) -> str:
@@ -103,32 +103,6 @@ def evidence_checklist(
             "sure_ratio": sure_ratio,
         },
     }
-
-
-def recent_expression_state(
-    session: Session, *, user_id: int, kp_id: int, window: int = 20, conf_threshold: float = 0.2
-) -> dict:
-    rows = session.exec(
-        select(ExpressionEvent)
-        .where(ExpressionEvent.user_id == user_id, ExpressionEvent.kp_id == kp_id)
-        .order_by(desc(ExpressionEvent.created_at))
-        .limit(window)
-    ).all()
-    if not rows:
-        return {"difficulty_avg": 0.5, "confidence_avg": 0.0, "labels": {}}
-    difficulty_avg = sum(r.difficulty for r in rows) / len(rows)
-    confidence_avg = sum(r.confidence for r in rows) / len(rows)
-    if confidence_avg < conf_threshold:
-        difficulty_avg = 0.5
-    labels: dict[str, int] = {}
-    for r in rows:
-        labels[r.label] = labels.get(r.label, 0) + 1
-    return {
-        "difficulty_avg": float(difficulty_avg),
-        "confidence_avg": float(confidence_avg),
-        "labels": labels,
-    }
-
 
 def recent_wrong_streak(session: Session, *, user_id: int, kp_id: int, window: int = 5) -> int:
     rows = session.exec(

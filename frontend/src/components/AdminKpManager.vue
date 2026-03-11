@@ -3,7 +3,19 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 
-type KP = { id: number; subject: string; grade: string; code: string; title: string; description: string };
+type KP = {
+  id: number;
+  subject: string;
+  grade: string;
+  code: string;
+  title: string;
+  description: string;
+  chapter?: string;
+  ability_tag?: string;
+  literacy_tag?: string;
+  importance?: number;
+  difficulty?: number;
+};
 
 const props = defineProps<{ subject: string; grade: string }>();
 
@@ -21,6 +33,11 @@ const form = reactive({
   code: "",
   title: "",
   description: "",
+  chapter: "",
+  ability_tag: "",
+  literacy_tag: "",
+  importance: 0.5,
+  difficulty: 0.5,
 });
 
 const isEdit = computed(() => Boolean(editing.value));
@@ -34,9 +51,7 @@ async function load() {
       page: String(page.value),
       page_size: String(pageSize),
     });
-    if (keyword.value.trim()) {
-      query.set("keyword", keyword.value.trim());
-    }
+    if (keyword.value.trim()) query.set("keyword", keyword.value.trim());
     const res = await api.get(`/admin/kps?${query.toString()}`);
     kps.value = res.data.items ?? [];
     total.value = Number(res.data.total ?? 0);
@@ -49,19 +64,33 @@ async function load() {
 
 function openAdd() {
   editing.value = null;
-  form.id = 0;
-  form.code = "";
-  form.title = "";
-  form.description = "";
+  Object.assign(form, {
+    id: 0,
+    code: "",
+    title: "",
+    description: "",
+    chapter: "",
+    ability_tag: "",
+    literacy_tag: "",
+    importance: 0.5,
+    difficulty: 0.5,
+  });
   dialogOpen.value = true;
 }
 
 function openEdit(row: KP) {
   editing.value = row;
-  form.id = row.id;
-  form.code = row.code;
-  form.title = row.title;
-  form.description = row.description;
+  Object.assign(form, {
+    id: row.id,
+    code: row.code,
+    title: row.title,
+    description: row.description,
+    chapter: row.chapter ?? "",
+    ability_tag: row.ability_tag ?? "",
+    literacy_tag: row.literacy_tag ?? "",
+    importance: row.importance ?? 0.5,
+    difficulty: row.difficulty ?? 0.5,
+  });
   dialogOpen.value = true;
 }
 
@@ -72,6 +101,11 @@ async function save() {
         code: form.code,
         title: form.title,
         description: form.description,
+        chapter: form.chapter,
+        ability_tag: form.ability_tag,
+        literacy_tag: form.literacy_tag,
+        importance: form.importance,
+        difficulty: form.difficulty,
       });
       ElMessage.success("已更新");
     } else {
@@ -81,6 +115,11 @@ async function save() {
         code: form.code,
         title: form.title,
         description: form.description,
+        chapter: form.chapter,
+        ability_tag: form.ability_tag,
+        literacy_tag: form.literacy_tag,
+        importance: form.importance,
+        difficulty: form.difficulty,
       });
       ElMessage.success("已新增");
     }
@@ -114,16 +153,16 @@ onMounted(() => load());
 </script>
 
 <template>
-  <el-card>
+  <el-card class="panel-card" shadow="never">
     <template #header>
-      <div style="display: flex; align-items: center; justify-content: space-between">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
         <div>知识点管理</div>
-        <div style="display: flex; gap: 8px">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap">
           <el-input
             v-model="keyword"
             placeholder="搜索编码/标题/描述"
             size="small"
-            style="width: 200px"
+            style="width: 220px"
             @keyup.enter="() => { page = 1; load(); }"
           />
           <el-button size="small" type="primary" @click="() => { page = 1; load(); }">搜索</el-button>
@@ -137,6 +176,15 @@ onMounted(() => load());
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="code" label="编码" width="160" />
       <el-table-column prop="title" label="标题" width="180" />
+      <el-table-column prop="chapter" label="章节" width="140" />
+      <el-table-column prop="ability_tag" label="能力标签" width="140" />
+      <el-table-column prop="literacy_tag" label="素养标签" width="140" />
+      <el-table-column prop="importance" label="重要度" width="100">
+        <template #default="{ row }">{{ Math.round((row.importance ?? 0.5) * 100) }}</template>
+      </el-table-column>
+      <el-table-column prop="difficulty" label="难度" width="100">
+        <template #default="{ row }">{{ Math.round((row.difficulty ?? 0.5) * 100) }}</template>
+      </el-table-column>
       <el-table-column prop="description" label="描述" />
       <el-table-column label="操作" width="160">
         <template #default="{ row }">
@@ -157,13 +205,28 @@ onMounted(() => load());
       />
     </div>
 
-    <el-dialog v-model="dialogOpen" :title="isEdit ? '编辑知识点' : '新增知识点'" width="560px">
+    <el-dialog v-model="dialogOpen" :title="isEdit ? '编辑知识点' : '新增知识点'" width="620px">
       <el-form label-width="80px">
         <el-form-item label="编码">
-          <el-input v-model="form.code" placeholder="例如 MATH-G2-DER-013" />
+          <el-input v-model="form.code" placeholder="例如 DS-GEN-001" />
         </el-form-item>
         <el-form-item label="标题">
           <el-input v-model="form.title" />
+        </el-form-item>
+        <el-form-item label="章节">
+          <el-input v-model="form.chapter" placeholder="例如 第一章 / 控件" />
+        </el-form-item>
+        <el-form-item label="能力标签">
+          <el-input v-model="form.ability_tag" placeholder="例如 逻辑分析" />
+        </el-form-item>
+        <el-form-item label="素养标签">
+          <el-input v-model="form.literacy_tag" placeholder="例如 工程规范" />
+        </el-form-item>
+        <el-form-item label="重要度">
+          <el-input-number v-model="form.importance" :min="0" :max="1" :step="0.05" />
+        </el-form-item>
+        <el-form-item label="难度">
+          <el-input-number v-model="form.difficulty" :min="0" :max="1" :step="0.05" />
         </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="form.description" type="textarea" :rows="3" />

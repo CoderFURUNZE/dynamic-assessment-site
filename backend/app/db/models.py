@@ -13,6 +13,20 @@ class UserRole(str, Enum):
     student = "student"
 
 
+class PortraitIndicatorSourceType(str, Enum):
+    auto = "auto"
+    teacher = "teacher"
+    questionnaire = "questionnaire"
+
+
+class PersonaType(str, Enum):
+    smart = "smart_capable"
+    diligent = "diligent"
+    struggling = "struggling_persistent"
+    procrastinating = "procrastinating_risk"
+    steady = "steady_progress"
+
+
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True)
@@ -34,6 +48,7 @@ class Course(SQLModel, table=True):
     title: str
     description: str = ""
     active: bool = True
+    teacher_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     __table_args__ = (UniqueConstraint("code"),)
@@ -46,9 +61,19 @@ class KnowledgePoint(SQLModel, table=True):
     code: str = Field(index=True)
     title: str
     description: str = ""
+    chapter: str = ""
+    ability_tag: str = ""
+    literacy_tag: str = ""
+    importance: float = 0.5
+    difficulty: float = 0.5
     practice_total: Optional[int] = Field(default=None)
 
     __table_args__ = (UniqueConstraint("code"),)
+
+
+class RelationType(str, Enum):
+    prerequisite = "prerequisite"
+    related = "related"
 
 
 class KnowledgeEdge(SQLModel, table=True):
@@ -57,6 +82,7 @@ class KnowledgeEdge(SQLModel, table=True):
     grade: str = Field(index=True)
     prereq_id: int = Field(foreign_key="knowledgepoint.id", index=True)
     next_id: int = Field(foreign_key="knowledgepoint.id", index=True)
+    relation_type: RelationType = Field(default=RelationType.prerequisite, index=True)
 
     __table_args__ = (UniqueConstraint("prereq_id", "next_id"),)
 
@@ -75,6 +101,85 @@ class LearningResource(SQLModel, table=True):
     title: str
     url: str
     type: ResourceType = Field(default=ResourceType.video)
+
+
+class KpTaskType(str, Enum):
+    task = "task"
+    exam = "exam"
+
+
+class KpTask(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
+    title: str
+    description: str = ""
+    link_url: str = ""
+    type: KpTaskType = Field(default=KpTaskType.task, index=True)
+    sort_order: int = Field(default=0, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class StageMetricType(str, Enum):
+    video = "video"
+    assignment = "assignment"
+    quiz = "quiz"
+    attendance = "attendance"
+    task = "task"
+    participation = "participation"
+
+
+class CourseStage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    title: str
+    stage_order: int = Field(default=1, index=True)
+    starts_at: Optional[datetime] = Field(default=None, index=True)
+    ends_at: Optional[datetime] = Field(default=None, index=True)
+    description: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("course_id", "stage_order"),)
+
+
+class StageImportBatch(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    stage_id: int = Field(foreign_key="coursestage.id", index=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    metric_type: StageMetricType = Field(index=True)
+    file_name: str = ""
+    uploaded_by: str = ""
+    total_rows: int = 0
+    success_rows: int = 0
+    failed_rows: int = 0
+    error_json: str = "[]"
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class StageImportRecord(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    batch_id: int = Field(foreign_key="stageimportbatch.id", index=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    stage_id: int = Field(foreign_key="coursestage.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    kp_id: Optional[int] = Field(default=None, foreign_key="knowledgepoint.id", index=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    metric_type: StageMetricType = Field(index=True)
+    score_value: float = 0.0
+    completion_value: float = 0.0
+    duration_minutes: float = 0.0
+    attendance_value: float = 0.0
+    submitted_on_time: bool = False
+    status: str = ""
+    note: str = ""
+    happened_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    raw_json: str = "{}"
 
 
 class Quiz(SQLModel, table=True):
@@ -164,6 +269,9 @@ class Mastery(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)
     kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
     value: float = Field(default=0.0, index=True)
+    direct_value: float = 0.0
+    status: str = "not_started"
+    reason_summary: str = ""
     updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     __table_args__ = (UniqueConstraint("user_id", "kp_id"),)
@@ -174,18 +282,55 @@ class EvalConfig(SQLModel, table=True):
     subject: str = Field(index=True)
     grade: str = Field(index=True)
     weights_json: str = (
-        '{"quiz_accuracy":0.2,"practice_accuracy":0.65,"expression_ease":0.1,"video_completion":0.05,"duration_penalty":0.0}'
+        '{"quiz_accuracy":0.2,"practice_accuracy":0.65,"video_completion":0.05,"duration_penalty":0.0}'
     )
     thresholds_json: str = '{"unlock_accuracy":0.9,"unlock_max_difficulty":0.35}'
     window_json: str = (
-        '{"practice_attempts":10,"expressions":20,"practice_total":10,'
-        '"difficulty_step":0.1,"expression_conf_threshold":0.2,"expression_influence":1.0,'
+        '{"practice_attempts":10,"practice_total":10,'
         '"evidence_sure_ratio":0.5,'
         '"video_complete_ratio":0.8,"video_min_ratio":0.0,'
         '"max_difficulty_jump":0.2,"stability_strength":0.4}'
     )
 
     __table_args__ = (UniqueConstraint("subject", "grade"),)
+
+
+class PortraitDimension(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    code: str = Field(index=True)
+    title: str
+    description: str = ""
+    sort_order: int = Field(default=0, index=True)
+    active: bool = True
+
+    __table_args__ = (UniqueConstraint("code"),)
+
+
+class PortraitIndicator(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    dimension_id: int = Field(foreign_key="portraitdimension.id", index=True)
+    code: str = Field(index=True)
+    title: str
+    description: str = ""
+    source_type: PortraitIndicatorSourceType = Field(default=PortraitIndicatorSourceType.auto, index=True)
+    default_weight: float = 1.0
+    sort_order: int = Field(default=0, index=True)
+    active: bool = True
+
+    __table_args__ = (UniqueConstraint("dimension_id", "code"),)
+
+
+class CoursePortraitIndicatorSelection(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    dimension_id: int = Field(foreign_key="portraitdimension.id", index=True)
+    indicator_id: int = Field(foreign_key="portraitindicator.id", index=True)
+    enabled: bool = True
+    weight: float = 1.0
+    selected_by: str = ""
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("course_id", "indicator_id"),)
 
 
 class Note(SQLModel, table=True):
@@ -253,4 +398,160 @@ class AuditLog(SQLModel, table=True):
     role: str = Field(index=True)
     action: str = Field(index=True)
     detail: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class LearnerPersonaRule(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    thresholds_json: str = (
+        '{"procrastinating_e":0.4,"smart_a":0.75,"smart_f":0.75,'
+        '"diligent_e":0.75,"diligent_a":0.6,"struggling_e":0.6,"struggling_a":0.6}'
+    )
+    weights_json: str = (
+        '{"engagement":{"learning_frequency":0.35,"study_duration":0.35,"resource_completion":0.2,"streak":0.1},'
+        '"achievement":{"practice_accuracy":0.5,"quiz_accuracy":0.3,"mastery_growth":0.2},'
+        '"efficiency":{"unit_time_accuracy":0.6,"task_completion":0.4},'
+        '"risk":{"overdue_rate":0.4,"wrong_streak":0.3,"abandonment_rate":0.3},'
+        '"dynamic":{"engagement":0.25,"achievement":0.3,"course_mastery":0.35,"stability":0.1},'
+        '"stage_dimensions":{"engagement":{"enabled":true,"weight":0.3,"metrics":{"activity_frequency":0.25,"study_duration":0.35,"completion":0.25,"attendance_participation":0.15}},'
+        '"achievement":{"enabled":true,"weight":0.35,"metrics":{"assignment_score":0.35,"quiz_score":0.35,"task_score":0.15,"stage_mastery":0.15}},'
+        '"habit":{"enabled":true,"weight":0.2,"metrics":{"on_time_rate":0.4,"attendance_rate":0.35,"continuity":0.25}},'
+        '"characteristic":{"enabled":true,"weight":0.15,"metrics":{"participation":0.35,"task_completion":0.35,"resource_initiative":0.3}}}}'
+    )
+    strategy_json: str = (
+        '{"smart_capable":"更高难度+精讲提要","diligent":"结构化路径+阶段反馈",'
+        '"struggling_persistent":"补救前置点+低阶练习","procrastinating_risk":"最短任务链+提醒",'
+        '"steady_progress":"标准推荐"}'
+    )
+
+    __table_args__ = (UniqueConstraint("subject", "grade"),)
+
+
+class LearnerPersonaOverride(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    persona_type: PersonaType = Field(index=True)
+    note: str = ""
+    updated_by: str = ""
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "subject", "grade"),)
+
+
+class LearnerProfileSnapshot(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    persona_type: PersonaType = Field(index=True)
+    engagement: float = 0.0
+    achievement: float = 0.0
+    efficiency: float = 0.0
+    risk: float = 0.0
+    course_mastery: float = 0.0
+    dynamic_score: float = 0.0
+    stability: float = 0.0
+    risk_level: str = "warning"
+    override_source: str = "auto"
+    reason_summary: str = ""
+    portrait_summary_json: str = "{}"
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class StageEvaluationSnapshot(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    stage_id: int = Field(foreign_key="coursestage.id", index=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    stage_title: str = ""
+    stage_order: int = Field(default=1, index=True)
+    persona_type: PersonaType = Field(index=True)
+    engagement: float = 0.0
+    achievement: float = 0.0
+    habit: float = 0.0
+    characteristic: float = 0.0
+    efficiency: float = 0.0
+    risk: float = 0.0
+    course_mastery: float = 0.0
+    dynamic_score: float = 0.0
+    trend_label: str = "持平"
+    risk_level: str = "预警"
+    reason_summary: str = ""
+    dimension_summary_json: str = "{}"
+    indicator_summary_json: str = "{}"
+    enabled_dimensions_json: str = "{}"
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "stage_id"),)
+
+
+class StageTeacherFeedback(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    stage_id: int = Field(foreign_key="coursestage.id", index=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    feedback_tag: str = ""
+    comment: str = ""
+    updated_by: str = ""
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "stage_id"),)
+
+
+class TeacherPortraitIndicatorInput(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    stage_id: int = Field(foreign_key="coursestage.id", index=True)
+    dimension_id: int = Field(foreign_key="portraitdimension.id", index=True)
+    indicator_id: int = Field(foreign_key="portraitindicator.id", index=True)
+    score: float = 0.0
+    note: str = ""
+    updated_by: str = ""
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "stage_id", "indicator_id"),)
+
+
+class QuestionnairePortraitIndicatorInput(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    dimension_id: int = Field(foreign_key="portraitdimension.id", index=True)
+    indicator_id: int = Field(foreign_key="portraitindicator.id", index=True)
+    score: float = 0.0
+    note: str = ""
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "course_id", "indicator_id"),)
+
+
+class LearningBehaviorEvent(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    course_id: Optional[int] = Field(default=None, foreign_key="course.id", index=True)
+    kp_id: Optional[int] = Field(default=None, foreign_key="knowledgepoint.id", index=True)
+    event_type: str = Field(index=True)
+    value_json: str = "{}"
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class RecommendationLog(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    source_kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
+    target_kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
+    persona_type: PersonaType = Field(index=True)
+    reason_summary: str = ""
+    payload_json: str = "{}"
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)

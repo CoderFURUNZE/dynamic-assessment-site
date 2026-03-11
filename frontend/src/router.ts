@@ -10,7 +10,10 @@ export const router = createRouter({
 });
 
 const StudentPage = () => import("./pages/Student.vue");
+const StudentGraphWorkspacePage = () => import("./pages/StudentGraphWorkspace.vue");
 const AdminPage = () => import("./pages/Admin.vue");
+const TeacherPage = () => import("./pages/Teacher.vue");
+const TeacherGraphWorkspacePage = () => import("./pages/TeacherGraphWorkspace.vue");
 const StartPage = () => import("./pages/Start.vue");
 const LoginPage = () => import("./pages/Login.vue");
 const AdminPreviewPage = () => import("./pages/AdminPreview.vue");
@@ -32,16 +35,21 @@ router.addRoute({
 
 [
   "/student/overview",
+  "/student/graph",
+  "/student/graph-workspace",
   "/student/resource",
   "/student/quiz",
   "/student/practice",
-  "/student/notes",
+  "/student/report",
 ].forEach((path) => {
-  router.addRoute({ path, component: StudentPage });
+  router.addRoute({ path, component: path === "/student/graph-workspace" ? StudentGraphWorkspacePage : StudentPage });
 });
 
 [
   "/admin/config",
+  "/admin/persona",
+  "/admin/dimensions",
+  "/admin/analytics",
   "/admin/video",
   "/admin/questions",
   "/admin/courses",
@@ -49,19 +57,42 @@ router.addRoute({
   "/admin/edges",
   "/admin/users",
   "/admin/report",
-  "/admin/expression",
   "/admin/audit",
+  "/admin/extensions",
 ].forEach((path) => {
   router.addRoute({ path, component: AdminPage });
 });
 
-router.addRoute({ path: "/student", redirect: "/student/resource" });
-router.addRoute({ path: "/student/interview", redirect: "/student/resource" });
-router.addRoute({ path: "/student/:pathMatch(.*)*", redirect: "/student/resource" });
+[
+  "/teacher/courses",
+  "/teacher/stages",
+  "/teacher/imports",
+  "/teacher/indicators",
+  "/teacher/graph",
+  "/teacher/graph-workspace",
+  "/teacher/kps",
+  "/teacher/edges",
+  "/teacher/video",
+  "/teacher/questions",
+  "/teacher/analytics",
+  "/teacher/profiles",
+  "/teacher/students",
+  "/teacher/report",
+  "/teacher/extensions",
+].forEach((path) => {
+  router.addRoute({ path, component: path === "/teacher/graph-workspace" ? TeacherGraphWorkspacePage : TeacherPage });
+});
+
+router.addRoute({ path: "/student", redirect: "/student/overview" });
+router.addRoute({ path: "/student/interview", redirect: "/student/overview" });
+router.addRoute({ path: "/student/:pathMatch(.*)*", redirect: "/student/overview" });
 
 router.addRoute({ path: "/admin", redirect: "/admin/config" });
 router.addRoute({ path: "/admin/preview", component: AdminPreviewPage });
 router.addRoute({ path: "/admin/:pathMatch(.*)*", redirect: "/admin/config" });
+
+router.addRoute({ path: "/teacher", redirect: "/teacher/courses" });
+router.addRoute({ path: "/teacher/:pathMatch(.*)*", redirect: "/teacher/courses" });
 
 router.addRoute({ path: "/:pathMatch(.*)*", redirect: "/start" });
 
@@ -70,11 +101,18 @@ router.beforeEach((to) => {
   if (!getToken()) return "/login";
   const role = getRole();
   if (to.path.startsWith("/admin")) {
-    if (role === "student") return "/student/resource";
+    if (role === "student") return "/student/overview";
+    if (role === "teacher") return "/teacher/courses";
+    return true;
+  }
+  if (to.path.startsWith("/teacher")) {
+    if (role === "student") return "/student/overview";
+    if (role === "admin") return "/admin/config";
     return true;
   }
   if (to.path.startsWith("/student")) {
-    if (role === "admin" || role === "teacher") return "/admin/config";
+    if (role === "admin") return "/admin/config";
+    if (role === "teacher") return "/teacher/courses";
   }
   const username = getUsername();
   if (username) {

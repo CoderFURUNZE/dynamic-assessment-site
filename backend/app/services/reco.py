@@ -1,189 +1,265 @@
 from __future__ import annotations
 
 import json
+from statistics import mean
 
-from sqlalchemy import Integer, func
-from sqlmodel import Session, desc, select
+from sqlmodel import Session, select
 
 from app.db.models import (
-    EvalConfig,
-    ExpressionEvent,
     KnowledgeEdge,
+    KnowledgePoint,
     LearningResource,
-    PracticeAttempt,
+    Mastery,
+    PersonaType,
     Question,
-    Quiz,
-    QuizAttempt,
+    RecommendationLog,
+    RelationType,
 )
 from app.services.eval import upsert_mastery
-from app.services.practice import practice_status
-from app.services.reco_policy import (
-    evidence_checklist,
-    infer_guess_slip,
-    recent_expression_state,
-    recent_wrong_streak,
-)
+from app.services.learner_profile import get_or_create_persona_rule, persona_label, recalculate_profile_snapshot
 
 
-def _get_config(session: Session, subject: str, grade: str) -> EvalConfig:
-    cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == subject, EvalConfig.grade == grade)).first()
-    if cfg is None:
-        cfg = EvalConfig(subject=subject, grade=grade)
-        session.add(cfg)
-        session.commit()
-        session.refresh(cfg)
-    return cfg
+def _mastery_value(session: Session, *, user_id: int, kp_id: int, subject: str, grade: str) -> Mastery:
+    mastery = session.exec(select(Mastery).where(Mastery.user_id == user_id, Mastery.kp_id == kp_id)).first()
+    if mastery is None:
+        mastery = upsert_mastery(session, user_id=user_id, kp_id=kp_id, subject=subject, grade=grade)
+    return mastery
+
+
+def _prereq_ids(session: Session, *, kp_id: int) -> list[int]:
+    return [
+        int(edge.prereq_id)
+        for edge in session.exec(
+            select(KnowledgeEdge).where(
+                KnowledgeEdge.next_id == kp_id,
+                KnowledgeEdge.relation_type == RelationType.prerequisite,
+            )
+        ).all()
+    ]
+
+
+def _next_ids(session: Session, *, kp_id: int) -> list[int]:
+    return [
+        int(edge.next_id)
+        for edge in session.exec(
+            select(KnowledgeEdge).where(
+                KnowledgeEdge.prereq_id == kp_id,
+                KnowledgeEdge.relation_type == RelationType.prerequisite,
+            )
+        ).all()
+    ]
+
+
+def _related_ids(session: Session, *, kp_id: int) -> list[int]:
+    rows = session.exec(
+        select(KnowledgeEdge).where(
+            ((KnowledgeEdge.prereq_id == kp_id) | (KnowledgeEdge.next_id == kp_id)),
+            KnowledgeEdge.relation_type == RelationType.related,
+        )
+    ).all()
+    related: set[int] = set()
+    for row in rows:
+        if int(row.prereq_id) == kp_id:
+            related.add(int(row.next_id))
+        else:
+            related.add(int(row.prereq_id))
+    return sorted(related)
+
+
+def _resource_priority(persona_type: PersonaType) -> dict[str, int]:
+    if persona_type == PersonaType.smart:
+        return {"example": 0, "note": 1, "video": 2}
+    if persona_type == PersonaType.diligent:
+        return {"video": 0, "note": 1, "example": 2}
+    if persona_type in {PersonaType.struggling, PersonaType.procrastinating}:
+        return {"video": 0, "example": 1, "note": 2}
+    return {"video": 0, "note": 1, "example": 2}
+
+
+def _question_order(persona_type: PersonaType, question: Question) -> tuple[float, int]:
+    difficulty = float(question.difficulty)
+    if persona_type == PersonaType.smart:
+        return (-difficulty, int(question.id or 0))
+    if persona_type == PersonaType.diligent:
+        return (abs(difficulty - 0.55), int(question.id or 0))
+    if persona_type in {PersonaType.struggling, PersonaType.procrastinating}:
+        return (difficulty, int(question.id or 0))
+    return (abs(difficulty - 0.5), int(question.id or 0))
+
+
+def _advice_text(persona_type: PersonaType, *, target_title: str, reason: str) -> str:
+    if persona_type == PersonaType.smart:
+        return f"你当前推进速度较快，建议直接冲刺“{target_title}”的高阶题，保留最少量讲解。{reason}"
+    if persona_type == PersonaType.diligent:
+        return f"建议按结构化路径推进“{target_title}”，先看资源，再做分层练习。{reason}"
+    if persona_type == PersonaType.struggling:
+        return f"先把“{target_title}”补牢，优先看短视频和基础题。{reason}"
+    if persona_type == PersonaType.procrastinating:
+        return f"建议先完成“{target_title}”的最短任务链：1 个资源 + 3 题练习。{reason}"
+    return f"继续按标准路径学习“{target_title}”。{reason}"
 
 
 def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, grade: str):
-    cfg = _get_config(session, subject, grade)
-    thresholds = json.loads(cfg.thresholds_json)
-    window = json.loads(cfg.window_json or "{}")
-    unlock_accuracy = float(thresholds.get("unlock_accuracy", 0.9))
-    unlock_max_difficulty = float(thresholds.get("unlock_max_difficulty", 0.35))
+    current_kp = session.get(KnowledgePoint, kp_id)
+    if current_kp is None:
+        raise ValueError(f"Knowledge point not found: {kp_id}")
 
-    mastery = upsert_mastery(session, user_id=user_id, kp_id=kp_id, subject=subject, grade=grade)
-
-    quiz_cfg = session.exec(select(Quiz).where(Quiz.kp_id == kp_id)).first()
-    quiz_pass_accuracy = float(quiz_cfg.pass_accuracy) if quiz_cfg is not None else 0.8
-    quiz = session.exec(
-        select(QuizAttempt)
-        .where(QuizAttempt.user_id == user_id, QuizAttempt.kp_id == kp_id)
-        .order_by(desc(QuizAttempt.created_at))
-        .limit(1)
-    ).first()
-    quiz_accuracy = quiz.score if quiz else 0.0
-    quiz_ok = bool(quiz and quiz_accuracy >= quiz_pass_accuracy)
-
-    practice_n = int(window.get("practice_attempts", 10))
-    practice_rows = session.exec(
-        select(PracticeAttempt, Question)
-        .join(Question, PracticeAttempt.question_id == Question.id, isouter=True)
-        .where(PracticeAttempt.user_id == user_id, PracticeAttempt.kp_id == kp_id)
-        .order_by(desc(PracticeAttempt.created_at))
-        .limit(practice_n)
-    ).all()
-    if practice_rows:
-        weighted_correct = 0.0
-        weight_sum = 0.0
-        for a, q in practice_rows:
-            d = float(q.difficulty) if q is not None else 0.5
-            w = 0.5 + d
-            weight_sum += w
-            weighted_correct += w * (1.0 if a.correct else 0.0)
-        practice_accuracy = (weighted_correct / weight_sum) if weight_sum > 0 else 0.0
-    else:
-        practice_accuracy = 0.0
-
-    st = practice_status(session, user_id=user_id, kp_id=kp_id)
-    practice_completed = bool(st.get("completed"))
-    practice_ok = practice_completed and (practice_accuracy >= unlock_accuracy)
-
-    expr_n = int(window.get("expressions", 20))
-    expr = session.exec(
-        select(ExpressionEvent)
-        .where(ExpressionEvent.user_id == user_id, ExpressionEvent.kp_id == kp_id)
-        .order_by(desc(ExpressionEvent.created_at))
-        .limit(expr_n)
-    ).all()
-    if expr:
-        difficulty_avg = sum(e.difficulty for e in expr) / len(expr)
-        confidence_avg = sum(e.confidence for e in expr) / len(expr)
-        expression_difficulty = float(difficulty_avg if confidence_avg >= 0.2 else 0.5)
-    else:
-        expression_difficulty = None
-
-    mastery_threshold = 0.7
-    sure_ratio_threshold = float(window.get("evidence_sure_ratio", 0.5))
-    evidence = evidence_checklist(
+    profile = recalculate_profile_snapshot(
         session,
         user_id=user_id,
-        kp_id=kp_id,
-        sure_ratio_threshold=sure_ratio_threshold,
+        subject=subject,
+        grade=grade,
+        refresh_mastery=False,
+        persist=True,
     )
-    evidence_threshold = float(window.get("evidence_threshold", 0.75))
-    evidence_ok = evidence.get("score", 0.0) >= evidence_threshold
-    # Unlock is driven by mastery + assessment outcomes (quiz + practice).
-    # Expression is kept only as a weak diagnostic signal (not a gate).
-    unlocked = quiz_ok and practice_ok and (mastery.value >= mastery_threshold) and evidence_ok
+    current_mastery = _mastery_value(session, user_id=user_id, kp_id=kp_id, subject=subject, grade=grade)
+    rule = get_or_create_persona_rule(session, subject=subject, grade=grade)
+    strategies = json.loads(rule.strategy_json or "{}")
 
-    # Remedial decision helper (soft guidance)
-    expr_state = recent_expression_state(
-        session,
-        user_id=user_id,
-        kp_id=kp_id,
-        window=expr_n,
-        conf_threshold=float(window.get("expression_conf_threshold", 0.2)),
-    )
-    wrong_streak = recent_wrong_streak(session, user_id=user_id, kp_id=kp_id, window=5)
-    last_attempt = session.exec(
-        select(PracticeAttempt)
-        .where(PracticeAttempt.user_id == user_id, PracticeAttempt.kp_id == kp_id)
-        .order_by(desc(PracticeAttempt.created_at))
-        .limit(1)
-    ).first()
-    guess_slip = {"guess_score": 0.0, "slip_score": 0.0}
-    if last_attempt and not last_attempt.correct:
-        fast_ms = int(window.get("guess_fast_ms", 8000))
-        slow_ms = int(window.get("slip_slow_ms", 45000))
-        guess_slip = infer_guess_slip(
-            duration_ms=int(last_attempt.duration_ms or 0),
-            expr_diff=float(expr_state.get("difficulty_avg", 0.5)),
-            fast_ms=fast_ms,
-            slow_ms=slow_ms,
-            self_report=str(getattr(last_attempt, "self_report", "unknown") or "unknown"),
-        )
-    remedy_action = "none"
-    if guess_slip["slip_score"] >= 0.7:
-        remedy_action = "retry_same_level"
-    elif guess_slip["guess_score"] >= 0.7 or float(expr_state.get("difficulty_avg", 0.5)) >= 0.6 or wrong_streak >= 2:
-        remedy_action = "remedial_path"
+    blocked_prereqs: list[dict] = []
+    for prereq_id in _prereq_ids(session, kp_id=kp_id):
+        mastery = _mastery_value(session, user_id=user_id, kp_id=prereq_id, subject=subject, grade=grade)
+        if float(mastery.value) < 0.6:
+            blocked_prereqs.append({"kp_id": prereq_id, "mastery": float(mastery.value)})
+    blocked_prereqs.sort(key=lambda item: item["mastery"])
 
-    prereqs = session.exec(select(KnowledgeEdge).where(KnowledgeEdge.next_id == kp_id)).all()
-    blocked = []
-    for p in prereqs:
-        m = session.exec(
-            select(QuizAttempt).where(QuizAttempt.user_id == user_id, QuizAttempt.kp_id == p.prereq_id)
-        ).first()
-        if m is None:
-            blocked.append(p.prereq_id)
+    next_candidates = _next_ids(session, kp_id=kp_id)
+    unlocked_next: list[int] = []
+    for candidate_id in next_candidates:
+        prereqs = _prereq_ids(session, kp_id=candidate_id)
+        if all(_mastery_value(session, user_id=user_id, kp_id=pid, subject=subject, grade=grade).value >= 0.6 for pid in prereqs):
+            unlocked_next.append(candidate_id)
 
-    resources = session.exec(
-        select(LearningResource).where(LearningResource.kp_id == kp_id).limit(3)
-    ).all()
+    related_candidates = _related_ids(session, kp_id=kp_id)
+
+    target_kp_id = kp_id
+    stage = "current"
+    if blocked_prereqs:
+        target_kp_id = int(blocked_prereqs[0]["kp_id"])
+        stage = "blocked_prerequisite"
+    elif float(current_mastery.value) < 0.7:
+        target_kp_id = kp_id
+        stage = "current_remedial"
+    elif unlocked_next:
+        scored = []
+        for candidate_id in unlocked_next:
+            mastery = _mastery_value(session, user_id=user_id, kp_id=candidate_id, subject=subject, grade=grade)
+            scored.append((float(mastery.value), candidate_id))
+        scored.sort(key=lambda item: item[0])
+        target_kp_id = scored[0][1]
+        stage = "next_unlocked"
+    elif related_candidates:
+        scored = []
+        for candidate_id in related_candidates:
+            mastery = _mastery_value(session, user_id=user_id, kp_id=candidate_id, subject=subject, grade=grade)
+            scored.append((float(mastery.value), candidate_id))
+        scored.sort(key=lambda item: item[0])
+        target_kp_id = scored[0][1]
+        stage = "related_extension"
+
+    target_kp = session.get(KnowledgePoint, target_kp_id)
+    target_mastery = _mastery_value(session, user_id=user_id, kp_id=target_kp_id, subject=subject, grade=grade)
+
+    reason_map = {
+        "blocked_prerequisite": f"当前知识点依赖的前置点还不稳，先补“{target_kp.title}”更有效。",
+        "current_remedial": f"当前知识点“{target_kp.title}”掌握度仍偏低，需要继续补强。",
+        "next_unlocked": f"前置条件已满足，可以推进到下一知识点“{target_kp.title}”。",
+        "related_extension": f"主线已较稳定，建议通过相关知识点“{target_kp.title}”做扩展巩固。",
+        "current": f"继续围绕“{target_kp.title}”进行标准学习。",
+    }
+    reason_summary = reason_map.get(stage, reason_map["current"])
+
+    resources = session.exec(select(LearningResource).where(LearningResource.kp_id == target_kp_id)).all()
+    resource_rank = _resource_priority(profile.persona_type)
+    resources = sorted(resources, key=lambda item: (resource_rank.get(item.type.value, 9), int(item.id or 0)))[:3]
     resource_list = [
-        {"id": r.id, "title": r.title, "url": r.url, "type": r.type.value} for r in resources
+        {"id": int(item.id), "title": item.title, "url": item.url, "type": item.type.value}
+        for item in resources
+        if item.id is not None
     ]
 
-    practice_qs = session.exec(select(Question).where(Question.kp_id == kp_id).limit(5)).all()
-    practice_list = [{"question_id": q.id, "type": q.type, "difficulty": q.difficulty} for q in practice_qs]
+    questions = session.exec(select(Question).where(Question.kp_id == target_kp_id)).all()
+    questions = sorted(questions, key=lambda item: _question_order(profile.persona_type, item))[:5]
+    practice_list = [
+        {
+            "question_id": int(item.id),
+            "type": item.type,
+            "difficulty": float(item.difficulty),
+            "prompt": item.prompt,
+        }
+        for item in questions
+        if item.id is not None
+    ]
 
-    next_edges = session.exec(select(KnowledgeEdge).where(KnowledgeEdge.prereq_id == kp_id)).all()
-    next_candidates = [e.next_id for e in next_edges]
+    strategy_tag = strategies.get(profile.persona_type.value, persona_label(profile.persona_type))
+    advice_text = _advice_text(profile.persona_type, target_title=target_kp.title, reason=reason_summary)
 
-    return {
+    can_unlock_next = bool(unlocked_next) and float(current_mastery.value) >= 0.7
+    evidence_items = {
+        "参与度达标": float(profile.engagement) >= 0.4,
+        "当前掌握度达标": float(current_mastery.value) >= 0.7,
+        "前置知识稳定": len(blocked_prereqs) == 0,
+        "课程状态良好": float(profile.dynamic_score) >= 0.7,
+    }
+    evidence_missing = [label for label, ok in evidence_items.items() if not ok]
+
+    payload = {
+        "target_kp": {
+            "id": int(target_kp.id),
+            "code": target_kp.code,
+            "title": target_kp.title,
+            "chapter": target_kp.chapter,
+            "mastery": float(target_mastery.value),
+        },
+        "reason_summary": reason_summary,
+        "resource_list": resource_list,
+        "practice_list": practice_list,
+        "advice_text": advice_text,
+        "persona_strategy_tag": strategy_tag,
+        "persona_type": profile.persona_type.value,
+        "persona_label": persona_label(profile.persona_type),
+        "dynamic_score": float(profile.dynamic_score),
+        "risk_level": profile.risk_level,
         "diagnosis": {
             "kp_id": kp_id,
-            "mastery": mastery.value,
-            "reasons": [
-                {"signal": "quiz_accuracy", "value": quiz_accuracy, "threshold": quiz_pass_accuracy},
-                {"signal": "practice_accuracy", "value": practice_accuracy, "threshold": unlock_accuracy},
-                {"signal": "practice_completed", "value": practice_completed, "threshold": True},
-                {"signal": "mastery", "value": mastery.value, "threshold": mastery_threshold},
-                {"signal": "expression_difficulty", "value": expression_difficulty, "threshold": unlock_max_difficulty},
-                {"signal": "evidence_score", "value": evidence.get("score", 0.0), "threshold": evidence_threshold},
-            ],
+            "mastery": float(current_mastery.value),
+            "status": current_mastery.status,
+            "reason_summary": current_mastery.reason_summary,
+            "blocked_prereq_count": len(blocked_prereqs),
         },
-        "evidence": evidence,
+        "evidence": {
+            "items": evidence_items,
+            "missing": evidence_missing,
+            "score": float(mean(1.0 if ok else 0.0 for ok in evidence_items.values())) if evidence_items else 0.0,
+        },
         "remedy": {
-            "action": remedy_action,
-            "guess_score": guess_slip["guess_score"],
-            "slip_score": guess_slip["slip_score"],
-            "wrong_streak": wrong_streak,
-            "expression_difficulty": expr_state.get("difficulty_avg", 0.5),
+            "action": stage,
+            "persona": profile.persona_type.value,
+            "reason_summary": reason_summary,
         },
-        "remedy_path": {"blocked_prereqs": blocked, "path": blocked + [kp_id] if blocked else [kp_id]},
+        "remedy_path": {
+            "blocked_prereqs": [int(item["kp_id"]) for item in blocked_prereqs],
+            "path": [int(item["kp_id"]) for item in blocked_prereqs] + [int(target_kp.id)],
+        },
         "resources": resource_list,
         "practice": practice_list,
-        "unlock": {"can_unlock_next": unlocked, "next_candidates": next_candidates},
+        "unlock": {
+            "can_unlock_next": can_unlock_next,
+            "next_candidates": [int(item) for item in unlocked_next],
+        },
     }
+
+    session.add(
+        RecommendationLog(
+            user_id=user_id,
+            subject=subject,
+            grade=grade,
+            source_kp_id=kp_id,
+            target_kp_id=int(target_kp.id),
+            persona_type=profile.persona_type,
+            reason_summary=reason_summary,
+            payload_json=json.dumps(payload, ensure_ascii=False),
+        )
+    )
+    session.commit()
+    return payload
