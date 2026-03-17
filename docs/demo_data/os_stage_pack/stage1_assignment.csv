@@ -1,0 +1,13 @@
+username,student_no,kp_code,score,completion_ratio,submitted_on_time,happened_at,note
+student1,,OS-1,78,0.95,yes,2026-03-05,阶段1作业
+student1,,OS-2,76,0.92,yes,2026-03-06,阶段1作业
+student1,,OS-3,74,0.90,yes,2026-03-07,阶段1作业
+student1,,OS-4,72,0.88,yes,2026-03-08,阶段1作业
+student2,,OS-1,66,0.82,yes,2026-03-05,阶段1作业
+student2,,OS-2,64,0.80,yes,2026-03-06,阶段1作业
+student2,,OS-3,62,0.78,yes,2026-03-07,阶段1作业
+student2,,OS-4,60,0.75,yes,2026-03-08,阶段1作业
+student3,,OS-1,52,0.60,no,2026-03-05,阶段1作业
+student3,,OS-2,50,0.58,no,2026-03-06,阶段1作业
+student3,,OS-3,48,0.55,no,2026-03-07,阶段1作业
+student3,,OS-4,45,0.50,no,2026-03-08,阶段1作业

@@ -232,6 +232,9 @@ def profile(
         ),
         portrait_dimensions=portrait_summary.get("portrait_dimensions", []),
         portrait_indicators=portrait_summary.get("portrait_indicators", []),
+        final_portrait_dimensions=portrait_summary.get("final_portrait_dimensions", []),
+        final_portrait_indicators=portrait_summary.get("final_portrait_indicators", []),
+        term_summary=portrait_summary.get("term_summary", {}),
     )
 
 

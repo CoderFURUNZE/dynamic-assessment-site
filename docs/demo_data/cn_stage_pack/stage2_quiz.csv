@@ -1,0 +1,10 @@
+username,student_no,kp_code,score,completion_ratio,duration_minutes,happened_at,note
+student1,,CN-GEN-004,78,0.78,17,2026-03-16,阶段2小测
+student1,,CN-GEN-005,80,0.80,16,2026-03-16,阶段2小测
+student1,,CN-GEN-006,82,0.82,16,2026-03-17,阶段2小测
+student2,,CN-GEN-004,68,0.68,18,2026-03-16,阶段2小测
+student2,,CN-GEN-005,70,0.70,18,2026-03-16,阶段2小测
+student2,,CN-GEN-006,72,0.72,17,2026-03-17,阶段2小测
+student3,,CN-GEN-004,45,0.45,23,2026-03-16,阶段2小测
+student3,,CN-GEN-005,42,0.42,24,2026-03-16,阶段2小测
+student3,,CN-GEN-006,40,0.40,25,2026-03-17,阶段2小测

@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+
+const props = withDefaults(defineProps<{ mode?: "users" | "teachers" }>(), {
+  mode: "users",
+});
 
 type UserRow = {
   id: number;
   username: string;
   role: string;
+  active: boolean;
   full_name: string;
   student_no: string;
   class_name: string;
@@ -26,6 +31,7 @@ const form = reactive({
   id: 0,
   username: "",
   role: "student",
+  active: true,
   full_name: "",
   student_no: "",
   class_name: "",
@@ -33,10 +39,18 @@ const form = reactive({
   password: "",
 });
 
+const titleText = computed(() => (props.mode === "teachers" ? "老师管理" : "用户管理"));
+const roleFilter = computed(() => (props.mode === "teachers" ? "teacher" : ""));
+
 async function load() {
   loading.value = true;
   try {
-    const res = await api.get(`/admin/users?page=${page.value}&page_size=${pageSize}`);
+    const qs = new URLSearchParams({
+      page: String(page.value),
+      page_size: String(pageSize),
+    });
+    if (roleFilter.value) qs.set("role", roleFilter.value);
+    const res = await api.get(`/admin/users?${qs.toString()}`);
     users.value = res.data.items ?? [];
     total.value = Number(res.data.total ?? 0);
   } catch (e: any) {
@@ -51,6 +65,7 @@ function openEdit(row: UserRow) {
   form.id = row.id;
   form.username = row.username;
   form.role = row.role;
+  form.active = row.active;
   form.full_name = row.full_name;
   form.student_no = row.student_no;
   form.class_name = row.class_name;
@@ -62,7 +77,8 @@ function openEdit(row: UserRow) {
 async function save() {
   try {
     await api.put(`/admin/users/${form.id}`, {
-      role: form.role,
+      role: props.mode === "teachers" ? "teacher" : form.role,
+      active: form.active,
       full_name: form.full_name,
       student_no: form.student_no,
       class_name: form.class_name,
@@ -77,6 +93,17 @@ async function save() {
   }
 }
 
+async function toggleActive(row: UserRow, active: boolean) {
+  try {
+    await api.put(`/admin/users/${row.id}`, { active });
+    ElMessage.success(active ? "已启用" : "已禁用");
+    row.active = active;
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "更新状态失败");
+    row.active = !active;
+  }
+}
+
 async function remove(row: UserRow) {
   try {
     await api.delete(`/admin/users/${row.id}`);
@@ -88,13 +115,21 @@ async function remove(row: UserRow) {
 }
 
 onMounted(() => load());
+
+watch(
+  () => props.mode,
+  () => {
+    page.value = 1;
+    load();
+  }
+);
 </script>
 
 <template>
   <el-card>
     <template #header>
       <div style="display: flex; align-items: center; justify-content: space-between">
-        <div>学生/用户管理</div>
+        <div>{{ titleText }}</div>
         <el-button @click="load" :loading="loading">刷新</el-button>
       </div>
     </template>
@@ -103,6 +138,17 @@ onMounted(() => load());
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="username" label="用户名" width="140" />
       <el-table-column prop="role" label="角色" width="100" />
+      <el-table-column label="状态" width="120">
+        <template #default="{ row }">
+          <el-switch
+            v-model="row.active"
+            active-text="启用"
+            inactive-text="禁用"
+            @change="(val: any) => toggleActive(row, Boolean(val))"
+            :disabled="row.username === 'admin'"
+          />
+        </template>
+      </el-table-column>
       <el-table-column prop="full_name" label="姓名" />
       <el-table-column prop="student_no" label="学号" />
       <el-table-column prop="class_name" label="班级" />
@@ -133,11 +179,14 @@ onMounted(() => load());
           <el-input v-model="form.username" disabled />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="form.role" style="width: 100%">
+          <el-select v-model="form.role" style="width: 100%" :disabled="props.mode === 'teachers'">
             <el-option label="admin" value="admin" />
             <el-option label="teacher" value="teacher" />
             <el-option label="student" value="student" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-switch v-model="form.active" active-text="启用" inactive-text="禁用" />
         </el-form-item>
         <el-form-item label="姓名">
           <el-input v-model="form.full_name" />

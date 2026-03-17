@@ -16,6 +16,7 @@ from app.schemas.content import (
 )
 from app.services.eval import upsert_mastery
 from app.services.learner_profile import log_behavior_event, recalculate_profile_snapshot
+from app.services.resource_files import build_resource_payload
 
 router = APIRouter(prefix="/content", tags=["content"])
 
@@ -35,7 +36,7 @@ def list_resources(
     _user=Depends(get_current_user),
 ):
     res = session.exec(select(LearningResource).where(LearningResource.kp_id == kp_id)).all()
-    return [ResourceOut(id=r.id, kp_id=r.kp_id, type=r.type.value, title=r.title, url=r.url) for r in res]
+    return [ResourceOut(**build_resource_payload(r)) for r in res if r.id is not None]
 
 
 @router.get("/quiz/{kp_id}", response_model=QuizOut)

@@ -25,9 +25,6 @@ def bootstrap_defaults() -> None:
 
 
 def _bootstrap_portrait_dimensions(session: Session) -> None:
-    if session.exec(select(PortraitDimension.id)).first():
-        return
-
     defaults = [
         {
             "code": "potential_trait",
@@ -35,9 +32,9 @@ def _bootstrap_portrait_dimensions(session: Session) -> None:
             "description": "用于描述学习者在创造性、迁移能力和价值判断方面的潜在特征。",
             "sort_order": 1,
             "indicators": [
-                ("creative_thinking", "创造性思维倾向", "关注创意表达与综合创新表现。", PortraitIndicatorSourceType.questionnaire, 1, 1.0),
-                ("cross_context_transfer", "跨情境迁移能力", "关注知识在新情境中的迁移使用。", PortraitIndicatorSourceType.auto, 2, 1.0),
-                ("value_judgement", "存在思考与价值判断", "关注价值判断与高层次反思。", PortraitIndicatorSourceType.questionnaire, 3, 1.0),
+                ("creative_thinking", "创造性思维倾向", "主要依据教师对开放性任务、项目作品和综合创新表现的阶段评价。", PortraitIndicatorSourceType.teacher, 1, 1.0),
+                ("cross_context_transfer", "跨情境迁移能力", "主要依据阶段导入的综合任务、迁移题和跨知识点应用结果。", PortraitIndicatorSourceType.imported, 2, 1.0),
+                ("value_judgement", "存在思考与价值判断", "主要依据教师补充评价、反思作业和高层次判断记录。", PortraitIndicatorSourceType.teacher, 3, 1.0),
             ],
         },
         {
@@ -47,7 +44,7 @@ def _bootstrap_portrait_dimensions(session: Session) -> None:
             "sort_order": 2,
             "indicators": [
                 ("collaboration", "协作能力与社交网络", "关注协作参与和同伴互动。", PortraitIndicatorSourceType.teacher, 1, 1.0),
-                ("motivation", "学习动机与态度", "关注主动性和持续投入。", PortraitIndicatorSourceType.teacher, 2, 1.0),
+                ("motivation", "学习动机与态度", "主要依据阶段导入的出勤、投入、任务完成连续性，并允许教师补充修正。", PortraitIndicatorSourceType.imported, 2, 1.0),
                 ("self_regulation", "自我调节与元认知", "关注反馈吸收和学习调整。", PortraitIndicatorSourceType.teacher, 3, 1.0),
             ],
         },
@@ -59,8 +56,8 @@ def _bootstrap_portrait_dimensions(session: Session) -> None:
             "indicators": [
                 ("cross_discipline_link", "跨学科知识关联能力", "关注知识之间的关联和整合。", PortraitIndicatorSourceType.auto, 1, 1.0),
                 ("discipline_level", "学科能力层级与认知路径", "关注认知层级和能力进阶。", PortraitIndicatorSourceType.auto, 2, 1.0),
-                ("language_mastery", "语言类知识掌握度", "关注语言/表达型知识点掌握。", PortraitIndicatorSourceType.auto, 3, 1.0),
-                ("logic_mastery", "逻辑类知识掌握度", "关注逻辑/推理型知识点掌握。", PortraitIndicatorSourceType.auto, 4, 1.0),
+                ("language_mastery", "语言类知识掌握度", "主要依据阶段导入的表达类作业、小测和文本型任务结果。", PortraitIndicatorSourceType.imported, 3, 1.0),
+                ("logic_mastery", "逻辑类知识掌握度", "主要依据阶段导入的小测、练习和推理型任务结果。", PortraitIndicatorSourceType.imported, 4, 1.0),
             ],
         },
         {
@@ -70,7 +67,7 @@ def _bootstrap_portrait_dimensions(session: Session) -> None:
             "sort_order": 4,
             "indicators": [
                 ("resource_preference", "资源偏好", "关注视频、图像、文本等资源偏好。", PortraitIndicatorSourceType.auto, 1, 1.0),
-                ("strategy_preference", "辅助学习策略", "关注常用学习策略和资源使用方式。", PortraitIndicatorSourceType.auto, 2, 1.0),
+                ("strategy_preference", "辅助学习策略", "主要依据阶段导入的补救学习、学习路径调整和老师补充观察。", PortraitIndicatorSourceType.imported, 2, 1.0),
                 ("text_discussion_interaction", "文本/讨论型交互偏好", "关注讨论、文本表达类交互。", PortraitIndicatorSourceType.auto, 3, 1.0),
                 ("practice_experience_interaction", "实践/体验型交互偏好", "关注实验、练习、体验类交互。", PortraitIndicatorSourceType.auto, 4, 1.0),
             ],
@@ -88,25 +85,34 @@ def _bootstrap_portrait_dimensions(session: Session) -> None:
         },
     ]
 
+    existing_dimensions = session.exec(select(PortraitDimension)).all()
+    dimension_map = {item.code: item for item in existing_dimensions}
+
     for item in defaults:
-        dimension = PortraitDimension(
-            code=item["code"],
-            title=item["title"],
-            description=item["description"],
-            sort_order=item["sort_order"],
-        )
+        dimension = dimension_map.get(item["code"]) or PortraitDimension(code=item["code"])
+        dimension.title = item["title"]
+        dimension.description = item["description"]
+        dimension.sort_order = item["sort_order"]
+        dimension.active = True
         session.add(dimension)
         session.flush()
+
+        existing_indicators = session.exec(
+            select(PortraitIndicator).where(PortraitIndicator.dimension_id == dimension.id)
+        ).all()
+        indicator_map = {indicator.code: indicator for indicator in existing_indicators}
+
         for code, title, description, source_type, sort_order, weight in item["indicators"]:
-            session.add(
-                PortraitIndicator(
-                    dimension_id=dimension.id,
-                    code=code,
-                    title=title,
-                    description=description,
-                    source_type=source_type,
-                    sort_order=sort_order,
-                    default_weight=weight,
-                )
+            indicator = indicator_map.get(code) or PortraitIndicator(
+                dimension_id=dimension.id,
+                code=code,
             )
+            indicator.dimension_id = dimension.id
+            indicator.title = title
+            indicator.description = description
+            indicator.source_type = source_type
+            indicator.sort_order = sort_order
+            indicator.default_weight = weight
+            indicator.active = True
+            session.add(indicator)
     session.commit()

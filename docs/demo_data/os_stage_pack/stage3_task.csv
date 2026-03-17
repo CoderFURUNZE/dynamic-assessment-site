@@ -1,0 +1,13 @@
+username,student_no,kp_code,score,completion_ratio,status,happened_at,note
+student1,,OS-1,92,0.98,done,2026-05-06,阶段3任务
+student1,,OS-2,90,0.96,done,2026-05-07,阶段3任务
+student1,,OS-3,88,0.95,done,2026-05-08,阶段3任务
+student1,,OS-4,86,0.94,done,2026-05-09,阶段3任务
+student2,,OS-1,84,0.92,done,2026-05-06,阶段3任务
+student2,,OS-2,82,0.90,done,2026-05-07,阶段3任务
+student2,,OS-3,80,0.88,done,2026-05-08,阶段3任务
+student2,,OS-4,78,0.86,done,2026-05-09,阶段3任务
+student3,,OS-1,60,0.68,in_progress,2026-05-06,阶段3任务
+student3,,OS-2,58,0.65,in_progress,2026-05-07,阶段3任务
+student3,,OS-3,55,0.62,in_progress,2026-05-08,阶段3任务
+student3,,OS-4,52,0.60,in_progress,2026-05-09,阶段3任务

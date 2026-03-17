@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -5,6 +7,7 @@ class UserOut(BaseModel):
     id: int
     username: str
     role: str
+    active: bool
     full_name: str
     student_no: str
     class_name: str
@@ -14,6 +17,7 @@ class UserOut(BaseModel):
 
 class UserUpdateIn(BaseModel):
     role: str | None = None
+    active: bool | None = None
     password: str | None = None
     full_name: str | None = None
     student_no: str | None = None
@@ -61,6 +65,8 @@ class KnowledgePointIn(BaseModel):
     literacy_tag: str = ""
     importance: float = 0.5
     difficulty: float = 0.5
+    pos_x: float | None = None
+    pos_y: float | None = None
 
 
 class KnowledgePointUpdateIn(BaseModel):
@@ -72,6 +78,8 @@ class KnowledgePointUpdateIn(BaseModel):
     literacy_tag: str | None = None
     importance: float | None = None
     difficulty: float | None = None
+    pos_x: float | None = None
+    pos_y: float | None = None
 
 
 class KpResourceIn(BaseModel):
@@ -79,12 +87,18 @@ class KpResourceIn(BaseModel):
     title: str
     url: str
     type: str = "note"
+    category: str = "learning"
+    tags: str = ""
+    description: str = ""
 
 
 class KpResourceUpdateIn(BaseModel):
     title: str | None = None
     url: str | None = None
     type: str | None = None
+    category: str | None = None
+    tags: str | None = None
+    description: str | None = None
 
 
 class KpTaskIn(BaseModel):
@@ -126,6 +140,9 @@ class CourseOut(BaseModel):
     description: str = ""
     active: bool
     teacher_id: int | None = None
+    max_students: int = 200
+    apply_deadline: datetime | None = None
+    enroll_status: str = "open"
 
 
 class CourseIn(BaseModel):
@@ -134,6 +151,9 @@ class CourseIn(BaseModel):
     description: str = ""
     active: bool = True
     teacher_id: int | None = None
+    max_students: int = 200
+    apply_deadline: datetime | None = None
+    enroll_status: str = "open"
 
 
 class CourseUpdateIn(BaseModel):
@@ -142,6 +162,9 @@ class CourseUpdateIn(BaseModel):
     description: str | None = None
     active: bool | None = None
     teacher_id: int | None = None
+    max_students: int | None = None
+    apply_deadline: datetime | None = None
+    enroll_status: str | None = None
 
 
 class PersonaRuleOut(BaseModel):
@@ -245,6 +268,16 @@ class AdminPracticeReportOut(BaseModel):
     accuracy: float
     daily: list[dict] = []
     by_kp: list[dict] = []
+
+
+class TeacherFinalScoreConfirmIn(BaseModel):
+    user_id: int
+    subject: str
+    grade: str
+    confirmed_score: float
+    confirmed_level: str = ""
+    comment: str = ""
+    recommendation_summary: str = ""
 
 
 class AuditLogOut(BaseModel):

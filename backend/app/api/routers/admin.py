@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import shutil
 from io import BytesIO
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -12,6 +13,8 @@ from app.api.deps import require_role
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.models import (
+    CourseEnrollStatus,
+    ChapterEdge,
     Course,
     CourseStage,
     EvalConfig,
@@ -33,7 +36,14 @@ from app.db.models import (
     Quiz,
     QuizAttempt,
     QuizItem,
+    ReviewSchedule,
+    Note,
+    ExpressionEvent,
+    StageImportRecord,
+    InterviewAnswer,
+    InterviewSession,
     StageEvaluationSnapshot,
+    TeacherFinalScoreConfirmation,
     StageTeacherFeedback,
     User,
     UserRole,
@@ -41,7 +51,7 @@ from app.db.models import (
     AuditLog,
 )
 from app.db.session import get_session
-from sqlalchemy import Integer, func, or_
+from sqlalchemy import Integer, func, or_, delete
 from app.schemas.admin import (
     KnowledgeEdgeIn,
     KnowledgeEdgeOut,
@@ -62,6 +72,7 @@ from app.schemas.admin import (
     AdminAnalyticsOut,
     AdminPracticeReportOut,
     AuditLogOut,
+    TeacherFinalScoreConfirmIn,
     UserOut,
     UserUpdateIn,
 )
@@ -84,6 +95,14 @@ from app.services.learner_profile import (
     upsert_persona_override,
     upsert_stage_teacher_feedback,
 )
+from app.services.resource_files import (
+    _preview_type_for_detected,
+    _resource_type_from_detected,
+    build_resource_payload,
+    detect_uploaded_file,
+    maybe_prepare_preview,
+    store_uploaded_file,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger("app.audit")
@@ -91,11 +110,16 @@ logger = logging.getLogger("app.audit")
 
 def _log_action(session: Session | None, user: User | None, action: str, detail: str = "") -> None:
     if user is None:
-        logger.info("actor=system action=%s detail=%s", action, detail)
-        if session is None:
-            return
-        session.add(AuditLog(actor="system", role="system", action=action, detail=detail))
-        session.commit()
+        try:
+            logger.info("actor=system action=%s detail=%s", action, detail)
+            if session is None:
+                return
+            session.add(AuditLog(actor="system", role="system", action=action, detail=detail))
+            session.commit()
+        except Exception:
+            if session is not None:
+                session.rollback()
+            logger.info("action=%s detail=%s", action, detail)
         return
     try:
         logger.info("actor=%s role=%s action=%s detail=%s", user.username, user.role.value, action, detail)
@@ -105,6 +129,8 @@ def _log_action(session: Session | None, user: User | None, action: str, detail:
             )
             session.commit()
     except Exception:
+        if session is not None:
+            session.rollback()
         logger.info("action=%s detail=%s", action, detail)
 
 
@@ -151,12 +177,289 @@ def _snapshot_for_user(session: Session, *, user_id: int, subject: str, grade: s
     return snapshot
 
 
+def _resolve_course_for_subject(session: Session, *, subject: str) -> Course | None:
+    return session.exec(select(Course).where(Course.title == subject)).first()
+
+
+def _check_teacher_subject_access(*, admin: User, course: Course | None) -> None:
+    if admin.role == UserRole.teacher and course is not None and course.teacher_id != admin.id:
+        raise HTTPException(status_code=403, detail="No permission for this subject")
+
+
+def _build_student_detail_payload(
+    session: Session,
+    *,
+    user_id: int,
+    subject: str,
+    grade: str,
+    course: Course | None,
+):
+    student = session.get(User, user_id)
+    if student is None or student.role != UserRole.student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    snapshot = _snapshot_for_user(session, user_id=user_id, subject=subject, grade=grade)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="No profile snapshot for this student and subject")
+    stage_snapshots = list(reversed(get_stage_snapshot_trend(session, user_id=user_id, subject=subject, grade=grade, limit=12)))
+    current_stage = stage_snapshots[-1] if stage_snapshots else None
+    feedback = get_stage_teacher_feedback(
+        session,
+        user_id=user_id,
+        subject=subject,
+        grade=grade,
+        stage_id=int(current_stage.stage_id) if current_stage is not None else None,
+    )
+    kps = session.exec(
+        select(KnowledgePoint)
+        .where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)
+        .order_by(KnowledgePoint.chapter, KnowledgePoint.id)
+    ).all()
+    kp_ids = [int(kp.id) for kp in kps if kp.id is not None]
+
+    mastery_rows = []
+    if kp_ids:
+        mastery_rows = session.exec(
+            select(Mastery).where(Mastery.user_id == user_id, Mastery.kp_id.in_(kp_ids))
+        ).all()
+    mastery_map = {int(row.kp_id): row for row in mastery_rows}
+    mastery_items = [
+        {
+            "kp_id": int(kp.id),
+            "code": kp.code,
+            "title": kp.title,
+            "chapter": kp.chapter,
+            "mastery": float(mastery_map.get(int(kp.id)).value) if int(kp.id) in mastery_map else 0.0,
+            "direct_value": float(mastery_map.get(int(kp.id)).direct_value) if int(kp.id) in mastery_map else 0.0,
+            "status": mastery_map.get(int(kp.id)).status if int(kp.id) in mastery_map else "not_started",
+            "reason_summary": mastery_map.get(int(kp.id)).reason_summary if int(kp.id) in mastery_map else "",
+        }
+        for kp in kps
+        if kp.id is not None
+    ]
+
+    behavior_rows = session.exec(
+        select(LearningBehaviorEvent)
+        .where(LearningBehaviorEvent.user_id == user_id)
+        .order_by(LearningBehaviorEvent.created_at.desc())
+        .limit(30)
+    ).all()
+    behavior_items = [
+        {
+            "id": int(row.id),
+            "event_type": row.event_type,
+            "kp_id": row.kp_id,
+            "value_json": row.value_json,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in behavior_rows
+        if row.id is not None
+    ]
+
+    recommendation_rows = session.exec(
+        select(RecommendationLog)
+        .where(
+            RecommendationLog.user_id == user_id,
+            RecommendationLog.subject == subject,
+            RecommendationLog.grade == grade,
+        )
+        .order_by(RecommendationLog.created_at.desc())
+        .limit(10)
+    ).all()
+    recommendation_items = [
+        {
+            "id": int(row.id),
+            "source_kp_id": row.source_kp_id,
+            "target_kp_id": row.target_kp_id,
+            "persona_type": row.persona_type.value if isinstance(row.persona_type, PersonaType) else str(row.persona_type),
+            "reason_summary": row.reason_summary,
+            "created_at": row.created_at.isoformat(),
+            "payload_json": row.payload_json,
+        }
+        for row in recommendation_rows
+        if row.id is not None
+    ]
+
+    practice_rows = session.exec(
+        select(PracticeAttempt)
+        .where(PracticeAttempt.user_id == user_id, PracticeAttempt.kp_id.in_(kp_ids) if kp_ids else True)
+        .order_by(PracticeAttempt.created_at.desc())
+        .limit(20)
+    ).all()
+    quiz_rows = session.exec(
+        select(QuizAttempt)
+        .where(QuizAttempt.user_id == user_id, QuizAttempt.kp_id.in_(kp_ids) if kp_ids else True)
+        .order_by(QuizAttempt.created_at.desc())
+        .limit(10)
+    ).all()
+    video_rows = session.exec(
+        select(VideoProgress)
+        .where(VideoProgress.user_id == user_id, VideoProgress.kp_id.in_(kp_ids) if kp_ids else True)
+        .order_by(VideoProgress.updated_at.desc())
+        .limit(10)
+    ).all()
+    portrait_summary = _json_load(snapshot.portrait_summary_json, {})
+    final_confirmation = None
+    if course is not None and course.id is not None:
+        final_confirmation = session.exec(
+            select(TeacherFinalScoreConfirmation).where(
+                TeacherFinalScoreConfirmation.user_id == user_id,
+                TeacherFinalScoreConfirmation.course_id == int(course.id),
+            )
+        ).first()
+    latest_recommendation = recommendation_items[0] if recommendation_items else None
+
+    return {
+        "student": {
+            "id": int(student.id),
+            "username": student.username,
+            "full_name": student.full_name,
+            "student_no": student.student_no,
+            "class_name": student.class_name,
+        },
+        "profile": {
+            "course_id": int(course.id) if course is not None and course.id is not None else None,
+            "persona_type": snapshot.persona_type.value,
+            "persona_label": persona_label(snapshot.persona_type),
+            "engagement": float(snapshot.engagement),
+            "achievement": float(snapshot.achievement),
+            "efficiency": float(snapshot.efficiency),
+            "risk": float(snapshot.risk),
+            "course_mastery": float(snapshot.course_mastery),
+            "dynamic_score": float(snapshot.dynamic_score),
+            "stability": float(snapshot.stability),
+            "risk_level": snapshot.risk_level,
+            "reason_summary": snapshot.reason_summary,
+            "updated_at": snapshot.updated_at.isoformat(),
+            "current_stage_title": current_stage.stage_title if current_stage is not None else "",
+            "current_stage_trend": current_stage.trend_label if current_stage is not None else "",
+            "portrait_dimensions": portrait_summary.get("portrait_dimensions", []),
+            "portrait_indicators": portrait_summary.get("portrait_indicators", []),
+            "final_portrait_dimensions": portrait_summary.get("final_portrait_dimensions", []),
+            "final_portrait_indicators": portrait_summary.get("final_portrait_indicators", []),
+            "term_summary": portrait_summary.get("term_summary", {}),
+        },
+        "stage_history": [
+            {
+                "stage_id": int(item.stage_id),
+                "stage_title": item.stage_title,
+                "stage_order": int(item.stage_order),
+                "persona_type": item.persona_type.value if isinstance(item.persona_type, PersonaType) else str(item.persona_type),
+                "persona_label": persona_label(item.persona_type),
+                "engagement": float(item.engagement),
+                "achievement": float(item.achievement),
+                "habit": float(item.habit),
+                "characteristic": float(item.characteristic),
+                "dynamic_score": float(item.dynamic_score),
+                "course_mastery": float(item.course_mastery),
+                "trend_label": item.trend_label,
+                "risk_level": item.risk_level,
+                "reason_summary": item.reason_summary,
+                "portrait_dimensions": _json_load(item.dimension_summary_json, {}).get("portrait_dimensions", []),
+                "portrait_indicators": _json_load(item.indicator_summary_json, {}).get("portrait_indicators", []),
+                "updated_at": item.updated_at.isoformat(),
+            }
+            for item in stage_snapshots
+        ],
+        "teacher_feedback": (
+            {
+                "stage_id": int(feedback.stage_id),
+                "feedback_tag": feedback.feedback_tag,
+                "comment": feedback.comment,
+                "updated_by": feedback.updated_by,
+                "updated_at": feedback.updated_at.isoformat(),
+            }
+            if feedback is not None and feedback.id is not None
+            else None
+        ),
+        "mastery_map": mastery_items,
+        "behavior_timeline": behavior_items,
+        "recommendations": recommendation_items,
+        "recommendation_closure": {
+            "total_recommendations": len(recommendation_items),
+            "latest_target_kp_id": latest_recommendation["target_kp_id"] if latest_recommendation else None,
+            "latest_reason_summary": latest_recommendation["reason_summary"] if latest_recommendation else "",
+            "latest_created_at": latest_recommendation["created_at"] if latest_recommendation else None,
+            "final_summary": (
+                final_confirmation.recommendation_summary
+                if final_confirmation is not None
+                else (latest_recommendation["reason_summary"] if latest_recommendation else "")
+            ),
+        },
+        "final_score_confirmation": (
+            {
+                "id": int(final_confirmation.id),
+                "suggested_score": float(final_confirmation.suggested_score),
+                "confirmed_score": float(final_confirmation.confirmed_score),
+                "confirmed_level": final_confirmation.confirmed_level,
+                "comment": final_confirmation.comment,
+                "recommendation_summary": final_confirmation.recommendation_summary,
+                "confirmed_by": final_confirmation.confirmed_by,
+                "confirmed_at": final_confirmation.confirmed_at.isoformat(),
+                "updated_at": final_confirmation.updated_at.isoformat(),
+            }
+            if final_confirmation is not None and final_confirmation.id is not None
+            else None
+        ),
+        "recent_practice": [
+            {
+                "id": int(row.id),
+                "kp_id": row.kp_id,
+                "question_id": row.question_id,
+                "correct": bool(row.correct),
+                "duration_ms": row.duration_ms,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in practice_rows
+            if row.id is not None
+        ],
+        "recent_quiz": [
+            {
+                "id": int(row.id),
+                "kp_id": row.kp_id,
+                "score": float(row.score),
+                "passed": bool(row.passed),
+                "duration_ms": row.duration_ms,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in quiz_rows
+            if row.id is not None
+        ],
+        "recent_video": [
+            {
+                "id": int(row.id),
+                "kp_id": row.kp_id,
+                "resource_id": row.resource_id,
+                "watched_seconds": float(row.watched_seconds),
+                "duration_seconds": float(row.duration_seconds),
+                "updated_at": row.updated_at.isoformat(),
+            }
+            for row in video_rows
+            if row.id is not None
+        ],
+    }
+
+
 def _relation_type_value(value) -> str:
     if isinstance(value, RelationType):
         return value.value
     if isinstance(value, str) and value:
         return value
     return RelationType.prerequisite.value
+
+
+def _course_to_out(course: Course) -> CourseOut:
+    return CourseOut(
+        id=int(course.id or 0),
+        code=course.code,
+        title=course.title,
+        description=course.description,
+        active=bool(course.active),
+        teacher_id=int(course.teacher_id) if course.teacher_id is not None else None,
+        max_students=int(course.max_students or 200),
+        apply_deadline=course.apply_deadline,
+        enroll_status=course.enroll_status.value if hasattr(course.enroll_status, "value") else str(course.enroll_status),
+    )
 
 
 def _safe_filename(name: str) -> str:
@@ -170,6 +473,13 @@ def _resource_type_value(value) -> str:
     if isinstance(value, str) and value:
         return value
     return ResourceType.note.value
+
+
+def _resource_category_value(row: LearningResource) -> str:
+    if getattr(row, "category", ""):
+        return str(row.category)
+    type_value = _resource_type_value(getattr(row, "type", ""))
+    return "recommend" if type_value in {ResourceType.book.value, ResourceType.recommend_book.value} else "learning"
 
 
 def _task_type_value(value) -> str:
@@ -281,17 +591,134 @@ def list_kp_resources(
     _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     rows = session.exec(select(LearningResource).where(LearningResource.kp_id == kp_id).order_by(LearningResource.id)).all()
-    return [
+    return [build_resource_payload(row) for row in rows if row.id is not None]
+
+
+@router.get("/kp-resources/{resource_id}/detail")
+def get_kp_resource_detail(
+    resource_id: int,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    row = session.get(LearningResource, resource_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    kp = session.get(KnowledgePoint, int(row.kp_id))
+    payload = build_resource_payload(row)
+    payload.update(
         {
-            "id": int(row.id),
-            "kp_id": int(row.kp_id),
-            "type": _resource_type_value(row.type),
-            "title": row.title,
-            "url": row.url,
+            "subject": row.subject,
+            "grade": row.grade,
+            "kp_code": kp.code if kp else "",
+            "kp_title": kp.title if kp else "",
         }
-        for row in rows
-        if row.id is not None
-    ]
+    )
+    return payload
+
+
+@router.post("/kp-resources/detect")
+def detect_kp_resource_upload(
+    file: UploadFile = File(...),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    payload = file.file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="file is empty")
+    try:
+        detected = detect_uploaded_file(
+            filename=file.filename or "resource",
+            payload=payload,
+            content_type=file.content_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        **detected,
+        "preview_label": {
+            "pdf_inline": "PDF 在线预览",
+            "video_inline": "页面内视频播放",
+            "image_inline": "页面内图片预览",
+            "pdf_after_convert": "转换为 PDF 后在线预览",
+            "external_link": "新窗口打开",
+            "download": "下载查看",
+        }.get(detected["preview_type"], "下载查看"),
+    }
+
+
+@router.post("/kp-resources/upload")
+def upload_kp_resource(
+    kp_id: int = Form(...),
+    title: str = Form(""),
+    category: str = Form("learning"),
+    tags: str = Form(""),
+    description: str = Form(""),
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    kp = session.get(KnowledgePoint, kp_id)
+    if kp is None:
+        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    raw = file.file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="file is empty")
+    try:
+        detected = detect_uploaded_file(
+            filename=file.filename or "resource",
+            payload=raw,
+            content_type=file.content_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    stored = store_uploaded_file(
+        kp_id=kp_id,
+        filename=file.filename or "resource",
+        payload=raw,
+        detected_resource_type=detected["detected_resource_type"],
+    )
+    type_value = _resource_type_from_detected(detected["detected_resource_type"], category=category)
+    preview_type = detected["preview_type"]
+    preview_status = "processing" if preview_type == "pdf_after_convert" else "ready"
+    final_title = title.strip() or Path(file.filename or "resource").stem
+    row = LearningResource(
+        subject=kp.subject,
+        grade=kp.grade,
+        kp_id=int(kp.id),
+        title=final_title,
+        url="",
+        type=type_value,
+        category=category if category in {"learning", "recommend"} else "learning",
+        description=description.strip(),
+        tags=tags.strip(),
+        original_file_name=detected["original_file_name"],
+        file_extension=detected["file_extension"],
+        detected_mime_type=detected["detected_mime_type"],
+        detected_resource_type=detected["detected_resource_type"],
+        preview_type=preview_type,
+        preview_status=preview_status,
+        converted_preview_url="",
+        original_file_url=stored["relative_url"],
+        file_size_bytes=stored["file_size_bytes"],
+        extension_mismatch=bool(detected["extension_mismatch"]),
+        source_kind="upload",
+    )
+    if preview_type in {"pdf_inline", "video_inline", "image_inline"}:
+        row.converted_preview_url = stored["relative_url"]
+        row.url = stored["relative_url"]
+    else:
+        row.url = stored["relative_url"]
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    maybe_prepare_preview(resource=row)
+    row.updated_at = datetime.utcnow()
+    if row.preview_status == "ready" and row.converted_preview_url:
+        row.url = row.converted_preview_url
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    _log_action(session, admin, "kp_resource_upload", f"kp_id={kp.id} resource_id={row.id} type={row.detected_resource_type}")
+    return build_resource_payload(row)
 
 
 @router.post("/kp-resources")
@@ -318,12 +745,22 @@ def create_kp_resource(
         title=title,
         url=url,
         type=resource_type,
+        category=payload.category if payload.category in {"learning", "recommend"} else "learning",
+        tags=payload.tags.strip(),
+        description=payload.description.strip(),
+        detected_resource_type=_resource_type_value(resource_type),
+        preview_type="external_link",
+        preview_status="ready",
+        original_file_url=url,
+        converted_preview_url="",
+        source_kind="external",
     )
+    row.url = url
     session.add(row)
     session.commit()
     session.refresh(row)
     _log_action(session, admin, "kp_resource_create", f"kp_id={kp.id} resource_id={row.id}")
-    return {"ok": True, "id": row.id}
+    return build_resource_payload(row)
 
 
 @router.put("/kp-resources/{resource_id}")
@@ -341,20 +778,40 @@ def update_kp_resource(
         if not title:
             raise HTTPException(status_code=400, detail="title required")
         row.title = title
+    if payload.description is not None:
+        row.description = payload.description.strip()
+    if payload.tags is not None:
+        row.tags = payload.tags.strip()
+    if payload.category is not None and payload.category in {"learning", "recommend"}:
+        row.category = payload.category
     if payload.url is not None:
         url = payload.url.strip()
         if not url:
             raise HTTPException(status_code=400, detail="url required")
         row.url = url
+        if (row.source_kind or "external") == "external":
+            row.original_file_url = url
+            row.converted_preview_url = ""
     if payload.type is not None:
+        if (row.source_kind or "external") == "upload":
+            raise HTTPException(status_code=400, detail="Uploaded file resources cannot change file type manually")
         try:
             row.type = ResourceType(str(payload.type).strip())
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Invalid resource type") from exc
+        row.detected_resource_type = _resource_type_value(row.type)
+        row.preview_type = "external_link" if row.type == ResourceType.link else _preview_type_for_detected(_resource_type_value(row.type))
+    if (row.source_kind or "external") == "external":
+        row.preview_status = "ready"
+        row.preview_type = "external_link"
+        row.converted_preview_url = ""
+        row.extension_mismatch = False
+    row.updated_at = datetime.utcnow()
     session.add(row)
     session.commit()
     _log_action(session, admin, "kp_resource_update", f"resource_id={resource_id}")
-    return {"ok": True}
+    session.refresh(row)
+    return build_resource_payload(row)
 
 
 @router.delete("/kp-resources/{resource_id}")
@@ -487,6 +944,7 @@ def create_user(
     student_no = payload.get("student_no", "") or ""
     class_name = payload.get("class_name", "") or ""
     phone = payload.get("phone", None)
+    active = bool(payload.get("active", True))
     if not username or not password:
         raise HTTPException(status_code=400, detail="Invalid user")
     # Password format validation disabled for testing.
@@ -501,6 +959,7 @@ def create_user(
         username=username,
         password_hash=hash_password(password),
         role=UserRole(role),
+        active=active,
         full_name=str(full_name),
         student_no=str(student_no),
         class_name=str(class_name),
@@ -528,7 +987,7 @@ def list_courses(
         q = q.where(or_(Course.code.like(like), Course.title.like(like), Course.description.like(like)))
     total = session.exec(select(func.count()).select_from(q.subquery())).one()
     items = session.exec(q.order_by(Course.created_at.desc()).offset((page - 1) * page_size).limit(page_size)).all()
-    return {"items": [CourseOut(**i.model_dump()) for i in items], "total": total}
+    return {"items": [_course_to_out(i) for i in items], "total": total}
 
 
 @router.post("/courses", response_model=CourseOut)
@@ -547,18 +1006,25 @@ def create_course(
     teacher_id = _ensure_teacher_id(session, payload.teacher_id)
     if admin.role == UserRole.teacher:
         teacher_id = int(admin.id)
+    try:
+        enroll_status = CourseEnrollStatus(str(payload.enroll_status or "open").strip().lower())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的报名开放状态")
     course = Course(
         code=code,
         title=title,
         description=payload.description or "",
         active=bool(payload.active),
         teacher_id=teacher_id,
+        max_students=max(1, int(payload.max_students or 200)),
+        apply_deadline=payload.apply_deadline,
+        enroll_status=enroll_status,
     )
     session.add(course)
     session.commit()
     session.refresh(course)
     _log_action(session, admin, "course_create", f"code={code} title={title} teacher_id={teacher_id}")
-    return CourseOut(**course.model_dump())
+    return _course_to_out(course)
 
 
 @router.put("/courses/{course_id}", response_model=CourseOut)
@@ -590,6 +1056,15 @@ def update_course(
         course.description = payload.description
     if payload.active is not None:
         course.active = bool(payload.active)
+    if payload.max_students is not None:
+        course.max_students = max(1, int(payload.max_students))
+    if payload.apply_deadline is not None:
+        course.apply_deadline = payload.apply_deadline
+    if payload.enroll_status is not None:
+        try:
+            course.enroll_status = CourseEnrollStatus(str(payload.enroll_status).strip().lower())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="无效的报名开放状态")
     if payload.teacher_id is not None:
         course.teacher_id = _ensure_teacher_id(session, payload.teacher_id)
     if admin.role == UserRole.teacher:
@@ -598,7 +1073,7 @@ def update_course(
     session.commit()
     session.refresh(course)
     _log_action(session, admin, "course_update", f"id={course_id} code={course.code} teacher_id={course.teacher_id}")
-    return CourseOut(**course.model_dump())
+    return _course_to_out(course)
 
 
 @router.delete("/courses/{course_id}")
@@ -624,20 +1099,30 @@ def delete_course(
 def list_users(
     page: int = 1,
     page_size: int = 15,
+    role: str | None = None,
     session: Session = Depends(get_session),
     _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     page = max(1, page)
     page_size = max(1, min(100, page_size))
-    total = session.exec(select(func.count()).select_from(User)).one()
+    q = select(User)
+    q_total = select(func.count()).select_from(User)
+    if role:
+        role_value = role.strip()
+        if role_value not in {UserRole.admin.value, UserRole.teacher.value, UserRole.student.value}:
+            raise HTTPException(status_code=400, detail="Invalid role filter")
+        q = q.where(User.role == UserRole(role_value))
+        q_total = q_total.where(User.role == UserRole(role_value))
+    total = session.exec(q_total).one()
     rows = session.exec(
-        select(User).order_by(User.id).offset((page - 1) * page_size).limit(page_size)
+        q.order_by(User.id).offset((page - 1) * page_size).limit(page_size)
     ).all()
     items = [
         UserOut(
             id=u.id,
             username=u.username,
             role=u.role.value,
+            active=bool(u.active),
             full_name=u.full_name,
             student_no=u.student_no,
             class_name=u.class_name,
@@ -745,6 +1230,8 @@ def update_user(
         raise HTTPException(status_code=404, detail="User not found")
     if payload.role is not None:
         u.role = UserRole(payload.role)
+    if payload.active is not None:
+        u.active = bool(payload.active)
     if payload.password is not None and payload.password.strip():
         pw = payload.password.strip()
         if len(pw) < 8 or not re.search(r"[A-Z]", pw) or not re.search(r"[a-z]", pw) or not re.search(r"\d", pw):
@@ -767,6 +1254,7 @@ def update_user(
         id=u.id,
         username=u.username,
         role=u.role.value,
+        active=bool(u.active),
         full_name=u.full_name,
         student_no=u.student_no,
         class_name=u.class_name,
@@ -855,6 +1343,8 @@ def create_kp(
         literacy_tag=payload.literacy_tag.strip(),
         importance=max(0.0, min(1.0, float(payload.importance))),
         difficulty=max(0.0, min(1.0, float(payload.difficulty))),
+        pos_x=float(payload.pos_x) if payload.pos_x is not None else None,
+        pos_y=float(payload.pos_y) if payload.pos_y is not None else None,
     )
     session.add(kp)
     session.commit()
@@ -894,10 +1384,36 @@ def update_kp(
         kp.importance = max(0.0, min(1.0, float(payload.importance)))
     if payload.difficulty is not None:
         kp.difficulty = max(0.0, min(1.0, float(payload.difficulty)))
+    if payload.pos_x is not None:
+        kp.pos_x = float(payload.pos_x)
+    if payload.pos_y is not None:
+        kp.pos_y = float(payload.pos_y)
     session.add(kp)
     session.commit()
     session.refresh(kp)
     return kp
+
+
+@router.put("/kps/{kp_id}/position")
+def update_kp_position(
+    kp_id: int,
+    payload: dict,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    kp = session.get(KnowledgePoint, kp_id)
+    if kp is None:
+        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    if "x" not in payload or "y" not in payload:
+        raise HTTPException(status_code=400, detail="x/y required")
+    try:
+        kp.pos_x = float(payload.get("x"))
+        kp.pos_y = float(payload.get("y"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="x/y must be number") from exc
+    session.add(kp)
+    session.commit()
+    return {"ok": True, "kp_id": kp_id, "x": kp.pos_x, "y": kp.pos_y}
 
 
 @router.put("/kps/{kp_id}/practice_total")
@@ -931,24 +1447,69 @@ def update_kp_practice_total(
 def delete_kp(
     kp_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp = session.get(KnowledgePoint, kp_id)
     if kp is None:
         raise HTTPException(status_code=404, detail="Knowledge point not found")
+    # 级联清理所有可能引用此知识点的数据，避免“表面无引用但仍删除失败”的情况。
+    question_ids = [
+        int(qid)
+        for qid in session.exec(select(Question.id).where(Question.kp_id == kp_id)).all()
+        if qid is not None
+    ]
+    quiz_ids = [
+        int(qid)
+        for qid in session.exec(select(Quiz.id).where(Quiz.kp_id == kp_id)).all()
+        if qid is not None
+    ]
+    interview_session_ids = [
+        int(sid)
+        for sid in session.exec(select(InterviewSession.id).where(InterviewSession.kp_id == kp_id)).all()
+        if sid is not None
+    ]
 
-    # Safety: block deletion if referenced.
-    has_edge = session.exec(
-        select(KnowledgeEdge.id).where((KnowledgeEdge.prereq_id == kp_id) | (KnowledgeEdge.next_id == kp_id))
-    ).first()
-    has_resource = session.exec(select(LearningResource.id).where(LearningResource.kp_id == kp_id)).first()
-    has_task = session.exec(select(KpTask.id).where(KpTask.kp_id == kp_id)).first()
-    has_q = session.exec(select(Question.id).where(Question.kp_id == kp_id)).first()
-    if has_edge or has_resource or has_task or has_q:
-        raise HTTPException(status_code=400, detail="Cannot delete: kp is referenced by edges/resources/tasks/questions")
+    try:
+        # 与题目、测验相关
+        if question_ids:
+            session.exec(delete(PracticeAttempt).where(PracticeAttempt.question_id.in_(question_ids)))
+            session.exec(delete(ReviewSchedule).where(ReviewSchedule.question_id.in_(question_ids)))
+            session.exec(delete(KpQuestionAssignment).where(KpQuestionAssignment.question_id.in_(question_ids)))
+            session.exec(delete(InterviewAnswer).where(InterviewAnswer.question_id.in_(question_ids)))
+            session.exec(delete(Question).where(Question.id.in_(question_ids)))
+        if quiz_ids:
+            session.exec(delete(QuizAttempt).where(QuizAttempt.quiz_id.in_(quiz_ids)))
+            session.exec(delete(QuizItem).where(QuizItem.quiz_id.in_(quiz_ids)))
+            session.exec(delete(Quiz).where(Quiz.id.in_(quiz_ids)))
+        if interview_session_ids:
+            session.exec(delete(InterviewAnswer).where(InterviewAnswer.session_id.in_(interview_session_ids)))
+            session.exec(delete(InterviewSession).where(InterviewSession.id.in_(interview_session_ids)))
 
-    session.delete(kp)
-    session.commit()
+        # 与知识点直接关联
+        session.exec(delete(KnowledgeEdge).where((KnowledgeEdge.prereq_id == kp_id) | (KnowledgeEdge.next_id == kp_id)))
+        session.exec(delete(LearningResource).where(LearningResource.kp_id == kp_id))
+        session.exec(delete(KpTask).where(KpTask.kp_id == kp_id))
+        session.exec(delete(PracticeAttempt).where(PracticeAttempt.kp_id == kp_id))
+        session.exec(delete(QuizAttempt).where(QuizAttempt.kp_id == kp_id))
+        session.exec(delete(ReviewSchedule).where(ReviewSchedule.kp_id == kp_id))
+        session.exec(delete(ExpressionEvent).where(ExpressionEvent.kp_id == kp_id))
+        session.exec(delete(Mastery).where(Mastery.kp_id == kp_id))
+        session.exec(delete(Note).where(Note.kp_id == kp_id))
+        session.exec(delete(VideoProgress).where(VideoProgress.kp_id == kp_id))
+        session.exec(delete(KpQuestionAssignment).where(KpQuestionAssignment.kp_id == kp_id))
+        session.exec(delete(InterviewAnswer).where(InterviewAnswer.kp_id == kp_id))
+        session.exec(delete(StageImportRecord).where(StageImportRecord.kp_id == kp_id))
+        session.exec(delete(LearningBehaviorEvent).where(LearningBehaviorEvent.kp_id == kp_id))
+        session.exec(delete(RecommendationLog).where((RecommendationLog.source_kp_id == kp_id) | (RecommendationLog.target_kp_id == kp_id)))
+
+        # 最后删除知识点
+        session.delete(kp)
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=f"删除失败：该知识点仍被其他数据引用 ({exc})") from exc
+
+    _log_action(session, admin, "kp_delete", f"kp_id={kp_id}")
     return {"ok": True}
 
 
@@ -1035,6 +1596,96 @@ def delete_edge(
     if edge is None:
         raise HTTPException(status_code=404, detail="Edge not found")
     session.delete(edge)
+    session.commit()
+    return {"ok": True}
+
+
+@router.get("/chapter-edges")
+def list_chapter_edges(
+    subject: str,
+    grade: str,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    rows = session.exec(
+        select(ChapterEdge)
+        .where(ChapterEdge.subject == subject, ChapterEdge.grade == grade)
+        .order_by(ChapterEdge.id)
+    ).all()
+    return [
+        {
+            "id": int(row.id),
+            "source_chapter": row.source_chapter,
+            "target_chapter": row.target_chapter,
+            "relation_type": _relation_type_value(row.relation_type),
+        }
+        for row in rows
+        if row.id is not None
+    ]
+
+
+@router.post("/chapter-edges")
+def create_chapter_edge(
+    payload: dict,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    subject = str(payload.get("subject", "")).strip()
+    grade = str(payload.get("grade", "")).strip()
+    source_chapter = str(payload.get("source_chapter", "")).strip()
+    target_chapter = str(payload.get("target_chapter", "")).strip()
+    relation_type_raw = str(payload.get("relation_type", RelationType.related.value)).strip() or RelationType.related.value
+    if not subject or not grade or not source_chapter or not target_chapter:
+        raise HTTPException(status_code=400, detail="subject/grade/source_chapter/target_chapter required")
+    if source_chapter == target_chapter:
+        raise HTTPException(status_code=400, detail="source_chapter and target_chapter cannot be same")
+    try:
+        relation_type = RelationType(relation_type_raw)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="relation_type must be prerequisite or related") from exc
+    exists = session.exec(
+        select(ChapterEdge).where(
+            ChapterEdge.subject == subject,
+            ChapterEdge.grade == grade,
+            ChapterEdge.source_chapter == source_chapter,
+            ChapterEdge.target_chapter == target_chapter,
+        )
+    ).first()
+    if exists is not None:
+        return {
+            "id": int(exists.id),
+            "source_chapter": exists.source_chapter,
+            "target_chapter": exists.target_chapter,
+            "relation_type": _relation_type_value(exists.relation_type),
+        }
+    row = ChapterEdge(
+        subject=subject,
+        grade=grade,
+        source_chapter=source_chapter,
+        target_chapter=target_chapter,
+        relation_type=relation_type,
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return {
+        "id": int(row.id),
+        "source_chapter": row.source_chapter,
+        "target_chapter": row.target_chapter,
+        "relation_type": _relation_type_value(row.relation_type),
+    }
+
+
+@router.delete("/chapter-edges/{edge_id}")
+def delete_chapter_edge(
+    edge_id: int,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    row = session.get(ChapterEdge, edge_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Chapter edge not found")
+    session.delete(row)
     session.commit()
     return {"ok": True}
 
@@ -2358,9 +3009,8 @@ def list_persona_students(
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = session.exec(select(Course).where(Course.title == subject)).first()
-    if admin.role == UserRole.teacher and course is not None and course.teacher_id != admin.id:
-        raise HTTPException(status_code=403, detail="No permission for this subject")
+    course = _resolve_course_for_subject(session, subject=subject)
+    _check_teacher_subject_access(admin=admin, course=course)
     students = session.exec(select(User).where(User.role == UserRole.student).order_by(User.id)).all()
     items = []
     for student in students:
@@ -2471,9 +3121,8 @@ def get_stage_feedback(
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = session.exec(select(Course).where(Course.title == subject)).first()
-    if admin.role == UserRole.teacher and course is not None and course.teacher_id != admin.id:
-        raise HTTPException(status_code=403, detail="No permission for this subject")
+    course = _resolve_course_for_subject(session, subject=subject)
+    _check_teacher_subject_access(admin=admin, course=course)
     row = get_stage_teacher_feedback(session, user_id=user_id, subject=subject, grade=grade, stage_id=stage_id)
     if row is None:
         return None
@@ -2485,6 +3134,52 @@ def get_stage_feedback(
         "comment": row.comment,
         "updated_by": row.updated_by,
         "updated_at": row.updated_at.isoformat(),
+    }
+
+
+@router.get("/stage-feedback/history")
+def get_stage_feedback_history(
+    user_id: int,
+    subject: str,
+    grade: str,
+    session: Session = Depends(get_session),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    course = _resolve_course_for_subject(session, subject=subject)
+    _check_teacher_subject_access(admin=admin, course=course)
+
+    rows = session.exec(
+        select(StageTeacherFeedback)
+        .where(
+            StageTeacherFeedback.user_id == user_id,
+            StageTeacherFeedback.subject == subject,
+            StageTeacherFeedback.grade == grade,
+        )
+        .order_by(StageTeacherFeedback.updated_at.desc())
+    ).all()
+
+    stage_ids = sorted({int(row.stage_id) for row in rows})
+    stage_map: dict[int, CourseStage] = {}
+    if stage_ids:
+        stages = session.exec(select(CourseStage).where(CourseStage.id.in_(stage_ids))).all()
+        stage_map = {int(stage.id): stage for stage in stages if stage.id is not None}
+
+    return {
+        "items": [
+            {
+                "id": int(row.id),
+                "user_id": int(row.user_id),
+                "stage_id": int(row.stage_id),
+                "stage_title": stage_map.get(int(row.stage_id)).title if int(row.stage_id) in stage_map else "",
+                "stage_order": stage_map.get(int(row.stage_id)).stage_order if int(row.stage_id) in stage_map else None,
+                "feedback_tag": row.feedback_tag,
+                "comment": row.comment,
+                "updated_by": row.updated_by,
+                "updated_at": row.updated_at.isoformat(),
+            }
+            for row in rows
+            if row.id is not None
+        ]
     }
 
 
@@ -2515,6 +3210,12 @@ def save_stage_feedback(
         comment=comment,
         updated_by=admin.username,
     )
+    recalculate_stage_snapshots_for_stage(
+        session,
+        stage_id=stage_id,
+        user_ids=[user_id],
+        persist=True,
+    )
     _log_action(session, admin, "stage_feedback_save", f"user_id={user_id} stage_id={stage_id}")
     return {
         "id": int(row.id),
@@ -2524,19 +3225,26 @@ def save_stage_feedback(
         "comment": row.comment,
         "updated_by": row.updated_by,
         "updated_at": row.updated_at.isoformat(),
+        "recalculated": True,
     }
 
 
 @router.get("/analytics/overview", response_model=AdminAnalyticsOut)
 def analytics_overview(
-    subject: str,
-    grade: str,
+    subject: str | None = None,
+    grade: str | None = None,
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = session.exec(select(Course).where(Course.title == subject)).first()
-    if admin.role == UserRole.teacher and course is not None and course.teacher_id != admin.id:
-        raise HTTPException(status_code=403, detail="No permission for this subject")
+    if not subject or not grade:
+        first_kp = session.exec(select(KnowledgePoint).order_by(KnowledgePoint.id)).first()
+        if first_kp is None:
+            raise HTTPException(status_code=404, detail="No knowledge point data available")
+        subject = subject or first_kp.subject
+        grade = grade or first_kp.grade
+
+    course = _resolve_course_for_subject(session, subject=subject)
+    _check_teacher_subject_access(admin=admin, course=course)
 
     students = session.exec(select(User).where(User.role == UserRole.student).order_by(User.id)).all()
     student_ids = [int(item.id) for item in students if item.id is not None]
@@ -2684,213 +3392,136 @@ def analytics_student_detail(
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = session.exec(select(Course).where(Course.title == subject)).first()
-    if admin.role == UserRole.teacher and course is not None and course.teacher_id != admin.id:
-        raise HTTPException(status_code=403, detail="No permission for this subject")
-
-    student = session.get(User, user_id)
-    if student is None or student.role != UserRole.student:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    snapshot = _snapshot_for_user(session, user_id=user_id, subject=subject, grade=grade)
-    if snapshot is None:
-        raise HTTPException(status_code=404, detail="No profile snapshot for this student and subject")
-    stage_snapshots = list(reversed(get_stage_snapshot_trend(session, user_id=user_id, subject=subject, grade=grade, limit=12)))
-    current_stage = stage_snapshots[-1] if stage_snapshots else None
-    feedback = get_stage_teacher_feedback(
+    course = _resolve_course_for_subject(session, subject=subject)
+    _check_teacher_subject_access(admin=admin, course=course)
+    return _build_student_detail_payload(
         session,
         user_id=user_id,
         subject=subject,
         grade=grade,
-        stage_id=int(current_stage.stage_id) if current_stage is not None else None,
+        course=course,
     )
-    kps = session.exec(
-        select(KnowledgePoint)
-        .where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)
-        .order_by(KnowledgePoint.chapter, KnowledgePoint.id)
-    ).all()
-    kp_ids = [int(kp.id) for kp in kps if kp.id is not None]
 
-    mastery_rows = []
-    if kp_ids:
-        mastery_rows = session.exec(
-            select(Mastery).where(Mastery.user_id == user_id, Mastery.kp_id.in_(kp_ids))
+
+@router.get("/final-score/students")
+def list_final_score_students(
+    subject: str,
+    grade: str,
+    session: Session = Depends(get_session),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    course = _resolve_course_for_subject(session, subject=subject)
+    _check_teacher_subject_access(admin=admin, course=course)
+    students = session.exec(select(User).where(User.role == UserRole.student).order_by(User.id)).all()
+    confirmation_map: dict[int, TeacherFinalScoreConfirmation] = {}
+    if course is not None and course.id is not None:
+        rows = session.exec(
+            select(TeacherFinalScoreConfirmation).where(TeacherFinalScoreConfirmation.course_id == int(course.id))
         ).all()
-    mastery_map = {int(row.kp_id): row for row in mastery_rows}
-    mastery_items = [
-        {
-            "kp_id": int(kp.id),
-            "code": kp.code,
-            "title": kp.title,
-            "chapter": kp.chapter,
-            "mastery": float(mastery_map.get(int(kp.id)).value) if int(kp.id) in mastery_map else 0.0,
-            "direct_value": float(mastery_map.get(int(kp.id)).direct_value) if int(kp.id) in mastery_map else 0.0,
-            "status": mastery_map.get(int(kp.id)).status if int(kp.id) in mastery_map else "not_started",
-            "reason_summary": mastery_map.get(int(kp.id)).reason_summary if int(kp.id) in mastery_map else "",
-        }
-        for kp in kps
-        if kp.id is not None
-    ]
-
-    behavior_rows = session.exec(
-        select(LearningBehaviorEvent)
-        .where(LearningBehaviorEvent.user_id == user_id)
-        .order_by(LearningBehaviorEvent.created_at.desc())
-        .limit(30)
-    ).all()
-    behavior_items = [
-        {
-            "id": int(row.id),
-            "event_type": row.event_type,
-            "kp_id": row.kp_id,
-            "value_json": row.value_json,
-            "created_at": row.created_at.isoformat(),
-        }
-        for row in behavior_rows
-        if row.id is not None
-    ]
-
-    recommendation_rows = session.exec(
-        select(RecommendationLog)
-        .where(
-            RecommendationLog.user_id == user_id,
-            RecommendationLog.subject == subject,
-            RecommendationLog.grade == grade,
+        confirmation_map = {int(row.user_id): row for row in rows}
+    items = []
+    for student in students:
+        if student.id is None:
+            continue
+        snapshot = _snapshot_for_user(session, user_id=int(student.id), subject=subject, grade=grade)
+        term_summary = _json_load(snapshot.portrait_summary_json, {}).get("term_summary", {})
+        confirmation = confirmation_map.get(int(student.id))
+        items.append(
+            {
+                "user_id": int(student.id),
+                "username": student.username,
+                "full_name": student.full_name,
+                "student_no": student.student_no,
+                "class_name": student.class_name,
+                "persona_label": persona_label(snapshot.persona_type),
+                "dynamic_score": float(snapshot.dynamic_score),
+                "course_mastery": float(snapshot.course_mastery),
+                "risk_level": snapshot.risk_level,
+                "suggested_score": float(term_summary.get("final_score_reference", 0.0)),
+                "confirmed_score": float(confirmation.confirmed_score) if confirmation is not None else None,
+                "confirmed_level": confirmation.confirmed_level if confirmation is not None else "",
+                "confirmed_at": confirmation.confirmed_at.isoformat() if confirmation is not None else None,
+            }
         )
-        .order_by(RecommendationLog.created_at.desc())
-        .limit(10)
-    ).all()
-    recommendation_items = [
-        {
-            "id": int(row.id),
-            "source_kp_id": row.source_kp_id,
-            "target_kp_id": row.target_kp_id,
-            "persona_type": row.persona_type.value if isinstance(row.persona_type, PersonaType) else str(row.persona_type),
-            "reason_summary": row.reason_summary,
-            "created_at": row.created_at.isoformat(),
-            "payload_json": row.payload_json,
-        }
-        for row in recommendation_rows
-        if row.id is not None
-    ]
+    return {"items": items}
 
-    practice_rows = session.exec(
-        select(PracticeAttempt)
-        .where(PracticeAttempt.user_id == user_id, PracticeAttempt.kp_id.in_(kp_ids) if kp_ids else True)
-        .order_by(PracticeAttempt.created_at.desc())
-        .limit(20)
-    ).all()
-    quiz_rows = session.exec(
-        select(QuizAttempt)
-        .where(QuizAttempt.user_id == user_id, QuizAttempt.kp_id.in_(kp_ids) if kp_ids else True)
-        .order_by(QuizAttempt.created_at.desc())
-        .limit(10)
-    ).all()
-    video_rows = session.exec(
-        select(VideoProgress)
-        .where(VideoProgress.user_id == user_id, VideoProgress.kp_id.in_(kp_ids) if kp_ids else True)
-        .order_by(VideoProgress.updated_at.desc())
-        .limit(10)
-    ).all()
 
+@router.get("/final-score/detail")
+def final_score_detail(
+    user_id: int,
+    subject: str,
+    grade: str,
+    session: Session = Depends(get_session),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    course = _resolve_course_for_subject(session, subject=subject)
+    _check_teacher_subject_access(admin=admin, course=course)
+    return _build_student_detail_payload(
+        session,
+        user_id=user_id,
+        subject=subject,
+        grade=grade,
+        course=course,
+    )
+
+
+@router.put("/final-score/confirm")
+def confirm_final_score(
+    payload: TeacherFinalScoreConfirmIn,
+    session: Session = Depends(get_session),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    course = _resolve_course_for_subject(session, subject=payload.subject)
+    if course is None or course.id is None:
+        raise HTTPException(status_code=404, detail="课程不存在")
+    _check_teacher_subject_access(admin=admin, course=course)
+    student = session.get(User, payload.user_id)
+    if student is None or student.role != UserRole.student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    snapshot = _snapshot_for_user(session, user_id=payload.user_id, subject=payload.subject, grade=payload.grade)
+    term_summary = _json_load(snapshot.portrait_summary_json, {}).get("term_summary", {})
+    confirmed_score = max(0.0, min(1.0, float(payload.confirmed_score)))
+    row = session.exec(
+        select(TeacherFinalScoreConfirmation).where(
+            TeacherFinalScoreConfirmation.user_id == payload.user_id,
+            TeacherFinalScoreConfirmation.course_id == int(course.id),
+        )
+    ).first()
+    if row is None:
+        row = TeacherFinalScoreConfirmation(
+            user_id=payload.user_id,
+            course_id=int(course.id),
+            subject=payload.subject,
+            grade=payload.grade,
+        )
+    row.subject = payload.subject
+    row.grade = payload.grade
+    row.suggested_score = float(term_summary.get("final_score_reference", 0.0))
+    row.confirmed_score = confirmed_score
+    row.confirmed_level = payload.confirmed_level.strip()
+    row.comment = payload.comment.strip()
+    row.recommendation_summary = payload.recommendation_summary.strip()
+    row.confirmed_by = admin.username
+    row.confirmed_at = datetime.utcnow()
+    row.updated_at = datetime.utcnow()
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    _log_action(
+        session,
+        admin,
+        "final_score_confirm",
+        f"user_id={payload.user_id} subject={payload.subject} confirmed_score={round(confirmed_score * 100)}",
+    )
     return {
-        "student": {
-            "id": int(student.id),
-            "username": student.username,
-            "full_name": student.full_name,
-            "student_no": student.student_no,
-            "class_name": student.class_name,
-        },
-        "profile": {
-            "course_id": int(course.id) if course is not None and course.id is not None else None,
-            "persona_type": snapshot.persona_type.value,
-            "persona_label": persona_label(snapshot.persona_type),
-            "engagement": float(snapshot.engagement),
-            "achievement": float(snapshot.achievement),
-            "efficiency": float(snapshot.efficiency),
-            "risk": float(snapshot.risk),
-            "course_mastery": float(snapshot.course_mastery),
-            "dynamic_score": float(snapshot.dynamic_score),
-            "stability": float(snapshot.stability),
-            "risk_level": snapshot.risk_level,
-            "reason_summary": snapshot.reason_summary,
-            "updated_at": snapshot.updated_at.isoformat(),
-            "current_stage_title": current_stage.stage_title if current_stage is not None else "",
-            "current_stage_trend": current_stage.trend_label if current_stage is not None else "",
-            "portrait_dimensions": _json_load(snapshot.portrait_summary_json, {}).get("portrait_dimensions", []),
-            "portrait_indicators": _json_load(snapshot.portrait_summary_json, {}).get("portrait_indicators", []),
-        },
-        "stage_history": [
-            {
-                "stage_id": int(item.stage_id),
-                "stage_title": item.stage_title,
-                "stage_order": int(item.stage_order),
-                "persona_type": item.persona_type.value if isinstance(item.persona_type, PersonaType) else str(item.persona_type),
-                "persona_label": persona_label(item.persona_type),
-                "engagement": float(item.engagement),
-                "achievement": float(item.achievement),
-                "habit": float(item.habit),
-                "characteristic": float(item.characteristic),
-                "dynamic_score": float(item.dynamic_score),
-                "course_mastery": float(item.course_mastery),
-                "trend_label": item.trend_label,
-                "risk_level": item.risk_level,
-                "reason_summary": item.reason_summary,
-                "portrait_dimensions": _json_load(item.dimension_summary_json, {}).get("portrait_dimensions", []),
-                "portrait_indicators": _json_load(item.indicator_summary_json, {}).get("portrait_indicators", []),
-                "updated_at": item.updated_at.isoformat(),
-            }
-            for item in stage_snapshots
-        ],
-        "teacher_feedback": (
-            {
-                "stage_id": int(feedback.stage_id),
-                "feedback_tag": feedback.feedback_tag,
-                "comment": feedback.comment,
-                "updated_by": feedback.updated_by,
-                "updated_at": feedback.updated_at.isoformat(),
-            }
-            if feedback is not None and feedback.id is not None
-            else None
-        ),
-        "mastery_map": mastery_items,
-        "behavior_timeline": behavior_items,
-        "recommendations": recommendation_items,
-        "recent_practice": [
-            {
-                "id": int(row.id),
-                "kp_id": row.kp_id,
-                "question_id": row.question_id,
-                "correct": bool(row.correct),
-                "duration_ms": row.duration_ms,
-                "created_at": row.created_at.isoformat(),
-            }
-            for row in practice_rows
-            if row.id is not None
-        ],
-        "recent_quiz": [
-            {
-                "id": int(row.id),
-                "kp_id": row.kp_id,
-                "score": float(row.score),
-                "passed": bool(row.passed),
-                "duration_ms": row.duration_ms,
-                "created_at": row.created_at.isoformat(),
-            }
-            for row in quiz_rows
-            if row.id is not None
-        ],
-        "recent_video": [
-            {
-                "id": int(row.id),
-                "kp_id": row.kp_id,
-                "resource_id": row.resource_id,
-                "watched_seconds": float(row.watched_seconds),
-                "duration_seconds": float(row.duration_seconds),
-                "completed": bool(row.completed),
-                "updated_at": row.updated_at.isoformat(),
-            }
-            for row in video_rows
-            if row.id is not None
-        ],
+        "ok": True,
+        "id": int(row.id),
+        "suggested_score": float(row.suggested_score),
+        "confirmed_score": float(row.confirmed_score),
+        "confirmed_level": row.confirmed_level,
+        "comment": row.comment,
+        "recommendation_summary": row.recommendation_summary,
+        "confirmed_by": row.confirmed_by,
+        "confirmed_at": row.confirmed_at.isoformat(),
+        "updated_at": row.updated_at.isoformat(),
     }

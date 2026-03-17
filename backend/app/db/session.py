@@ -12,6 +12,9 @@ engine = create_engine(settings.database_url, echo=False, connect_args=connect_a
 
 def init_db() -> None:
     SQLModel.metadata.create_all(engine)
+    _ensure_portrait_indicator_source_values()
+    _ensure_resource_type_values()
+    _ensure_user_columns()
     _ensure_kp_practice_total_column()
     _ensure_question_meta_columns()
     _ensure_practice_attempt_columns()
@@ -20,8 +23,16 @@ def init_db() -> None:
     _ensure_knowledgepoint_columns()
     _ensure_knowledgeedge_columns()
     _ensure_mastery_columns()
+    _ensure_learning_resource_columns()
     _ensure_stage_snapshot_columns()
     _ensure_profile_snapshot_columns()
+    _ensure_enrollment_columns()
+    _ensure_final_score_confirmation_columns()
+    _normalize_legacy_status_values()
+
+
+def _is_postgres() -> bool:
+    return engine.dialect.name.lower().startswith("postgres")
 
 
 def _ensure_columns(table_name: str, columns: dict[str, str]) -> None:
@@ -33,10 +44,62 @@ def _ensure_columns(table_name: str, columns: dict[str, str]) -> None:
     missing = {name: ddl for name, ddl in columns.items() if name not in existing}
     if not missing:
         return
+    for ddl in missing.values():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}"))
+        except Exception:
+            # Best-effort compatibility migration: keep progressing even if a
+            # single column DDL fails, so other missing columns can still be added.
+            pass
+
+
+def _ensure_portrait_indicator_source_values() -> None:
+    if not _is_postgres():
+        return
+    statements = [
+        "ALTER TYPE portraitindicatorsourcetype ADD VALUE IF NOT EXISTS 'imported'",
+    ]
+    for stmt in statements:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception:
+            pass
+
+
+def _ensure_resource_type_values() -> None:
+    if not _is_postgres():
+        return
+    statements = [
+        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'pdf'",
+        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'doc'",
+        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'docx'",
+        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'ppt'",
+        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'pptx'",
+        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'image'",
+        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'link'",
+        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'book'",
+        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'recommend_book'",
+    ]
+    for stmt in statements:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception:
+            pass
+
+
+def _ensure_user_columns() -> None:
+    _ensure_columns(
+        "user",
+        {
+            "active": "active BOOLEAN DEFAULT 1",
+        },
+    )
     try:
         with engine.begin() as conn:
-            for ddl in missing.values():
-                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}"))
+            conn.execute(text("UPDATE \"user\" SET active=1 WHERE active IS NULL"))
     except Exception:
         pass
 
@@ -91,10 +154,14 @@ def _ensure_practice_attempt_columns() -> None:
 
 
 def _ensure_course_columns() -> None:
+    apply_deadline_type = "TIMESTAMP" if _is_postgres() else "DATETIME"
     _ensure_columns(
         "course",
         {
             "teacher_id": "teacher_id INTEGER",
+            "max_students": "max_students INTEGER DEFAULT 200",
+            "apply_deadline": f"apply_deadline {apply_deadline_type}",
+            "enroll_status": "enroll_status TEXT DEFAULT 'open'",
         },
     )
 
@@ -123,6 +190,8 @@ def _ensure_knowledgepoint_columns() -> None:
             "literacy_tag": "literacy_tag TEXT DEFAULT ''",
             "importance": "importance FLOAT DEFAULT 0.5",
             "difficulty": "difficulty FLOAT DEFAULT 0.5",
+            "pos_x": "pos_x FLOAT",
+            "pos_y": "pos_y FLOAT",
         },
     )
 
@@ -159,6 +228,45 @@ def _ensure_mastery_columns() -> None:
         pass
 
 
+def _ensure_learning_resource_columns() -> None:
+    timestamp_type = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" if _is_postgres() else "DATETIME"
+    bool_default = "extension_mismatch BOOLEAN DEFAULT FALSE" if _is_postgres() else "extension_mismatch BOOLEAN DEFAULT 0"
+    _ensure_columns(
+        "learningresource",
+        {
+            "category": "category TEXT DEFAULT 'learning'",
+            "description": "description TEXT DEFAULT ''",
+            "tags": "tags TEXT DEFAULT ''",
+            "original_file_name": "original_file_name TEXT DEFAULT ''",
+            "file_extension": "file_extension TEXT DEFAULT ''",
+            "detected_mime_type": "detected_mime_type TEXT DEFAULT ''",
+            "detected_resource_type": "detected_resource_type TEXT DEFAULT ''",
+            "preview_type": "preview_type TEXT DEFAULT ''",
+            "preview_status": "preview_status TEXT DEFAULT 'ready'",
+            "preview_error": "preview_error TEXT DEFAULT ''",
+            "converted_preview_url": "converted_preview_url TEXT DEFAULT ''",
+            "original_file_url": "original_file_url TEXT DEFAULT ''",
+            "file_size_bytes": "file_size_bytes INTEGER DEFAULT 0",
+            "extension_mismatch": bool_default,
+            "source_kind": "source_kind TEXT DEFAULT 'external'",
+            "created_at": f"created_at {timestamp_type}",
+            "updated_at": f"updated_at {timestamp_type}",
+        },
+    )
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE learningresource SET category='recommend' WHERE category IS NULL AND type IN ('book', 'recommend_book')"))
+            conn.execute(text("UPDATE learningresource SET category='learning' WHERE category IS NULL"))
+            conn.execute(text("UPDATE learningresource SET preview_status='ready' WHERE preview_status IS NULL"))
+            conn.execute(text("UPDATE learningresource SET source_kind='external' WHERE source_kind IS NULL"))
+            conn.execute(text("UPDATE learningresource SET updated_at=CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+        if not _is_postgres():
+            with engine.begin() as conn:
+                conn.execute(text("UPDATE learningresource SET created_at=CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+    except Exception:
+        pass
+
+
 def _ensure_stage_snapshot_columns() -> None:
     _ensure_columns(
         "stageevaluationsnapshot",
@@ -178,6 +286,64 @@ def _ensure_profile_snapshot_columns() -> None:
             "portrait_summary_json": "portrait_summary_json TEXT DEFAULT '{}'",
         },
     )
+
+
+def _ensure_enrollment_columns() -> None:
+    _ensure_columns(
+        "enrollment",
+        {
+            "application_id": "application_id INTEGER",
+            "status": "status TEXT DEFAULT 'active'",
+        },
+    )
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE enrollment SET status='active' WHERE status IS NULL OR status='enrolled'"))
+    except Exception:
+        pass
+
+
+def _ensure_final_score_confirmation_columns() -> None:
+    _ensure_columns(
+        "teacherfinalscoreconfirmation",
+        {
+            "recommendation_summary": "recommendation_summary TEXT DEFAULT ''",
+            "updated_at": "updated_at DATETIME",
+        },
+    )
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE teacherfinalscoreconfirmation SET recommendation_summary='' WHERE recommendation_summary IS NULL"))
+            conn.execute(text("UPDATE teacherfinalscoreconfirmation SET updated_at=confirmed_at WHERE updated_at IS NULL"))
+    except Exception:
+        pass
+
+
+def _normalize_legacy_status_values() -> None:
+    # Compatibility migration for legacy uppercase status values.
+    # Existing DB may store OPEN/ACTIVE/UNREAD..., while current enums use lowercase.
+    statements = [
+        # course.enroll_status is TEXT in legacy DBs.
+        "UPDATE course SET enroll_status = LOWER(enroll_status::text) "
+        "WHERE enroll_status::text IN ('OPEN','FULL','CLOSED','EXPIRED')",
+        # enrollment.status may be enum or text depending on historical schema.
+        "UPDATE enrollment SET status = 'active' "
+        "WHERE status::text IN ('ACTIVE','enrolled')",
+        "UPDATE enrollment SET status = 'cancelled' "
+        "WHERE status::text IN ('CANCELLED')",
+        # coursenotification.status may be enum or text depending on historical schema.
+        "UPDATE coursenotification SET status = 'unread' "
+        "WHERE status::text IN ('UNREAD')",
+        "UPDATE coursenotification SET status = 'read' "
+        "WHERE status::text IN ('READ')",
+    ]
+    for stmt in statements:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception:
+            # Best-effort compatibility fix.
+            pass
 
 
 def get_session():

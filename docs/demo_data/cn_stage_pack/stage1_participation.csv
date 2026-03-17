@@ -1,0 +1,10 @@
+username,student_no,kp_code,score,completion_ratio,status,happened_at,note
+student1,,CN-GEN-001,0.8,0.8,active,2026-03-02,阶段1课堂参与
+student1,,CN-GEN-002,0.8,0.8,active,2026-03-04,阶段1课堂参与
+student1,,CN-GEN-003,0.7,0.7,active,2026-03-06,阶段1课堂参与
+student2,,CN-GEN-001,0.7,0.8,active,2026-03-02,阶段1课堂参与
+student2,,CN-GEN-002,0.7,0.8,active,2026-03-04,阶段1课堂参与
+student2,,CN-GEN-003,0.7,0.8,active,2026-03-06,阶段1课堂参与
+student3,,CN-GEN-001,0.3,0.3,passive,2026-03-02,阶段1课堂参与
+student3,,CN-GEN-002,0.2,0.2,passive,2026-03-04,阶段1课堂参与
+student3,,CN-GEN-003,0.2,0.2,passive,2026-03-06,阶段1课堂参与

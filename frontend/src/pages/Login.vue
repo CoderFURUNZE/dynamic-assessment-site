@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { reactive, ref } from "vue";
+﻿﻿<script setup lang="ts">
+import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { setRole, setToken, validateInput } from "../token";
@@ -22,6 +22,11 @@ const registerForm = reactive({
   password: "",
   phone: "",
 });
+
+const loginAccountLabel = computed(() => (loginForm.role === "student" ? "学号" : "工号/账号"));
+const loginAccountPlaceholder = computed(() => (loginForm.role === "student" ? "请输入学号" : "请输入工号或账号"));
+const registerAccountLabel = computed(() => (registerForm.role === "student" ? "学号" : "工号"));
+const registerAccountPlaceholder = computed(() => (registerForm.role === "student" ? "设置学号" : "设置工号"));
 
 function lastRouteKey(username: string) {
   return `da_last_route_${username}`;
@@ -46,13 +51,13 @@ function goAfterLogin(role: string, username: string) {
   }
   if (role === "student") router.push("/student/overview");
   else if (role === "teacher") router.push("/teacher/courses");
-  else router.push("/admin/config");
+  else router.push("/admin/dashboard");
 }
 
 // 验证登录表单
 function validateLoginForm(): boolean {
   if (!validateInput(loginForm.username, 'username')) {
-    ElMessage.error('用户名长度至少3位，只能包含字母、数字、下划线和连字符');
+    ElMessage.error('账号长度至少3位，只能包含字母、数字、下划线和连字符');
     return false;
   }
   if (!validateInput(loginForm.password, 'password')) {
@@ -65,7 +70,7 @@ function validateLoginForm(): boolean {
 // 验证注册表单
 function validateRegisterForm(): boolean {
   if (!validateInput(registerForm.username, 'username')) {
-    ElMessage.error('用户名长度至少3位，只能包含字母、数字、下划线和连字符');
+    ElMessage.error('账号长度至少3位，只能包含字母、数字、下划线和连字符');
     return false;
   }
   if (!validateInput(registerForm.password, 'password')) {
@@ -123,11 +128,22 @@ async function submitRegister() {
     <div class="login-bg" />
     <div class="login-shell">
       <div class="brand-panel">
+        <div class="brand-kicker">Learning Intelligence</div>
         <div class="brand-logo">CS</div>
         <div class="brand-title">动态评价系统</div>
         <div class="brand-sub">知识图谱 · 自适应练习 · 行为信号</div>
         <div class="brand-desc">
           集成课程、题库与推荐策略，面向计算机专业课程的学习诊断与路径优化。
+        </div>
+        <div class="brand-points">
+          <div class="brand-point">
+            <strong>更聚焦</strong>
+            <span>把课程、图谱、练习和报告集中到统一学习流程中。</span>
+          </div>
+          <div class="brand-point">
+            <strong>更清晰</strong>
+            <span>通过阶段结果和推荐路径帮助学生知道下一步该学什么。</span>
+          </div>
         </div>
       </div>
 
@@ -146,8 +162,8 @@ async function submitRegister() {
                   <el-radio label="admin">教师/管理员登录</el-radio>
                 </el-radio-group>
               </el-form-item>
-              <el-form-item label="用户名">
-                <el-input v-model="loginForm.username" placeholder="请输入账号" />
+              <el-form-item :label="loginAccountLabel">
+                <el-input v-model="loginForm.username" :placeholder="loginAccountPlaceholder" />
               </el-form-item>
               <el-form-item label="密码">
                 <el-input v-model="loginForm.password" type="password" show-password placeholder="请输入密码" />
@@ -155,11 +171,14 @@ async function submitRegister() {
               <el-form-item label="记住登录">
                 <el-switch v-model="loginForm.remember" active-text="7天" inactive-text="仅本次" />
               </el-form-item>
+              <div class="login-helper-row">
+                <span>忘记密码请联系管理员重置</span>
+              </div>
               <el-form-item>
                 <el-button type="primary" :loading="loading" class="full-btn" @click="submitLogin">登录</el-button>
               </el-form-item>
               <div class="login-tip">
-                默认账号：admin/admin123；图谱与题库需在管理端 Seed。
+                默认账号：admin/admin123；teacher1/teacher123；student1/student123。
               </div>
             </el-form>
           </el-tab-pane>
@@ -172,8 +191,8 @@ async function submitRegister() {
                   <el-radio label="teacher">教师注册</el-radio>
                 </el-radio-group>
               </el-form-item>
-              <el-form-item label="用户名">
-                <el-input v-model="registerForm.username" placeholder="设置用户名" />
+              <el-form-item :label="registerAccountLabel">
+                <el-input v-model="registerForm.username" :placeholder="registerAccountPlaceholder" />
               </el-form-item>
               <el-form-item label="密码">
                 <el-input v-model="registerForm.password" type="password" show-password placeholder="设置密码" />
@@ -200,149 +219,277 @@ async function submitRegister() {
   align-items: center;
   justify-content: center;
   padding: 32px 20px;
-}
-
-.login-bg {
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(900px 500px at 15% 20%, rgba(79, 140, 255, 0.08), transparent 60%),
-    radial-gradient(800px 480px at 85% 25%, rgba(86, 191, 255, 0.06), transparent 60%),
-    linear-gradient(160deg, var(--app-bg) 0%, var(--app-bg-alt) 45%, #f0f2f5 100%);
-  z-index: 0;
+  background: var(--app-bg);
 }
 
 .login-shell {
   position: relative;
-  z-index: 1;
   width: min(1100px, 100%);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 28px;
+  gap: 40px;
+  align-items: center;
 }
 
 .brand-panel {
-  padding: 28px 24px;
-  border-radius: var(--app-radius);
+  padding: 42px 34px;
+  border-radius: calc(var(--app-radius) + 8px);
   border: 1px solid var(--app-border);
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  box-shadow: var(--app-shadow);
+  background: #ffffff;
+  box-shadow: var(--app-shadow-soft);
+}
+
+.brand-kicker {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6f87ad;
+  font-weight: 800;
+  margin-bottom: 18px;
 }
 
 .brand-logo {
-  width: 46px;
-  height: 46px;
-  border-radius: 8px;
+  width: 66px;
+  height: 66px;
+  border-radius: 18px;
   display: grid;
   place-items: center;
-  background: linear-gradient(140deg, var(--app-green), #7fb0ff);
-  color: #fff;
-  font-weight: 700;
-  letter-spacing: 1px;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(79, 140, 255, 0.2);
+  background: #f4f7fb;
+  color: var(--app-ink);
+  font-weight: 800;
+  margin-bottom: 24px;
 }
 
 .brand-title {
-  font-size: 28px;
-  font-weight: 700;
-  margin-bottom: 8px;
-  color: var(--app-ink);
+  font-size: 34px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  color: #22395b;
+  line-height: 1.2;
 }
 
 .brand-sub {
-  color: var(--app-ink-soft);
-  margin-bottom: 16px;
+  color: #5f7698;
+  margin-bottom: 18px;
+  font-size: 15px;
 }
 
 .brand-desc {
-  color: var(--app-ink-soft);
-  line-height: 1.7;
+  color: #68809d;
+  line-height: 1.8;
   font-size: 14px;
+  padding: 0;
+  margin: 0;
+}
+
+.brand-points {
+  margin-top: 28px;
+  display: grid;
+  gap: 12px;
+}
+
+.brand-point {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #fcfdff;
+  border: 1px solid var(--app-border);
+  display: grid;
+  gap: 4px;
+}
+
+.brand-point strong {
+  color: #29415f;
+}
+
+.brand-point span {
+  color: #68809d;
+  line-height: 1.7;
+  font-size: 13px;
 }
 
 .login-card {
-  border-radius: var(--app-radius);
+  border-radius: calc(var(--app-radius) + 8px);
   border: 1px solid var(--app-border);
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: var(--app-shadow);
+  background: #ffffff;
+  box-shadow: var(--app-shadow-soft);
+  overflow: hidden;
 }
 
 .card-header {
-  margin-bottom: 12px;
+  margin-bottom: 24px;
+  padding: 26px 28px 0;
 }
 
 .card-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--app-ink);
+  font-size: 24px;
+  font-weight: 800;
+  color: #22395b;
+  margin-bottom: 8px;
 }
 
 .card-sub {
-  font-size: 12px;
-  color: var(--app-ink-soft);
-  margin-top: 6px;
+  font-size: 14px;
+  color: #67809e;
 }
 
 .login-tabs :deep(.el-tabs__header) {
-  margin-bottom: 18px;
+  margin-bottom: 24px;
+  padding: 0 24px;
 }
 
 .login-tabs :deep(.el-tabs__nav-wrap::after) {
   background: var(--app-border);
 }
 
-.login-form :deep(.el-form-item) {
-  margin-bottom: 16px;
+.login-tabs :deep(.el-tabs__item) {
+  font-size: 14px;
+  font-weight: 500;
+  padding: 12px 20px;
 }
 
-.login-form :deep(.el-input__inner) {
-  border-radius: var(--app-radius);
-  background: transparent;
-  border-color: transparent;
+.login-form {
+  padding: 0 24px 24px;
+}
+
+.login-form :deep(.el-form-item) {
+  margin-bottom: 20px;
+}
+
+.login-form :deep(.el-form-item__label) {
+  font-size: 14px;
+  font-weight: 500;
   color: var(--app-ink);
 }
 
-.login-form :deep(.el-input__inner::placeholder) {
-  color: var(--el-text-color-placeholder);
+.login-form :deep(.el-form-item__content) {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.login-form :deep(.el-input) {
+  width: 100%;
 }
 
 .login-form :deep(.el-input__wrapper) {
-  background: #f8f9fa;
-  box-shadow: inset 0 0 0 1px var(--app-border);
+  border-radius: var(--app-radius);
+  border: none;
+  box-shadow: 0 0 0 1px var(--app-border) inset !important;
+  min-height: 44px;
+  padding: 0 14px;
+  background: #fff;
+}
+
+.login-form :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #cdd6e4 inset !important;
+}
+
+.login-form :deep(.el-input.is-focus .el-input__wrapper) {
+  box-shadow:
+    0 0 0 1px var(--app-green) inset,
+    0 0 0 3px rgba(79, 140, 255, 0.1) !important;
+}
+
+.login-form :deep(.el-input__inner) {
+  color: var(--app-ink);
+  font-size: 14px;
+  height: 42px;
+  line-height: 42px;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
 }
 
 .login-form :deep(.el-radio) {
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-}
-
-.login-form :deep(.el-radio.is-checked) {
-  background: rgba(79, 140, 255, 0.08);
-  border-color: rgba(79, 140, 255, 0.3);
+  margin-right: 12px;
 }
 
 .full-btn {
   width: 100%;
   border-radius: var(--app-radius);
-  padding: 10px 0;
+  padding: 12px 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.login-helper-row {
+  margin: -4px 0 8px;
+  display: flex;
+  justify-content: flex-end;
+  font-size: 12px;
+  color: var(--app-ink-soft);
 }
 
 .login-tip {
-  margin-top: 8px;
-  font-size: 12px;
+  margin-top: 16px;
+  font-size: 13px;
   color: var(--app-ink-soft);
-  padding: 8px 12px;
-  background: rgba(79, 140, 255, 0.05);
+  padding: 12px 16px;
+  background: var(--app-bg-alt);
   border-radius: var(--app-radius);
-  border: 1px solid rgba(79, 140, 255, 0.1);
+  border: 1px solid var(--app-border);
+  line-height: 1.5;
 }
 
 @media (max-width: 980px) {
   .login-shell {
     grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  
+  .brand-panel {
+    padding: 32px 24px;
+  }
+  
+  .brand-logo {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .brand-title {
+    font-size: 24px;
+  }
+  
+  .card-header {
+    padding: 0 20px;
+    padding-top: 20px;
+  }
+  
+  .login-form {
+    padding: 0 20px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-page {
+    padding: 20px 16px;
+  }
+  
+  .brand-panel {
+    padding: 24px 20px;
+  }
+  
+  .brand-title {
+    font-size: 20px;
+  }
+  
+  .brand-sub {
+    font-size: 14px;
+  }
+  
+  .card-title {
+    font-size: 18px;
+  }
+  
+  .login-form :deep(.el-form-item) {
+    margin-bottom: 16px;
+  }
+  
+  .full-btn {
+    padding: 10px 0;
+    font-size: 14px;
   }
 }
 </style>

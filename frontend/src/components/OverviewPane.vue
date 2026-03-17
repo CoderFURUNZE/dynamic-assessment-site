@@ -222,7 +222,6 @@ watch(
           <div style="font-weight: 600; margin-bottom: 8px">最近活动</div>
           <div style="display: grid; gap: 4px">
             <el-text>最近练习：{{ formatTime(recent.last_practice_at) }}</el-text>
-            <el-text>最近小测：{{ formatTime(recent.last_quiz_at) }}</el-text>
             <el-text>最近视频：{{ formatTime(recent.last_video_at) }}</el-text>
           </div>
         </el-card>

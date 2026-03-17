@@ -13,6 +13,8 @@ class KnowledgePointOut(BaseModel):
     literacy_tag: str = ""
     importance: float = 0.5
     difficulty: float = 0.5
+    pos_x: float | None = None
+    pos_y: float | None = None
     practice_total: int | None = None
 
 
@@ -26,6 +28,13 @@ class KnowledgeEdgeOut(BaseModel):
     prereq_id: int
     next_id: int
     relation_type: str = "prerequisite"
+
+
+class ChapterEdgeOut(BaseModel):
+    id: int
+    source_chapter: str
+    target_chapter: str
+    relation_type: str = "related"
 
 
 class GraphPathOut(BaseModel):
@@ -60,6 +69,21 @@ class GraphResourceOut(BaseModel):
     type: str
     title: str
     url: str
+    category: str = "learning"
+    description: str = ""
+    tags: str = ""
+    original_file_name: str = ""
+    file_extension: str = ""
+    detected_mime_type: str = ""
+    detected_resource_type: str = ""
+    preview_type: str = ""
+    preview_status: str = "ready"
+    preview_error: str = ""
+    converted_preview_url: str = ""
+    original_file_url: str = ""
+    file_size_bytes: int = 0
+    extension_mismatch: bool = False
+    source_kind: str = "external"
 
 
 class GraphTaskOut(BaseModel):

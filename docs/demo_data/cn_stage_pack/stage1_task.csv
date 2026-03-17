@@ -1,0 +1,10 @@
+username,student_no,kp_code,score,completion_ratio,status,happened_at,note
+student1,,CN-GEN-001,72,0.86,done,2026-03-04,阶段1任务
+student1,,CN-GEN-002,70,0.84,done,2026-03-05,阶段1任务
+student1,,CN-GEN-003,68,0.80,done,2026-03-06,阶段1任务
+student2,,CN-GEN-001,62,0.90,done,2026-03-04,阶段1任务
+student2,,CN-GEN-002,60,0.88,done,2026-03-05,阶段1任务
+student2,,CN-GEN-003,58,0.85,done,2026-03-06,阶段1任务
+student3,,CN-GEN-001,45,0.50,in_progress,2026-03-04,阶段1任务
+student3,,CN-GEN-002,42,0.46,in_progress,2026-03-05,阶段1任务
+student3,,CN-GEN-003,40,0.42,in_progress,2026-03-06,阶段1任务

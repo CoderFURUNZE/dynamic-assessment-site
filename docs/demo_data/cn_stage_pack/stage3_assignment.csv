@@ -1,0 +1,13 @@
+username,student_no,kp_code,score,completion_ratio,submitted_on_time,happened_at,note
+student1,,CN-GEN-007,88,1.0,yes,2026-03-24,阶段3作业
+student1,,CN-GEN-008,90,1.0,yes,2026-03-25,阶段3作业
+student1,,CN-GEN-009,90,1.0,yes,2026-03-26,阶段3作业
+student1,,CN-GEN-010,92,1.0,yes,2026-03-27,阶段3作业
+student2,,CN-GEN-007,78,0.95,yes,2026-03-24,阶段3作业
+student2,,CN-GEN-008,80,0.95,yes,2026-03-25,阶段3作业
+student2,,CN-GEN-009,82,0.95,yes,2026-03-26,阶段3作业
+student2,,CN-GEN-010,84,0.95,yes,2026-03-27,阶段3作业
+student3,,CN-GEN-007,52,0.65,no,2026-03-24,阶段3作业
+student3,,CN-GEN-008,50,0.60,no,2026-03-25,阶段3作业
+student3,,CN-GEN-009,48,0.58,no,2026-03-26,阶段3作业
+student3,,CN-GEN-010,46,0.55,no,2026-03-27,阶段3作业

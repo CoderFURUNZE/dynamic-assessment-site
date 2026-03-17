@@ -37,6 +37,26 @@ const items = ref<DimensionItem[]>([]);
 const enabledCount = computed(() =>
   items.value.reduce((sum, dim) => sum + dim.indicators.filter((item) => item.enabled).length, 0)
 );
+const dimensionWeightSummary = computed(() =>
+  items.value.map((dim) => {
+    const enabledIndicators = dim.indicators.filter((indicator) => indicator.active && indicator.enabled);
+    const total = enabledIndicators.reduce((sum, indicator) => sum + Number(indicator.weight || 0), 0);
+    return {
+      id: dim.id,
+      title: dim.title,
+      enabledCount: enabledIndicators.length,
+      total,
+    };
+  })
+);
+
+function sourceTypeLabel(sourceType: string) {
+  if (sourceType === "auto") return "系统自动";
+  if (sourceType === "imported") return "阶段导入";
+  if (sourceType === "teacher") return "老师填写";
+  if (sourceType === "questionnaire") return "学生补充";
+  return sourceType;
+}
 
 async function loadSelection() {
   if (!props.courseId) {
@@ -51,7 +71,7 @@ async function loadSelection() {
       indicators: (dim.indicators ?? []).map((indicator) => ({ ...indicator })),
     }));
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "加载课程画像指标失败");
+    ElMessage.error(e?.response?.data?.detail ?? "加载课程评价项失败");
   } finally {
     loading.value = false;
   }
@@ -67,14 +87,14 @@ async function saveSelection() {
         .map((indicator) => ({
           indicator_id: indicator.id,
           enabled: indicator.enabled,
-          weight: Number(indicator.weight || indicator.default_weight || 1),
+          weight: Number(indicator.weight || indicator.default_weight || 0),
         }))
     );
     await api.put(`/portrait/course-selection?course_id=${props.courseId}`, { selections });
-    ElMessage.success("课程画像指标已保存");
+    ElMessage.success("课程评价项已保存");
     await loadSelection();
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "保存课程画像指标失败");
+    ElMessage.error(e?.response?.data?.detail ?? "保存课程评价项失败");
   } finally {
     saving.value = false;
   }
@@ -89,10 +109,10 @@ onMounted(loadSelection);
     <template #header>
       <div class="indicator-header">
         <div>
-          <div class="indicator-header__kicker">Course Portrait Selection</div>
-          <div class="indicator-header__title">课程画像指标选择</div>
+          <div class="indicator-header__kicker">Course Indicator Setup</div>
+          <div class="indicator-header__title">这门课看哪些内容</div>
           <div class="indicator-header__subtitle">
-            管理员先配置一级维度和二级指标，教师再结合当前课程与可提供的数据选择要参与画像的指标。
+            先勾选这门课真正会用到的评价项。后面系统会按这些评价项生成学生学习情况。
           </div>
         </div>
         <div class="indicator-header__meta">
@@ -101,23 +121,44 @@ onMounted(loadSelection);
             <strong>{{ subject || '未选择课程' }}</strong>
           </div>
           <div class="indicator-metric">
-            <span class="indicator-metric__label">已启用指标</span>
+            <span class="indicator-metric__label">已选内容</span>
             <strong>{{ enabledCount }}</strong>
           </div>
-          <el-button type="primary" :loading="saving" @click="saveSelection">保存选择</el-button>
+          <div class="indicator-metric">
+            <span class="indicator-metric__label">一级维度</span>
+            <strong>{{ items.length }}</strong>
+          </div>
+          <el-button type="primary" :loading="saving" @click="saveSelection">保存设置</el-button>
         </div>
       </div>
     </template>
 
-    <el-empty v-if="!courseId" description="请先选择课程" :image-size="88" />
+    <div v-if="!courseId" class="indicator-empty">
+      <el-empty description="请先在页面顶部选择一门课程" :image-size="88" />
+      <el-alert
+        class="indicator-empty__tip"
+        type="info"
+        :closable="false"
+        title="先选课程，再勾选这门课要看的内容。保存后，后面的阶段数据和学生学习情况才会按这些内容计算。"
+      />
+    </div>
     <div v-else class="indicator-list">
+      <el-alert
+        class="indicator-tip"
+        type="info"
+        :closable="false"
+        title="只勾选这门课真正会用到的内容。系统拿得到数据的内容，后面才更容易算出结果。"
+      />
       <el-card v-for="dimension in items" :key="dimension.id" class="indicator-card" shadow="never">
         <template #header>
           <div class="indicator-card__header">
             <div>
               <div class="indicator-card__code">{{ dimension.code }}</div>
               <div class="indicator-card__title">{{ dimension.title }}</div>
-              <div class="indicator-card__desc">{{ dimension.description || '未填写说明' }}</div>
+              <div class="indicator-card__desc">{{ dimension.description || '还没写说明' }}</div>
+            </div>
+            <div class="indicator-card__sum">
+              总和 {{ (dimensionWeightSummary.find((item) => item.id === dimension.id)?.total ?? 0).toFixed(2) }}
             </div>
           </div>
         </template>
@@ -130,13 +171,13 @@ onMounted(loadSelection);
               </el-checkbox>
               <div class="indicator-item__meta">
                 <span>{{ indicator.code }}</span>
-                <span>{{ indicator.source_type }}</span>
+                <span>{{ sourceTypeLabel(indicator.source_type) }}</span>
               </div>
-              <div class="indicator-item__desc">{{ indicator.description || '暂无说明' }}</div>
+              <div class="indicator-item__desc">{{ indicator.description || '还没写说明' }}</div>
             </div>
             <div class="indicator-item__side">
-              <span class="indicator-item__weight-label">权重</span>
-              <el-input-number v-model="indicator.weight" :min="0" :max="10" :step="0.1" size="small" />
+              <span class="indicator-item__weight-label">比重</span>
+              <el-input-number v-model="indicator.weight" :min="0" :max="1" :step="0.05" size="small" />
             </div>
           </div>
         </div>
@@ -201,6 +242,19 @@ onMounted(loadSelection);
   gap: 16px;
 }
 
+.indicator-empty {
+  display: grid;
+  gap: 14px;
+}
+
+.indicator-empty__tip {
+  margin-top: -6px;
+}
+
+.indicator-tip {
+  margin-bottom: 2px;
+}
+
 .indicator-card {
   border-radius: 24px;
 }
@@ -221,6 +275,22 @@ onMounted(loadSelection);
 .indicator-card__desc {
   margin-top: 6px;
   color: #7283a1;
+}
+
+.indicator-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.indicator-card__sum {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #edf4ff;
+  color: #355b97;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .indicator-grid {

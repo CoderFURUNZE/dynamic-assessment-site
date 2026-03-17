@@ -7,6 +7,21 @@ class ResourceOut(BaseModel):
     type: str
     title: str
     url: str
+    category: str = "learning"
+    description: str = ""
+    tags: str = ""
+    original_file_name: str = ""
+    file_extension: str = ""
+    detected_mime_type: str = ""
+    detected_resource_type: str = ""
+    preview_type: str = ""
+    preview_status: str = "ready"
+    preview_error: str = ""
+    converted_preview_url: str = ""
+    original_file_url: str = ""
+    file_size_bytes: int = 0
+    extension_mismatch: bool = False
+    source_kind: str = "external"
 
 
 class QuizItemOut(BaseModel):

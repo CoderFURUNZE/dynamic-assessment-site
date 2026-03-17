@@ -157,6 +157,7 @@ export function getUsername(): string | null {
 
 // 清除 token 和相关数据
 export function clearToken() {
+  const username = sessionStorage.getItem(USERNAME_KEY) || localStorage.getItem(USERNAME_KEY);
   sessionStorage.removeItem(KEY);
   sessionStorage.removeItem(ROLE_KEY);
   sessionStorage.removeItem(USERNAME_KEY);
@@ -165,7 +166,6 @@ export function clearToken() {
   localStorage.removeItem(USERNAME_KEY);
   localStorage.removeItem(EXPIRES_KEY);
   // 清除 last route 数据
-  const username = getUsername();
   if (username) {
     localStorage.removeItem(`da_last_route_${username}`);
   }

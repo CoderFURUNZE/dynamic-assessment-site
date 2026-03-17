@@ -12,6 +12,8 @@ class RecommendationTargetOut(BaseModel):
 class RecommendationOut(BaseModel):
     target_kp: RecommendationTargetOut
     reason_summary: str
+    recommendation_stage: str
+    recommendation_stage_label: str
     resource_list: list[dict]
     practice_list: list[dict]
     advice_text: str
