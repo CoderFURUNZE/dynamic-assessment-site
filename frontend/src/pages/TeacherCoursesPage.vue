@@ -1,0 +1,67 @@
+<script setup lang="ts">
+import { onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { ElMessage } from "element-plus";
+import { api } from "../api";
+import WorkspaceTopbar from "../components/WorkspaceTopbar.vue";
+import HintButton from "../components/HintButton.vue";
+import AdminCourseManager from "../components/AdminCourseManager.vue";
+import PageSectionCard from "../components/PageSectionCard.vue";
+import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
+
+type Course = { id: number; code: string; title: string };
+
+const route = useRoute();
+const router = useRouter();
+const subject = ref("");
+const courses = ref<Course[]>([]);
+
+async function loadCourses() {
+  try {
+    const res = await api.get("/graph/courses");
+    courses.value = res.data ?? [];
+    subject.value = resolveTeacherSubject(String(route.query.subject || ""), subject.value, courses.value);
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "加载教师课程失败");
+  }
+}
+
+function syncQuery() {
+  saveTeacherSubject(subject.value);
+  router.replace({ path: "/teacher/courses", query: buildTeacherSubjectQuery(subject.value) });
+}
+
+watch(subject, () => syncQuery());
+watch(
+  () => route.query.subject,
+  (value) => {
+    const next = String(value || "").trim();
+    if (next && next !== subject.value) subject.value = next;
+  }
+);
+
+onMounted(loadCourses);
+</script>
+
+<template>
+  <div class="teacher-page">
+    <WorkspaceTopbar
+      v-model="subject"
+      :courses="courses"
+      badge="Teacher Courses"
+      title="课程管理"
+      @change="syncQuery"
+    >
+      <HintButton tip="进入阶段设置页面。" @click="router.push({ path: '/teacher/stages', query: { subject: subject || undefined } })">阶段管理</HintButton>
+      <HintButton tip="进入图谱工作区。" type="primary" @click="router.push({ path: '/teacher/graph-workspace', query: { subject: subject || undefined } })">图谱工作区</HintButton>
+    </WorkspaceTopbar>
+
+    <PageSectionCard eyebrow="Courses" title="课程管理">
+      <AdminCourseManager />
+    </PageSectionCard>
+  </div>
+</template>
+
+<style scoped>
+.teacher-page { display: grid; gap: 20px; }
+</style>

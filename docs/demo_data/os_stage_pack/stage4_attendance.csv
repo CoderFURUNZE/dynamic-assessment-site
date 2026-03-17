@@ -1,0 +1,10 @@
+username,student_no,attendance_value,status,happened_at,note
+student1,,1,present,2026-06-01,阶段4考勤
+student1,,1,present,2026-06-03,阶段4考勤
+student1,,1,present,2026-06-05,阶段4考勤
+student2,,1,present,2026-06-01,阶段4考勤
+student2,,1,present,2026-06-03,阶段4考勤
+student2,,1,present,2026-06-05,阶段4考勤
+student3,,1,present,2026-06-01,阶段4考勤
+student3,,0,late,2026-06-03,阶段4考勤
+student3,,1,present,2026-06-05,阶段4考勤

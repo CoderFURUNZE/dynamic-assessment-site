@@ -5,12 +5,11 @@ import { ElMessage } from "element-plus";
 import { api, getWithCache } from "../api";
 import { getRole, getUsername } from "../token";
 
-import ResourcePane from "../components/ResourcePane.vue";
-import MiniQuizPane from "../components/MiniQuizPane.vue";
-import QuizPane from "../components/QuizPane.vue";
 import OverviewPane from "../components/OverviewPane.vue";
-import KnowledgeGraphPane from "../components/KnowledgeGraphPane.vue";
-import LearnerReportPane from "../components/LearnerReportPane.vue";
+import HintButton from "../components/HintButton.vue";
+import WorkspaceTopbar from "../components/WorkspaceTopbar.vue";
+import SimpleStepsBar from "../components/SimpleStepsBar.vue";
+import StarterGuideCard from "../components/StarterGuideCard.vue";
 
 type KP = {
   id: number;
@@ -27,6 +26,8 @@ type Course = { id: number; code: string; title: string };
 type RecoData = {
   target_kp: { id: number; code: string; title: string; mastery?: number };
   reason_summary: string;
+  recommendation_stage?: string;
+  recommendation_stage_label?: string;
   resource_list: Array<Record<string, any>>;
   practice_list: Array<Record<string, any>>;
   advice_text: string;
@@ -49,23 +50,13 @@ const currentKpId = ref<number | null>(null);
 
 const mastery = ref<number>(0);
 const reco = ref<RecoData | null>(null);
+const reportReloadKey = ref(0);
 const isStudent = computed(() => getRole() === "student");
-const lastVideoRefreshAt = ref<number>(0);
 const route = useRoute();
 const router = useRouter();
-const studentSections = ["overview", "graph", "resource", "quiz", "practice", "report"] as const;
-const activeSection = computed<"overview" | "graph" | "resource" | "quiz" | "practice" | "report">({
-  get() {
-    if (route.path.startsWith("/student/")) {
-      const seg = route.path.split("/")[2] as "overview" | "graph" | "resource" | "quiz" | "practice" | "report";
-      if (studentSections.includes(seg)) return seg;
-    }
-    return "overview";
-  },
-  set(value) {
-    const target = `/student/${String(value || "overview")}`;
-    if (route.path !== target) router.push(target);
-  },
+const selectedCourseId = computed<number | null>(() => {
+  const current = courses.value.find((item) => item.title === subject.value);
+  return current?.id ?? null;
 });
 
 const currentKp = computed(() => kps.value.find((k) => k.id === currentKpId.value) ?? null);
@@ -74,6 +65,7 @@ const recommendedTarget = computed<KP | null>(() => {
   if (!recommendedTargetId.value) return null;
   return kps.value.find((item) => item.id === recommendedTargetId.value) ?? null;
 });
+const recommendationStageLabel = computed(() => reco.value?.recommendation_stage_label || "当前推荐");
 const masteryStageLabel = computed(() => {
   if (mastery.value >= 0.85) return "已掌握";
   if (mastery.value >= 0.5) return "学习中";
@@ -88,11 +80,19 @@ function kpStorageKey() {
 
 async function loadCourses() {
   try {
-    const data = await getWithCache("/graph/courses");
-    courses.value = data ?? [];
+    const data = await api.get("/graph/courses");
+    courses.value = data.data ?? [];
     if (!subject.value && courses.value.length) subject.value = courses.value[0].title;
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载课程失败");
+  }
+}
+
+async function loadStudentCourses() {
+  try {
+    await loadCourses();
+  } catch {
+    // actual errors handled in child loaders
   }
 }
 
@@ -156,14 +156,6 @@ function resetReco() {
   reco.value = null;
 }
 
-function onVideoProgress() {
-  if (!isStudent.value) return;
-  const now = Date.now();
-  if (now - lastVideoRefreshAt.value < 10_000) return;
-  lastVideoRefreshAt.value = now;
-  refreshMastery();
-}
-
 async function onCourseChange() {
   currentKpId.value = null;
   reco.value = null;
@@ -178,18 +170,46 @@ async function onKpChange() {
 }
 
 function openGraphWorkspace() {
+  const preview = String(route.query.preview || "");
   router.push({
     path: "/student/graph-workspace",
     query: {
       subject: subject.value,
       kp: currentKpId.value ? String(currentKpId.value) : undefined,
+      preview: preview || undefined,
     },
   });
 }
 
+function handleGuideAction(key: string) {
+  if (key === "graph-workspace") {
+    openGraphWorkspace();
+    return;
+  }
+  if (key === "overview") {
+    router.push("/student/overview");
+    return;
+  }
+  if (key === "questionnaire") {
+    router.push({ path: "/student/questionnaire", query: { subject: subject.value || undefined } });
+    return;
+  }
+  if (key === "report") {
+    router.push({ path: "/student/report", query: { subject: subject.value || undefined } });
+    return;
+  }
+  if (key === "recommended") {
+    goToRecommended();
+  }
+}
+
+function handleQuestionnaireSaved() {
+  reportReloadKey.value += 1;
+}
+
 onMounted(async () => {
   try {
-    await loadCourses();
+    await loadStudentCourses();
     await loadKps();
     await refreshMastery();
   } catch (e: any) {
@@ -200,45 +220,96 @@ onMounted(async () => {
 
 <template>
   <div class="page-shell">
-    <div v-if="isStudent" class="page-grid">
+    <template v-if="isStudent">
+      <WorkspaceTopbar
+        v-model="subject"
+        :courses="courses"
+        badge="Student Workspace"
+        title="学习中心"
+        @change="onCourseChange"
+      >
+        <HintButton tip="进入单独报名页面，查看审核状态与通知。" @click="router.push('/student/enroll')">
+          课程报名
+        </HintButton>
+      </WorkspaceTopbar>
+
+      <StarterGuideCard
+        title="使用顺序"
+        intro="先总览，再图谱，再学习。"
+        :items="[
+          { title: '先看总览', desc: '先知道这门课学什么、现在学到哪里。' },
+          { title: '再看图谱', desc: '图谱能告诉你知识点之间的关系，先学什么、后学什么。' },
+          { title: '进入学习内容页', desc: '在图谱里点知识点，再进入学习内容页学习资源和练习。' },
+          { title: '最后看报告', desc: '报告页会显示学习情况、建议和需要补充填写的内容。' },
+        ]"
+        :actions="[
+          { key: 'overview', label: '先看总览', primary: true },
+          { key: 'graph-workspace', label: '打开知识图谱' },
+          { key: 'questionnaire', label: '去补充问卷' },
+          { key: 'report', label: '去看报告' },
+        ]"
+        storage-key="student-main"
+        @action="handleGuideAction"
+      />
+
+      <div class="page-grid">
       <section class="panel-card info-panel">
-        <div class="panel-title">学习导航</div>
+        <div class="section-block">
+          <div class="panel-title">我的课程</div>
+        </div>
+
+        <div class="section-block section-block--spaced">
+          <div class="panel-title">学习导航</div>
+        </div>
         <div v-if="courses.length === 0" style="margin-bottom: 8px">
           <el-alert type="warning" title="暂无课程，请先在管理员端配置课程" :closable="false" show-icon />
         </div>
-        <div class="control-row">
-          <el-select v-model="subject" placeholder="选择课程" style="width: 100%" @change="onCourseChange">
-            <el-option v-for="c in courses" :key="c.id" :label="c.title" :value="c.title" />
-          </el-select>
+
+        <div class="step-card">
+          <div class="step-card__index">1</div>
+          <div class="step-card__body">
+            <div class="step-card__title">先选知识点</div>
+            <el-select
+              v-model="currentKpId"
+              placeholder="选择知识点"
+              style="width: 100%"
+              :disabled="courses.length === 0 || kps.length === 0"
+              @change="onKpChange"
+            >
+              <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
+            </el-select>
+          </div>
         </div>
-        <el-select
-          v-model="currentKpId"
-          placeholder="选择知识点"
-          style="width: 100%"
-          :disabled="courses.length === 0 || kps.length === 0"
-          @change="onKpChange"
-        >
-          <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
-        </el-select>
 
         <div v-if="currentKp" class="kp-meta">
           <div class="kp-code">{{ currentKp.code }}</div>
           <div class="kp-title">{{ currentKp.title }}</div>
-          <el-text type="info">{{ currentKp.description || "暂无描述" }}</el-text>
         </div>
 
         <div v-if="currentKpId" class="kp-progress">
           <div class="metric-head">
-            <span>当前知识点掌握度</span>
+            <span>当前掌握度</span>
             <strong>{{ Math.round(mastery * 100) }}%</strong>
           </div>
           <el-progress :percentage="Math.round(mastery * 100)" />
         </div>
 
-        <div class="action-row">
-          <el-button type="primary" :disabled="!currentKpId" @click="refreshMastery">刷新掌握度</el-button>
-          <el-button type="success" :disabled="!currentKpId" @click="getReco">生成学习建议</el-button>
-          <el-button :disabled="!currentKpId" @click="openGraphWorkspace">打开知识图谱</el-button>
+        <div class="step-card step-card--action">
+          <div class="step-card__index">2</div>
+          <div class="step-card__body">
+            <div class="step-card__title">再开始操作</div>
+            <div class="action-row">
+              <HintButton tip="重新读取这个知识点的最新掌握度。" type="primary" :disabled="!currentKpId" @click="refreshMastery">
+                刷新掌握度
+              </HintButton>
+              <HintButton tip="根据当前知识点和学习状态生成下一步建议。" type="success" :disabled="!currentKpId" @click="getReco">
+                生成学习建议
+              </HintButton>
+              <HintButton tip="进入大图谱页面，查看知识关系、资源和推荐路径。" :disabled="!currentKpId" @click="openGraphWorkspace">
+                打开知识图谱
+              </HintButton>
+            </div>
+          </div>
         </div>
 
         <el-card v-if="reco" class="sub-card" shadow="never">
@@ -264,7 +335,10 @@ onMounted(async () => {
               <div class="reco-target">
                 {{ reco.target_kp.code }} {{ reco.target_kp.title }}
               </div>
-              <el-tag size="small" type="info">{{ reco.persona_strategy_tag }}</el-tag>
+              <div class="action-row action-row--compact">
+                <el-tag size="small" type="primary">{{ recommendationStageLabel }}</el-tag>
+                <el-tag size="small" type="info">{{ reco.persona_strategy_tag }}</el-tag>
+              </div>
               <div class="reco-text">{{ reco.reason_summary }}</div>
               <div class="reco-text">{{ reco.advice_text }}</div>
             </div>
@@ -279,7 +353,7 @@ onMounted(async () => {
               </div>
               <div class="reco-box">
                 <div class="reco-label">解锁与补救</div>
-                <div class="reco-item">推荐动作：{{ reco.remedy?.action || "current" }}</div>
+                <div class="reco-item">推荐动作：{{ recommendationStageLabel }}</div>
                 <div class="reco-item">缺失条件：{{ (reco.evidence?.missing?.length ?? 0) > 0 ? reco.evidence?.missing?.join("、") : "已满足主要条件" }}</div>
                 <div class="reco-item">路径长度：{{ reco.remedy_path?.path?.length ?? 0 }} 个节点</div>
                 <div class="reco-item">{{ reco.unlock?.can_unlock_next ? "当前可解锁下一节点" : "当前仍需先补强再解锁" }}</div>
@@ -312,134 +386,34 @@ onMounted(async () => {
       </section>
 
       <section class="panel-card content-panel">
-        <el-tabs v-model="activeSection" type="border-card" class="dify-tabs">
-          <el-tab-pane label="课程总览" name="overview">
-            <OverviewPane :subject="subject" :grade="grade" />
-          </el-tab-pane>
-          <el-tab-pane label="知识图谱" name="graph">
-            <div class="graph-showcase">
-              <section class="graph-showcase__intro">
-                <div class="graph-showcase__copy">
-                  <div class="graph-showcase__kicker">Knowledge Graph Workspace</div>
-                  <div class="graph-showcase__title">知识图谱工作区</div>
-                  <div class="graph-showcase__text">
-                    把课程结构、前置依赖、节点资源和系统推荐放到同一块工作台里。进入全屏后可以按知识点查看学习资源、任务、小测和推荐路径。
-                  </div>
-                </div>
-                <div class="graph-showcase__signal">
-                  <div class="graph-showcase__signal-label">当前知识状态</div>
-                  <div class="graph-showcase__signal-value">{{ Math.round(mastery * 100) }}%</div>
-                  <el-progress :percentage="Math.round(mastery * 100)" :show-text="false" />
-                  <div class="graph-showcase__signal-meta">
-                    <span>{{ masteryStageLabel }}</span>
-                    <span>{{ recommendedTarget ? "已生成推荐目标" : "建议先生成学习建议" }}</span>
-                  </div>
-                </div>
-              </section>
+        <div class="content-steps">
+          <SimpleStepsBar :items="['先看总览', '再进图谱', '再去学习内容页', '单独补问卷', '单独看报告']" />
+        </div>
+        <div class="tab-panel">
+          <OverviewPane :subject="subject" :grade="grade" />
 
-              <section class="graph-showcase__stats">
-                <div class="graph-showcase__stat-card">
-                  <span>当前课程</span>
-                  <strong>{{ subject || "未选择课程" }}</strong>
-                </div>
-                <div class="graph-showcase__stat-card">
-                  <span>当前知识点</span>
-                  <strong>{{ currentKp ? `${currentKp.code} ${currentKp.title}` : "未选择知识点" }}</strong>
-                </div>
-                <div class="graph-showcase__stat-card">
-                  <span>当前掌握阶段</span>
-                  <strong>{{ masteryStageLabel }}</strong>
-                </div>
-                <div class="graph-showcase__stat-card">
-                  <span>推荐目标</span>
-                  <strong>{{ recommendedTarget ? `${recommendedTarget.code} ${recommendedTarget.title}` : "暂未生成" }}</strong>
-                </div>
-              </section>
-
-              <section class="graph-showcase__workspace">
-                <div class="graph-showcase__preview">
-                  <div class="graph-showcase__preview-head">
-                    <div>
-                      <div class="graph-showcase__preview-kicker">Workspace Preview</div>
-                      <div class="graph-showcase__preview-title">全屏图谱工作台预览</div>
-                    </div>
-                    <el-tag size="small" type="info">全屏交互模式</el-tag>
-                  </div>
-
-                  <div class="graph-showcase__preview-stage">
-                    <div class="graph-showcase__preview-orbit graph-showcase__preview-orbit--center">
-                      <span>{{ currentKp?.code || "CURRENT" }}</span>
-                      <strong>{{ currentKp?.title || "当前知识点" }}</strong>
-                    </div>
-                    <div class="graph-showcase__preview-orbit graph-showcase__preview-orbit--upper">
-                      <span>Prerequisite</span>
-                      <strong>前置知识</strong>
-                    </div>
-                    <div class="graph-showcase__preview-orbit graph-showcase__preview-orbit--lower">
-                      <span>Related</span>
-                      <strong>关联拓展</strong>
-                    </div>
-                    <div class="graph-showcase__preview-orbit graph-showcase__preview-orbit--right">
-                      <span>Recommendation</span>
-                      <strong>{{ recommendedTarget?.title || "推荐目标" }}</strong>
-                    </div>
-                    <div class="graph-showcase__preview-line graph-showcase__preview-line--upper"></div>
-                    <div class="graph-showcase__preview-line graph-showcase__preview-line--lower"></div>
-                    <div class="graph-showcase__preview-line graph-showcase__preview-line--right"></div>
-                  </div>
-
-                  <div class="graph-showcase__preview-foot">
-                    <span><i class="graph-dot graph-dot--mastered"></i>已掌握</span>
-                    <span><i class="graph-dot graph-dot--learning"></i>学习中</span>
-                    <span><i class="graph-dot graph-dot--risk"></i>风险</span>
-                    <span><i class="graph-dot graph-dot--idle"></i>未开始</span>
-                  </div>
-                </div>
-
-                <div class="graph-showcase__aside">
-                  <div class="graph-showcase__action-card">
-                    <div class="graph-showcase__action-kicker">Launch</div>
-                    <div class="graph-showcase__action-title">进入知识图谱工作区</div>
-                    <div class="graph-showcase__action-text">
-                      在全屏界面里集中查看知识关系、节点内容、掌握状态和系统推荐，不再被其他模块挤压。
-                    </div>
-                    <div class="graph-showcase__actions">
-                      <el-button type="primary" size="large" :disabled="!currentKpId" @click="openGraphWorkspace">
-                        打开全屏知识图谱
-                      </el-button>
-                      <el-button size="large" :disabled="!recommendedTargetId" @click="goToRecommended">
-                        直达推荐知识点
-                      </el-button>
-                    </div>
-                  </div>
-
-                  <div class="graph-showcase__guide-card">
-                    <div class="graph-showcase__guide-title">进入后可以做什么</div>
-                    <div class="graph-showcase__guide-list">
-                      <div class="graph-showcase__guide-item">查看当前知识点的前置关系和后续路径</div>
-                      <div class="graph-showcase__guide-item">点击节点查看资源、任务、练习和小测</div>
-                      <div class="graph-showcase__guide-item">根据掌握状态定位薄弱点和系统推荐点</div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            </div>
-          </el-tab-pane>
-          <el-tab-pane label="学习资源" name="resource">
-            <ResourcePane :kp-id="currentKpId" @progress-updated="onVideoProgress" />
-          </el-tab-pane>
-          <el-tab-pane label="小测" name="quiz">
-            <MiniQuizPane :kp-id="currentKpId" @mastery-updated="refreshMastery" />
-          </el-tab-pane>
-          <el-tab-pane label="练习/测验" name="practice">
-            <QuizPane :kp-id="currentKpId" @mastery-updated="refreshMastery" />
-          </el-tab-pane>
-          <el-tab-pane label="学习报告" name="report">
-            <LearnerReportPane :subject="subject" :grade="grade" />
-          </el-tab-pane>
-        </el-tabs>
+          <div class="feature-grid">
+            <button class="feature-card" @click="openGraphWorkspace">
+              <strong>知识图谱</strong>
+              <span>查看知识结构，定位当前知识点，再进入学习内容页。</span>
+            </button>
+            <button class="feature-card" @click="router.push({ path: '/student/questionnaire', query: { subject: subject || undefined } })">
+              <strong>补充问卷</strong>
+              <span>单独填写学习偏好和当前状态，不再和其它内容混在一起。</span>
+            </button>
+            <button class="feature-card" @click="router.push({ path: '/student/report', query: { subject: subject || undefined } })">
+              <strong>学习报告</strong>
+              <span>单独查看画像结果、阶段变化和下一步建议。</span>
+            </button>
+            <button class="feature-card" :disabled="!recommendedTargetId" @click="goToRecommended">
+              <strong>推荐知识点</strong>
+              <span>{{ recommendedTarget ? `${recommendedTarget.code} ${recommendedTarget.title}` : "等待系统推荐结果" }}</span>
+            </button>
+          </div>
+        </div>
       </section>
-    </div>
+      </div>
+    </template>
 
     <section v-else class="panel-card">
       <div class="panel-title">学习内容预览</div>
@@ -457,51 +431,155 @@ onMounted(async () => {
           <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
         </el-select>
       </div>
-      <el-tabs v-model="activeSection" type="border-card" class="dify-tabs">
-        <el-tab-pane label="知识图谱" name="graph">
-          <KnowledgeGraphPane :subject="subject" :grade="grade" :current-kp-id="currentKpId" />
-        </el-tab-pane>
-        <el-tab-pane label="学习资源" name="resource">
-          <ResourcePane :kp-id="currentKpId" />
-        </el-tab-pane>
-        <el-tab-pane label="小测预览" name="quiz">
-          <MiniQuizPane :kp-id="currentKpId" preview />
-        </el-tab-pane>
-        <el-tab-pane label="练习预览" name="practice">
-          <QuizPane :kp-id="currentKpId" preview />
-        </el-tab-pane>
-      </el-tabs>
+      <div class="preview-note">
+        预览模式已收敛到知识图谱工作区。资源和练习统一从图谱节点进入学习内容页。
+      </div>
     </section>
   </div>
 
 </template>
 
 <style scoped>
+.preview-note {
+  padding: 20px;
+  border-radius: var(--app-radius);
+  background: var(--app-bg-alt);
+  border: 1px solid var(--app-border);
+  color: var(--app-ink-soft);
+  line-height: 1.7;
+  font-size: 14px;
+}
+
 .page-shell {
   display: grid;
-  gap: 24px;
+  gap: 16px;
 }
 
 .page-grid {
   display: grid;
   grid-template-columns: minmax(300px, 360px) 1fr;
-  gap: 24px;
+  gap: 16px;
   align-items: start;
+}
+
+.section-block {
+  display: grid;
+  gap: 10px;
+}
+
+.section-block--spaced {
+  margin-top: 10px;
 }
 
 .panel-title {
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: 16px;
   color: var(--app-ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-title::before {
+  content: '';
+  width: 4px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--app-green);
+}
+
+.panel-help {
+  margin-bottom: 14px;
+  color: var(--app-ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .info-panel {
-  padding: 20px;
+  padding: 18px;
 }
 
 .content-panel {
   overflow: hidden;
+  padding: 0;
+}
+
+.feature-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.feature-card {
+  text-align: left;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.feature-card strong {
+  font-size: 14px;
+  color: var(--app-ink);
+}
+
+.feature-card span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--app-ink-soft);
+}
+
+.feature-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.tab-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.tab-panel__intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px);
+  gap: 12px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.tab-panel__eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b84aa;
+}
+
+.tab-panel__title {
+  margin-top: 6px;
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 800;
+  color: #203657;
+}
+
+.tab-panel__desc {
+  align-self: end;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #5e7697;
+}
+
+.content-steps {
+  padding: 14px 16px 0;
+  border-bottom: 1px solid var(--app-border);
+  padding-bottom: 14px;
+  background: #ffffff;
 }
 
 .control-row {
@@ -509,443 +587,295 @@ onMounted(async () => {
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+  padding: 0 16px;
+  padding-top: 16px;
+}
+
+.step-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--app-radius);
+  background: #ffffff;
+  border: 1px solid var(--app-border);
+  margin-bottom: 12px;
+  box-shadow: none;
+}
+
+.step-card--action {
+  align-items: start;
+}
+
+.step-card__index {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: #eef4ff;
+  color: var(--app-green-dark);
+  font-weight: 600;
+}
+
+.step-card__body {
+  display: grid;
+  gap: 10px;
+}
+
+.step-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-ink);
 }
 
 .kp-meta {
-  margin-top: 16px;
-  padding: 14px;
-  background: #f8fafc;
+  margin-top: 4px;
+  padding: 16px;
+  background: #fbfcfe;
   border-radius: var(--app-radius);
   border: 1px solid var(--app-border);
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .kp-code {
   font-size: 12px;
-  color: #557291;
+  color: var(--app-ink-soft);
 }
 
 .kp-title {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--app-ink);
+  font-size: 15px;
 }
 
 .kp-progress {
-  margin-top: 16px;
+  margin-top: 4px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  padding: 16px;
+  background: #fbfcfe;
+  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
 }
 
 .metric-head {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 13px;
-  color: #5f7894;
+  font-size: 14px;
+  color: var(--app-ink-soft);
 }
 
 .metric-head strong {
   color: var(--app-ink);
+  font-weight: 600;
 }
 
 .action-row {
-  margin-top: 16px;
-  display: flex;
+  display: grid;
   gap: 12px;
-  flex-wrap: wrap;
 }
 
 .sub-card {
-  margin-top: 16px;
+  margin-top: 20px;
+}
+
+.graph-entry {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  padding: 0;
+}
+
+.graph-entry__main,
+.graph-entry__side {
   border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  background: #ffffff;
 }
 
-.graph-showcase {
+.graph-entry__main {
+  padding: 20px;
   display: grid;
-  gap: 18px;
-}
-
-.graph-showcase__intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
   gap: 16px;
-}
-
-.graph-showcase__copy,
-.graph-showcase__signal,
-.graph-showcase__stat-card,
-.graph-showcase__action-card,
-.graph-showcase__guide-card {
-  border-radius: 22px;
-  border: 1px solid #dce7f0;
-  background: linear-gradient(180deg, #fbfdff, #f5f9fd);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-.graph-showcase__copy {
-  padding: 24px 26px;
-  display: grid;
-  gap: 10px;
   align-content: start;
 }
 
-.graph-showcase__kicker,
-.graph-showcase__preview-kicker,
-.graph-showcase__action-kicker {
+.graph-entry__kicker {
   font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
+  font-weight: 600;
   text-transform: uppercase;
-  color: #6a88a8;
+  color: var(--app-ink-soft);
 }
 
-.graph-showcase__title {
-  font-size: 28px;
-  line-height: 1.08;
-  font-weight: 800;
-  color: var(--app-ink);
-}
-
-.graph-showcase__text {
-  max-width: 720px;
-  font-size: 14px;
-  line-height: 1.75;
-  color: #57718f;
-}
-
-.graph-showcase__signal {
-  padding: 22px;
-  display: grid;
-  gap: 10px;
-  align-content: start;
-}
-
-.graph-showcase__signal-label {
-  font-size: 12px;
-  color: #6884a1;
-}
-
-.graph-showcase__signal-value {
-  font-size: 34px;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--app-ink);
-}
-
-.graph-showcase__signal-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 12px;
-  color: #6884a1;
-}
-
-.graph-showcase__stats {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.graph-showcase__stat-card {
-  padding: 16px 18px;
-  display: grid;
-  gap: 6px;
-}
-
-.graph-showcase__stat-card span {
-  font-size: 12px;
-  color: #6884a1;
-}
-
-.graph-showcase__stat-card strong {
-  font-size: 18px;
-  line-height: 1.45;
-  color: var(--app-ink);
-}
-
-.graph-showcase__workspace {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
-}
-
-.graph-showcase__preview {
-  padding: 20px;
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at 16% 20%, rgba(107, 165, 255, 0.22), transparent 28%),
-    radial-gradient(circle at 80% 82%, rgba(73, 118, 188, 0.18), transparent 24%),
-    linear-gradient(135deg, #0b1830, #12355d 58%, #174877);
-  color: #f5f9ff;
-  display: grid;
-  gap: 16px;
-  min-height: 360px;
-}
-
-.graph-showcase__preview-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.graph-showcase__preview-title {
-  margin-top: 4px;
+.graph-entry__title {
   font-size: 22px;
-  font-weight: 800;
-  line-height: 1.1;
-}
-
-.graph-showcase__preview-stage {
-  position: relative;
-  min-height: 220px;
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.06), transparent 52%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
-  overflow: hidden;
-}
-
-.graph-showcase__preview-orbit {
-  position: absolute;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  text-align: center;
-  border-radius: 999px;
-  padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 18px 38px rgba(7, 17, 34, 0.24);
-}
-
-.graph-showcase__preview-orbit span {
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(227, 238, 252, 0.72);
-}
-
-.graph-showcase__preview-orbit strong {
-  margin-top: 6px;
-  font-size: 14px;
-  line-height: 1.35;
-  max-width: 150px;
-}
-
-.graph-showcase__preview-orbit--center {
-  left: 50%;
-  top: 50%;
-  width: 180px;
-  height: 180px;
-  transform: translate(-50%, -50%);
-  background: rgba(106, 167, 255, 0.18);
-  border-color: rgba(157, 201, 255, 0.42);
-}
-
-.graph-showcase__preview-orbit--upper {
-  left: 18%;
-  top: 16%;
-  width: 126px;
-  height: 126px;
-}
-
-.graph-showcase__preview-orbit--lower {
-  left: 20%;
-  bottom: 12%;
-  width: 126px;
-  height: 126px;
-}
-
-.graph-showcase__preview-orbit--right {
-  right: 11%;
-  top: 50%;
-  width: 152px;
-  height: 152px;
-  transform: translateY(-50%);
-  background: rgba(255, 208, 112, 0.14);
-  border-color: rgba(255, 227, 158, 0.34);
-}
-
-.graph-showcase__preview-line {
-  position: absolute;
-  background: linear-gradient(90deg, rgba(182, 211, 255, 0.2), rgba(243, 248, 255, 0.78), rgba(182, 211, 255, 0.2));
-  transform-origin: left center;
-  height: 1px;
-}
-
-.graph-showcase__preview-line--upper {
-  left: 32%;
-  top: 34%;
-  width: 190px;
-  transform: rotate(19deg);
-}
-
-.graph-showcase__preview-line--lower {
-  left: 34%;
-  bottom: 30%;
-  width: 180px;
-  transform: rotate(-15deg);
-}
-
-.graph-showcase__preview-line--right {
-  left: 57%;
-  top: 50%;
-  width: 180px;
-}
-
-.graph-showcase__preview-foot {
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  align-items: center;
-  font-size: 12px;
-  color: rgba(230, 239, 251, 0.86);
-}
-
-.graph-dot {
-  display: inline-flex;
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  margin-right: 7px;
-}
-
-.graph-dot--mastered {
-  background: #2dcc84;
-}
-
-.graph-dot--learning {
-  background: #4c92ff;
-}
-
-.graph-dot--risk {
-  background: #ff9553;
-}
-
-.graph-dot--idle {
-  background: #90a7c0;
-}
-
-.graph-showcase__aside {
-  display: grid;
-  gap: 16px;
-  align-content: start;
-}
-
-.graph-showcase__action-card,
-.graph-showcase__guide-card {
-  padding: 20px;
-  display: grid;
-  gap: 10px;
-}
-
-.graph-showcase__action-title,
-.graph-showcase__guide-title {
-  font-size: 20px;
   line-height: 1.2;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--app-ink);
 }
 
-.graph-showcase__action-text {
+.graph-entry__text {
+  max-width: 680px;
   font-size: 14px;
-  line-height: 1.75;
-  color: #5c7692;
+  line-height: 1.5;
+  color: var(--app-ink-soft);
 }
 
-.graph-showcase__actions {
-  margin-top: 6px;
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.graph-showcase__guide-list {
+.graph-entry__meta {
   display: grid;
-  gap: 10px;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.graph-showcase__guide-item {
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: #f2f7fb;
-  border: 1px solid #dde9f2;
-  color: #486480;
-  line-height: 1.65;
+.graph-entry__item {
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  border-radius: var(--app-radius);
+  background: #fbfcfe;
+  border: 1px solid var(--app-border);
+}
+
+.graph-entry__item span {
+  font-size: 13px;
+  color: var(--app-ink-soft);
+}
+
+.graph-entry__item strong {
+  font-size: 18px;
+  line-height: 1.4;
+  color: var(--app-ink);
+  font-weight: 600;
+}
+
+.graph-entry__side {
+  padding: 20px;
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
+.graph-entry__side :deep(.el-button) {
+  width: 100%;
+}
+
+.graph-entry__tips {
+  padding: 16px 20px;
+  border-radius: var(--app-radius);
+  background: #fbfcfe;
+  border: 1px solid var(--app-border);
+  display: grid;
+  gap: 12px;
+  color: var(--app-ink-soft);
+  line-height: 1.5;
+  font-size: 14px;
 }
 
 .reco-body {
   display: grid;
   gap: 14px;
+  padding: 0;
 }
 
 .reco-summary {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .reco-summary > div,
 .reco-box {
-  padding: 12px;
-  border-radius: 16px;
-  background: #f7fafc;
-  border: 1px solid #e1e9f0;
+  padding: 16px;
+  border-radius: var(--app-radius);
+  background: #fbfcfe;
+  border: 1px solid var(--app-border);
 }
 
 .reco-label {
   font-size: 12px;
-  color: #5d7693;
+  color: var(--app-ink-soft);
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 .reco-highlight {
-  padding: 16px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #15395e, #29577d);
-  color: #f8fbff;
+  padding: 18px;
+  border-radius: var(--app-radius);
+  background: #fbfcfe;
+  color: var(--app-ink);
   display: grid;
-  gap: 6px;
+  gap: 8px;
+  border: 1px solid var(--app-border);
 }
 
 .reco-target {
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .reco-text {
-  font-size: 13px;
-  line-height: 1.65;
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 .reco-grid {
   display: grid;
-  gap: 12px;
+  gap: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .reco-item {
-  padding: 8px 0;
-  border-bottom: 1px dashed #d8e4ef;
-  font-size: 13px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--app-border);
+  font-size: 14px;
   color: var(--app-ink);
 }
 
 .dify-tabs :deep(.el-tabs__header) {
-  margin-bottom: 16px;
-  padding: 0 16px;
+  margin-bottom: 0;
+  padding: 0 20px;
+  background: var(--app-bg);
+  border-bottom: 1px solid var(--app-border);
 }
 
 .dify-tabs :deep(.el-tabs__nav-wrap::after) {
   background: var(--app-border);
 }
 
+.dify-tabs :deep(.el-tabs__item) {
+  font-size: 14px;
+  font-weight: 500;
+  padding: 16px 24px;
+  color: var(--app-ink-soft);
+}
+
+.dify-tabs :deep(.el-tabs__item:hover) {
+  color: var(--app-green);
+}
+
+.dify-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--app-green);
+  font-weight: 600;
+  position: relative;
+}
+
+.dify-tabs :deep(.el-tabs__item.is-active::after) {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 24px;
+  right: 24px;
+  height: 2px;
+  background: var(--app-green);
+  border-radius: 2px;
+}
+
 .dify-tabs :deep(.el-tabs__content) {
-  padding: 16px;
+  padding: 24px;
+  min-height: 400px;
 }
 
 @media (max-width: 1100px) {
@@ -953,38 +883,70 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 
-  .graph-showcase__intro,
-  .graph-showcase__workspace,
-  .graph-showcase__stats,
+  .graph-entry,
+  .tab-panel__intro,
+  .feature-grid,
+  .graph-entry__meta,
   .reco-summary,
   .reco-grid {
     grid-template-columns: 1fr;
   }
-  .graph-showcase__preview {
-    min-height: 300px;
+  
+  .info-panel,
+  .content-panel {
+    width: 100%;
   }
-
-  .graph-showcase__preview-orbit--center {
-    width: 152px;
-    height: 152px;
+  
+  .graph-entry__main {
+    padding: 24px 20px;
   }
-
-  .graph-showcase__preview-orbit--upper,
-  .graph-showcase__preview-orbit--lower {
-    width: 108px;
-    height: 108px;
+  
+  .graph-entry__title {
+    font-size: 20px;
   }
+}
 
-  .graph-showcase__preview-orbit--right {
-    width: 124px;
-    height: 124px;
-    right: 6%;
+@media (max-width: 768px) {
+  .page-grid {
+    gap: 16px;
   }
-
-  .graph-showcase__preview-line--upper,
-  .graph-showcase__preview-line--lower,
-  .graph-showcase__preview-line--right {
-    width: 120px;
+  
+  .info-panel {
+    padding: 20px;
+  }
+  
+  .dify-tabs :deep(.el-tabs__header) {
+    padding: 0 12px;
+  }
+  
+  .dify-tabs :deep(.el-tabs__item) {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+  
+  .dify-tabs :deep(.el-tabs__content) {
+    padding: 16px;
+  }
+  
+  .graph-entry {
+    padding: 16px;
+    gap: 16px;
+  }
+  
+  .graph-entry__main {
+    padding: 20px;
+  }
+  
+  .graph-entry__title {
+    font-size: 18px;
+  }
+  
+  .graph-entry__item {
+    padding: 16px;
+  }
+  
+  .graph-entry__side {
+    padding: 20px;
   }
 }
 </style>

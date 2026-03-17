@@ -1,0 +1,10 @@
+username,student_no,kp_code,watched_minutes,completion_ratio,happened_at,note
+student1,,CN-GEN-001,38,0.72,2026-03-01,阶段1视频学习
+student1,,CN-GEN-002,34,0.68,2026-03-01,阶段1视频学习
+student1,,CN-GEN-003,30,0.62,2026-03-02,阶段1视频学习
+student2,,CN-GEN-001,42,0.80,2026-03-01,阶段1视频学习
+student2,,CN-GEN-002,40,0.78,2026-03-02,阶段1视频学习
+student2,,CN-GEN-003,36,0.70,2026-03-02,阶段1视频学习
+student3,,CN-GEN-001,16,0.30,2026-03-01,阶段1视频学习
+student3,,CN-GEN-002,12,0.24,2026-03-02,阶段1视频学习
+student3,,CN-GEN-003,10,0.20,2026-03-03,阶段1视频学习

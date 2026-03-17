@@ -167,6 +167,13 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
         "related_extension": f"主线已较稳定，建议通过相关知识点“{target_kp.title}”做扩展巩固。",
         "current": f"继续围绕“{target_kp.title}”进行标准学习。",
     }
+    stage_label_map = {
+        "blocked_prerequisite": "先补前置",
+        "current_remedial": "当前补救",
+        "next_unlocked": "继续推进",
+        "related_extension": "拓展学习",
+        "current": "当前推荐",
+    }
     reason_summary = reason_map.get(stage, reason_map["current"])
 
     resources = session.exec(select(LearningResource).where(LearningResource.kp_id == target_kp_id)).all()
@@ -212,6 +219,8 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
             "mastery": float(target_mastery.value),
         },
         "reason_summary": reason_summary,
+        "recommendation_stage": stage,
+        "recommendation_stage_label": stage_label_map.get(stage, stage_label_map["current"]),
         "resource_list": resource_list,
         "practice_list": practice_list,
         "advice_text": advice_text,

@@ -49,6 +49,16 @@ class StageImportBatchOut(BaseModel):
     created_at: str
 
 
+class StageMetricGuideOut(BaseModel):
+    metric_type: str
+    label: str
+    summary: str
+    template_fields: list[str] = []
+    affected_dimensions: list[str] = []
+    affected_indicators: list[str] = []
+    next_action: str = ""
+
+
 class StageImportResultOut(BaseModel):
     batch_id: int
     metric_type: str
@@ -56,4 +66,7 @@ class StageImportResultOut(BaseModel):
     success_rows: int
     failed_rows: int
     errors: list[str] = []
-
+    affected_dimensions: list[str] = []
+    affected_indicators: list[str] = []
+    recalculated_users: int = 0
+    next_action: str = ""

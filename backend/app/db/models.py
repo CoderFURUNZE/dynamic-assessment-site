@@ -13,8 +13,32 @@ class UserRole(str, Enum):
     student = "student"
 
 
+class CourseEnrollStatus(str, Enum):
+    open = "open"
+    full = "full"
+    closed = "closed"
+    expired = "expired"
+
+
+class ApplicationStatus(str, Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class EnrollmentStatus(str, Enum):
+    active = "active"
+    cancelled = "cancelled"
+
+
+class NotificationStatus(str, Enum):
+    unread = "unread"
+    read = "read"
+
+
 class PortraitIndicatorSourceType(str, Enum):
     auto = "auto"
+    imported = "imported"
     teacher = "teacher"
     questionnaire = "questionnaire"
 
@@ -32,6 +56,7 @@ class User(SQLModel, table=True):
     username: str = Field(index=True)
     password_hash: str
     role: UserRole = Field(default=UserRole.student)
+    active: bool = Field(default=True, index=True)
     full_name: str = ""
     student_no: str = ""
     class_name: str = ""
@@ -49,9 +74,67 @@ class Course(SQLModel, table=True):
     description: str = ""
     active: bool = True
     teacher_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    max_students: int = Field(default=200)
+    apply_deadline: Optional[datetime] = Field(default=None, index=True)
+    enroll_status: CourseEnrollStatus = Field(default=CourseEnrollStatus.open, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     __table_args__ = (UniqueConstraint("code"),)
+
+
+class Enrollment(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    student_id: int = Field(foreign_key="user.id", index=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    application_id: Optional[int] = Field(default=None, foreign_key="courseapplication.id", index=True)
+    status: EnrollmentStatus = Field(default=EnrollmentStatus.active, index=True)
+    enrolled_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("student_id", "course_id"),)
+
+
+class CoursePrerequisite(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    prerequisite_course_id: int = Field(foreign_key="course.id", index=True)
+
+    __table_args__ = (UniqueConstraint("course_id", "prerequisite_course_id"),)
+
+
+class CourseApplication(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    student_id: int = Field(foreign_key="user.id", index=True)
+    apply_reason: str = ""
+    status: ApplicationStatus = Field(default=ApplicationStatus.pending, index=True)
+    review_remark: str = ""
+    reject_reason: str = ""
+    reviewed_by: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    reviewed_at: Optional[datetime] = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("student_id", "course_id"),)
+
+
+class CourseNotification(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    type: str = Field(default="COURSE")
+    title: str
+    content: str
+    status: NotificationStatus = Field(default=NotificationStatus.unread, index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class CourseCompletionRecord(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    student_id: int = Field(foreign_key="user.id", index=True)
+    completed_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    note: str = ""
+
+    __table_args__ = (UniqueConstraint("course_id", "student_id"),)
 
 
 class KnowledgePoint(SQLModel, table=True):
@@ -66,6 +149,8 @@ class KnowledgePoint(SQLModel, table=True):
     literacy_tag: str = ""
     importance: float = 0.5
     difficulty: float = 0.5
+    pos_x: Optional[float] = Field(default=None)
+    pos_y: Optional[float] = Field(default=None)
     practice_total: Optional[int] = Field(default=None)
 
     __table_args__ = (UniqueConstraint("code"),)
@@ -87,10 +172,30 @@ class KnowledgeEdge(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("prereq_id", "next_id"),)
 
 
+class ChapterEdge(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    source_chapter: str = Field(index=True)
+    target_chapter: str = Field(index=True)
+    relation_type: RelationType = Field(default=RelationType.related, index=True)
+
+    __table_args__ = (UniqueConstraint("subject", "grade", "source_chapter", "target_chapter"),)
+
+
 class ResourceType(str, Enum):
     video = "video"
+    pdf = "pdf"
     note = "note"
+    doc = "doc"
+    docx = "docx"
+    ppt = "ppt"
+    pptx = "pptx"
+    image = "image"
+    link = "link"
     example = "example"
+    book = "book"
+    recommend_book = "recommend_book"
 
 
 class LearningResource(SQLModel, table=True):
@@ -101,6 +206,23 @@ class LearningResource(SQLModel, table=True):
     title: str
     url: str
     type: ResourceType = Field(default=ResourceType.video)
+    category: str = Field(default="learning", index=True)
+    description: str = ""
+    tags: str = ""
+    original_file_name: str = ""
+    file_extension: str = ""
+    detected_mime_type: str = ""
+    detected_resource_type: str = ""
+    preview_type: str = ""
+    preview_status: str = Field(default="ready", index=True)
+    preview_error: str = ""
+    converted_preview_url: str = ""
+    original_file_url: str = ""
+    file_size_bytes: int = 0
+    extension_mismatch: bool = False
+    source_kind: str = Field(default="external", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
 class KpTaskType(str, Enum):
@@ -504,6 +626,24 @@ class StageTeacherFeedback(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     __table_args__ = (UniqueConstraint("user_id", "stage_id"),)
+
+
+class TeacherFinalScoreConfirmation(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    subject: str = Field(index=True)
+    grade: str = Field(index=True)
+    suggested_score: float = 0.0
+    confirmed_score: float = 0.0
+    confirmed_level: str = ""
+    comment: str = ""
+    recommendation_summary: str = ""
+    confirmed_by: str = ""
+    confirmed_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("user_id", "course_id"),)
 
 
 class TeacherPortraitIndicatorInput(SQLModel, table=True):

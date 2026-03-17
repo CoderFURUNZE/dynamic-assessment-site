@@ -114,6 +114,210 @@ DIMENSION_LEGACY_LABELS = {
     "individual_background": "个体基础特征",
 }
 
+METRIC_LABELS = {
+    "activity_frequency": "阶段活跃天数",
+    "study_duration": "阶段学习时长",
+    "completion": "阶段完成度",
+    "attendance_rate": "阶段出勤率",
+    "participation": "课堂参与度",
+    "assignment_score": "作业成绩",
+    "quiz_score": "小测成绩",
+    "task_score": "任务成绩",
+    "stage_mastery": "知识掌握度",
+    "on_time_rate": "按时提交率",
+    "continuity": "连续学习情况",
+    "task_completion": "任务完成率",
+    "resource_initiative": "资源主动使用度",
+    "engagement_base": "学习投入基线",
+    "achievement_base": "学习成效基线",
+    "habit_base": "学习习惯基线",
+    "characteristic_base": "学习特征基线",
+}
+
+INDICATOR_RULES: dict[str, dict[str, Any]] = {
+    "creative_thinking": {
+        "source_detail": "教师补充评分优先；没有教师评分时，根据任务完成、资源主动使用和课堂参与综合估算。",
+        "formula_text": "0.45*任务完成率 + 0.30*资源主动使用度 + 0.25*课堂参与度",
+        "metrics": ["task_completion", "resource_initiative", "participation"],
+        "weights": {"task_completion": 0.45, "resource_initiative": 0.30, "participation": 0.25},
+    },
+    "cross_context_transfer": {
+        "source_detail": "优先依据阶段导入的综合任务与小测，再结合知识掌握度判断迁移能力。",
+        "formula_text": "0.40*任务成绩 + 0.30*小测成绩 + 0.30*知识掌握度",
+        "metrics": ["task_score", "quiz_score", "stage_mastery"],
+        "weights": {"task_score": 0.40, "quiz_score": 0.30, "stage_mastery": 0.30},
+    },
+    "value_judgement": {
+        "source_detail": "需要老师结合反思作业、课堂表现进行补充评分，系统暂不自动估算。",
+        "formula_text": "教师补充评分",
+        "metrics": [],
+        "weights": {},
+    },
+    "collaboration": {
+        "source_detail": "主要通过阶段参与度、任务协作完成情况和出勤表现综合判断。",
+        "formula_text": "0.45*课堂参与度 + 0.30*任务完成率 + 0.25*出勤率",
+        "metrics": ["participation", "task_completion", "attendance_rate"],
+        "weights": {"participation": 0.45, "task_completion": 0.30, "attendance_rate": 0.25},
+    },
+    "motivation": {
+        "source_detail": "优先依据阶段导入数据，观察学生持续投入、完成情况和连续学习状态。",
+        "formula_text": "0.45*学习投入基线 + 0.35*阶段完成度 + 0.20*连续学习情况",
+        "metrics": ["engagement_base", "completion", "continuity"],
+        "weights": {"engagement_base": 0.45, "completion": 0.35, "continuity": 0.20},
+    },
+    "self_regulation": {
+        "source_detail": "通过是否按时提交、是否持续学习以及是否主动使用资源来估算自我调节能力。",
+        "formula_text": "0.40*按时提交率 + 0.35*连续学习情况 + 0.25*资源主动使用度",
+        "metrics": ["on_time_rate", "continuity", "resource_initiative"],
+        "weights": {"on_time_rate": 0.40, "continuity": 0.35, "resource_initiative": 0.25},
+    },
+    "cross_discipline_link": {
+        "source_detail": "结合知识图谱掌握度和资源延伸使用情况，判断跨学科连接能力。",
+        "formula_text": "0.55*知识掌握度 + 0.45*资源主动使用度",
+        "metrics": ["stage_mastery", "resource_initiative"],
+        "weights": {"stage_mastery": 0.55, "resource_initiative": 0.45},
+    },
+    "discipline_level": {
+        "source_detail": "根据阶段成效基线和知识掌握度，判断本学科能力层级。",
+        "formula_text": "0.60*学习成效基线 + 0.40*知识掌握度",
+        "metrics": ["achievement_base", "stage_mastery"],
+        "weights": {"achievement_base": 0.60, "stage_mastery": 0.40},
+    },
+    "language_mastery": {
+        "source_detail": "主要看作业与小测中的表达、理解类表现。",
+        "formula_text": "0.65*作业成绩 + 0.35*小测成绩",
+        "metrics": ["assignment_score", "quiz_score"],
+        "weights": {"assignment_score": 0.65, "quiz_score": 0.35},
+    },
+    "logic_mastery": {
+        "source_detail": "主要看小测与任务中的推理、结构化解题表现。",
+        "formula_text": "0.65*小测成绩 + 0.35*任务成绩",
+        "metrics": ["quiz_score", "task_score"],
+        "weights": {"quiz_score": 0.65, "task_score": 0.35},
+    },
+    "resource_preference": {
+        "source_detail": "根据资源使用情况与学习时长，判断资源偏好是否稳定。",
+        "formula_text": "0.55*阶段完成度 + 0.45*阶段学习时长",
+        "metrics": ["completion", "study_duration"],
+        "weights": {"completion": 0.55, "study_duration": 0.45},
+    },
+    "strategy_preference": {
+        "source_detail": "通过任务推进、资源使用和按时完成情况判断学习策略。",
+        "formula_text": "0.50*任务完成率 + 0.25*资源主动使用度 + 0.25*按时提交率",
+        "metrics": ["task_completion", "resource_initiative", "on_time_rate"],
+        "weights": {"task_completion": 0.50, "resource_initiative": 0.25, "on_time_rate": 0.25},
+    },
+    "text_discussion_interaction": {
+        "source_detail": "通过课堂参与与文本作业表现判断讨论/文本型互动倾向。",
+        "formula_text": "0.50*课堂参与度 + 0.50*作业成绩",
+        "metrics": ["participation", "assignment_score"],
+        "weights": {"participation": 0.50, "assignment_score": 0.50},
+    },
+    "practice_experience_interaction": {
+        "source_detail": "通过任务成绩与任务完成率判断实践/体验型互动倾向。",
+        "formula_text": "0.55*任务成绩 + 0.45*任务完成率",
+        "metrics": ["task_score", "task_completion"],
+        "weights": {"task_score": 0.55, "task_completion": 0.45},
+    },
+    "academic_background": {
+        "source_detail": "通过问卷/基础资料补充，不参与阶段自动估算。",
+        "formula_text": "学生补充或教师补充",
+        "metrics": [],
+        "weights": {},
+    },
+    "interest_type": {
+        "source_detail": "通过问卷或标签补充，不参与阶段自动估算。",
+        "formula_text": "学生补充或教师补充",
+        "metrics": [],
+        "weights": {},
+    },
+    "intelligence_advantage": {
+        "source_detail": "通过问卷和教师观察综合补充，不参与阶段自动估算。",
+        "formula_text": "学生补充 + 教师观察",
+        "metrics": [],
+        "weights": {},
+    },
+}
+
+
+def _aggregate_stage_portrait_summary(
+    history: list[StageEvaluationSnapshot],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    if not history:
+        return [], [], {"stage_count": 0, "progress_stages": 0, "steady_stages": 0, "regress_stages": 0, "final_score_reference": 0.0}
+
+    dimension_bucket: dict[str, list[float]] = {}
+    indicator_bucket: dict[str, dict[str, Any]] = {}
+    trend_counter = Counter((item.trend_label or "持平") for item in history)
+    scores = [float(item.dynamic_score or 0.0) for item in history]
+
+    for item in history:
+        dimension_rows = _json_load(item.dimension_summary_json, {}).get("portrait_dimensions", [])
+        for row in dimension_rows:
+            title = str(row.get("dimension_title") or "").strip()
+            score = row.get("score")
+            available = bool(row.get("available"))
+            if not title or not available or score is None:
+                continue
+            dimension_bucket.setdefault(title, []).append(float(score))
+
+        indicator_rows = _json_load(item.indicator_summary_json, {}).get("portrait_indicators", [])
+        for row in indicator_rows:
+            title = str(row.get("title") or "").strip()
+            score = row.get("score")
+            available = bool(row.get("available"))
+            if not title or not available or score is None:
+                continue
+            item_bucket = indicator_bucket.setdefault(
+                title,
+                {
+                    "title": title,
+                    "scores": [],
+                    "source_type": row.get("source_type", "auto"),
+                    "weight": float(row.get("weight") or 0.0),
+                    "score_source": row.get("score_source"),
+                    "formula_text": row.get("formula_text"),
+                    "source_detail": row.get("source_detail"),
+                },
+            )
+            item_bucket["scores"].append(float(score))
+
+    final_dimensions = [
+        {
+            "dimension_title": title,
+            "score": _clamp01(mean(values)) if values else None,
+            "available": bool(values),
+        }
+        for title, values in dimension_bucket.items()
+    ]
+    final_dimensions.sort(key=lambda item: item["dimension_title"])
+
+    final_indicators = []
+    for _, payload in indicator_bucket.items():
+        scores_list = payload.pop("scores", [])
+        final_indicators.append(
+            {
+                **payload,
+                "score": _clamp01(mean(scores_list)) if scores_list else None,
+                "available": bool(scores_list),
+            }
+        )
+    final_indicators.sort(key=lambda item: item["title"])
+
+    latest_score = scores[-1] if scores else 0.0
+    avg_score = mean(scores) if scores else 0.0
+    final_score_reference = _clamp01(0.6 * avg_score + 0.4 * latest_score)
+    term_summary = {
+        "stage_count": len(history),
+        "progress_stages": int(trend_counter.get("进步", 0)),
+        "steady_stages": int(trend_counter.get("持平", 0)),
+        "regress_stages": int(trend_counter.get("退步", 0)),
+        "avg_dynamic_score": _clamp01(avg_score),
+        "latest_dynamic_score": _clamp01(latest_score),
+        "final_score_reference": final_score_reference,
+    }
+    return final_dimensions, final_indicators, term_summary
+
 
 def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
@@ -327,27 +531,33 @@ def _course_indicator_rows(session: Session, *, course_id: int) -> list[dict[str
 
 
 def _infer_indicator_score(code: str, *, metrics: dict[str, float]) -> float | None:
-    mapping = {
-        "creative_thinking": lambda m: _clamp01(0.45 * m["task_completion"] + 0.3 * m["resource_initiative"] + 0.25 * m["participation"]),
-        "cross_context_transfer": lambda m: _clamp01(0.4 * m["task_score"] + 0.3 * m["quiz_score"] + 0.3 * m["stage_mastery"]),
-        "value_judgement": lambda m: None,
-        "collaboration": lambda m: _clamp01(0.45 * m["participation"] + 0.3 * m["task_completion"] + 0.25 * m["attendance_rate"]),
-        "motivation": lambda m: _clamp01(0.45 * m["engagement_base"] + 0.35 * m["completion"] + 0.2 * m["continuity"]),
-        "self_regulation": lambda m: _clamp01(0.4 * m["on_time_rate"] + 0.35 * m["continuity"] + 0.25 * m["resource_initiative"]),
-        "cross_discipline_link": lambda m: _clamp01(0.55 * m["stage_mastery"] + 0.45 * m["resource_initiative"]),
-        "discipline_level": lambda m: _clamp01(0.6 * m["achievement_base"] + 0.4 * m["stage_mastery"]),
-        "language_mastery": lambda m: _clamp01(0.65 * m["assignment_score"] + 0.35 * m["quiz_score"]),
-        "logic_mastery": lambda m: _clamp01(0.65 * m["quiz_score"] + 0.35 * m["task_score"]),
-        "resource_preference": lambda m: _clamp01(0.55 * m["completion"] + 0.45 * m["study_duration"]),
-        "strategy_preference": lambda m: _clamp01(0.5 * m["task_completion"] + 0.25 * m["resource_initiative"] + 0.25 * m["on_time_rate"]),
-        "text_discussion_interaction": lambda m: _clamp01(0.5 * m["participation"] + 0.5 * m["assignment_score"]),
-        "practice_experience_interaction": lambda m: _clamp01(0.55 * m["task_score"] + 0.45 * m["task_completion"]),
-        "academic_background": lambda m: None,
-        "interest_type": lambda m: None,
-        "intelligence_advantage": lambda m: None,
+    rules = INDICATOR_RULES.get(code)
+    if not rules:
+        return None
+    metric_weights = rules.get("weights", {})
+    if not metric_weights:
+        return None
+    return _clamp01(sum(float(metric_weights.get(name, 0.0)) * float(metrics.get(name, 0.0)) for name in metric_weights))
+
+
+def _indicator_rule_payload(code: str, metrics: dict[str, float]) -> dict[str, Any]:
+    rule = INDICATOR_RULES.get(code, {})
+    metric_names = list(rule.get("metrics", []))
+    evidence_rows = [
+        {
+            "metric_key": metric_name,
+            "metric_label": METRIC_LABELS.get(metric_name, metric_name),
+            "metric_value": round(float(metrics.get(metric_name, 0.0)), 4),
+            "metric_percent": round(float(metrics.get(metric_name, 0.0)) * 100, 1),
+            "weight": float(rule.get("weights", {}).get(metric_name, 0.0)),
+        }
+        for metric_name in metric_names
+    ]
+    return {
+        "formula_text": rule.get("formula_text", "系统按阶段规则自动估算"),
+        "source_detail": rule.get("source_detail", "系统根据阶段数据和补充信息综合判断"),
+        "evidence_metrics": evidence_rows,
     }
-    fn = mapping.get(code)
-    return fn(metrics) if fn is not None else None
 
 
 def _build_portrait_indicator_summary(
@@ -392,10 +602,14 @@ def _build_portrait_indicator_summary(
         questionnaire_input = questionnaire_inputs.get(int(indicator.id))
         if teacher_input is not None:
             score = _clamp01(float(teacher_input.score))
+            score_source = "teacher_input"
         elif questionnaire_input is not None:
             score = _clamp01(float(questionnaire_input.score))
+            score_source = "questionnaire_input"
         else:
             score = _infer_indicator_score(indicator.code, metrics=metrics)
+            score_source = "stage_inference" if score is not None else "missing"
+        rule_payload = _indicator_rule_payload(indicator.code, metrics)
         available = score is not None
         indicator_items.append(
             {
@@ -410,6 +624,10 @@ def _build_portrait_indicator_summary(
                 "available": available,
                 "score": None if score is None else float(score),
                 "note": teacher_input.note if teacher_input is not None else questionnaire_input.note if questionnaire_input is not None else "",
+                "score_source": score_source,
+                "formula_text": rule_payload["formula_text"],
+                "source_detail": rule_payload["source_detail"],
+                "evidence_metrics": rule_payload["evidence_metrics"],
             }
         )
         bucket = dimension_bucket.setdefault(
@@ -800,6 +1018,7 @@ def sync_profile_snapshot_from_stage(
     if latest is None:
         return None
     history = get_stage_snapshot_trend(session, user_id=user_id, subject=subject, grade=grade, limit=5)
+    ordered_history = list(reversed(history))
     scores = [float(item.dynamic_score) for item in reversed(history)]
     if len(scores) <= 1:
         stability = 0.7
@@ -816,6 +1035,15 @@ def sync_profile_snapshot_from_stage(
     ).first()
     persona_type = override.persona_type if override is not None else latest.persona_type
     override_source = "manual" if override is not None else "auto"
+    final_portrait_dimensions, final_portrait_indicators, term_summary = _aggregate_stage_portrait_summary(ordered_history)
+    focus_dimensions = [item["dimension_title"] for item in final_portrait_dimensions if item.get("score") is not None and float(item["score"]) >= 0.6][:2]
+    final_reason_summary = (
+        f"共分析 {term_summary['stage_count']} 个阶段；"
+        f"进步 {term_summary['progress_stages']} 次，持平 {term_summary['steady_stages']} 次，回落 {term_summary['regress_stages']} 次；"
+        f"期末参考分 {round(float(term_summary['final_score_reference']) * 100)}%"
+    )
+    if focus_dimensions:
+        final_reason_summary += f"；主要优势：{'、'.join(focus_dimensions)}"
 
     snapshot = LearnerProfileSnapshot(
         user_id=user_id,
@@ -836,6 +1064,12 @@ def sync_profile_snapshot_from_stage(
             {
                 "portrait_dimensions": _json_load(latest.dimension_summary_json, {}).get("portrait_dimensions", []),
                 "portrait_indicators": _json_load(latest.indicator_summary_json, {}).get("portrait_indicators", []),
+                "final_portrait_dimensions": final_portrait_dimensions,
+                "final_portrait_indicators": final_portrait_indicators,
+                "term_summary": {
+                    **term_summary,
+                    "final_reason_summary": final_reason_summary,
+                },
             }
         ),
         updated_at=datetime.utcnow(),
@@ -857,12 +1091,13 @@ def recalculate_stage_snapshots_for_stage(
     stage = session.get(CourseStage, stage_id)
     if stage is None:
         return []
+    affected: set[int] = {int(uid) for uid in (user_ids or []) if uid is not None}
     stmt = select(StageImportRecord.user_id).where(StageImportRecord.stage_id == stage_id)
     if user_ids:
         stmt = stmt.where(StageImportRecord.user_id.in_(user_ids))
-    affected = sorted({int(row) for row in session.exec(stmt).all() if row is not None})
+    affected.update({int(row) for row in session.exec(stmt).all() if row is not None})
     snapshots: list[StageEvaluationSnapshot] = []
-    for uid in affected:
+    for uid in sorted(affected):
         snapshot = recalculate_stage_snapshot(session, user_id=uid, stage_id=stage_id, persist=persist)
         if snapshot is not None:
             snapshots.append(snapshot)

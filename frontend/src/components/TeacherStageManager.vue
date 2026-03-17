@@ -21,6 +21,9 @@ const props = defineProps<{
   subject: string;
   grade: string;
 }>();
+const emit = defineEmits<{
+  (e: "stage-changed"): void;
+}>();
 
 const loading = ref(false);
 const stages = ref<Stage[]>([]);
@@ -97,20 +100,34 @@ async function save() {
       ElMessage.success("阶段已创建");
     }
     dialogOpen.value = false;
-    await load();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "保存阶段失败");
+    return;
   }
+  try {
+    await load();
+  } catch {
+    ElMessage.warning("阶段已保存，但列表刷新失败，请点击“刷新”");
+  }
+  window.dispatchEvent(new CustomEvent("da:teacher-stage-changed", { detail: { courseId: props.courseId } }));
+  emit("stage-changed");
 }
 
 async function remove(row: Stage) {
   try {
     await api.delete(`/stages/${row.id}`);
     ElMessage.success("阶段已删除");
-    await load();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "删除阶段失败");
+    return;
   }
+  try {
+    await load();
+  } catch {
+    ElMessage.warning("阶段已删除，但列表刷新失败，请点击“刷新”");
+  }
+  window.dispatchEvent(new CustomEvent("da:teacher-stage-changed", { detail: { courseId: props.courseId } }));
+  emit("stage-changed");
 }
 
 watch(
@@ -174,10 +191,22 @@ watch(
           <el-input-number v-model="form.stage_order" :min="1" :max="99" />
         </el-form-item>
         <el-form-item label="开始日期">
-          <el-date-picker v-model="form.starts_at" type="date" value-format="YYYY-MM-DD" placeholder="选择开始日期" />
+          <el-date-picker
+            v-model="form.starts_at"
+            type="date"
+            value-format="YYYY-MM-DD"
+            format="YYYY年MM月DD日"
+            placeholder="选择开始日期"
+          />
         </el-form-item>
         <el-form-item label="结束日期">
-          <el-date-picker v-model="form.ends_at" type="date" value-format="YYYY-MM-DD" placeholder="选择结束日期" />
+          <el-date-picker
+            v-model="form.ends_at"
+            type="date"
+            value-format="YYYY-MM-DD"
+            format="YYYY年MM月DD日"
+            placeholder="选择结束日期"
+          />
         </el-form-item>
         <el-form-item label="阶段说明">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="说明该阶段关注的问题、任务或能力目标" />

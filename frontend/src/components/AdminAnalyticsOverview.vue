@@ -205,8 +205,8 @@ watch(
 
 .metric-value {
   margin-top: 6px;
-  font-size: 28px;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 600;
   color: var(--app-ink);
 }
 
@@ -224,9 +224,9 @@ watch(
 .distribution-item,
 .stage-summary-item {
   padding: 12px 14px;
-  border-radius: 14px;
-  background: #f7fafc;
-  border: 1px solid #e1e8ef;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e1eaf1;
 }
 
 .distribution-item {
@@ -257,8 +257,8 @@ watch(
 
 .stage-summary-item__title {
   margin-top: 4px;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--app-ink);
 }
 
@@ -275,7 +275,7 @@ watch(
   padding: 4px 8px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .trend-pill--up {

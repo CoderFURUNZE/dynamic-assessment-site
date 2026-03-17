@@ -80,6 +80,9 @@ class ProfileOut(BaseModel):
     teacher_feedback: TeacherFeedbackOut | None = None
     portrait_dimensions: list[dict] = []
     portrait_indicators: list[dict] = []
+    final_portrait_dimensions: list[dict] = []
+    final_portrait_indicators: list[dict] = []
+    term_summary: dict = {}
 
 
 class MasteryMapItem(BaseModel):

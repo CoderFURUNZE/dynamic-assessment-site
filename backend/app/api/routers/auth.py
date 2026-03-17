@@ -33,8 +33,8 @@ def _normalize_phone(phone: str | None) -> str | None:
 
 
 def _validate_password(password: str):
-    # Password format validation disabled for testing.
-    return
+    if len(password or "") < 6:
+        raise HTTPException(status_code=400, detail="密码长度至少 6 位")
 
 
 @router.post("/register")
@@ -98,6 +98,8 @@ def login(payload: LoginRequest, session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.username == payload.username)).first()
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Invalid username or password")
+    if not bool(user.active):
+        raise HTTPException(status_code=403, detail="账号已禁用")
     token = create_access_token(subject=user.username, role=user.role.value)
     log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return Token(access_token=token, role=user.role.value)
@@ -110,6 +112,8 @@ def login_student(payload: LoginRequest, session: Session = Depends(get_session)
         raise HTTPException(status_code=400, detail="Invalid username or password")
     if user.role != UserRole.student:
         raise HTTPException(status_code=403, detail="Not a student account")
+    if not bool(user.active):
+        raise HTTPException(status_code=403, detail="账号已禁用")
     token = create_access_token(subject=user.username, role=user.role.value)
     log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return Token(access_token=token, role=user.role.value)
@@ -122,6 +126,8 @@ def login_admin(payload: LoginRequest, session: Session = Depends(get_session)):
         raise HTTPException(status_code=400, detail="Invalid username or password")
     if user.role not in {UserRole.admin, UserRole.teacher}:
         raise HTTPException(status_code=403, detail="Not an admin/teacher account")
+    if not bool(user.active):
+        raise HTTPException(status_code=403, detail="账号已禁用")
     token = create_access_token(subject=user.username, role=user.role.value)
     log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return Token(access_token=token, role=user.role.value)
@@ -198,6 +204,7 @@ def me(user=Depends(get_current_user)):
         "id": user.id,
         "username": user.username,
         "role": user.role.value,
+        "active": bool(user.active),
         "full_name": user.full_name,
         "student_no": user.student_no,
         "class_name": user.class_name,

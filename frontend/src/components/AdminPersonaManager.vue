@@ -4,8 +4,9 @@ import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { getRole } from "../token";
 
-const props = withDefaults(defineProps<{ subject: string; grade: string; showStudentDetailAction?: boolean }>(), {
+const props = withDefaults(defineProps<{ subject: string; grade: string; showStudentDetailAction?: boolean; readonly?: boolean }>(), {
   showStudentDetailAction: false,
+  readonly: false,
 });
 const emit = defineEmits<{
   (e: "view-student", userId: number): void;
@@ -72,7 +73,8 @@ const dimensionOptions = [
 ];
 
 const riskyCount = computed(() => students.value.filter((item) => item.risk_level === "风险").length);
-const canManage = computed(() => getRole() === "admin");
+const canManage = computed(() => getRole() === "admin" && !props.readonly);
+const isReadonlyView = computed(() => !canManage.value);
 
 async function loadRules() {
   const res = await api.get(
@@ -193,7 +195,7 @@ watch(
 
 <template>
   <div class="persona-shell" v-loading="loading">
-    <el-card class="panel-card" shadow="never">
+    <el-card v-if="!isReadonlyView" class="panel-card" shadow="never">
       <template #header>
         <div class="persona-header">
           <div>
@@ -282,6 +284,34 @@ watch(
       </div>
     </el-card>
 
+    <el-card v-else class="panel-card" shadow="never">
+      <template #header>
+        <div class="persona-header">
+          <div>
+            <div class="persona-title">学习者画像分析</div>
+            <div class="persona-subtitle">教师端为只读分析模式：只查看画像结果，不维护规则。</div>
+          </div>
+          <div class="persona-actions">
+            <el-button size="small" @click="reloadAll">刷新</el-button>
+          </div>
+        </div>
+      </template>
+      <div class="persona-readonly">
+        <el-alert
+          type="info"
+          :closable="false"
+          title="画像规则由管理员维护。教师端只看学生画像、阶段变化和判定依据。"
+        />
+        <div class="persona-readonly__grid">
+          <div v-for="item in dimensionOptions" :key="item.key" class="persona-readonly__card">
+            <strong>{{ item.label }}</strong>
+            <span>启用：{{ stageDimensions[item.key].enabled ? "是" : "否" }}</span>
+            <span>权重：{{ Number(stageDimensions[item.key].weight || 0).toFixed(2) }}</span>
+          </div>
+        </div>
+      </div>
+    </el-card>
+
     <el-card class="panel-card" shadow="never">
       <template #header>
         <div class="persona-summary">
@@ -313,7 +343,7 @@ watch(
             <el-button size="small" text type="primary" @click="emit('view-student', row.user_id)">查看</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="人工覆盖" width="250">
+        <el-table-column v-if="canManage" label="人工覆盖" width="250">
           <template #default="{ row }">
             <div class="override-cell">
               <el-select v-model="selectedOverride[row.user_id]" size="small" style="width: 140px">
@@ -431,6 +461,31 @@ watch(
 .dimension-card__bottom {
   font-size: 12px;
   color: #5c7592;
+}
+
+.persona-readonly {
+  display: grid;
+  gap: 14px;
+}
+
+.persona-readonly__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.persona-readonly__card {
+  border: 1px solid #d8e6f2;
+  border-radius: 14px;
+  background: #f7fbff;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+  color: #5e7390;
+}
+
+.persona-readonly__card strong {
+  color: #314865;
 }
 
 .override-cell {

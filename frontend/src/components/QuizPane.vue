@@ -398,27 +398,35 @@ watch(
 </script>
 
 <template>
-  <el-card>
-    <template #header>练习题（选择 + 填空）</template>
-    <div v-if="!kpId">
+  <el-card class="quiz-card">
+    <template #header>
+      <div class="quiz-card__header">
+        <div>
+          <div class="quiz-card__eyebrow">Practice</div>
+          <div class="quiz-card__title">练习题</div>
+        </div>
+        <div class="quiz-card__caption">聚焦当前知识点的作答、错题回练与复习节奏。</div>
+      </div>
+    </template>
+    <div v-if="!kpId" class="empty-state">
       <el-text type="info">请选择知识点后加载题目</el-text>
     </div>
     <div v-else-if="loading">
       <el-skeleton :rows="4" animated />
     </div>
     <div v-else-if="preview">
-      <div v-if="questions.length === 0">
+      <div v-if="questions.length === 0" class="empty-state">
         <el-text type="info">暂无题目</el-text>
       </div>
-      <div v-else style="display: grid; gap: 12px">
-        <div v-for="(q, i) in questions" :key="q.id">
-          <div style="font-weight: 600; margin-bottom: 6px">Q{{ i + 1 }}. {{ q.prompt }}</div>
-          <div v-if="q.type === 'mcq'" style="display: grid; gap: 4px">
-            <div v-for="(opt, j) in q.options" :key="j">
+      <div class="preview-list">
+        <div v-for="(q, i) in questions" :key="q.id" class="question-item">
+          <div class="question-prompt">Q{{ i + 1 }}. {{ q.prompt }}</div>
+          <div v-if="q.type === 'mcq'" class="question-options">
+            <div v-for="(opt, j) in q.options" :key="j" class="option-item">
               {{ String.fromCharCode(65 + j) }}. {{ opt }}
             </div>
           </div>
-          <div style="margin-top: 6px">
+          <div class="answer-info">
             <el-text type="success">答案：{{ q.answer ?? "" }}</el-text>
           </div>
         </div>
@@ -429,150 +437,102 @@ watch(
         <el-tab-pane label="作答" name="practice">
           <div v-if="done">
             <el-result icon="success" title="已完成本知识点练习" sub-title="可点击“推荐下一步”查看建议" />
-            <div style="margin-top: 10px; display: flex; gap: 8px">
+            <div class="action-row">
               <el-button type="primary" @click="resetPractice">重做</el-button>
             </div>
           </div>
-          <div v-else-if="current">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px">
-              <div style="font-weight: 600">Q{{ attemptedQuestions + 1 }} / {{ totalQuestions }}</div>
-              <div style="display: flex; gap: 10px; align-items: center">
-                <el-text v-if="difficultyRange" type="info">难度区间 {{ difficultyRange }}</el-text>
+          <div v-else-if="current" class="question-container">
+            <div class="question-header">
+              <div class="question-counter">Q{{ attemptedQuestions + 1 }} / {{ totalQuestions }}</div>
+              <div class="question-meta">
+                <el-text v-if="difficultyRange" type="info">{{ difficultyRange }}</el-text>
                 <el-tag size="small" :type="modelUsed ? 'success' : 'info'">
                   {{ modelUsed ? "模型推荐" : "规则推荐" }}
                 </el-tag>
-                <el-text v-if="reason" type="info" style="font-size: 12px">({{ reason }})</el-text>
-                <el-text v-if="predictedCorrect !== null" type="info" style="font-size: 12px">
-                  预测正确率 {{ Math.round(predictedCorrect * 100) }}%
-                </el-text>
               </div>
             </div>
-            <div
-              v-if="wrongPractice.active"
-              style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px"
-            >
+            <div class="question-surface">
+            <div v-if="wrongPractice.active" class="wrong-practice-indicator">
               <el-tag type="warning">错题重练中</el-tag>
               <el-text type="info">
                 {{ wrongPractice.index + 1 }} / {{ wrongPractice.queue.length }}
               </el-text>
-              <el-button size="small" type="default" @click="stopWrongPractice">退出错题</el-button>
+              <el-button size="small" type="default" @click="stopWrongPractice">退出</el-button>
             </div>
-            <div style="font-weight: 600; margin-bottom: 8px">{{ current.prompt }}</div>
-            <div v-if="current.type === 'mcq'">
+            <div class="question-prompt">{{ current.prompt }}</div>
+            <div v-if="current.type === 'mcq'" class="question-options">
               <el-radio-group v-model="selected">
-                <el-radio v-for="(opt, i) in current.options" :key="i" :label="String.fromCharCode(65 + i)">
+                <el-radio v-for="(opt, i) in current.options" :key="i" :label="String.fromCharCode(65 + i)" class="option-item">
                   {{ String.fromCharCode(65 + i) }}. {{ opt }}
                 </el-radio>
               </el-radio-group>
             </div>
-            <div v-else>
+            <div v-else class="blank-answer-wrap">
               <el-input v-model="blankAnswer" placeholder="输入你的答案" />
             </div>
-            <div style="margin-top: 10px">
+            <div class="self-report-container">
+              <div class="self-report-label">自信度：</div>
               <el-radio-group v-model="selfReport">
                 <el-radio label="guess">蒙的</el-radio>
                 <el-radio label="sure">确定</el-radio>
               </el-radio-group>
             </div>
-            <div v-if="lastResult" style="margin-top: 10px">
+            <div v-if="lastResult" class="result-container">
               <el-alert
                 :type="lastResult.correct ? 'success' : 'warning'"
                 :title="lastResult.correct ? '回答正确' : '回答错误'"
                 :description="lastResult.explanation || '暂无解析'"
                 show-icon
               />
-              <div style="margin-top: 10px; display: flex; gap: 8px">
+              <div class="action-row">
                 <el-button type="primary" @click="nextAfterAnswer">
                   {{ wrongPractice.active ? "继续错题" : "下一题" }}
                 </el-button>
               </div>
             </div>
-            <div v-else style="margin-top: 10px">
+            <div v-else class="action-row">
               <el-button type="primary" @click="submit">提交</el-button>
+            </div>
             </div>
           </div>
         </el-tab-pane>
-        <el-tab-pane label="做题记录" name="history">
+        <el-tab-pane label="记录" name="history">
           <div v-if="historyLoading">
             <el-skeleton :rows="4" animated />
           </div>
           <div v-else>
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
+            <div class="history-header">
               <el-button type="primary" plain size="small" @click="loadHistory">刷新</el-button>
               <el-button size="small" type="success" :href="exportUrl" target="_blank">导出 CSV</el-button>
             </div>
 
-            <div style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 10px">
-              <el-card shadow="never">
-                <div style="font-size: 12px; color: #666">总题数</div>
-                <div style="font-weight: 600; font-size: 20px">{{ statsDetail.total }}</div>
+            <div class="stats-grid">
+              <el-card shadow="never" class="stat-card">
+                <div class="stat-label">总题数</div>
+                <div class="stat-value">{{ statsDetail.total }}</div>
               </el-card>
-              <el-card shadow="never">
-                <div style="font-size: 12px; color: #666">正确</div>
-                <div style="font-weight: 600; font-size: 20px">{{ statsDetail.correct }}</div>
+              <el-card shadow="never" class="stat-card">
+                <div class="stat-label">正确</div>
+                <div class="stat-value">{{ statsDetail.correct }}</div>
               </el-card>
-              <el-card shadow="never">
-                <div style="font-size: 12px; color: #666">错误</div>
-                <div style="font-weight: 600; font-size: 20px">{{ statsDetail.incorrect }}</div>
+              <el-card shadow="never" class="stat-card">
+                <div class="stat-label">错误</div>
+                <div class="stat-value">{{ statsDetail.incorrect }}</div>
               </el-card>
-              <el-card shadow="never">
-                <div style="font-size: 12px; color: #666">正确率</div>
-                <div style="font-weight: 600; font-size: 20px">{{ Math.round((statsDetail.accuracy || 0) * 100) }}%</div>
-              </el-card>
-            </div>
-
-            <div style="display: flex; gap: 16px; flex-wrap: wrap">
-              <el-card shadow="never" style="width: 240px">
-                <div style="font-weight: 600; margin-bottom: 8px">正确率</div>
-                <div
-                  style="width: 140px; height: 140px; border-radius: 50%; margin: 0 auto; background: #f3f3f3; position: relative"
-                  :style="{ background: `conic-gradient(#5fbf7a 0 ${Math.round(correctRatio * 100)}%, #f2b5b5 ${Math.round(correctRatio * 100)}% 100%)` }"
-                />
-                <div style="text-align: center; margin-top: 8px">
-                  <div style="font-weight: 600">{{ Math.round(correctRatio * 100) }}%</div>
-                  <div style="font-size: 12px; color: #666">正确 {{ historyStats.correct }} / 错误 {{ historyStats.incorrect }}</div>
-                </div>
-              </el-card>
-              <el-card shadow="never" style="flex: 1; min-width: 260px">
-                <div style="font-weight: 600; margin-bottom: 8px">最近 10 次作答</div>
-                <div style="display: flex; gap: 6px; align-items: flex-end; height: 120px">
-                  <div
-                    v-for="item in recentItems"
-                    :key="item.id"
-                    :title="item.correct ? '正确' : '错误'"
-                    :style="{
-                      height: item.correct ? '100%' : '40%',
-                      width: '16px',
-                      background: item.correct ? '#5fbf7a' : '#f2b5b5',
-                      borderRadius: '6px',
-                    }"
-                  />
-                </div>
-                <div style="font-size: 12px; color: #666; margin-top: 6px">绿色=正确，粉色=错误</div>
+              <el-card shadow="never" class="stat-card">
+                <div class="stat-label">正确率</div>
+                <div class="stat-value">{{ Math.round((statsDetail.accuracy || 0) * 100) }}%</div>
               </el-card>
             </div>
 
-            <div v-if="statsDetail.daily?.length" style="margin-top: 12px">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px">
-                <div style="font-weight: 600">趋势统计</div>
+            <div v-if="statsDetail.daily?.length" class="trend-container section-card">
+              <div class="section-header">
+                <div class="section-title">趋势统计</div>
                 <el-select v-model="trendMode" size="small" style="width: 120px">
                   <el-option label="按天" value="daily" />
                   <el-option label="按周" value="weekly" />
                   <el-option label="按月" value="monthly" />
                 </el-select>
-              </div>
-              <div style="display: flex; gap: 6px; align-items: flex-end; height: 120px; margin-bottom: 6px">
-                <div
-                  v-for="item in trendItems"
-                  :key="item.date"
-                  :title="`${item.date} 正确率 ${Math.round((item.accuracy || 0) * 100)}%`"
-                  :style="{
-                    height: `${Math.max(6, Math.round((item.accuracy || 0) * 100))}%`,
-                    width: '18px',
-                    background: '#5fbf7a',
-                    borderRadius: '6px',
-                  }"
-                />
               </div>
               <el-table :data="trendItems" size="small" style="width: 100%" max-height="220">
                 <el-table-column prop="date" label="时间" width="120" />
@@ -586,54 +546,36 @@ watch(
               </el-table>
             </div>
 
-            <div style="margin-top: 12px">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px">
-                <div style="font-weight: 600">错题</div>
-                <el-text type="info">支持分页与时间筛选</el-text>
+            <div class="wrong-container section-card">
+              <div class="section-header">
+                <div class="section-title">错题</div>
               </div>
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
-                <el-select v-model="wrongDays" size="small" style="width: 140px" @change="loadWrong">
+              <div class="filter-controls">
+                <el-select v-model="wrongDays" size="small" style="width: 120px" @change="loadWrong">
                   <el-option label="全部时间" :value="0" />
                   <el-option label="近7天" :value="7" />
                   <el-option label="近14天" :value="14" />
                   <el-option label="近30天" :value="30" />
-                  <el-option label="近90天" :value="90" />
                 </el-select>
-                <el-select v-model="wrongType" size="small" style="width: 120px">
+                <el-select v-model="wrongType" size="small" style="width: 100px">
                   <el-option label="全部类型" value="" />
                   <el-option label="选择题" value="mcq" />
                   <el-option label="填空题" value="blank" />
                 </el-select>
-                <el-select v-model="wrongOrder" size="small" style="width: 140px">
-                  <el-option label="按时间" value="recent" />
-                  <el-option label="难度升序" value="difficulty_asc" />
-                  <el-option label="难度降序" value="difficulty_desc" />
-                </el-select>
-                <el-input-number v-model="wrongMinDiff" :min="0" :max="1" :step="0.1" size="small" style="width: 120px" placeholder="最小难度" />
-                <el-input-number v-model="wrongMaxDiff" :min="0" :max="1" :step="0.1" size="small" style="width: 120px" placeholder="最大难度" />
-                <el-button size="small" type="primary" @click="startWrongPractice">一键重练全部错题</el-button>
+                <el-button size="small" type="primary" @click="startWrongPractice">重练错题</el-button>
               </div>
               <el-table :data="wrongItems" size="small" style="width: 100%" max-height="240" v-loading="wrongLoading" empty-text="暂无错题">
                 <el-table-column prop="created_at" label="时间" width="160" />
                 <el-table-column prop="prompt" label="题干" />
-                <el-table-column label="归因" width="160">
-                  <template #default="{ row }">
-                    <div style="display: flex; flex-wrap: wrap; gap: 4px">
-                      <el-tag v-for="(tag, i) in (row.tags || [])" :key="i" size="small" type="info">
-                        {{ tag }}
-                      </el-tag>
-                    </div>
-                  </template>
-                </el-table-column>
                 <el-table-column prop="difficulty" label="难度" width="80" />
                 <el-table-column prop="type" label="类型" width="80" />
-                <el-table-column width="120" label="操作">
+                <el-table-column width="100" label="操作">
                   <template #default="{ row }">
                     <el-button size="small" type="primary" @click="redoWrong(row)">重做</el-button>
                   </template>
                 </el-table-column>
               </el-table>
-              <div style="display: flex; justify-content: flex-end; margin-top: 8px">
+              <div class="pagination-container">
                 <el-pagination
                   background
                   layout="prev, pager, next"
@@ -645,10 +587,10 @@ watch(
               </div>
             </div>
 
-            <div style="margin-top: 12px">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px">
-                <div style="font-weight: 600">间隔复习</div>
-                <el-text type="info">未来 7 天待复习 {{ reviewTotal }}，已到期 {{ reviewDue }}</el-text>
+            <div class="review-container section-card">
+              <div class="section-header">
+                <div class="section-title">复习</div>
+                <el-text type="info">待复习 {{ reviewTotal }}，已到期 {{ reviewDue }}</el-text>
                 <el-button size="small" @click="loadReview" :loading="reviewLoading">刷新</el-button>
               </div>
               <el-table
@@ -662,31 +604,11 @@ watch(
                 <el-table-column prop="due_at" label="到期时间" width="180" />
                 <el-table-column prop="prompt" label="题干" />
                 <el-table-column prop="difficulty" label="难度" width="80" />
-                <el-table-column prop="interval_days" label="间隔天数" width="90" />
-                <el-table-column prop="last_result" label="上次结果" width="90" />
+                <el-table-column prop="interval_days" label="间隔" width="80" />
                 <el-table-column label="状态" width="80">
                   <template #default="{ row }">
                     <el-tag size="small" :type="row.overdue ? 'danger' : 'info'">
                       {{ row.overdue ? "已到期" : "待复习" }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </div>
-
-            <div style="margin-top: 12px">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px">
-                <div style="font-weight: 600">全部作答记录</div>
-                <el-text type="info">最多显示 50 条</el-text>
-              </div>
-              <el-table :data="historyItems" size="small" style="width: 100%" max-height="260">
-                <el-table-column prop="created_at" label="时间" width="180" />
-                <el-table-column prop="prompt" label="题干" />
-                <el-table-column prop="difficulty" label="难度" width="80" />
-                <el-table-column label="结果" width="80">
-                  <template #default="{ row }">
-                    <el-tag size="small" :type="row.correct ? 'success' : 'danger'">
-                      {{ row.correct ? "正确" : "错误" }}
                     </el-tag>
                   </template>
                 </el-table-column>
@@ -698,3 +620,350 @@ watch(
     </div>
   </el-card>
 </template>
+
+<style scoped>
+.quiz-card {
+  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow);
+  background: var(--app-card);
+  overflow: hidden;
+}
+
+.quiz-card__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.quiz-card__eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: #6d87ac;
+}
+
+.quiz-card__title {
+  margin-top: 8px;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #22395b;
+}
+
+.quiz-card__caption {
+  max-width: 360px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #667d9b;
+}
+
+.el-card__header {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--app-ink);
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-bg-alt);
+}
+
+.el-card__body {
+  padding: 20px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.preview-list {
+  display: grid;
+  gap: 16px;
+}
+
+.question-container {
+  display: grid;
+  gap: 16px;
+}
+
+.question-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.question-counter {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #f4f7fb;
+  border: 1px solid #d7e4fb;
+  font-weight: 800;
+  color: #365c97;
+  font-size: 13px;
+}
+
+.question-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.question-surface {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border-radius: var(--app-radius);
+  background: #ffffff;
+  border: 1px solid #dce6f4;
+}
+
+.wrong-practice-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px;
+  background: rgba(255, 193, 7, 0.08);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 193, 7, 0.22);
+}
+
+.question-prompt {
+  font-weight: 800;
+  margin-bottom: 4px;
+  color: #243851;
+  line-height: 1.65;
+  font-size: 17px;
+}
+
+.question-options {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.question-options :deep(.el-radio-group) {
+  display: grid;
+  gap: 12px;
+}
+
+.option-item {
+  margin-right: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  border: 1px solid #d8e3f5;
+  background: #ffffff;
+  line-height: 1.6;
+  width: 100%;
+}
+
+.option-item:hover {
+  background: #f8fbff;
+  border-color: rgba(79, 140, 255, 0.22);
+}
+
+.question-options :deep(.el-radio__input.is-checked + .el-radio__label) {
+  color: #24406b;
+  font-weight: 700;
+}
+
+.question-options :deep(.el-radio__label) {
+  white-space: normal;
+  line-height: 1.65;
+}
+
+.blank-answer-wrap {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #d8e3f5;
+  background: #ffffff;
+}
+
+.self-report-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 4px 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fbfcfe;
+  border: 1px solid #dce6f6;
+}
+
+.self-report-label {
+  font-weight: 700;
+  color: #29415f;
+}
+
+.result-container {
+  margin-top: 8px;
+}
+
+.action-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.history-container {
+  display: grid;
+  gap: 20px;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.stats-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  border-radius: 14px;
+  border: 1px solid #dbe6f4;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--app-ink-soft);
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--app-ink);
+}
+
+.trend-container {
+  margin-top: 20px;
+}
+
+.section-card {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid #dde7f4;
+  background: #ffffff;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.section-title {
+  font-weight: 600;
+  color: var(--app-ink);
+  font-size: 14px;
+}
+
+.filter-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 14px;
+  background: #fbfcfe;
+  border-radius: 12px;
+  border: 1px solid #dce6f6;
+}
+
+.wrong-container,
+.review-container {
+  margin-top: 20px;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.question-item {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid #dde7f4;
+  background: #ffffff;
+}
+
+.answer-info {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-border);
+}
+
+@media (max-width: 768px) {
+  .el-card__body {
+    padding: 16px;
+  }
+
+  .quiz-card__header {
+    align-items: flex-start;
+  }
+  
+  .question-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .question-surface,
+  .section-card {
+    padding: 16px;
+  }
+  
+  .question-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .action-row {
+    flex-direction: column;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .filter-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+</style>

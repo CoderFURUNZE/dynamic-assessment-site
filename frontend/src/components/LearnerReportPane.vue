@@ -2,6 +2,20 @@
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import PortraitRadarChart from "./PortraitRadarChart.vue";
+
+const QUESTIONNAIRE_SCORE_OPTIONS = [
+  { label: "很少", value: 0.2 },
+  { label: "偶尔", value: 0.4 },
+  { label: "一般", value: 0.6 },
+  { label: "经常", value: 0.8 },
+  { label: "总是", value: 1.0 },
+];
+
+function questionnaireOptionLabel(score: number | null | undefined) {
+  const option = QUESTIONNAIRE_SCORE_OPTIONS.find((item) => item.value === score);
+  return option?.label ?? "未选择";
+}
 
 type TrendPoint = {
   updated_at: string;
@@ -27,7 +41,17 @@ type StagePoint = {
   risk_level: string;
   reason_summary: string;
   portrait_dimensions?: Array<{ dimension_title: string; score: number | null; available: boolean }>;
-  portrait_indicators?: Array<{ title: string; score: number | null; available: boolean; source_type: string; weight: number }>;
+  portrait_indicators?: Array<{
+    title: string;
+    score: number | null;
+    available: boolean;
+    source_type: string;
+    weight: number;
+    score_source?: string;
+    formula_text?: string;
+    source_detail?: string;
+    evidence_metrics?: Array<{ metric_label: string; metric_percent: number; weight: number }>;
+  }>;
 };
 
 type DimensionConfig = {
@@ -67,25 +91,138 @@ type ProfileData = {
   dimension_config?: DimensionConfig[];
   teacher_feedback?: TeacherFeedback | null;
   portrait_dimensions?: Array<{ dimension_title: string; score: number | null; available: boolean }>;
-  portrait_indicators?: Array<{ title: string; score: number | null; available: boolean; source_type: string; weight: number }>;
+  portrait_indicators?: Array<{
+    title: string;
+    score: number | null;
+    available: boolean;
+    source_type: string;
+    weight: number;
+    score_source?: string;
+    formula_text?: string;
+    source_detail?: string;
+    evidence_metrics?: Array<{ metric_label: string; metric_percent: number; weight: number }>;
+  }>;
+  final_portrait_dimensions?: Array<{ dimension_title: string; score: number | null; available: boolean }>;
+  final_portrait_indicators?: Array<{
+    title: string;
+    score: number | null;
+    available: boolean;
+    source_type: string;
+    weight: number;
+    score_source?: string;
+    formula_text?: string;
+    source_detail?: string;
+  }>;
+  term_summary?: {
+    stage_count?: number;
+    progress_stages?: number;
+    steady_stages?: number;
+    regress_stages?: number;
+    avg_dynamic_score?: number;
+    latest_dynamic_score?: number;
+    final_score_reference?: number;
+    final_reason_summary?: string;
+  };
 };
 
-const props = defineProps<{ subject: string; grade: string }>();
+const props = defineProps<{ subject: string; grade: string; reloadKey?: number }>();
 
 const loading = ref(false);
 const profile = ref<ProfileData | null>(null);
 const questionnaireLoading = ref(false);
 const savingQuestionnaire = ref(false);
+const reportTab = ref("summary");
 const questionnaireIndicators = ref<Array<{ dimension_id: number; dimension_title: string; indicator_id: number; indicator_title: string; indicator_code: string; weight: number; score: number | null; note: string }>>([]);
+
+function sourceTypeLabel(sourceType: string) {
+  if (sourceType === "auto") return "系统自动";
+  if (sourceType === "imported") return "阶段导入";
+  if (sourceType === "teacher") return "老师填写";
+  if (sourceType === "questionnaire") return "学生补充";
+  return sourceType;
+}
+
+function scoreSourceLabel(scoreSource?: string) {
+  if (scoreSource === "teacher_input") return "老师评分";
+  if (scoreSource === "questionnaire_input") return "问卷补充";
+  if (scoreSource === "stage_inference") return "阶段映射";
+  return "待补充";
+}
 
 const currentStage = computed(() => profile.value?.current_stage ?? null);
 const stageHistory = computed(() => profile.value?.stage_history ?? []);
 const dimensionConfig = computed(() => (profile.value?.dimension_config ?? []).filter((item) => item.enabled));
 const hasStageModel = computed(() => stageHistory.value.length > 0 || Boolean(currentStage.value));
 const portraitDimensions = computed(() => currentStage.value?.portrait_dimensions ?? profile.value?.portrait_dimensions ?? []);
-const portraitIndicators = computed(() =>
-  (currentStage.value?.portrait_indicators ?? profile.value?.portrait_indicators ?? []).filter((item) => item.available)
-);
+const finalPortraitDimensions = computed(() => profile.value?.final_portrait_dimensions ?? []);
+const termSummary = computed(() => profile.value?.term_summary ?? {});
+const portraitIndicatorRows = computed(() => currentStage.value?.portrait_indicators ?? profile.value?.portrait_indicators ?? []);
+const portraitIndicators = computed(() => portraitIndicatorRows.value.filter((item) => item.available));
+const hasQuestionnaireItems = computed(() => questionnaireIndicators.value.length > 0);
+const mentorDimensionOrder = [
+  "潜能与特质倾向",
+  "情感与社会性发展",
+  "知识与认知状态",
+  "学习行为与过程",
+  "个体基础特征",
+];
+const indicatorDimensionMap: Record<string, string> = {
+  创造性思维倾向: "潜能与特质倾向",
+  跨情境迁移能力: "潜能与特质倾向",
+  存在思考与价值判断: "潜能与特质倾向",
+  协作能力与社交网络: "情感与社会性发展",
+  学习动机与态度: "情感与社会性发展",
+  自我调节与元认知: "情感与社会性发展",
+  跨学科知识关联能力: "知识与认知状态",
+  学科能力层级与认知路径: "知识与认知状态",
+  语言类知识掌握度: "知识与认知状态",
+  逻辑类知识掌握度: "知识与认知状态",
+  资源偏好: "学习行为与过程",
+  辅助学习策略: "学习行为与过程",
+  "交互偏好：文本/讨论型": "学习行为与过程",
+  "交互偏好：实践/体验型": "学习行为与过程",
+  人口学背景与学业经历: "个体基础特征",
+  探究兴趣类型: "个体基础特征",
+  智能优势倾向标签: "个体基础特征",
+};
+const dimensionScoreMap = computed(() => {
+  const map = new Map<string, number | null>();
+  for (const item of portraitDimensions.value) map.set(item.dimension_title, item.score);
+  return map;
+});
+const mentorDimensionGroups = computed(() => {
+  const bucket = new Map<string, Array<{ title: string; score: number | null; available: boolean; source_type: string; weight: number }>>();
+  for (const item of portraitIndicatorRows.value) {
+    const dim = indicatorDimensionMap[item.title] || "未归类";
+    const arr = bucket.get(dim) ?? [];
+    arr.push(item);
+    bucket.set(dim, arr);
+  }
+
+  const rows = mentorDimensionOrder.map((title) => {
+    const indicators = bucket.get(title) ?? [];
+    const scored = indicators.filter((item) => item.available && item.score != null);
+    const completion = indicators.length ? Math.round((scored.length / indicators.length) * 100) : 0;
+    return {
+      title,
+      score: dimensionScoreMap.value.get(title) ?? null,
+      indicators,
+      completion,
+    };
+  });
+
+  for (const [title, indicators] of bucket.entries()) {
+    if (mentorDimensionOrder.includes(title)) continue;
+    const scored = indicators.filter((item) => item.available && item.score != null);
+    rows.push({
+      title,
+      score: dimensionScoreMap.value.get(title) ?? null,
+      indicators,
+      completion: indicators.length ? Math.round((scored.length / indicators.length) * 100) : 0,
+    });
+  }
+  return rows;
+});
 
 const dimensions = computed(() => {
   const current = profile.value;
@@ -136,7 +273,7 @@ const suggestions = computed(() => {
   } else if (current.persona_type === "struggling_persistent") {
     base.push("优先补前置知识点，再进入当前阶段任务。", "短资源和低阶练习优先，先稳住正确率。", "错题和未完成任务要在下一阶段前清掉。");
   } else if (current.persona_type === "procrastinating_risk") {
-    base.push("先完成最短任务链，别同时开太多内容。", "把阶段目标拆成每天一小步。", "优先完成老师明确要求提交的任务和小测。");
+    base.push("先完成最短任务链，别同时开太多内容。", "把阶段目标拆成每天一小步。", "优先完成老师明确要求提交的任务。");
   } else {
     base.push("保持当前节奏，优先处理薄弱知识点。", "学习资源和练习同步推进。", "每个阶段结束时做一次总结回看。");
   }
@@ -204,7 +341,7 @@ async function load() {
 }
 
 watch(
-  () => [props.subject, props.grade],
+  () => [props.subject, props.grade, props.reloadKey ?? 0],
   () => load(),
   { immediate: true }
 );
@@ -221,17 +358,24 @@ watch(
   <el-card class="panel-card report-shell" shadow="never" v-loading="loading">
     <template #header>
       <div class="report-header">
-        <div>
-          <div class="report-title">学习画像与动态评价</div>
-          <div class="report-subtitle">系统会根据教师导入的阶段数据、知识图谱掌握情况和学习轨迹更新你的画像结果。</div>
+        <div class="report-header__main">
+          <div class="report-header__eyebrow">Learning Report</div>
+          <div class="report-title">学习情况报告</div>
+          <div class="report-subtitle">系统会根据老师导入的数据、知识点掌握情况和学习过程，更新你的当前学习结果。</div>
         </div>
         <el-button size="small" @click="load" :loading="loading">刷新</el-button>
       </div>
     </template>
 
     <div v-if="profile" class="report-grid">
+      <el-alert
+        class="report-tip"
+        type="info"
+        :closable="false"
+        title="先看“当前结果”和“核心维度”，再看下面的详细内容，不需要一次看完所有信息。"
+      />
       <section class="report-hero">
-        <div class="hero-label">当前画像</div>
+        <div class="hero-label">当前结果</div>
         <div class="hero-title">{{ profile.persona_label }}</div>
         <div class="hero-stage">
           <span>{{ currentStage?.stage_title || "尚未形成阶段评价" }}</span>
@@ -274,7 +418,35 @@ watch(
       </section>
 
       <section class="dimension-board">
-        <div class="board-title">一级维度画像</div>
+        <div class="board-title">期末总结果</div>
+        <div class="dimension-list">
+          <div class="dimension-item">
+            <div class="dimension-top"><span>覆盖阶段</span><strong>{{ termSummary.stage_count || 0 }}</strong></div>
+            <div class="dimension-bar"><div class="dimension-bar__value" :style="{ width: `${Math.min(100, (termSummary.stage_count || 0) * 20)}%`, background: '#5c7cff' }" /></div>
+          </div>
+          <div class="dimension-item">
+            <div class="dimension-top"><span>期末参考分</span><strong>{{ Math.round((termSummary.final_score_reference || 0) * 100) }}%</strong></div>
+            <div class="dimension-bar"><div class="dimension-bar__value" :style="{ width: `${Math.round((termSummary.final_score_reference || 0) * 100)}%`, background: '#2cb67d' }" /></div>
+          </div>
+          <div class="dimension-item">
+            <div class="dimension-top"><span>进步次数</span><strong>{{ termSummary.progress_stages || 0 }}</strong></div>
+            <div class="dimension-bar"><div class="dimension-bar__value" :style="{ width: `${Math.min(100, (termSummary.progress_stages || 0) * 20)}%`, background: '#ff9b42' }" /></div>
+          </div>
+        </div>
+        <div class="empty-help__text" style="text-align:left; margin-top: 10px;">
+          {{ termSummary.final_reason_summary || "系统会把整个学期的阶段结果汇总成期末总画像和参考分。" }}
+        </div>
+      </section>
+
+      <section class="dimension-board">
+        <div class="board-title">五大类结果</div>
+        <PortraitRadarChart
+          title="当前阶段五维雷达图"
+          subtitle="系统根据老师导入的数据、学习过程和补充评价，形成这张当前阶段画像图。"
+          :items="portraitDimensions"
+          accent="#5c7cff"
+          empty-text="这门课当前还没有足够数据生成雷达图"
+        />
         <div v-if="portraitDimensions.length" class="dimension-list">
           <div v-for="item in portraitDimensions" :key="item.dimension_title" class="dimension-item">
             <div class="dimension-top">
@@ -290,7 +462,36 @@ watch(
             </div>
           </div>
         </div>
-        <el-empty v-else description="当前课程还未形成一级维度画像" />
+        <div v-else class="empty-help">
+          <el-empty description="这门课还没有形成五大类结果" />
+          <div class="empty-help__text">通常是因为老师还没导入阶段数据，或者这门课还没选好要看的内容。</div>
+        </div>
+      </section>
+
+      <section v-if="finalPortraitDimensions.length" class="dimension-board">
+        <div class="board-title">期末五大类汇总</div>
+        <PortraitRadarChart
+          title="期末五维雷达图"
+          subtitle="系统会把整个学期的阶段结果汇总成期末总画像，供老师评分、也方便你看自己哪方面更强。"
+          :items="finalPortraitDimensions"
+          accent="#7b61ff"
+          empty-text="当前还没有可展示的期末雷达图"
+        />
+        <div class="dimension-list">
+          <div v-for="item in finalPortraitDimensions" :key="item.dimension_title" class="dimension-item">
+            <div class="dimension-top">
+              <span>{{ item.dimension_title }}</span>
+              <strong>{{ item.score == null ? "待补充" : `${Math.round(item.score * 100)}%` }}</strong>
+            </div>
+            <div class="dimension-bar">
+              <div
+                v-if="item.score != null"
+                class="dimension-bar__value"
+                :style="{ width: `${Math.round(item.score * 100)}%`, background: '#7b61ff' }"
+              />
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="stage-board">
@@ -310,85 +511,184 @@ watch(
             </div>
           </div>
         </div>
-        <el-empty v-else description="当前还没有阶段评价数据" />
-      </section>
-
-      <section class="config-board">
-        <div class="board-title">当前启用维度</div>
-        <div v-if="dimensionConfig.length" class="config-list">
-          <div v-for="item in dimensionConfig" :key="item.key" class="config-item">
-            <span>{{ item.label }}</span>
-            <strong>{{ Math.round(item.weight * 100) }}%</strong>
-          </div>
+        <div v-else class="empty-help">
+          <el-empty description="当前还没有阶段评价数据" />
+          <div class="empty-help__text">请先让老师创建阶段并导入学习数据，系统才会生成阶段变化。</div>
         </div>
-        <el-empty v-else description="教师暂未配置阶段维度" />
       </section>
+      <section class="detail-tabs">
+        <el-tabs v-model="reportTab">
+          <el-tab-pane label="结果详情" name="summary">
+            <div class="detail-grid">
+              <section class="feedback-board">
+                <div class="board-title">教师补充评价</div>
+                <div v-if="profile.teacher_feedback" class="feedback-card">
+                  <div class="feedback-tag">{{ profile.teacher_feedback.feedback_tag || "阶段评语" }}</div>
+                  <div class="feedback-text">{{ profile.teacher_feedback.comment || "教师暂未填写补充评价" }}</div>
+                  <div class="feedback-meta">
+                    {{ profile.teacher_feedback.updated_by || "教师" }}
+                    <span v-if="profile.teacher_feedback.updated_at">· {{ new Date(profile.teacher_feedback.updated_at).toLocaleString() }}</span>
+                  </div>
+                </div>
+                <div v-else class="empty-help empty-help--compact">
+                  <el-empty description="当前阶段暂无教师补充评价" :image-size="72" />
+                  <div class="empty-help__text">这不是错误，说明老师目前还没有补充填写这部分内容。</div>
+                </div>
+              </section>
 
-      <section class="config-board">
-        <div class="board-title">二级指标映射结果</div>
-        <div v-if="portraitIndicators.length" class="config-list">
-          <div v-for="item in portraitIndicators" :key="item.title" class="config-item config-item--stack">
-            <div class="config-item__title">{{ item.title }}</div>
-            <div class="config-item__meta">
-              <span>{{ item.source_type }}</span>
-              <span>权重 {{ Number(item.weight || 0).toFixed(1) }}</span>
-              <strong>{{ item.score == null ? "待补充" : `${Math.round(item.score * 100)}%` }}</strong>
+              <section class="advice-board">
+                <div class="board-title">个性化建议</div>
+                <div class="advice-list">
+                  <div v-for="item in suggestions" :key="item" class="advice-item">{{ item }}</div>
+                </div>
+              </section>
             </div>
-          </div>
-        </div>
-        <el-empty v-else description="当前阶段暂无可映射的二级指标结果" />
-      </section>
+          </el-tab-pane>
 
-      <section class="config-board" v-loading="questionnaireLoading">
-        <div class="board-title">问卷/标签补充指标</div>
-        <div v-if="questionnaireIndicators.length" class="config-list">
-          <div v-for="item in questionnaireIndicators" :key="item.indicator_id" class="config-item config-item--stack">
-            <div class="config-item__title">{{ item.indicator_title }}</div>
-            <div class="config-item__meta">
-              <span>{{ item.dimension_title }}</span>
-              <span>权重 {{ Number(item.weight || 0).toFixed(1) }}</span>
+          <el-tab-pane label="老师看的内容" name="indicators">
+            <div class="detail-grid">
+              <section class="config-board">
+                <div class="board-title">老师现在看的内容</div>
+                <div v-if="dimensionConfig.length" class="config-list">
+                  <div v-for="item in dimensionConfig" :key="item.key" class="config-item">
+                    <span>{{ item.label }}</span>
+                    <strong>{{ Math.round(item.weight * 100) }}%</strong>
+                  </div>
+                </div>
+                <div v-else class="empty-help empty-help--compact">
+                  <el-empty description="老师还没设置当前阶段要看哪些内容" :image-size="72" />
+                  <div class="empty-help__text">老师先在“这门课看哪些内容”里勾选评价项，这里才会显示。</div>
+                </div>
+              </section>
+
+              <section class="config-board">
+                <div class="board-title">细项结果</div>
+                <div v-if="portraitIndicators.length" class="config-list">
+                  <div v-for="item in portraitIndicators" :key="item.title" class="config-item config-item--stack">
+                    <div class="config-item__title">{{ item.title }}</div>
+                    <div class="config-item__meta">
+                      <span>{{ sourceTypeLabel(item.source_type) }}</span>
+                      <span>{{ scoreSourceLabel(item.score_source) }}</span>
+                      <strong>{{ item.score == null ? "待补充" : `${Math.round(item.score * 100)}%` }}</strong>
+                    </div>
+                    <div v-if="item.formula_text" class="config-item__hint">{{ item.formula_text }}</div>
+                    <div v-if="item.evidence_metrics?.length" class="config-item__chips">
+                      <span v-for="metric in item.evidence_metrics" :key="`${item.title}-${metric.metric_label}`">
+                        {{ metric.metric_label }} {{ metric.metric_percent }}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="empty-help empty-help--compact">
+                  <el-empty description="当前阶段还没有细项结果" :image-size="72" />
+                  <div class="empty-help__text">老师导入数据后，系统会把数据自动映射成这里的细项结果。</div>
+                </div>
+              </section>
             </div>
-            <div class="questionnaire-row">
-              <el-slider v-model="item.score" :min="0" :max="1" :step="0.05" show-input />
-            </div>
-            <el-input v-model="item.note" type="textarea" :rows="2" placeholder="补充标签或说明" />
-          </div>
-          <div class="questionnaire-actions">
-            <el-button type="primary" :loading="savingQuestionnaire" @click="saveQuestionnaireIndicators">保存问卷指标</el-button>
-          </div>
-        </div>
-        <el-empty v-else description="当前课程未启用问卷/标签型指标" />
-      </section>
+          </el-tab-pane>
 
-      <section class="feedback-board">
-        <div class="board-title">教师补充评价</div>
-        <div v-if="profile.teacher_feedback" class="feedback-card">
-          <div class="feedback-tag">{{ profile.teacher_feedback.feedback_tag || "阶段评语" }}</div>
-          <div class="feedback-text">{{ profile.teacher_feedback.comment || "教师暂未填写补充评价" }}</div>
-          <div class="feedback-meta">
-            {{ profile.teacher_feedback.updated_by || "教师" }}
-            <span v-if="profile.teacher_feedback.updated_at">· {{ new Date(profile.teacher_feedback.updated_at).toLocaleString() }}</span>
-          </div>
-        </div>
-        <el-empty v-else description="当前阶段暂无教师补充评价" />
-      </section>
+          <el-tab-pane label="补充填写" name="questionnaire">
+            <section class="config-board" v-loading="questionnaireLoading">
+              <div class="board-title">补充填写学习情况</div>
+              <div v-if="hasQuestionnaireItems" class="config-list">
+                <div v-for="item in questionnaireIndicators" :key="item.indicator_id" class="config-item config-item--stack">
+                  <div class="config-item__title">{{ item.indicator_title }}</div>
+                  <div class="config-item__meta">
+                    <span>{{ item.dimension_title }}</span>
+                    <span>学生补充项</span>
+                  </div>
+                  <div class="questionnaire-row">
+                    <div class="questionnaire-row__value">你的问卷答案：{{ questionnaireOptionLabel(item.score) }}</div>
+                    <el-radio-group v-model="item.score" size="small" class="questionnaire-row__options">
+                      <el-radio-button
+                        v-for="option in QUESTIONNAIRE_SCORE_OPTIONS"
+                        :key="`${item.indicator_id}-questionnaire-${option.value}`"
+                        :label="option.value"
+                      >
+                        {{ option.label }}
+                      </el-radio-button>
+                    </el-radio-group>
+                  </div>
+                  <div class="questionnaire-row__hint">
+                    这里只需要按实际情况选择问卷答案并补充说明，权重由老师和系统预设，你不用调整评分规则。
+                  </div>
+                  <el-input v-model="item.note" type="textarea" :rows="2" placeholder="补充标签或说明" />
+                </div>
+                <div class="questionnaire-actions">
+                  <el-button type="primary" :loading="savingQuestionnaire" @click="saveQuestionnaireIndicators">保存补充内容</el-button>
+                </div>
+              </div>
+              <div v-else class="empty-help empty-help--compact">
+                <el-empty description="这门课还没有启用需要补充填写的内容" :image-size="72" />
+                <div class="empty-help__text">如果老师启用了“学生补充”类型的内容，你就可以在这里填写。</div>
+              </div>
+            </section>
+          </el-tab-pane>
 
-      <section class="advice-board">
-        <div class="board-title">个性化建议</div>
-        <div class="advice-list">
-          <div v-for="item in suggestions" :key="item" class="advice-item">{{ item }}</div>
-        </div>
-      </section>
+          <el-tab-pane label="多元智能映射" name="mi-map">
+            <section class="config-board">
+              <div class="board-title">五大类学习者画像映射</div>
+              <div class="mi-intro">
+                系统把当前课程结果映射到 5 大类维度，每类再展开子指标，便于查看“哪一类强、哪一类还需补充”。
+              </div>
+              <div v-if="mentorDimensionGroups.length" class="mi-grid">
+                <article v-for="group in mentorDimensionGroups" :key="group.title" class="mi-card">
+                  <div class="mi-card__head">
+                    <div>
+                      <div class="mi-card__title">{{ group.title }}</div>
+                      <div class="mi-card__meta">子指标 {{ group.indicators.length }} · 完成度 {{ group.completion }}%</div>
+                    </div>
+                    <div class="mi-card__score">{{ group.score == null ? "待补充" : `${Math.round(group.score * 100)}%` }}</div>
+                  </div>
+                  <div class="mi-list">
+                    <div v-for="item in group.indicators" :key="`${group.title}-${item.title}`" class="mi-item">
+                      <div class="mi-item__top">
+                        <span>{{ item.title }}</span>
+                        <strong>{{ item.score == null ? "待补充" : `${Math.round(item.score * 100)}%` }}</strong>
+                      </div>
+                      <div class="mi-item__meta">
+                        {{ sourceTypeLabel(item.source_type) }} · {{ scoreSourceLabel(item.score_source) }}
+                      </div>
+                      <div class="mi-item__bar">
+                        <div
+                          v-if="item.score != null"
+                          class="mi-item__bar-value"
+                          :style="{ width: `${Math.round(item.score * 100)}%` }"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <div v-else class="empty-help empty-help--compact">
+                <el-empty description="当前还没有可映射的多元智能结果" :image-size="72" />
+                <div class="empty-help__text">请先让老师完成阶段数据导入，并补充需要的教师/问卷指标。</div>
+              </div>
+            </section>
+          </el-tab-pane>
 
-      <section class="config-board">
-        <div class="board-title">系统如何判断</div>
-        <div class="config-list">
-          <div class="config-item">动态评价：老师导入阶段数据后，系统更新阶段评分和趋势，不按每次点击实时重算。</div>
-          <div class="config-item">学习者画像：当前以学习投入、学习成效、学习习惯、学习特征四类维度为主。</div>
-          <div class="config-item">知识图谱：图谱负责组织知识结构，并把资源、任务、练习和小测挂到节点上。</div>
-          <div class="config-item">推荐结果：系统先判断该补哪个点，再结合画像决定推什么资源和练习。</div>
-        </div>
+          <el-tab-pane label="系统说明" name="explain">
+            <section class="config-board">
+              <div class="board-title">系统如何判断</div>
+              <div class="config-list">
+                <div class="config-item">动态评价：老师导入阶段数据后，系统更新阶段评分和趋势，不按每次点击实时重算。</div>
+                <div class="config-item">学习情况：系统会把老师选的五大类和细项汇总起来，形成你的学习结果。</div>
+                <div class="config-item">知识图谱：图谱负责组织知识结构，并把资源、任务和练习挂到节点上。</div>
+                <div class="config-item">推荐结果：系统先判断该补哪个点，再结合画像决定推什么资源和练习。</div>
+              </div>
+            </section>
+          </el-tab-pane>
+        </el-tabs>
       </section>
+    </div>
+    <div v-else class="report-empty">
+      <el-empty description="这门课还没有形成学习情况报告" :image-size="88" />
+      <el-alert
+        class="report-empty__tip"
+        type="info"
+        :closable="false"
+        title="先让老师完成三步：1. 选这门课要看的内容；2. 创建阶段；3. 导入阶段数据。完成后，这里就会自动出现结果。"
+      />
     </div>
   </el-card>
 </template>
@@ -401,20 +701,37 @@ watch(
 .report-header {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.report-header__main {
+  display: grid;
+  gap: 6px;
+}
+
+.report-header__eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6c86ab;
 }
 
 .report-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--app-ink);
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #22395b;
 }
 
 .report-subtitle {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--app-ink-soft);
+  max-width: 720px;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #667d9b;
 }
 
 .report-grid {
@@ -423,19 +740,74 @@ watch(
   grid-template-columns: 1.1fr 0.9fr;
 }
 
+.report-empty {
+  display: grid;
+  gap: 14px;
+}
+
+.report-empty__tip {
+  margin-top: -6px;
+}
+
+.report-tip {
+  margin-bottom: 2px;
+}
+
+.detail-tabs {
+  grid-column: 1 / -1;
+}
+
+.detail-tabs :deep(.el-tabs__nav-scroll) {
+  padding: 0 6px;
+}
+
+.detail-tabs :deep(.el-tabs__item) {
+  min-height: 42px;
+  font-weight: 700;
+}
+
+.detail-tabs :deep(.el-tabs__header) {
+  margin-bottom: 18px;
+}
+
+.detail-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.empty-help {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.empty-help--compact :deep(.el-empty) {
+  padding: 6px 0;
+}
+
+.empty-help__text {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--app-ink-soft);
+  text-align: center;
+}
+
 .report-hero {
-  padding: 22px;
-  border-radius: 24px;
-  background: linear-gradient(135deg, #143759, #2a5d84);
-  color: #f7fbff;
+  padding: 24px;
+  border-radius: 20px;
+  background: #ffffff;
+  color: var(--app-ink);
   display: grid;
   gap: 12px;
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .hero-label {
   font-size: 12px;
   letter-spacing: 0.08em;
-  opacity: 0.72;
+  color: #6f85a3;
   text-transform: uppercase;
 }
 
@@ -450,13 +822,13 @@ watch(
   gap: 10px;
   flex-wrap: wrap;
   font-size: 13px;
-  opacity: 0.92;
+  color: #5e7697;
 }
 
 .hero-text {
   line-height: 1.7;
   font-size: 13px;
-  opacity: 0.88;
+  color: var(--app-ink-soft);
 }
 
 .hero-metrics {
@@ -467,20 +839,22 @@ watch(
 
 .hero-metric {
   padding: 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: #fcfdff;
   display: grid;
   gap: 4px;
+  border: 1px solid var(--app-border);
 }
 
 .hero-metric span {
   font-size: 12px;
-  opacity: 0.8;
+  color: #6b809c;
 }
 
 .hero-metric strong {
   font-size: 22px;
   font-weight: 800;
+  color: var(--app-ink);
 }
 
 .dimension-board,
@@ -489,15 +863,16 @@ watch(
 .feedback-board,
 .advice-board {
   padding: 18px;
-  border-radius: 22px;
-  background: #f7fafc;
-  border: 1px solid #e0e8ef;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .board-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--app-ink);
+  font-size: 15px;
+  font-weight: 800;
+  color: #243851;
   margin-bottom: 14px;
 }
 
@@ -533,7 +908,7 @@ watch(
   height: 10px;
   border-radius: 999px;
   overflow: hidden;
-  background: #dfe8ef;
+  background: #e3ebf4;
 }
 
 .dimension-bar__value {
@@ -547,11 +922,12 @@ watch(
 
 .stage-card {
   padding: 14px;
-  border-radius: 18px;
+  border-radius: 16px;
   background: #ffffff;
-  border: 1px solid #dce7ef;
+  border: 1px solid var(--app-border);
   display: grid;
   gap: 8px;
+  box-shadow: var(--app-shadow-soft);
 }
 
 .stage-card__index {
@@ -574,8 +950,9 @@ watch(
   padding: 12px 14px;
   border-radius: 16px;
   background: #ffffff;
-  border: 1px solid #dde7ef;
+  border: 1px solid var(--app-border);
   color: var(--app-ink);
+  box-shadow: none;
 }
 
 .config-item--stack {
@@ -598,8 +975,47 @@ watch(
   font-size: 12px;
 }
 
+.config-item__hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #59708f;
+}
+
+.config-item__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.config-item__chips span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f3f7fc;
+  color: #5b7391;
+  font-size: 12px;
+}
+
 .questionnaire-row {
   margin-top: 4px;
+}
+
+.questionnaire-row__value {
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--app-ink-soft);
+}
+
+.questionnaire-row__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.questionnaire-row__hint {
+  font-size: 12px;
+  color: #6d7f98;
+  line-height: 1.5;
 }
 
 .questionnaire-actions {
@@ -609,11 +1025,12 @@ watch(
 
 .feedback-card {
   padding: 14px 16px;
-  border-radius: 18px;
+  border-radius: 16px;
   background: #ffffff;
-  border: 1px solid #dde7ef;
+  border: 1px solid var(--app-border);
   display: grid;
   gap: 8px;
+  box-shadow: none;
 }
 
 .feedback-tag {
@@ -636,13 +1053,107 @@ watch(
   padding: 12px 14px;
   border-radius: 16px;
   background: #ffffff;
-  border: 1px solid #dde7ef;
+  border: 1px solid var(--app-border);
   color: var(--app-ink);
+  box-shadow: none;
+}
+
+.mi-intro {
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #5a7697;
+}
+
+.mi-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.mi-card {
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  box-shadow: none;
+}
+
+.mi-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mi-card__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--app-ink);
+}
+
+.mi-card__meta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #5a7697;
+}
+
+.mi-card__score {
+  font-size: 14px;
+  font-weight: 700;
+  color: #3564b5;
+}
+
+.mi-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mi-item {
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: #fcfdff;
+  padding: 8px;
+  display: grid;
+  gap: 5px;
+}
+
+.mi-item__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: #4f6988;
+}
+
+.mi-item__meta {
+  font-size: 12px;
+  color: #6d82a0;
+}
+
+.mi-item__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #e3ebf5;
+  overflow: hidden;
+}
+
+.mi-item__bar-value {
+  height: 100%;
+  border-radius: inherit;
+  background: #6d92cf;
 }
 
 @media (max-width: 960px) {
   .report-grid {
     grid-template-columns: 1fr;
+  }
+
+  .report-header {
+    align-items: flex-start;
   }
 }
 </style>

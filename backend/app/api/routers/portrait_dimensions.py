@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from app.api.deps import require_role
 from app.db.models import (
     Course,
+    CourseStage,
     CoursePortraitIndicatorSelection,
     PortraitDimension,
     PortraitIndicator,
@@ -300,6 +301,8 @@ def update_course_selection(
         if not indicator:
             continue
         keep_ids.add(indicator_id)
+        enabled = bool(row.get("enabled", True))
+        weight = float(row.get("weight") or indicator.default_weight or 0.0)
         selection = existing_map.get(indicator_id) or CoursePortraitIndicatorSelection(
             course_id=course_id,
             dimension_id=indicator.dimension_id,
@@ -307,8 +310,8 @@ def update_course_selection(
             selected_by=user.username,
         )
         selection.dimension_id = indicator.dimension_id
-        selection.enabled = bool(row.get("enabled", True))
-        selection.weight = float(row.get("weight") or indicator.default_weight or 1.0)
+        selection.enabled = enabled
+        selection.weight = weight
         selection.selected_by = user.username
         selection.updated_at = datetime.utcnow()
         session.add(selection)
@@ -511,6 +514,16 @@ def save_questionnaire_indicator_input(
             session.delete(item)
 
     session.commit()
+    stage_ids = session.exec(
+        select(CourseStage.id).where(CourseStage.course_id == course_id).order_by(CourseStage.stage_order.asc())
+    ).all()
+    for stage_id in stage_ids:
+        recalculate_stage_snapshots_for_stage(
+            session,
+            stage_id=int(stage_id),
+            user_ids=[target_user_id],
+            persist=True,
+        )
     recalculate_profile_snapshot(
         session,
         user_id=target_user_id,

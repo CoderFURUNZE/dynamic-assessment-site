@@ -104,3 +104,251 @@
 2026-03-11 22:30:08,260 INFO httpx HTTP Request: GET http://testserver/api/portrait/questionnaire-input?course_id=4 "HTTP/1.1 200 OK"
 2026-03-11 22:30:08,291 INFO httpx HTTP Request: PUT http://testserver/api/portrait/questionnaire-input?course_id=4 "HTTP/1.1 200 OK"
 2026-03-11 22:30:08,512 INFO httpx HTTP Request: GET http://testserver/api/eval/profile?subject=%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C&grade=%E9%80%9A%E7%94%A8 "HTTP/1.1 200 OK"
+2026-03-13 09:51:25,099 INFO app.audit actor=admin role=admin action=seed_full detail=created_kp=40 created_questions=1600
+2026-03-13 09:52:15,847 INFO app.audit actor=admin role=admin action=persona_recalculate detail=subject=计算机组成原理 grade=通用 count=3
+2026-03-13 11:08:47,356 INFO app.audit actor=teacher1 role=teacher action=course_create detail=code=MATH title=高等数学 teacher_id=1
+2026-03-13 11:09:26,442 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=1 code=MATH teacher_id=1
+2026-03-13 11:09:31,692 INFO app.audit actor=teacher1 role=teacher action=course_delete detail=id=1 code=MATH
+2026-03-13 11:09:42,112 INFO app.audit actor=teacher1 role=teacher action=course_create detail=code=MATH title=高数 teacher_id=1
+2026-03-13 11:10:48,627 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=2 code=MATH teacher_id=1
+2026-03-13 11:18:10,012 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=2 stage_id=1
+2026-03-13 11:18:34,026 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=2 stage_id=2
+2026-03-13 15:58:24,603 INFO app.audit actor=teacher1 role=teacher action=course_create detail=code=DS title=数据结构 teacher_id=1
+2026-03-13 15:59:07,406 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=3 code=DS teacher_id=1
+2026-03-13 16:15:58,824 INFO app.audit actor=teacher1 role=teacher action=course_create detail=code=OS title=操作系统 teacher_id=1
+2026-03-13 16:16:13,220 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-13 16:46:35,735 INFO app.audit actor=teacher1 role=teacher action=kp_delete detail=kp_id=4
+2026-03-13 16:46:37,980 INFO app.audit actor=teacher1 role=teacher action=kp_delete detail=kp_id=1
+2026-03-13 16:46:42,450 INFO app.audit actor=teacher1 role=teacher action=kp_delete detail=kp_id=3
+2026-03-13 16:47:40,688 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=4 stage_id=3
+2026-03-13 16:48:00,059 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=4 stage_id=4
+2026-03-13 16:48:03,783 INFO app.audit actor=teacher1 role=teacher action=course_stage_delete detail=stage_id=4
+2026-03-13 16:48:20,638 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=4 stage_id=5
+2026-03-13 16:57:50,170 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=2 code=MATH teacher_id=1
+2026-03-13 17:06:13,714 INFO app.audit actor=teacher1 role=teacher action=kp_delete detail=kp_id=5
+2026-03-13 17:55:02,078 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-13 17:55:02,912 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-13 17:55:03,592 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-13 17:57:22,163 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-13 17:58:49,775 INFO app.audit actor=teacher1 role=teacher action=kp_resource_create detail=kp_id=6 resource_id=1
+2026-03-13 17:58:53,859 INFO app.audit actor=teacher1 role=teacher action=kp_resource_update detail=resource_id=1
+2026-03-13 18:02:31,180 INFO app.audit actor=teacher1 role=teacher action=kp_resource_update detail=resource_id=1
+2026-03-13 18:16:20,102 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-13 18:16:21,182 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-13 18:16:21,981 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-13 18:16:22,677 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-13 22:13:36,289 INFO app.audit actor=admin role=admin action=user_update detail=user_id=3
+2026-03-13 22:43:06,689 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=1
+2026-03-14 11:12:03,453 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-14 11:12:11,243 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=4 code=OS teacher_id=1
+2026-03-14 12:08:02,264 INFO app.audit actor=teacher3 role=teacher action=course_create detail=code=CN title=计算机网络 teacher_id=5
+2026-03-14 16:37:27,628 INFO app.audit actor=teacher1 role=teacher action=course_stage_delete detail=stage_id=3
+2026-03-14 16:37:28,693 INFO app.audit actor=teacher1 role=teacher action=course_stage_delete detail=stage_id=5
+2026-03-14 16:37:37,064 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=4 stage_id=6
+2026-03-14 16:37:49,204 INFO app.audit actor=teacher1 role=teacher action=course_stage_update detail=stage_id=6
+2026-03-14 16:38:03,733 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=4 stage_id=7
+2026-03-14 16:38:16,316 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=4 stage_id=8
+2026-03-14 16:38:48,273 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=6 metric=video success=12 failed=0
+2026-03-14 16:39:29,680 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=6 metric=assignment success=12 failed=0
+2026-03-14 16:39:44,944 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=6 metric=quiz success=12 failed=0
+2026-03-14 16:39:56,565 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=6 metric=attendance success=9 failed=0
+2026-03-14 16:40:11,368 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=6 metric=task success=12 failed=0
+2026-03-14 16:40:23,894 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=6 metric=task success=12 failed=0
+2026-03-14 16:42:18,211 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=7 metric=video success=12 failed=0
+2026-03-14 16:42:40,783 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=7 metric=assignment success=12 failed=0
+2026-03-14 16:42:53,990 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=7 metric=quiz success=12 failed=0
+2026-03-14 16:43:19,289 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=7 metric=attendance success=9 failed=0
+2026-03-14 16:43:42,661 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=7 metric=task success=12 failed=0
+2026-03-14 16:43:54,114 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=7 metric=assignment success=12 failed=0
+2026-03-14 16:44:07,696 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=7 metric=participation success=12 failed=0
+2026-03-14 16:44:44,699 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=8 metric=video success=12 failed=0
+2026-03-14 16:44:54,485 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=8 metric=assignment success=12 failed=0
+2026-03-14 16:45:05,866 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=8 metric=quiz success=12 failed=0
+2026-03-14 16:45:15,386 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=8 metric=attendance success=9 failed=0
+2026-03-14 16:45:27,472 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=8 metric=task success=12 failed=0
+2026-03-14 16:45:42,499 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=8 metric=participation success=12 failed=0
+2026-03-14 16:49:53,968 INFO app.audit actor=teacher1 role=teacher action=stage_feedback_save detail=user_id=6 stage_id=6
+2026-03-14 20:05:23,301 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=4 stage_id=9
+2026-03-14 20:05:40,637 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=9 metric=video success=12 failed=0
+2026-03-14 20:06:00,385 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=9 metric=assignment success=12 failed=0
+2026-03-14 20:06:15,471 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=9 metric=quiz success=12 failed=0
+2026-03-14 20:06:26,772 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=9 metric=attendance success=9 failed=0
+2026-03-14 20:06:37,409 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=9 metric=task success=12 failed=0
+2026-03-14 20:06:46,774 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=9 metric=participation success=12 failed=0
+2026-03-14 20:33:57,307 INFO app.audit actor=teacher1 role=teacher action=stage_feedback_save detail=user_id=3 stage_id=6
+2026-03-14 20:34:58,436 INFO app.audit actor=teacher1 role=teacher action=stage_feedback_save detail=user_id=3 stage_id=8
+2026-03-14 20:35:10,097 INFO app.audit actor=teacher1 role=teacher action=stage_feedback_save detail=user_id=3 stage_id=7
+2026-03-14 20:35:22,087 INFO app.audit actor=teacher1 role=teacher action=stage_feedback_save detail=user_id=3 stage_id=6
+2026-03-15 18:08:28,950 INFO app.audit actor=teacher1 role=teacher action=course_create detail=code=AUTO-71D4F1 title=自动化回归课程D4F1 teacher_id=1
+2026-03-15 18:09:02,616 INFO app.audit actor=teacher1 role=teacher action=course_create detail=code=AUTOERR8249 title=自动化错误定位49 teacher_id=1
+2026-03-15 18:10:40,583 INFO app.audit actor=teacher1 role=teacher action=course_create detail=code=AUTO-7DC4CE title=自动化回归课程C4CE teacher_id=1
+2026-03-15 18:10:40,601 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=9 code=AUTO-7DC4CE teacher_id=1
+2026-03-15 18:10:40,629 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=9 stage_id=10
+2026-03-15 18:10:40,646 INFO app.audit actor=teacher1 role=teacher action=course_stage_update detail=stage_id=10
+2026-03-15 18:10:40,810 INFO app.audit actor=teacher1 role=teacher action=final_score_confirm detail=user_id=3 subject=数据结构 confirmed_score=82
+2026-03-15 18:10:41,026 INFO app.audit actor=teacher1 role=teacher action=course_stage_delete detail=stage_id=10
+2026-03-15 18:11:50,116 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=4 stage_id=9 metric=video success=12 failed=0
+2026-03-15 18:12:04,722 INFO app.audit actor=teacher1 role=teacher action=stage_feedback_save detail=user_id=3 stage_id=6
+2026-03-16 15:04:38,336 INFO httpx HTTP Request: POST http://testserver/api/auth/login/admin "HTTP/1.1 200 OK"
+2026-03-16 15:04:38,580 INFO httpx HTTP Request: POST http://testserver/api/auth/login/student "HTTP/1.1 200 OK"
+2026-03-16 15:04:38,595 INFO httpx HTTP Request: GET http://testserver/api/graph/node/6 "HTTP/1.1 200 OK"
+2026-03-16 15:05:49,182 INFO httpx HTTP Request: POST http://testserver/api/auth/login/admin "HTTP/1.1 200 OK"
+2026-03-16 15:05:49,430 INFO httpx HTTP Request: POST http://testserver/api/auth/login/student "HTTP/1.1 200 OK"
+2026-03-16 15:05:49,452 INFO httpx HTTP Request: GET http://testserver/api/graph/node/6 "HTTP/1.1 200 OK"
+2026-03-16 15:05:49,466 INFO app.audit actor=teacher1 role=teacher action=kp_resource_create detail=kp_id=6 resource_id=2
+2026-03-16 15:05:49,474 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources "HTTP/1.1 200 OK"
+2026-03-16 15:05:49,484 INFO app.audit actor=teacher1 role=teacher action=kp_resource_create detail=kp_id=6 resource_id=3
+2026-03-16 15:05:49,488 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources "HTTP/1.1 200 OK"
+2026-03-16 15:05:49,493 INFO httpx HTTP Request: GET http://testserver/api/content/resources?kp_id=6 "HTTP/1.1 200 OK"
+2026-03-16 15:05:49,530 INFO httpx HTTP Request: GET http://testserver/api/graph/node/6 "HTTP/1.1 200 OK"
+2026-03-16 15:05:49,536 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=2
+2026-03-16 15:05:49,538 INFO httpx HTTP Request: DELETE http://testserver/api/admin/kp-resources/2 "HTTP/1.1 200 OK"
+2026-03-16 15:05:49,543 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=3
+2026-03-16 15:05:49,544 INFO httpx HTTP Request: DELETE http://testserver/api/admin/kp-resources/3 "HTTP/1.1 200 OK"
+2026-03-16 15:35:27,852 INFO httpx HTTP Request: POST http://testserver/api/auth/login/admin "HTTP/1.1 200 OK"
+2026-03-16 15:35:28,125 INFO httpx HTTP Request: POST http://testserver/api/auth/login/student "HTTP/1.1 200 OK"
+2026-03-16 15:36:22,261 INFO httpx HTTP Request: POST http://testserver/api/auth/login/admin "HTTP/1.1 200 OK"
+2026-03-16 15:36:22,541 INFO httpx HTTP Request: POST http://testserver/api/auth/login/student "HTTP/1.1 200 OK"
+2026-03-16 15:37:52,406 INFO httpx HTTP Request: POST http://testserver/api/auth/login/admin "HTTP/1.1 200 OK"
+2026-03-16 15:37:52,659 INFO httpx HTTP Request: POST http://testserver/api/auth/login/student "HTTP/1.1 200 OK"
+2026-03-16 15:37:52,684 INFO httpx HTTP Request: GET http://testserver/api/graph/node/6 "HTTP/1.1 200 OK"
+2026-03-16 15:37:52,691 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources/detect "HTTP/1.1 200 OK"
+2026-03-16 15:37:52,714 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=4 type=pptx
+2026-03-16 15:37:52,720 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources/upload "HTTP/1.1 200 OK"
+2026-03-16 15:37:52,728 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=5 type=image
+2026-03-16 15:37:52,731 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources/upload "HTTP/1.1 200 OK"
+2026-03-16 15:37:52,734 INFO httpx HTTP Request: GET http://testserver/api/content/resources?kp_id=6 "HTTP/1.1 200 OK"
+2026-03-16 15:37:52,768 INFO httpx HTTP Request: GET http://testserver/api/graph/node/6 "HTTP/1.1 200 OK"
+2026-03-16 15:37:52,775 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=4
+2026-03-16 15:37:52,777 INFO httpx HTTP Request: DELETE http://testserver/api/admin/kp-resources/4 "HTTP/1.1 200 OK"
+2026-03-16 15:37:52,782 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=5
+2026-03-16 15:37:52,783 INFO httpx HTTP Request: DELETE http://testserver/api/admin/kp-resources/5 "HTTP/1.1 200 OK"
+2026-03-16 15:56:46,708 INFO httpx HTTP Request: POST http://testserver/api/auth/login/admin "HTTP/1.1 200 OK"
+2026-03-16 15:56:47,043 INFO httpx HTTP Request: POST http://testserver/api/auth/login/student "HTTP/1.1 200 OK"
+2026-03-16 15:56:47,071 INFO httpx HTTP Request: GET http://testserver/api/graph/node/6 "HTTP/1.1 200 OK"
+2026-03-16 15:56:47,092 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=6 type=pptx
+2026-03-16 15:56:47,107 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources/upload "HTTP/1.1 200 OK"
+2026-03-16 15:56:47,117 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:48,143 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:49,165 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:50,186 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:51,209 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:52,229 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:53,238 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:54,255 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:55,271 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:56,294 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:57,323 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:58,349 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:56:59,377 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:57:00,405 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 15:57:01,425 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/6/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:48,280 INFO httpx HTTP Request: POST http://testserver/api/auth/login/admin "HTTP/1.1 200 OK"
+2026-03-16 16:59:48,525 INFO httpx HTTP Request: POST http://testserver/api/auth/login/student "HTTP/1.1 200 OK"
+2026-03-16 16:59:48,550 INFO httpx HTTP Request: GET http://testserver/api/graph/node/6 "HTTP/1.1 200 OK"
+2026-03-16 16:59:48,569 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=7 type=docx
+2026-03-16 16:59:48,581 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources/upload "HTTP/1.1 200 OK"
+2026-03-16 16:59:48,597 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=8 type=pptx
+2026-03-16 16:59:48,606 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources/upload "HTTP/1.1 200 OK"
+2026-03-16 16:59:48,612 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:49,628 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:50,644 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:51,666 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:52,689 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:53,715 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:54,726 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:55,740 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:56,754 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:57,774 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:58,797 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 16:59:59,817 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:00,838 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:01,850 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:02,871 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:03,894 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:04,916 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:05,936 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:06,955 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:07,975 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:08,990 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:10,010 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:11,031 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:12,052 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:00:13,074 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/7/detail "HTTP/1.1 200 OK"
+2026-03-16 17:01:54,695 INFO httpx HTTP Request: POST http://testserver/api/auth/login/admin "HTTP/1.1 200 OK"
+2026-03-16 17:01:54,942 INFO httpx HTTP Request: POST http://testserver/api/auth/login/student "HTTP/1.1 200 OK"
+2026-03-16 17:01:54,967 INFO httpx HTTP Request: GET http://testserver/api/graph/node/6 "HTTP/1.1 200 OK"
+2026-03-16 17:01:55,014 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=9 type=docx
+2026-03-16 17:01:55,025 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources/upload "HTTP/1.1 200 OK"
+2026-03-16 17:01:55,037 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=10 type=pptx
+2026-03-16 17:01:55,041 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources/upload "HTTP/1.1 200 OK"
+2026-03-16 17:01:55,051 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/9/detail "HTTP/1.1 200 OK"
+2026-03-16 17:01:56,065 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/9/detail "HTTP/1.1 200 OK"
+2026-03-16 17:01:57,087 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/9/detail "HTTP/1.1 200 OK"
+2026-03-16 17:01:57,106 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:01:58,127 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:01:59,142 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:00,157 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:01,178 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:02,199 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:03,221 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:04,242 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:05,257 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:06,280 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:07,299 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:08,316 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:09,334 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:10,356 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:11,375 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:12,394 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:13,406 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:14,428 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:15,449 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:16,472 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:17,491 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:18,505 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:19,518 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:20,540 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:21,562 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:22,581 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:23,603 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:24,625 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:25,647 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:26,662 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:27,682 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:28,705 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:29,729 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:30,753 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:31,770 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:32,789 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:33,805 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:34,826 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:35,846 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:02:36,864 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/10/detail "HTTP/1.1 200 OK"
+2026-03-16 17:05:07,848 INFO httpx HTTP Request: POST http://testserver/api/auth/login/admin "HTTP/1.1 200 OK"
+2026-03-16 17:05:08,096 INFO httpx HTTP Request: POST http://testserver/api/auth/login/student "HTTP/1.1 200 OK"
+2026-03-16 17:05:08,121 INFO httpx HTTP Request: GET http://testserver/api/graph/node/6 "HTTP/1.1 200 OK"
+2026-03-16 17:05:08,164 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=11 type=docx
+2026-03-16 17:05:08,176 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources/upload "HTTP/1.1 200 OK"
+2026-03-16 17:05:08,189 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=12 type=pptx
+2026-03-16 17:05:08,193 INFO httpx HTTP Request: POST http://testserver/api/admin/kp-resources/upload "HTTP/1.1 200 OK"
+2026-03-16 17:05:08,198 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/11/detail "HTTP/1.1 200 OK"
+2026-03-16 17:05:09,215 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/11/detail "HTTP/1.1 200 OK"
+2026-03-16 17:05:10,231 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/11/detail "HTTP/1.1 200 OK"
+2026-03-16 17:05:10,239 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/12/detail "HTTP/1.1 200 OK"
+2026-03-16 17:05:11,263 INFO httpx HTTP Request: GET http://testserver/api/admin/kp-resources/12/detail "HTTP/1.1 200 OK"
+2026-03-16 17:05:11,277 INFO httpx HTTP Request: GET http://testserver/api/content/resources?kp_id=6 "HTTP/1.1 200 OK"
+2026-03-16 17:05:11,294 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=11
+2026-03-16 17:05:11,299 INFO httpx HTTP Request: DELETE http://testserver/api/admin/kp-resources/11 "HTTP/1.1 200 OK"
+2026-03-16 17:05:11,311 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=12
+2026-03-16 17:05:11,315 INFO httpx HTTP Request: DELETE http://testserver/api/admin/kp-resources/12 "HTTP/1.1 200 OK"
+2026-03-16 17:23:04,343 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=7 resource_id=13 type=pdf
+2026-03-16 17:24:18,408 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=7 resource_id=14 type=docx
+2026-03-16 20:29:18,621 INFO httpx HTTP Request: POST http://testserver/api/auth/login "HTTP/1.1 200 OK"
+2026-03-16 20:29:18,630 INFO httpx HTTP Request: GET http://testserver/api/stages/internal-summary?course_id=2&stage_id=1 "HTTP/1.1 200 OK"
+2026-03-16 20:29:18,650 INFO app.audit actor=teacher1 role=teacher action=stage_internal_summary_apply detail=course_id=2 stage_id=1 success=0
+2026-03-16 20:29:18,654 INFO httpx HTTP Request: POST http://testserver/api/stages/internal-summary/apply "HTTP/1.1 200 OK"
+2026-03-16 20:45:23,424 INFO app.audit actor=teacher1 role=teacher action=stage_internal_summary_apply detail=course_id=4 stage_id=6 success=3 include_video=True include_practice=True include_mastery=True
+2026-03-16 21:36:01,903 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=1
+2026-03-16 21:36:23,334 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=7 type=pdf
+2026-03-16 21:37:16,246 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=1 resource_id=8 type=pdf

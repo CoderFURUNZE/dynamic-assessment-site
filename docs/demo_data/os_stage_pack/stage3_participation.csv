@@ -1,0 +1,13 @@
+username,student_no,kp_code,score,completion_ratio,status,happened_at,note
+student1,,OS-1,0.92,0.92,active,2026-05-02,阶段3课堂参与
+student1,,OS-2,0.90,0.90,active,2026-05-04,阶段3课堂参与
+student1,,OS-3,0.88,0.88,active,2026-05-06,阶段3课堂参与
+student1,,OS-4,0.86,0.86,active,2026-05-08,阶段3课堂参与
+student2,,OS-1,0.82,0.84,active,2026-05-02,阶段3课堂参与
+student2,,OS-2,0.80,0.82,active,2026-05-04,阶段3课堂参与
+student2,,OS-3,0.78,0.80,active,2026-05-06,阶段3课堂参与
+student2,,OS-4,0.76,0.78,active,2026-05-08,阶段3课堂参与
+student3,,OS-1,0.40,0.45,passive,2026-05-02,阶段3课堂参与
+student3,,OS-2,0.38,0.42,passive,2026-05-04,阶段3课堂参与
+student3,,OS-3,0.35,0.40,passive,2026-05-06,阶段3课堂参与
+student3,,OS-4,0.32,0.36,passive,2026-05-08,阶段3课堂参与
