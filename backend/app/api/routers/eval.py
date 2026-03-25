@@ -30,6 +30,7 @@ from app.schemas.eval import (
 )
 from app.services.eval import refresh_subject_mastery, upsert_mastery
 from app.services.learner_profile import (
+    build_kp_dimension_summary,
     _json_load,
     get_or_create_persona_rule,
     get_profile_trend,
@@ -86,11 +87,14 @@ def profile(
         .order_by(KnowledgePoint.chapter, KnowledgePoint.id)
     ).all()
     mastery_map = []
+    mastery_row_map: dict[int, Mastery] = {}
     weak_points = []
     for kp in kps:
         if kp.id is None:
             continue
         m = session.exec(select(Mastery).where(Mastery.user_id == user.id, Mastery.kp_id == kp.id)).first()
+        if m is not None:
+            mastery_row_map[int(kp.id)] = m
         value = float(m.value) if m else 0.0
         mastery_map.append(
             {
@@ -147,6 +151,14 @@ def profile(
         .where(Course.title == subject)
         .order_by(Course.id)
     ).first()
+    kp_dimension_summary = build_kp_dimension_summary(
+        session,
+        user_id=user.id,
+        subject=subject,
+        grade=grade,
+        kps=kps,
+        mastery_map=mastery_row_map,
+    )
     return ProfileOut(
         user_id=user.id,
         course_id=int(current_stage.course_id) if current_stage is not None else int(course.id) if course and course.id is not None else None,
@@ -235,6 +247,7 @@ def profile(
         final_portrait_dimensions=portrait_summary.get("final_portrait_dimensions", []),
         final_portrait_indicators=portrait_summary.get("final_portrait_indicators", []),
         term_summary=portrait_summary.get("term_summary", {}),
+        kp_dimension_summary=kp_dimension_summary,
     )
 
 

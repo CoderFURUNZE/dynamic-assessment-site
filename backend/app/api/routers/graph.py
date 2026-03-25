@@ -8,6 +8,7 @@ from app.api.deps import get_current_user
 from app.db.models import (
     ApplicationStatus,
     Course,
+    CourseLifecycleStatus,
     CourseApplication,
     CourseCompletionRecord,
     CourseEnrollStatus,
@@ -34,6 +35,7 @@ from app.schemas.graph import (
     GraphBaseOut,
     GraphMapOut,
     GraphNodeDetailOut,
+    GraphNodeNavOut,
     GraphOverlayNodeOut,
     GraphPathOut,
     GraphPracticeOut,
@@ -46,7 +48,7 @@ from app.schemas.graph import (
 )
 from app.services.resource_files import build_resource_payload
 from app.services.eval import upsert_mastery
-from app.services.learner_profile import log_behavior_event
+from app.services.learner_profile import build_kp_dimension_summary, log_behavior_event
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -86,9 +88,14 @@ def _course_payload(course: Course, teacher_name: str | None = None, enrolled: b
         "title": course.title,
         "description": course.description,
         "active": bool(course.active),
+        "lifecycle_status": course.lifecycle_status.value if hasattr(course.lifecycle_status, "value") else str(course.lifecycle_status or "draft"),
         "teacher_id": course.teacher_id,
         "teacher_name": teacher_name or "",
+        "target_class": str(course.target_class or ""),
         "max_students": int(course.max_students or 0),
+        "start_at": course.start_at.isoformat() if course.start_at else None,
+        "end_at": course.end_at.isoformat() if course.end_at else None,
+        "archived_at": course.archived_at.isoformat() if course.archived_at else None,
         "apply_deadline": course.apply_deadline.isoformat() if course.apply_deadline else None,
         "enroll_status": course.enroll_status.value if isinstance(course.enroll_status, CourseEnrollStatus) else str(course.enroll_status),
     }
@@ -101,10 +108,82 @@ def _relation_nodes(kps: list[KnowledgePoint], ids: list[int]) -> list[GraphRela
     return [GraphRelationNodeOut(id=int(row.id), code=row.code, title=row.title) for row in kps if int(row.id) in ids]
 
 
+def _build_kp_navigation(kp: KnowledgePoint, session: Session) -> GraphNodeNavOut:
+    chapter_key = kp.chapter or "未分章"
+    chapter_rows = session.exec(
+        select(KnowledgePoint)
+        .where(
+            KnowledgePoint.subject == kp.subject,
+            KnowledgePoint.grade == kp.grade,
+            KnowledgePoint.chapter == kp.chapter,
+        )
+        .order_by(KnowledgePoint.code, KnowledgePoint.id)
+    ).all()
+    if not chapter_rows and chapter_key == "未分章":
+        chapter_rows = session.exec(
+            select(KnowledgePoint)
+            .where(
+                KnowledgePoint.subject == kp.subject,
+                KnowledgePoint.grade == kp.grade,
+                KnowledgePoint.chapter == "",
+            )
+            .order_by(KnowledgePoint.code, KnowledgePoint.id)
+        ).all()
+    nav_rows = [row for row in chapter_rows if row.id is not None]
+    current_index = next((index for index, row in enumerate(nav_rows) if int(row.id) == int(kp.id)), -1)
+    previous = None
+    nxt = None
+    if current_index > 0:
+        row = nav_rows[current_index - 1]
+        previous = GraphRelationNodeOut(id=int(row.id), code=row.code, title=row.title)
+    if current_index >= 0 and current_index < len(nav_rows) - 1:
+        row = nav_rows[current_index + 1]
+        nxt = GraphRelationNodeOut(id=int(row.id), code=row.code, title=row.title)
+    return GraphNodeNavOut(
+        previous=previous,
+        next=nxt,
+        chapter_nodes=[GraphRelationNodeOut(id=int(row.id), code=row.code, title=row.title) for row in nav_rows],
+    )
+
+
+def _course_lifecycle_value(course: Course | None) -> str:
+    if course is None:
+        return CourseLifecycleStatus.draft.value
+    value = getattr(course, "lifecycle_status", CourseLifecycleStatus.draft)
+    return value.value if hasattr(value, "value") else str(value or CourseLifecycleStatus.draft.value)
+
+
+def _is_course_learning_available(course: Course | None) -> bool:
+    if course is None:
+        return False
+    lifecycle = _course_lifecycle_value(course)
+    if not bool(course.active) or lifecycle != CourseLifecycleStatus.active.value:
+        return False
+    now = datetime.utcnow()
+    if course.start_at and now < course.start_at:
+        return False
+    if course.end_at and now > course.end_at:
+        return False
+    return True
+
+
 def _assert_student_subject_access(session: Session, user_id: int, subject: str) -> None:
     course = session.exec(select(Course).where(Course.title == subject).order_by(Course.created_at.desc())).first()
-    if course is None or course.id is None:
+    if course is None or course.id is None or not _is_course_learning_available(course):
         raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
+    enrollment = session.exec(
+        select(Enrollment).where(
+            Enrollment.student_id == user_id,
+            Enrollment.course_id == int(course.id),
+            Enrollment.status == EnrollmentStatus.active,
+        )
+    ).first()
+    if enrollment is not None:
+        return
+    student = session.get(User, user_id)
+    if student is not None and str(student.class_name or "").strip() and str(course.target_class or "").strip():
+        if str(student.class_name).strip() == str(course.target_class).strip():
+            return
     app_ids = {
         int(item.id)
         for item in session.exec(
@@ -116,16 +195,7 @@ def _assert_student_subject_access(session: Session, user_id: int, subject: str)
         ).all()
         if item.id is not None
     }
-    if not app_ids:
-        raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
-    enrollment = session.exec(
-        select(Enrollment).where(
-            Enrollment.student_id == user_id,
-            Enrollment.course_id == int(course.id),
-            Enrollment.status == EnrollmentStatus.active,
-        )
-    ).first()
-    if enrollment is None or enrollment.application_id is None or int(enrollment.application_id) not in app_ids:
+    if enrollment is None or (enrollment.application_id is not None and int(enrollment.application_id) not in app_ids):
         raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
 
 
@@ -161,24 +231,20 @@ def list_courses(
                 Enrollment.status == EnrollmentStatus.active,
             )
         ).all()
-        approved_app_ids = {
-            int(item.id)
-            for item in session.exec(
-                select(CourseApplication).where(
-                    CourseApplication.student_id == user.id,
-                    CourseApplication.status == ApplicationStatus.approved,
-                )
-            ).all()
-            if item.id is not None
-        }
         enrolled_course_ids = [
             int(item.course_id)
             for item in enrolled_rows
-            if item.application_id is not None and int(item.application_id) in approved_app_ids
+            if item.course_id is not None
         ]
+        class_bound_rows = session.exec(
+            select(Course).where(
+                Course.target_class == str(user.class_name or "").strip(),
+            )
+        ).all() if str(user.class_name or "").strip() else []
+        enrolled_course_ids.extend(int(item.id) for item in class_bound_rows if item.id is not None)
         if not enrolled_course_ids:
             return []
-        stmt = stmt.where(Course.id.in_(enrolled_course_ids))
+        stmt = stmt.where(Course.id.in_(set(enrolled_course_ids)))
     courses = session.exec(stmt).all()
     teacher_ids = [int(course.teacher_id) for course in courses if course.teacher_id is not None]
     teacher_map = {}
@@ -193,6 +259,58 @@ def list_courses(
         _course_payload(c, teacher_name=teacher_map.get(int(c.teacher_id)) if c.teacher_id is not None else "")
         for c in courses
     ]
+
+
+@router.get("/teacher/course-catalog")
+def list_teacher_course_catalog(
+    session: Session = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    if user.role != UserRole.teacher:
+        raise HTTPException(status_code=403, detail="Only teachers can browse course catalog")
+    courses = session.exec(select(Course).order_by(Course.created_at.desc())).all()
+    rows = []
+    for course in courses:
+        owner_id = int(course.teacher_id) if course.teacher_id is not None else None
+        rows.append(
+            {
+                **_course_payload(course),
+                "activated": owner_id == int(user.id),
+                "can_activate": _is_course_learning_available(course) and (owner_id is None or owner_id == int(user.id)),
+                "activation_status": (
+                    "已激活"
+                    if owner_id == int(user.id)
+                    else "课程未进入开课状态"
+                    if not _is_course_learning_available(course)
+                    else "已被其他老师激活"
+                    if owner_id is not None
+                    else "待激活"
+                ),
+            }
+        )
+    return {"items": rows}
+
+
+@router.post("/teacher/courses/{course_id}/activate")
+def activate_teacher_course(
+    course_id: int,
+    session: Session = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    if user.role != UserRole.teacher:
+        raise HTTPException(status_code=403, detail="Only teachers can activate courses")
+    course = session.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status_code=404, detail="课程不存在")
+    if not _is_course_learning_available(course):
+        raise HTTPException(status_code=400, detail="课程尚未开课，不能激活")
+    if course.teacher_id is not None and int(course.teacher_id) != int(user.id):
+        raise HTTPException(status_code=400, detail="该课程已被其他老师激活")
+    course.teacher_id = int(user.id)
+    session.add(course)
+    session.commit()
+    session.refresh(course)
+    return _course_payload(course, teacher_name=user.full_name or user.username)
 
 
 @router.get("/available-courses")
@@ -219,11 +337,14 @@ def list_available_courses(
             if teacher.id is not None
         }
     return [
-        _course_payload(
-            course,
-            teacher_name=teacher_map.get(int(course.teacher_id)) if course.teacher_id is not None else "",
-            enrolled=bool(app_map.get(int(course.id))),
-        )
+        {
+            **_course_payload(
+                course,
+                teacher_name=teacher_map.get(int(course.teacher_id)) if course.teacher_id is not None else "",
+                enrolled=bool(app_map.get(int(course.id))),
+            ),
+            "available": _is_course_learning_available(course),
+        }
         for course in courses
         if course.id is not None
     ]
@@ -251,7 +372,7 @@ def enroll_course(
     payload = payload or {}
     reason = str(payload.get("apply_reason") or "").strip()
     course = session.get(Course, course_id)
-    if course is None or not bool(course.active):
+    if course is None or not _is_course_learning_available(course):
         raise HTTPException(status_code=404, detail="Course not found")
     status_value = course.enroll_status.value if isinstance(course.enroll_status, CourseEnrollStatus) else str(course.enroll_status or "")
     if status_value != CourseEnrollStatus.open.value:
@@ -440,6 +561,18 @@ def graph_map(
 
     kp_title_map = {int(kp.id): kp.title for kp in kps if kp.id is not None}
     overlay: list[GraphOverlayNodeOut] = []
+    kp_dimension_summary = (
+        build_kp_dimension_summary(
+            session,
+            user_id=user.id,
+            subject=subject,
+            grade=grade,
+            kps=kps,
+            mastery_map=mastery_map,
+        )
+        if user.role == UserRole.student
+        else {"by_kp": {}}
+    )
     for kp in kps:
         blocked_reason = None
         status = "not_started"
@@ -461,6 +594,7 @@ def graph_map(
         if blocked:
             blocked_titles = [kp_title_map.get(item, str(item)) for item in blocked[:3]]
             blocked_reason = f"前驱未完成：{'、'.join(blocked_titles)}"
+        dimension_info = kp_dimension_summary.get("by_kp", {}).get(int(kp.id), {})
         overlay.append(
             GraphOverlayNodeOut(
                 kp_id=int(kp.id),
@@ -468,6 +602,16 @@ def graph_map(
                 status=status,
                 recommended=False,
                 blocked_reason=blocked_reason,
+                knowledge_enabled=bool(dimension_info.get("knowledge_enabled", True)),
+                ability_enabled=bool(dimension_info.get("ability_enabled", False)),
+                literacy_enabled=bool(dimension_info.get("literacy_enabled", False)),
+                knowledge_status=str(dimension_info.get("knowledge_status", "not_started")),
+                ability_status=str(dimension_info.get("ability_status", "not_started")),
+                literacy_status=str(dimension_info.get("literacy_status", "not_started")),
+                knowledge_label=str(dimension_info.get("knowledge_label", kp.title)),
+                ability_labels=list(dimension_info.get("ability_labels", [])),
+                literacy_labels=list(dimension_info.get("literacy_labels", [])),
+                evidence=dict(dimension_info.get("evidence", {})),
             )
         )
 
@@ -529,12 +673,30 @@ def node_detail(
             if blocked:
                 blocked_kps = session.exec(select(KnowledgePoint).where(KnowledgePoint.id.in_(blocked[:3]))).all()
                 blocked_titles = [item.title for item in blocked_kps]
+            dimension_info = build_kp_dimension_summary(
+                session,
+                user_id=user.id,
+                subject=kp.subject,
+                grade=kp.grade,
+                kps=[kp],
+                mastery_map={kp_id: mastery},
+            ).get("by_kp", {}).get(kp_id, {})
             overlay = GraphOverlayNodeOut(
                 kp_id=kp_id,
                 mastery=float(mastery.value),
                 status=mastery.status,
                 recommended=False,
                 blocked_reason=f"前驱未完成：{'、'.join(blocked_titles or [str(item) for item in blocked[:3]])}" if blocked else None,
+                knowledge_enabled=bool(dimension_info.get("knowledge_enabled", True)),
+                ability_enabled=bool(dimension_info.get("ability_enabled", False)),
+                literacy_enabled=bool(dimension_info.get("literacy_enabled", False)),
+                knowledge_status=str(dimension_info.get("knowledge_status", "not_started")),
+                ability_status=str(dimension_info.get("ability_status", "not_started")),
+                literacy_status=str(dimension_info.get("literacy_status", "not_started")),
+                knowledge_label=str(dimension_info.get("knowledge_label", kp.title)),
+                ability_labels=list(dimension_info.get("ability_labels", [])),
+                literacy_labels=list(dimension_info.get("literacy_labels", [])),
+                evidence=dict(dimension_info.get("evidence", {})),
             )
 
     resource_rows = session.exec(
@@ -617,6 +779,7 @@ def node_detail(
     return GraphNodeDetailOut(
         kp=_kp_out(kp),
         overlay=overlay,
+        navigation=_build_kp_navigation(kp, session),
         prerequisites=_relation_nodes(relation_kps, prereq_ids),
         downstream=_relation_nodes(relation_kps, downstream_ids),
         related=_relation_nodes(relation_kps, related_ids),

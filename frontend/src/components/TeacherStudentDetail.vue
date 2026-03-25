@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HoverTip from "./HoverTip.vue";
 import PortraitRadarChart from "./PortraitRadarChart.vue";
 
 type StudentRow = {
@@ -358,8 +359,8 @@ watch(
       <template #header>
         <div class="detail-header">
           <div>
-            <div class="detail-title">单学生学习详情</div>
-            <div class="detail-subtitle">查看学生画像、阶段变化、教师补充评价和知识点掌握依据。</div>
+            <div class="detail-title">学生详情</div>
+            <div class="detail-subtitle">这里看学生当前情况、阶段变化、老师填写内容和学习记录。</div>
           </div>
           <div class="detail-actions">
             <el-select v-model="selectedUserId" placeholder="选择学生" style="width: 260px">
@@ -376,7 +377,7 @@ watch(
 
       <div v-if="detail" class="detail-grid" v-loading="detailLoading">
         <section class="hero-card">
-          <div class="hero-label">当前学习者画像</div>
+          <div class="hero-label">当前情况</div>
           <div class="hero-name">{{ detail.student.full_name || detail.student.username }}</div>
           <div class="hero-meta">
             {{ detail.profile.persona_label }} · {{ detail.profile.risk_level }}
@@ -435,17 +436,17 @@ watch(
         </section>
         <section class="detail-tabs">
           <el-tabs v-model="detailTab">
-            <el-tab-pane label="结果概览" name="summary">
+            <el-tab-pane label="学生情况" name="summary">
               <div class="tab-grid">
                 <section v-if="selectedStage" class="panel-card soft-card">
-                  <div class="soft-title">期末汇总结果</div>
+                  <div class="soft-title">学期总结果</div>
                   <div class="stage-focus-grid">
                     <div class="stage-focus-card">
                       <span>覆盖阶段</span>
                       <strong>{{ termSummary.stage_count || 0 }}</strong>
                     </div>
                     <div class="stage-focus-card">
-                      <span>期末参考分</span>
+                      <span>学期参考分</span>
                       <strong>{{ Math.round((termSummary.final_score_reference || 0) * 100) }}%</strong>
                     </div>
                     <div class="stage-focus-card">
@@ -457,17 +458,17 @@ watch(
                       <strong>{{ termSummary.regress_stages || 0 }}</strong>
                     </div>
                   </div>
-                  <div class="stage-reason">{{ termSummary.final_reason_summary || "系统会把整个学期的阶段结果汇总成这里的期末参考。" }}</div>
+                  <div class="stage-reason">{{ termSummary.final_reason_summary || "系统会把整个学期的结果汇总到这里。" }}</div>
                 </section>
 
                 <section v-if="finalPortraitDimensions.length" class="panel-card soft-card">
-                  <div class="soft-title">期末五大类结果</div>
+                  <div class="soft-title">学期结果图</div>
                   <PortraitRadarChart
-                    title="期末五维雷达图"
-                    subtitle="系统把整个学期的阶段结果汇总后，得到这里的期末五维画像。"
+                    title="学期结果图"
+                    subtitle="这张图是整个学期的汇总结果。"
                     :items="finalPortraitDimensions"
                     accent="#2cb67d"
-                    empty-text="当前还没有可展示的期末五维结果"
+                    empty-text="当前还没有可展示的学期结果"
                   />
                   <div class="portrait-grid">
                     <div v-for="item in finalPortraitDimensions" :key="item.dimension_title" class="portrait-card">
@@ -478,7 +479,7 @@ watch(
                 </section>
 
                 <section v-if="selectedStage" class="panel-card soft-card">
-                  <div class="soft-title">当前选中阶段</div>
+                  <div class="soft-title">当前阶段</div>
                   <div class="stage-focus-grid">
                     <div class="stage-focus-card">
                       <span>学习投入</span>
@@ -501,10 +502,10 @@ watch(
                 </section>
 
                 <section v-if="selectedStage" class="panel-card soft-card">
-                  <div class="soft-title">五大类结果</div>
+                  <div class="soft-title">当前阶段结果图</div>
                   <PortraitRadarChart
-                    title="当前阶段五维雷达图"
-                    subtitle="这张图反映当前所选阶段在五大一级维度上的综合结果。"
+                    title="当前阶段结果图"
+                    subtitle="这张图反映当前阶段的大致情况。"
                     :items="selectedStage.portrait_dimensions ?? []"
                     accent="#5c7cff"
                     empty-text="当前阶段还没有足够数据生成雷达图"
@@ -516,13 +517,13 @@ watch(
                     </div>
                   </div>
                   <div v-else class="empty-help empty-help--compact">
-                    <el-empty description="当前阶段还没形成五大类结果" :image-size="72" />
-                    <div class="empty-help__text">当前阶段的数据还不够，或者老师还没有选好这门课要看的内容。</div>
+                    <el-empty description="当前阶段还没生成结果" :image-size="72" />
+                    <div class="empty-help__text">当前阶段的数据还不够，或者老师还没有配置完成。</div>
                   </div>
                 </section>
 
                 <section v-if="selectedStage" class="panel-card soft-card">
-                  <div class="soft-title">细项结果</div>
+                  <div class="soft-title">详细结果</div>
                   <div v-if="selectedStage.portrait_indicators?.length" class="indicator-stack">
                     <div
                       v-for="item in selectedStage.portrait_indicators.filter((row) => row.available)"
@@ -545,7 +546,7 @@ watch(
                     </div>
                   </div>
                   <div v-else class="empty-help empty-help--compact">
-                    <el-empty description="当前阶段还没有可显示的细项结果" :image-size="72" />
+                    <el-empty description="当前阶段还没有可显示的详细结果" :image-size="72" />
                     <div class="empty-help__text">系统会根据阶段数据、老师填写和学生补充内容自动生成这里的结果。</div>
                   </div>
                 </section>
@@ -555,13 +556,11 @@ watch(
             <el-tab-pane label="老师填写" name="teacher">
               <div class="tab-grid">
                 <section class="panel-card soft-card" v-loading="feedbackLoading">
-                  <div class="soft-title">教师补充评价</div>
-                  <el-alert
-                    class="teacher-sync-alert"
-                    type="info"
-                    :closable="false"
-                    title="这里填写的是老师对本阶段学生表现的判断。保存后，系统会立刻重算本阶段画像、五维结果和期末总画像。"
-                  />
+                  <div class="soft-title">老师评语</div>
+                  <div class="teacher-sync-inline">
+                    <span>填写说明</span>
+                    <HoverTip content="这里填写老师对本阶段表现的判断。保存后，系统会同步更新结果。" />
+                  </div>
                   <el-form label-width="88px" size="small">
                     <el-form-item label="评价阶段">
                       <el-select v-model="selectedStageId" placeholder="选择阶段" style="width: 100%" :disabled="!stageHistory.length">
@@ -589,7 +588,7 @@ watch(
                       <el-input v-model="feedbackForm.comment" type="textarea" :rows="4" placeholder="填写该学生在本阶段的补充评价和建议" />
                     </el-form-item>
                     <el-form-item>
-                      <el-button type="primary" :loading="savingFeedback" @click="saveStageFeedback">保存教师评语</el-button>
+                      <el-button type="primary" :loading="savingFeedback" @click="saveStageFeedback">保存评语</el-button>
                     </el-form-item>
                   </el-form>
                 </section>
@@ -621,13 +620,11 @@ watch(
                 </section>
 
                 <section class="panel-card soft-card" v-loading="teacherIndicatorLoading">
-                  <div class="soft-title">老师补充填写</div>
-                  <el-alert
-                    class="teacher-sync-alert"
-                    type="info"
-                    :closable="false"
-                    title="这部分用于补充系统自动看不出的高阶能力。保存后会直接进入阶段雷达图和最终画像结果。"
-                  />
+                  <div class="soft-title">老师补充内容</div>
+                  <div class="teacher-sync-inline">
+                    <span>补充说明</span>
+                    <HoverTip content="这部分用于补充系统自动看不出的情况。保存后会直接进入结果图。" />
+                  </div>
                   <div v-if="teacherIndicators.length" class="indicator-input-list">
                     <div v-for="item in teacherIndicators" :key="item.indicator_id" class="indicator-input-card">
                       <div class="indicator-input-card__head">
@@ -640,7 +637,7 @@ watch(
                       <el-input v-model="item.note" type="textarea" :rows="2" placeholder="简单写下老师观察到的情况" />
                     </div>
                     <div class="indicator-input-actions">
-                      <el-button type="primary" :loading="savingTeacherIndicators" @click="saveTeacherIndicators">保存老师填写内容</el-button>
+                      <el-button type="primary" :loading="savingTeacherIndicators" @click="saveTeacherIndicators">保存</el-button>
                     </div>
                   </div>
                   <div v-else class="empty-help empty-help--compact">
@@ -667,7 +664,7 @@ watch(
                 </section>
 
                 <section class="panel-card soft-card">
-                  <div class="soft-title">知识点掌握详情</div>
+                  <div class="soft-title">知识点情况</div>
                   <el-table :data="detail.mastery_map" size="small" max-height="320">
                     <el-table-column prop="code" label="编码" width="120" />
                     <el-table-column prop="title" label="知识点" min-width="180" />
@@ -682,7 +679,7 @@ watch(
                 </section>
 
                 <section class="panel-card soft-card">
-                  <div class="soft-title">行为轨迹</div>
+                  <div class="soft-title">学习行为记录</div>
                   <div class="timeline-list">
                     <div v-for="item in detail.behavior_timeline" :key="item.id" class="timeline-item">
                       <div class="timeline-type">{{ item.event_type }}</div>
@@ -693,7 +690,7 @@ watch(
                 </section>
 
                 <section class="panel-card soft-card">
-                  <div class="soft-title">最近推荐记录</div>
+                  <div class="soft-title">最近推荐</div>
                   <div class="timeline-list">
                     <div v-for="item in detail.recommendations" :key="item.id" class="timeline-item">
                       <div class="timeline-type">推荐到知识点 {{ item.target_kp_id }}</div>
@@ -767,12 +764,10 @@ watch(
 
       <div v-else class="detail-empty">
         <el-empty :description="emptyDetailMessage" />
-        <el-alert
-          class="detail-empty__tip"
-          type="info"
-          :closable="false"
-          title="如果这里没有内容，请按这个顺序检查：先选课程，再创建阶段，再导入阶段数据，最后回来看学生详情。"
-        />
+        <div class="teacher-sync-inline">
+          <span>排查提示</span>
+          <HoverTip content="如果这里没有内容，请按这个顺序检查：先选课程，再创建阶段，再导入阶段数据，最后回来看学生详情。" />
+        </div>
       </div>
     </el-card>
   </div>
@@ -1096,8 +1091,14 @@ watch(
   gap: 8px;
 }
 
-.teacher-sync-alert {
+.teacher-sync-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 14px;
+  color: #637995;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .feedback-history-list {

@@ -1,0 +1,48 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "首页" [ref=e9] [cursor=pointer]
+      - button "图谱" [ref=e10] [cursor=pointer]
+      - button "报告" [ref=e11] [cursor=pointer]
+      - button "问卷" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]: 学习中心
+    - button "退出" [ref=e15] [cursor=pointer]:
+      - generic [ref=e16]: 退出
+  - main [ref=e17]:
+    - generic [ref=e18]:
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - generic [ref=e23]: Student Report
+          - generic [ref=e24]: 学习报告
+        - generic [ref=e25]:
+          - generic [ref=e27] [cursor=pointer]:
+            - generic:
+              - combobox [ref=e29]
+              - generic [ref=e30]: 选择课程
+            - img [ref=e33]
+          - button "返回学习首页" [ref=e35] [cursor=pointer]:
+            - generic [ref=e36]: 返回学习首页
+          - button "去补充问卷" [ref=e37] [cursor=pointer]:
+            - generic [ref=e38]: 去补充问卷
+      - generic [ref=e39]:
+        - generic [ref=e41]:
+          - generic [ref=e42]: Report
+          - heading "学习结果" [level=2] [ref=e43]
+        - generic [ref=e45]:
+          - generic [ref=e47]:
+            - generic [ref=e48]:
+              - generic [ref=e49]: Learning Report
+              - generic [ref=e50]: 我的学习情况
+              - generic [ref=e51]: 这里会告诉你现在学得怎么样、哪里学得好、下一步该做什么。
+            - button "刷新" [ref=e52] [cursor=pointer]:
+              - generic [ref=e53]: 刷新
+          - generic [ref=e55]:
+            - generic [ref=e56]:
+              - img [ref=e58]
+              - paragraph [ref=e75]: 这门课还没有形成学习情况报告
+            - generic [ref=e76]:
+              - generic [ref=e77]: 为什么还没有结果
+              - button "查看提示" [ref=e78] [cursor=pointer]: "?"

@@ -8,6 +8,7 @@ from app.api.deps import get_current_user, require_role
 from app.db.models import (
     ApplicationStatus,
     Course,
+    CourseLifecycleStatus,
     CourseApplication,
     CourseCompletionRecord,
     CourseEnrollStatus,
@@ -66,6 +67,13 @@ def list_enrollable_courses(
         teacher_map = {int(t.id): (t.full_name or t.username) for t in teachers if t.id is not None}
     my_apps = session.exec(select(CourseApplication).where(CourseApplication.student_id == user.id)).all()
     app_map = {int(item.course_id): item for item in my_apps}
+    enrollment_rows = session.exec(
+        select(Enrollment).where(
+            Enrollment.student_id == user.id,
+            Enrollment.status == EnrollmentStatus.active,
+        )
+    ).all()
+    enrollment_map = {int(item.course_id): item for item in enrollment_rows if item.course_id is not None}
     data = []
     for course in courses:
         if course.id is None:
@@ -80,6 +88,13 @@ def list_enrollable_courses(
         )
         status = _course_open_status(course, enrolled_count)
         app = app_map.get(int(course.id))
+        enrollment = enrollment_map.get(int(course.id))
+        class_bound = bool(str(course.target_class or "").strip()) and str(course.target_class or "").strip() == str(user.class_name or "").strip()
+        lifecycle = course.lifecycle_status.value if isinstance(course.lifecycle_status, CourseLifecycleStatus) else str(course.lifecycle_status or "draft")
+        if enrollment is not None and enrollment.application_id is None:
+            app_status = "linked"
+        else:
+            app_status = app.status.value if app else None
         data.append(
             {
                 "id": int(course.id),
@@ -92,7 +107,12 @@ def list_enrollable_courses(
                 "enrolled_count": enrolled_count,
                 "apply_deadline": course.apply_deadline.isoformat() if course.apply_deadline else None,
                 "enroll_status": status,
-                "application_status": app.status.value if app else None,
+                "application_status": app_status,
+                "enrollment_mode": "class_auto" if class_bound else "manual_apply",
+                "target_class": course.target_class,
+                "lifecycle_status": lifecycle,
+                "start_at": course.start_at.isoformat() if course.start_at else None,
+                "end_at": course.end_at.isoformat() if course.end_at else None,
             }
         )
     return {"items": data}

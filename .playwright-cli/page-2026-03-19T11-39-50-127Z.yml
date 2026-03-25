@@ -1,0 +1,80 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "概览" [ref=e9] [cursor=pointer]
+      - button "课程" [ref=e10] [cursor=pointer]
+      - button "用户" [ref=e11] [cursor=pointer]
+      - button "规则" [ref=e12] [cursor=pointer]
+      - button "指标" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]: 管理端
+    - generic [ref=e15]:
+      - button "学习者端预览" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 学习者端预览
+      - button "退出" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 退出
+  - main [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - strong [ref=e24]: "1"
+          - generic [ref=e25]: 先看平台概览
+        - generic [ref=e26]:
+          - strong [ref=e27]: "2"
+          - generic [ref=e28]: 再管用户
+        - generic [ref=e29]:
+          - strong [ref=e30]: "3"
+          - generic [ref=e31]: 再管老师
+        - generic [ref=e32]:
+          - strong [ref=e33]: "4"
+          - generic [ref=e34]: 最后维护规则
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - generic [ref=e37]:
+            - generic [ref=e38]: Platform
+            - heading "平台概览" [level=2] [ref=e39]
+            - paragraph [ref=e40]: 先看整体运行情况，再进入用户、老师和规则等独立管理页面。
+          - generic [ref=e41]:
+            - button "课程管理" [ref=e42] [cursor=pointer]:
+              - generic [ref=e43]: 课程管理
+            - button "用户管理" [ref=e44] [cursor=pointer]:
+              - generic [ref=e45]: 用户管理
+            - button "老师管理" [ref=e46] [cursor=pointer]:
+              - generic [ref=e47]: 老师管理
+            - button "画像规则" [ref=e48] [cursor=pointer]:
+              - generic [ref=e49]: 画像规则
+        - generic [ref=e51]:
+          - generic [ref=e52]:
+            - generic [ref=e54]:
+              - generic [ref=e55]:
+                - generic [ref=e56]: 平台治理概览
+                - generic [ref=e57]: 管理员只看平台级数据：账号、角色、指标和画像规则底座。
+              - button "刷新" [ref=e58] [cursor=pointer]:
+                - generic [ref=e59]: 刷新
+            - generic [ref=e61]:
+              - generic [ref=e62]:
+                - generic [ref=e63]: 用户总数
+                - generic [ref=e64]: "4"
+              - generic [ref=e65]:
+                - generic [ref=e66]: 教师数量
+                - generic [ref=e67]: "2"
+              - generic [ref=e68]:
+                - generic [ref=e69]: 学生数量
+                - generic [ref=e70]: "1"
+              - generic [ref=e71]:
+                - generic [ref=e72]: 管理员数量
+                - generic [ref=e73]: "1"
+              - generic [ref=e74]:
+                - generic [ref=e75]: 一级指标数
+                - generic [ref=e76]: "5"
+              - generic [ref=e77]:
+                - generic [ref=e78]: 二级指标数
+                - generic [ref=e79]: "17"
+          - generic [ref=e80]:
+            - generic [ref=e81]: 管理员操作建议
+            - list [ref=e83]:
+              - listitem [ref=e84]: 先维护用户和老师账号状态（启用/禁用、角色、基础信息）。
+              - listitem [ref=e85]: 再维护指标池（一级维度和二级指标）。
+              - listitem [ref=e86]: 最后维护画像规则（阈值、权重、策略模板），供教师端按课程使用。

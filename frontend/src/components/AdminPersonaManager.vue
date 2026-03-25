@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { getRole } from "../token";
+import HoverTip from "./HoverTip.vue";
 
 const props = withDefaults(defineProps<{ subject: string; grade: string; showStudentDetailAction?: boolean; readonly?: boolean }>(), {
   showStudentDetailAction: false,
@@ -297,11 +298,10 @@ watch(
         </div>
       </template>
       <div class="persona-readonly">
-        <el-alert
-          type="info"
-          :closable="false"
-          title="画像规则由管理员维护。教师端只看学生画像、阶段变化和判定依据。"
-        />
+        <div class="persona-tip-inline">
+          <span>提示</span>
+          <HoverTip content="画像规则由管理员维护。教师端只看学生画像、阶段变化和判定依据。" />
+        </div>
         <div class="persona-readonly__grid">
           <div v-for="item in dimensionOptions" :key="item.key" class="persona-readonly__card">
             <strong>{{ item.label }}</strong>
@@ -466,6 +466,15 @@ watch(
 .persona-readonly {
   display: grid;
   gap: 14px;
+}
+
+.persona-tip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #637995;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .persona-readonly__grid {

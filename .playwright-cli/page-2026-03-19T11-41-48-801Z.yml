@@ -1,0 +1,138 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e70]:
+      - generic [ref=e71]:
+        - generic [ref=e72]: 动态评价系统
+        - generic [ref=e73]: 选课程，看图谱，学内容，看结果
+      - navigation [ref=e74]:
+        - button "首页" [ref=e75] [cursor=pointer]
+        - button "图谱" [ref=e76] [cursor=pointer]
+        - button "报告" [ref=e77] [cursor=pointer]
+        - button "问卷" [ref=e78] [cursor=pointer]
+      - generic [ref=e79]: 学习中心
+      - button "退出" [ref=e81] [cursor=pointer]:
+        - generic [ref=e82]: 退出
+    - main [ref=e83]:
+      - generic [ref=e84]:
+        - generic [ref=e87]:
+          - generic [ref=e88]:
+            - generic [ref=e89]: 学生端
+            - generic [ref=e90]: 学习首页
+          - generic [ref=e93] [cursor=pointer]:
+            - generic:
+              - combobox [ref=e95]
+              - generic [ref=e96]: 选择课程
+            - img [ref=e99]
+        - generic [ref=e101]:
+          - strong [ref=e102]: 最简单的使用方法
+          - generic [ref=e103]: 先选课程和知识点，再点“打开图谱”或“去学习”，最后看报告。
+          - generic [ref=e104]:
+            - button "打开图谱" [disabled] [ref=e105]:
+              - generic [ref=e106]: 打开图谱
+            - button "看报告" [ref=e107] [cursor=pointer]:
+              - generic [ref=e108]: 看报告
+            - button "填问卷" [ref=e109] [cursor=pointer]:
+              - generic [ref=e110]: 填问卷
+        - generic [ref=e111]:
+          - generic [ref=e112]:
+            - generic [ref=e114]: 我的课程
+            - generic [ref=e116]: 学习导航
+            - generic [ref=e117]:
+              - generic [ref=e118]: 暂无课程
+              - button "查看提示" [ref=e119] [cursor=pointer]: "?"
+            - generic [ref=e120]:
+              - generic [ref=e121]: "1"
+              - generic [ref=e122]:
+                - generic [ref=e123]: 先选知识点
+                - generic [ref=e125]:
+                  - generic:
+                    - combobox [disabled] [ref=e127]
+                    - generic [ref=e128]: 选择知识点
+                  - generic:
+                    - generic:
+                      - img
+            - generic [ref=e129]:
+              - generic [ref=e130]: "2"
+              - generic [ref=e131]:
+                - generic [ref=e132]: 接下来做什么
+                - generic [ref=e133]:
+                  - button "打开图谱" [disabled] [ref=e134]:
+                    - generic [ref=e135]: 打开图谱
+                  - button "给我建议" [disabled] [ref=e136]:
+                    - generic [ref=e137]: 给我建议
+                  - button "看报告" [disabled] [ref=e138]:
+                    - generic [ref=e139]: 看报告
+          - generic [ref=e141]:
+            - generic [ref=e142]:
+              - generic [ref=e144]:
+                - generic [ref=e145]: 学习总览
+                - button "刷新" [ref=e146] [cursor=pointer]:
+                  - generic [ref=e147]: 刷新
+              - generic [ref=e149]:
+                - generic [ref=e150]:
+                  - generic [ref=e152]:
+                    - generic [ref=e153]: 知识点总数
+                    - generic [ref=e154]: "0"
+                  - generic [ref=e156]:
+                    - generic [ref=e157]: 已掌握
+                    - generic [ref=e158]: "0"
+                  - generic [ref=e160]:
+                    - generic [ref=e161]: 进行中
+                    - generic [ref=e162]: "0"
+                  - generic [ref=e164]:
+                    - generic [ref=e165]: 待巩固
+                    - generic [ref=e166]: "0"
+                  - generic [ref=e168]:
+                    - generic [ref=e169]: 当前画像
+                    - generic [ref=e170]: 拖延风险型
+                  - generic [ref=e172]:
+                    - generic [ref=e173]: 平均掌握度
+                    - generic [ref=e174]: 0%
+                  - generic [ref=e176]:
+                    - generic [ref=e177]: 动态评分
+                    - generic [ref=e178]: 7%
+                  - generic [ref=e180]:
+                    - generic [ref=e181]: 待复习任务
+                    - generic [ref=e182]: "0"
+                - generic [ref=e183]:
+                  - generic [ref=e184]: 当前判断依据
+                  - button "查看提示" [ref=e185] [cursor=pointer]: "?"
+                - generic [ref=e186]:
+                  - generic [ref=e188]:
+                    - generic [ref=e189]: 本周练习表现
+                    - generic [ref=e190]:
+                      - generic [ref=e191]: 练习次数：0
+                      - generic [ref=e192]: 正确次数：0
+                      - generic [ref=e193]: 正确率：0%
+                  - generic [ref=e195]:
+                    - generic [ref=e196]: 最近活动
+                    - generic [ref=e197]:
+                      - generic [ref=e198]: 最近练习：暂无
+                      - generic [ref=e199]: 最近视频：暂无
+                - generic [ref=e200]:
+                  - generic [ref=e202]:
+                    - generic [ref=e203]: 薄弱知识点 Top5
+                    - generic [ref=e204]:
+                      - img [ref=e206]
+                      - paragraph [ref=e223]: 暂无数据
+                  - generic [ref=e225]:
+                    - generic [ref=e226]: 掌握度热力
+                    - generic [ref=e227]:
+                      - img [ref=e229]
+                      - paragraph [ref=e246]: 暂无知识点
+            - generic [ref=e247]:
+              - button "打开图谱 在图谱里点知识点，然后进入学习页面。" [ref=e248] [cursor=pointer]:
+                - strong [ref=e249]: 打开图谱
+                - generic [ref=e250]: 在图谱里点知识点，然后进入学习页面。
+              - button "填写问卷 补充你的学习情况。" [ref=e251] [cursor=pointer]:
+                - strong [ref=e252]: 填写问卷
+                - generic [ref=e253]: 补充你的学习情况。
+              - button "查看报告 看看你学得怎么样，下一步该做什么。" [ref=e254] [cursor=pointer]:
+                - strong [ref=e255]: 查看报告
+                - generic [ref=e256]: 看看你学得怎么样，下一步该做什么。
+              - button "系统建议 先点“给我建议”再看这里" [disabled] [ref=e257]:
+                - strong [ref=e258]: 系统建议
+                - generic [ref=e259]: 先点“给我建议”再看这里
+  - alert [ref=e260]:
+    - img [ref=e262]
+    - paragraph [ref=e264]: 登录成功

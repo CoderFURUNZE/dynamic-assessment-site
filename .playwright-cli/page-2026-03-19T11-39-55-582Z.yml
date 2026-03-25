@@ -1,0 +1,214 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "概览" [ref=e9] [cursor=pointer]
+      - button "课程" [ref=e10] [cursor=pointer]
+      - button "用户" [ref=e11] [cursor=pointer]
+      - button "规则" [ref=e12] [cursor=pointer]
+      - button "指标" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]: 管理端
+    - generic [ref=e15]:
+      - button "学习者端预览" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 学习者端预览
+      - button "退出" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 退出
+  - main [ref=e20]:
+    - generic [ref=e22]:
+      - generic [ref=e24]:
+        - generic [ref=e25]: Persona Rules
+        - heading "画像规则管理" [level=2] [ref=e26]
+        - paragraph [ref=e27]: 先确定规则上下文，再单独维护画像规则，避免后台页面信息过载。
+      - generic [ref=e28]:
+        - generic [ref=e29]:
+          - generic [ref=e30]: 规则上下文
+          - generic [ref=e32]:
+            - textbox "学科（如：计算机网络）" [ref=e35]: 计算机网络
+            - textbox "层级（如：通用）" [ref=e38]: 通用
+        - generic [ref=e39]:
+          - generic [ref=e40]:
+            - generic [ref=e42]:
+              - generic [ref=e43]:
+                - generic [ref=e44]: 学习者画像规则
+                - generic [ref=e45]: 管理员在这里配置分型阈值、策略模板，并可一键重算全体学生画像。
+              - generic [ref=e46]:
+                - button "刷新" [ref=e47] [cursor=pointer]:
+                  - generic [ref=e48]: 刷新
+                - button "重算画像" [ref=e49] [cursor=pointer]:
+                  - generic [ref=e50]: 重算画像
+                - button "重算画像+掌握度" [ref=e51] [cursor=pointer]:
+                  - generic [ref=e52]: 重算画像+掌握度
+                - button "保存规则" [ref=e53] [cursor=pointer]:
+                  - generic [ref=e54]: 保存规则
+            - generic [ref=e56]:
+              - generic [ref=e57]:
+                - generic [ref=e58]: 分型阈值
+                - generic [ref=e59]:
+                  - generic [ref=e60]:
+                    - generic [ref=e61]: 拖延阈值 E
+                    - generic [ref=e62]:
+                      - button "减少数值" [ref=e63] [cursor=pointer]:
+                        - img [ref=e65]
+                      - button "增加数值" [ref=e67] [cursor=pointer]:
+                        - img [ref=e69]
+                      - spinbutton "拖延阈值 E 减少数值 增加数值" [ref=e73]: "0.4"
+                  - generic [ref=e74]:
+                    - generic [ref=e75]: 聪明型 A
+                    - generic [ref=e76]:
+                      - button "减少数值" [ref=e77] [cursor=pointer]:
+                        - img [ref=e79]
+                      - button "增加数值" [ref=e81] [cursor=pointer]:
+                        - img [ref=e83]
+                      - spinbutton "聪明型 A 减少数值 增加数值" [ref=e87]: "0.75"
+                  - generic [ref=e88]:
+                    - generic [ref=e89]: 聪明型 F
+                    - generic [ref=e90]:
+                      - button "减少数值" [ref=e91] [cursor=pointer]:
+                        - img [ref=e93]
+                      - button "增加数值" [ref=e95] [cursor=pointer]:
+                        - img [ref=e97]
+                      - spinbutton "聪明型 F 减少数值 增加数值" [ref=e101]: "0.75"
+                  - generic [ref=e102]:
+                    - generic [ref=e103]: 踏实型 E
+                    - generic [ref=e104]:
+                      - button "减少数值" [ref=e105] [cursor=pointer]:
+                        - img [ref=e107]
+                      - button "增加数值" [ref=e109] [cursor=pointer]:
+                        - img [ref=e111]
+                      - spinbutton "踏实型 E 减少数值 增加数值" [ref=e115]: "0.75"
+                  - generic [ref=e116]:
+                    - generic [ref=e117]: 踏实型 A
+                    - generic [ref=e118]:
+                      - button "减少数值" [ref=e119] [cursor=pointer]:
+                        - img [ref=e121]
+                      - button "增加数值" [ref=e123] [cursor=pointer]:
+                        - img [ref=e125]
+                      - spinbutton "踏实型 A 减少数值 增加数值" [ref=e129]: "0.6"
+                  - generic [ref=e130]:
+                    - generic [ref=e131]: 困难型 E
+                    - generic [ref=e132]:
+                      - button "减少数值" [ref=e133] [cursor=pointer]:
+                        - img [ref=e135]
+                      - button "增加数值" [ref=e137] [cursor=pointer]:
+                        - img [ref=e139]
+                      - spinbutton "困难型 E 减少数值 增加数值" [ref=e143]: "0.6"
+                  - generic [ref=e144]:
+                    - generic [ref=e145]: 困难型 A
+                    - generic [ref=e146]:
+                      - button "减少数值" [ref=e147] [cursor=pointer]:
+                        - img [ref=e149]
+                      - button "增加数值" [ref=e151] [cursor=pointer]:
+                        - img [ref=e153]
+                      - spinbutton "困难型 A 减少数值 增加数值" [ref=e157]: "0.6"
+              - generic [ref=e158]:
+                - generic [ref=e159]: 策略模板
+                - generic [ref=e160]:
+                  - generic [ref=e161]:
+                    - generic [ref=e162]: 聪明能干型
+                    - textbox "聪明能干型" [ref=e165]: 更高难度+精讲提要
+                  - generic [ref=e166]:
+                    - generic [ref=e167]: 踏实学习型
+                    - textbox "踏实学习型" [ref=e170]: 结构化路径+阶段反馈
+                  - generic [ref=e171]:
+                    - generic [ref=e172]: 困难坚持型
+                    - textbox "困难坚持型" [ref=e175]: 补救前置点+低阶练习
+                  - generic [ref=e176]:
+                    - generic [ref=e177]: 拖延风险型
+                    - textbox "拖延风险型" [ref=e180]: 最短任务链+提醒
+                  - generic [ref=e181]:
+                    - generic [ref=e182]: 平稳发展型
+                    - textbox "平稳发展型" [ref=e185]: 标准推荐
+              - generic [ref=e186]:
+                - generic [ref=e187]: 阶段维度配置
+                - generic [ref=e188]:
+                  - generic [ref=e189]:
+                    - generic [ref=e190]:
+                      - generic [ref=e191]: 学习投入
+                      - generic [ref=e192]:
+                        - switch "学习投入 权重 减少数值 增加数值 0.3" [checked]
+                    - generic [ref=e195]:
+                      - generic [ref=e196]: 权重
+                      - generic [ref=e197]:
+                        - button "减少数值" [ref=e198] [cursor=pointer]:
+                          - img [ref=e200]
+                        - button "增加数值" [ref=e202] [cursor=pointer]:
+                          - img [ref=e204]
+                        - spinbutton [ref=e208]: "0.3"
+                  - generic [ref=e209]:
+                    - generic [ref=e210]:
+                      - generic [ref=e211]: 学习成效
+                      - generic [ref=e212]:
+                        - switch "学习成效 权重 减少数值 增加数值 0.35" [checked]
+                    - generic [ref=e215]:
+                      - generic [ref=e216]: 权重
+                      - generic [ref=e217]:
+                        - button "减少数值" [ref=e218] [cursor=pointer]:
+                          - img [ref=e220]
+                        - button "增加数值" [ref=e222] [cursor=pointer]:
+                          - img [ref=e224]
+                        - spinbutton [ref=e228]: "0.35"
+                  - generic [ref=e229]:
+                    - generic [ref=e230]:
+                      - generic [ref=e231]: 学习习惯
+                      - generic [ref=e232]:
+                        - switch "学习习惯 权重 减少数值 增加数值 0.2" [checked]
+                    - generic [ref=e235]:
+                      - generic [ref=e236]: 权重
+                      - generic [ref=e237]:
+                        - button "减少数值" [ref=e238] [cursor=pointer]:
+                          - img [ref=e240]
+                        - button "增加数值" [ref=e242] [cursor=pointer]:
+                          - img [ref=e244]
+                        - spinbutton [ref=e248]: "0.2"
+                  - generic [ref=e249]:
+                    - generic [ref=e250]:
+                      - generic [ref=e251]: 学习特征
+                      - generic [ref=e252]:
+                        - switch "学习特征 权重 减少数值 增加数值 0.15" [checked]
+                    - generic [ref=e255]:
+                      - generic [ref=e256]: 权重
+                      - generic [ref=e257]:
+                        - button "减少数值" [ref=e258] [cursor=pointer]:
+                          - img [ref=e260]
+                        - button "增加数值" [ref=e262] [cursor=pointer]:
+                          - img [ref=e264]
+                        - spinbutton [ref=e268]: "0.15"
+              - generic [ref=e269]:
+                - generic [ref=e270]: 画像权重 JSON
+                - textbox "请输入画像维度权重 JSON" [ref=e272]: "{ \"engagement\": { \"learning_frequency\": 0.35, \"study_duration\": 0.35, \"resource_completion\": 0.2, \"streak\": 0.1 }, \"achievement\": { \"practice_accuracy\": 0.5, \"quiz_accuracy\": 0.3, \"mastery_growth\": 0.2 }, \"efficiency\": { \"unit_time_accuracy\": 0.6, \"task_completion\": 0.4 }, \"risk\": { \"overdue_rate\": 0.4, \"wrong_streak\": 0.3, \"abandonment_rate\": 0.3 }, \"dynamic\": { \"engagement\": 0.25, \"achievement\": 0.3, \"course_mastery\": 0.35, \"stability\": 0.1 }, \"stage_dimensions\": { \"engagement\": { \"enabled\": true, \"weight\": 0.3, \"metrics\": { \"activity_frequency\": 0.25, \"study_duration\": 0.35, \"completion\": 0.25, \"attendance_participation\": 0.15 } }, \"achievement\": { \"enabled\": true, \"weight\": 0.35, \"metrics\": { \"assignment_score\": 0.35, \"quiz_score\": 0.35, \"task_score\": 0.15, \"stage_mastery\": 0.15 } }, \"habit\": { \"enabled\": true, \"weight\": 0.2, \"metrics\": { \"on_time_rate\": 0.4, \"attendance_rate\": 0.35, \"continuity\": 0.25 } }, \"characteristic\": { \"enabled\": true, \"weight\": 0.15, \"metrics\": { \"participation\": 0.35, \"task_completion\": 0.35, \"resource_initiative\": 0.3 } } } }"
+          - generic [ref=e273]:
+            - generic [ref=e275]:
+              - generic [ref=e276]: 学生画像列表
+              - generic [ref=e278]: 风险学生 0
+            - generic [ref=e281]:
+              - table [ref=e283]:
+                - rowgroup [ref=e295]:
+                  - row "账号 姓名 当前类型 最新阶段 阶段变化 动态评分 课程掌握度 等级 判定依据 人工覆盖" [ref=e296]:
+                    - columnheader "账号" [ref=e297]:
+                      - generic [ref=e298]: 账号
+                    - columnheader "姓名" [ref=e299]:
+                      - generic [ref=e300]: 姓名
+                    - columnheader "当前类型" [ref=e301]:
+                      - generic [ref=e302]: 当前类型
+                    - columnheader "最新阶段" [ref=e303]:
+                      - generic [ref=e304]: 最新阶段
+                    - columnheader "阶段变化" [ref=e305]:
+                      - generic [ref=e306]: 阶段变化
+                    - columnheader "动态评分" [ref=e307]:
+                      - generic [ref=e308]: 动态评分
+                    - columnheader "课程掌握度" [ref=e309]:
+                      - generic [ref=e310]: 课程掌握度
+                    - columnheader "等级" [ref=e311]:
+                      - generic [ref=e312]: 等级
+                    - columnheader "判定依据" [ref=e313]:
+                      - generic [ref=e314]: 判定依据
+                    - columnheader "人工覆盖" [ref=e315]:
+                      - generic [ref=e316]: 人工覆盖
+              - generic [ref=e320]:
+                - table:
+                  - rowgroup
+                - generic [ref=e322]: 暂无数据
+          - img [ref=e325]
+  - generic [ref=e327]: 加载中...

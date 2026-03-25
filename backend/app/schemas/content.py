@@ -68,3 +68,9 @@ class VideoProgressOut(BaseModel):
     watched_seconds: float
     duration_seconds: float
     completed: bool
+
+
+class ResourceVisitIn(BaseModel):
+    kp_id: int
+    resource_id: int
+    action: str = "visit"

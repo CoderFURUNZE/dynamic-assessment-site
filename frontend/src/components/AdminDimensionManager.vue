@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HoverTip from "./HoverTip.vue";
 
 type Indicator = {
   id: number;
@@ -215,12 +216,10 @@ watch(
               </div>
             </div>
           </el-card>
-          <el-alert
-            class="dimension-tip"
-            type="info"
-            :closable="false"
-            title="管理员负责定五大维度和细项框架；老师只按课程选择哪些细项参与画像。"
-          />
+          <div class="dimension-tip-inline">
+            <span>提示</span>
+            <HoverTip content="管理员负责定五大维度和细项框架；老师只按课程选择哪些细项参与画像。" />
+          </div>
           <div
             v-for="item in dimensions"
             :key="item.id"
@@ -406,8 +405,14 @@ watch(
   margin-bottom: 18px;
 }
 
-.dimension-tip {
+.dimension-tip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 2px;
+  color: #637995;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .source-card {

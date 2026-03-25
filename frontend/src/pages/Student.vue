@@ -4,12 +4,10 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api, getWithCache } from "../api";
 import { getRole, getUsername } from "../token";
+import HoverTip from "../components/HoverTip.vue";
 
 import OverviewPane from "../components/OverviewPane.vue";
-import HintButton from "../components/HintButton.vue";
 import WorkspaceTopbar from "../components/WorkspaceTopbar.vue";
-import SimpleStepsBar from "../components/SimpleStepsBar.vue";
-import StarterGuideCard from "../components/StarterGuideCard.vue";
 
 type KP = {
   id: number;
@@ -224,33 +222,20 @@ onMounted(async () => {
       <WorkspaceTopbar
         v-model="subject"
         :courses="courses"
-        badge="Student Workspace"
-        title="学习中心"
+        badge="学生端"
+        title="学习首页"
         @change="onCourseChange"
-      >
-        <HintButton tip="进入单独报名页面，查看审核状态与通知。" @click="router.push('/student/enroll')">
-          课程报名
-        </HintButton>
-      </WorkspaceTopbar>
-
-      <StarterGuideCard
-        title="使用顺序"
-        intro="先总览，再图谱，再学习。"
-        :items="[
-          { title: '先看总览', desc: '先知道这门课学什么、现在学到哪里。' },
-          { title: '再看图谱', desc: '图谱能告诉你知识点之间的关系，先学什么、后学什么。' },
-          { title: '进入学习内容页', desc: '在图谱里点知识点，再进入学习内容页学习资源和练习。' },
-          { title: '最后看报告', desc: '报告页会显示学习情况、建议和需要补充填写的内容。' },
-        ]"
-        :actions="[
-          { key: 'overview', label: '先看总览', primary: true },
-          { key: 'graph-workspace', label: '打开知识图谱' },
-          { key: 'questionnaire', label: '去补充问卷' },
-          { key: 'report', label: '去看报告' },
-        ]"
-        storage-key="student-main"
-        @action="handleGuideAction"
       />
+
+      <section class="panel-card simple-intro">
+        <strong>最简单的使用方法</strong>
+        <span>先选课程和知识点，再点“打开图谱”或“去学习”，最后看报告。</span>
+        <div class="simple-intro__actions">
+          <el-button type="primary" @click="openGraphWorkspace" :disabled="!currentKpId">打开图谱</el-button>
+          <el-button @click="router.push({ path: '/student/report', query: { subject: subject || undefined } })">看报告</el-button>
+          <el-button @click="router.push({ path: '/student/questionnaire', query: { subject: subject || undefined } })">填问卷</el-button>
+        </div>
+      </section>
 
       <div class="page-grid">
       <section class="panel-card info-panel">
@@ -261,8 +246,9 @@ onMounted(async () => {
         <div class="section-block section-block--spaced">
           <div class="panel-title">学习导航</div>
         </div>
-        <div v-if="courses.length === 0" style="margin-bottom: 8px">
-          <el-alert type="warning" title="暂无课程，请先在管理员端配置课程" :closable="false" show-icon />
+        <div v-if="courses.length === 0" class="student-tip-inline" style="margin-bottom: 8px">
+          <span>暂无课程</span>
+          <HoverTip content="请先在管理员端配置课程，学生端这里才会显示可学习课程。" />
         </div>
 
         <div class="step-card">
@@ -297,117 +283,54 @@ onMounted(async () => {
         <div class="step-card step-card--action">
           <div class="step-card__index">2</div>
           <div class="step-card__body">
-            <div class="step-card__title">再开始操作</div>
+            <div class="step-card__title">接下来做什么</div>
             <div class="action-row">
-              <HintButton tip="重新读取这个知识点的最新掌握度。" type="primary" :disabled="!currentKpId" @click="refreshMastery">
-                刷新掌握度
-              </HintButton>
-              <HintButton tip="根据当前知识点和学习状态生成下一步建议。" type="success" :disabled="!currentKpId" @click="getReco">
-                生成学习建议
-              </HintButton>
-              <HintButton tip="进入大图谱页面，查看知识关系、资源和推荐路径。" :disabled="!currentKpId" @click="openGraphWorkspace">
-                打开知识图谱
-              </HintButton>
+              <el-button type="primary" :disabled="!currentKpId" @click="openGraphWorkspace">打开图谱</el-button>
+              <el-button :disabled="!currentKpId" @click="getReco">给我建议</el-button>
+              <el-button :disabled="!currentKpId" @click="router.push({ path: '/student/report', query: { subject: subject || undefined } })">看报告</el-button>
             </div>
           </div>
         </div>
 
         <el-card v-if="reco" class="sub-card" shadow="never">
-          <template #header>个性化推荐</template>
+          <template #header>下一步建议</template>
           <div class="reco-body">
-            <div class="reco-summary">
-              <div>
-                <div class="reco-label">当前画像</div>
-                <strong>{{ reco.persona_label }}</strong>
-              </div>
-              <div>
-                <div class="reco-label">动态评分</div>
-                <strong>{{ Math.round((reco.dynamic_score || 0) * 100) }}%</strong>
-              </div>
-              <div>
-                <div class="reco-label">评价等级</div>
-                <strong>{{ reco.risk_level }}</strong>
-              </div>
-            </div>
-
             <div class="reco-highlight">
-              <div class="reco-label">推荐目标</div>
+              <div class="reco-label">建议先学</div>
               <div class="reco-target">
                 {{ reco.target_kp.code }} {{ reco.target_kp.title }}
-              </div>
-              <div class="action-row action-row--compact">
-                <el-tag size="small" type="primary">{{ recommendationStageLabel }}</el-tag>
-                <el-tag size="small" type="info">{{ reco.persona_strategy_tag }}</el-tag>
               </div>
               <div class="reco-text">{{ reco.reason_summary }}</div>
               <div class="reco-text">{{ reco.advice_text }}</div>
             </div>
-
-            <div class="reco-grid">
-              <div class="reco-box">
-                <div class="reco-label">推荐依据</div>
-                <div class="reco-item">当前掌握度：{{ Math.round((reco.diagnosis?.mastery || 0) * 100) }}%</div>
-                <div class="reco-item">当前状态：{{ reco.diagnosis?.status || "未知" }}</div>
-                <div class="reco-item">{{ reco.diagnosis?.reason_summary || "暂无掌握度解释" }}</div>
-                <div class="reco-item">证据覆盖：{{ Math.round(((reco.evidence?.score || 0) * 100)) }}%</div>
-              </div>
-              <div class="reco-box">
-                <div class="reco-label">解锁与补救</div>
-                <div class="reco-item">推荐动作：{{ recommendationStageLabel }}</div>
-                <div class="reco-item">缺失条件：{{ (reco.evidence?.missing?.length ?? 0) > 0 ? reco.evidence?.missing?.join("、") : "已满足主要条件" }}</div>
-                <div class="reco-item">路径长度：{{ reco.remedy_path?.path?.length ?? 0 }} 个节点</div>
-                <div class="reco-item">{{ reco.unlock?.can_unlock_next ? "当前可解锁下一节点" : "当前仍需先补强再解锁" }}</div>
-              </div>
-            </div>
-
-            <div class="reco-grid">
-              <div class="reco-box">
-                <div class="reco-label">推荐资源</div>
-                <div v-if="reco.resource_list.length === 0" class="reco-text">暂无资源推荐</div>
-                <div v-for="item in reco.resource_list" :key="item.id" class="reco-item">
-                  {{ item.title }} · {{ item.type }}
-                </div>
-              </div>
-              <div class="reco-box">
-                <div class="reco-label">推荐练习</div>
-                <div v-if="reco.practice_list.length === 0" class="reco-text">暂无练习推荐</div>
-                <div v-for="item in reco.practice_list" :key="item.question_id" class="reco-item">
-                  {{ item.type }} · 难度 {{ Math.round((item.difficulty || 0) * 100) }}
-                </div>
-              </div>
-            </div>
-
             <div class="action-row">
               <el-button @click="resetReco">关闭</el-button>
-              <el-button type="primary" :disabled="!recommendedTarget" @click="goToRecommended">前往推荐知识点</el-button>
+              <el-button type="primary" :disabled="!recommendedTarget" @click="goToRecommended">去这个知识点</el-button>
             </div>
           </div>
         </el-card>
       </section>
 
       <section class="panel-card content-panel">
-        <div class="content-steps">
-          <SimpleStepsBar :items="['先看总览', '再进图谱', '再去学习内容页', '单独补问卷', '单独看报告']" />
-        </div>
         <div class="tab-panel">
           <OverviewPane :subject="subject" :grade="grade" />
 
           <div class="feature-grid">
             <button class="feature-card" @click="openGraphWorkspace">
-              <strong>知识图谱</strong>
-              <span>查看知识结构，定位当前知识点，再进入学习内容页。</span>
+              <strong>打开图谱</strong>
+              <span>在图谱里点知识点，然后进入学习页面。</span>
             </button>
             <button class="feature-card" @click="router.push({ path: '/student/questionnaire', query: { subject: subject || undefined } })">
-              <strong>补充问卷</strong>
-              <span>单独填写学习偏好和当前状态，不再和其它内容混在一起。</span>
+              <strong>填写问卷</strong>
+              <span>补充你的学习情况。</span>
             </button>
             <button class="feature-card" @click="router.push({ path: '/student/report', query: { subject: subject || undefined } })">
-              <strong>学习报告</strong>
-              <span>单独查看画像结果、阶段变化和下一步建议。</span>
+              <strong>查看报告</strong>
+              <span>看看你学得怎么样，下一步该做什么。</span>
             </button>
             <button class="feature-card" :disabled="!recommendedTargetId" @click="goToRecommended">
-              <strong>推荐知识点</strong>
-              <span>{{ recommendedTarget ? `${recommendedTarget.code} ${recommendedTarget.title}` : "等待系统推荐结果" }}</span>
+              <strong>系统建议</strong>
+              <span>{{ recommendedTarget ? `${recommendedTarget.code} ${recommendedTarget.title}` : "先点“给我建议”再看这里" }}</span>
             </button>
           </div>
         </div>
@@ -453,6 +376,28 @@ onMounted(async () => {
 .page-shell {
   display: grid;
   gap: 16px;
+}
+
+.simple-intro {
+  padding: 16px 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.simple-intro strong {
+  font-size: 18px;
+  color: var(--app-ink);
+}
+
+.simple-intro span {
+  color: var(--app-ink-soft);
+  line-height: 1.7;
+}
+
+.simple-intro__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .page-grid {
@@ -573,13 +518,6 @@ onMounted(async () => {
   font-size: 12px;
   line-height: 1.6;
   color: #5e7697;
-}
-
-.content-steps {
-  padding: 14px 16px 0;
-  border-bottom: 1px solid var(--app-border);
-  padding-bottom: 14px;
-  background: #ffffff;
 }
 
 .control-row {
@@ -772,6 +710,15 @@ onMounted(async () => {
   color: var(--app-ink-soft);
   line-height: 1.5;
   font-size: 14px;
+}
+
+.student-tip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #7c6750;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .reco-body {

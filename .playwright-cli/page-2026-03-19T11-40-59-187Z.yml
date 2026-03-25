@@ -1,0 +1,78 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "课程" [ref=e9] [cursor=pointer]
+      - button "图谱" [ref=e10] [cursor=pointer]
+      - button "导入" [ref=e11] [cursor=pointer]
+      - button "学生" [ref=e12] [cursor=pointer]
+      - button "评分" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]: 教师工作台
+    - generic [ref=e15]:
+      - button "学习者端预览" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 学习者端预览
+      - button "退出" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 退出
+  - main [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26]: Teacher Students
+          - generic [ref=e27]: 学生详情
+        - generic [ref=e28]:
+          - generic [ref=e30] [cursor=pointer]:
+            - generic:
+              - combobox [ref=e32]
+              - generic [ref=e33]: 操作系统
+            - img [ref=e36]
+          - button "返回课程分析" [ref=e38] [cursor=pointer]:
+            - generic [ref=e39]: 返回课程分析
+      - generic [ref=e40]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Students
+          - heading "学生详情" [level=2] [ref=e44]
+        - generic [ref=e47]:
+          - generic [ref=e49]:
+            - generic [ref=e50]:
+              - generic [ref=e51]: 学生详情
+              - generic [ref=e52]: 这里看学生当前情况、阶段变化、老师填写内容和学习记录。
+            - generic [ref=e55] [cursor=pointer]:
+              - generic:
+                - combobox [ref=e57]
+                - generic [ref=e58]: "202220164205"
+              - img [ref=e61]
+          - generic [ref=e93]:
+            - generic [ref=e94]:
+              - generic [ref=e95]: 当前情况
+              - generic [ref=e96]: "202220164205"
+              - generic [ref=e97]: 拖延风险型 · 风险
+              - generic [ref=e98]: 拖延风险型；课程掌握度 0.06；主要判断：参与度偏低、学习成效偏弱
+              - generic [ref=e99]:
+                - generic [ref=e100]:
+                  - generic [ref=e101]: 动态评分
+                  - strong [ref=e102]: 25%
+                - generic [ref=e103]:
+                  - generic [ref=e104]: 课程掌握度
+                  - strong [ref=e105]: 6%
+                - generic [ref=e106]:
+                  - generic [ref=e107]: 学习投入
+                  - strong [ref=e108]: 15%
+                - generic [ref=e109]:
+                  - generic [ref=e110]: 学习成效
+                  - strong [ref=e111]: 33%
+            - generic [ref=e112]:
+              - generic [ref=e113]: 阶段变化
+              - generic [ref=e114]:
+                - generic [ref=e115]:
+                  - img [ref=e117]
+                  - paragraph [ref=e134]: 当前还没有阶段评价数据
+                - generic [ref=e135]: 请先在教师端创建阶段，并为这门课导入阶段数据，系统才会生成这里的结果。
+            - generic [ref=e137]:
+              - tablist [ref=e141]:
+                - tab "学生情况" [selected] [ref=e143]
+                - tab "老师填写" [ref=e144]
+                - tab "学习记录" [ref=e145]
+              - generic:
+                - tabpanel "学生情况"

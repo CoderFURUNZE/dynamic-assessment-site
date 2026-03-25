@@ -337,6 +337,253 @@ def _json_load(raw: str | None, default: dict[str, Any]) -> dict[str, Any]:
         return default
 
 
+def parse_kp_tags(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    parts = [
+        item.strip()
+        for item in str(raw)
+        .replace("；", ",")
+        .replace(";", ",")
+        .replace("、", ",")
+        .replace("/", ",")
+        .replace("\n", ",")
+        .split(",")
+    ]
+    result: list[str] = []
+    for item in parts:
+        if item and item not in result:
+            result.append(item)
+    return result
+
+
+def build_kp_dimension_summary(
+    session: Session,
+    *,
+    user_id: int,
+    subject: str,
+    grade: str,
+    kps: list[KnowledgePoint] | None = None,
+    mastery_map: dict[int, Mastery] | None = None,
+) -> dict[str, Any]:
+    kp_rows = list(kps or session.exec(
+        select(KnowledgePoint)
+        .where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)
+        .order_by(KnowledgePoint.chapter, KnowledgePoint.id)
+    ).all())
+    kp_ids = [int(kp.id) for kp in kp_rows if kp.id is not None]
+    if not kp_ids:
+        return {
+            "summary": {
+                "knowledge_total": 0,
+                "knowledge_achieved": 0,
+                "ability_target_total": 0,
+                "ability_achieved": 0,
+                "literacy_target_total": 0,
+                "literacy_achieved": 0,
+                "top_abilities": [],
+                "top_literacies": [],
+            },
+            "by_kp": {},
+        }
+
+    if mastery_map is None:
+        mastery_rows = session.exec(select(Mastery).where(Mastery.user_id == user_id, Mastery.kp_id.in_(kp_ids))).all()
+        mastery_map = {int(item.kp_id): item for item in mastery_rows}
+    else:
+        mastery_map = {int(key): value for key, value in mastery_map.items()}
+
+    practice_rows = session.exec(
+        select(PracticeAttempt).where(PracticeAttempt.user_id == user_id, PracticeAttempt.kp_id.in_(kp_ids))
+    ).all()
+    quiz_rows = session.exec(
+        select(QuizAttempt).where(QuizAttempt.user_id == user_id, QuizAttempt.kp_id.in_(kp_ids))
+    ).all()
+    video_rows = session.exec(
+        select(VideoProgress).where(VideoProgress.user_id == user_id, VideoProgress.kp_id.in_(kp_ids))
+    ).all()
+    behavior_rows = session.exec(
+        select(LearningBehaviorEvent).where(
+            LearningBehaviorEvent.user_id == user_id,
+            LearningBehaviorEvent.kp_id.in_(kp_ids),
+        )
+    ).all()
+
+    practice_bucket: dict[int, dict[str, float]] = {}
+    for row in practice_rows:
+        item = practice_bucket.setdefault(int(row.kp_id), {"total": 0.0, "correct": 0.0})
+        item["total"] += 1
+        if row.correct:
+            item["correct"] += 1
+
+    quiz_bucket: dict[int, dict[str, float]] = {}
+    for row in quiz_rows:
+        item = quiz_bucket.setdefault(int(row.kp_id), {"total": 0.0, "passed": 0.0, "best_score": 0.0})
+        item["total"] += 1
+        if row.passed:
+            item["passed"] += 1
+        item["best_score"] = max(float(item["best_score"]), float(row.score or 0.0))
+
+    video_bucket: dict[int, dict[str, float]] = {}
+    for row in video_rows:
+        item = video_bucket.setdefault(
+            int(row.kp_id),
+            {"started": 0.0, "completed": 0.0, "watched_seconds": 0.0},
+        )
+        item["started"] += 1
+        item["watched_seconds"] += max(0.0, float(row.watched_seconds or 0.0))
+        if row.completed:
+            item["completed"] += 1
+
+    behavior_bucket: dict[int, dict[str, float]] = {}
+    for row in behavior_rows:
+        item = behavior_bucket.setdefault(int(row.kp_id), {"resource_visits": 0.0, "resource_downloads": 0.0})
+        if row.event_type == "resource_visit":
+            item["resource_visits"] += 1
+        elif row.event_type == "resource_download":
+            item["resource_downloads"] += 1
+
+    ability_counter: Counter[str] = Counter()
+    ability_target_counter: Counter[str] = Counter()
+    literacy_counter: Counter[str] = Counter()
+    literacy_target_counter: Counter[str] = Counter()
+    by_kp: dict[int, dict[str, Any]] = {}
+    knowledge_achieved = 0
+    ability_target_total = 0
+    ability_achieved = 0
+    literacy_target_total = 0
+    literacy_achieved = 0
+
+    for kp in kp_rows:
+        if kp.id is None:
+            continue
+        kp_id = int(kp.id)
+        mastery = mastery_map.get(kp_id)
+        mastery_value = float(mastery.value) if mastery is not None else 0.0
+        practice_info = practice_bucket.get(kp_id, {"total": 0.0, "correct": 0.0})
+        quiz_info = quiz_bucket.get(kp_id, {"total": 0.0, "passed": 0.0, "best_score": 0.0})
+        video_info = video_bucket.get(kp_id, {"started": 0.0, "completed": 0.0, "watched_seconds": 0.0})
+        behavior_info = behavior_bucket.get(kp_id, {"resource_visits": 0.0, "resource_downloads": 0.0})
+
+        has_learning_evidence = any(
+            float(value) > 0
+            for value in (
+                practice_info["total"],
+                quiz_info["total"],
+                video_info["started"],
+                behavior_info["resource_visits"],
+                behavior_info["resource_downloads"],
+            )
+        )
+
+        knowledge_status = "achieved" if mastery_value >= 0.6 else "in_progress" if mastery_value >= 0.2 or has_learning_evidence else "not_started"
+        if knowledge_status == "achieved":
+            knowledge_achieved += 1
+
+        ability_labels = parse_kp_tags(kp.ability_tag)
+        ability_enabled = bool(ability_labels)
+        for label in ability_labels:
+            ability_target_counter[label] += 1
+        if ability_enabled:
+            ability_target_total += 1
+        ability_evidence_score = 0
+        if mastery_value >= 0.7:
+            ability_evidence_score += 1
+        if float(practice_info["correct"]) >= 1:
+            ability_evidence_score += 1
+        if float(quiz_info["passed"]) >= 1 or float(quiz_info["best_score"]) >= 0.6:
+            ability_evidence_score += 1
+        if not ability_enabled:
+            ability_status = "not_started"
+        elif mastery_value >= 0.6 and ability_evidence_score >= 2:
+            ability_status = "achieved"
+        elif mastery_value >= 0.35 or has_learning_evidence:
+            ability_status = "in_progress"
+        else:
+            ability_status = "not_started"
+        if ability_status == "achieved":
+            ability_achieved += 1
+            for label in ability_labels:
+                ability_counter[label] += 1
+
+        literacy_labels = parse_kp_tags(kp.literacy_tag)
+        literacy_enabled = bool(literacy_labels)
+        for label in literacy_labels:
+            literacy_target_counter[label] += 1
+        if literacy_enabled:
+            literacy_target_total += 1
+        literacy_evidence_score = 0
+        if float(behavior_info["resource_visits"]) >= 1 or float(behavior_info["resource_downloads"]) >= 1:
+            literacy_evidence_score += 1
+        if float(video_info["watched_seconds"]) >= 120 or float(video_info["completed"]) >= 1:
+            literacy_evidence_score += 1
+        if float(behavior_info["resource_visits"]) + float(video_info["started"]) >= 2:
+            literacy_evidence_score += 1
+        if not literacy_enabled:
+            literacy_status = "not_started"
+        elif literacy_evidence_score >= 2:
+            literacy_status = "achieved"
+        elif literacy_evidence_score >= 1:
+            literacy_status = "in_progress"
+        else:
+            literacy_status = "not_started"
+        if literacy_status == "achieved":
+            literacy_achieved += 1
+            for label in literacy_labels:
+                literacy_counter[label] += 1
+
+        by_kp[kp_id] = {
+            "knowledge_enabled": True,
+            "ability_enabled": ability_enabled,
+            "literacy_enabled": literacy_enabled,
+            "knowledge_label": (kp.knowledge_tag or kp.title or "知识掌握").strip(),
+            "ability_labels": ability_labels,
+            "literacy_labels": literacy_labels,
+            "knowledge_status": knowledge_status,
+            "ability_status": ability_status,
+            "literacy_status": literacy_status,
+            "evidence": {
+                "mastery": round(mastery_value, 4),
+                "practice_total": int(practice_info["total"]),
+                "practice_correct": int(practice_info["correct"]),
+                "quiz_total": int(quiz_info["total"]),
+                "quiz_passed": int(quiz_info["passed"]),
+                "video_started": int(video_info["started"]),
+                "video_completed": int(video_info["completed"]),
+                "watched_seconds": round(float(video_info["watched_seconds"]), 2),
+                "resource_visits": int(behavior_info["resource_visits"]),
+                "resource_downloads": int(behavior_info["resource_downloads"]),
+            },
+        }
+
+    def _to_ranked_rows(counter: Counter[str], target_counter: Counter[str]) -> list[dict[str, Any]]:
+        rows = []
+        for label, target_count in target_counter.items():
+            rows.append(
+                {
+                    "label": label,
+                    "achieved_count": int(counter.get(label, 0)),
+                    "target_count": int(target_count),
+                }
+            )
+        rows.sort(key=lambda item: (-item["achieved_count"], -item["target_count"], item["label"]))
+        return rows[:8]
+
+    return {
+        "summary": {
+            "knowledge_total": len(kp_rows),
+            "knowledge_achieved": knowledge_achieved,
+            "ability_target_total": ability_target_total,
+            "ability_achieved": ability_achieved,
+            "literacy_target_total": literacy_target_total,
+            "literacy_achieved": literacy_achieved,
+            "top_abilities": _to_ranked_rows(ability_counter, ability_target_counter),
+            "top_literacies": _to_ranked_rows(literacy_counter, literacy_target_counter),
+        },
+        "by_kp": by_kp,
+    }
+
+
 def _safe_ratio(value: float, base: float) -> float:
     if base <= 0:
         return 0.0

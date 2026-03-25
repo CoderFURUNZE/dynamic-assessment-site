@@ -1,0 +1,114 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "概览" [ref=e9] [cursor=pointer]
+      - button "课程" [ref=e10] [cursor=pointer]
+      - button "用户" [ref=e11] [cursor=pointer]
+      - button "规则" [ref=e12] [cursor=pointer]
+      - button "指标" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]: 管理端
+    - generic [ref=e15]:
+      - button "学习者端预览" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 学习者端预览
+      - button "退出" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 退出
+  - main [ref=e20]:
+    - generic [ref=e22]:
+      - generic [ref=e24]:
+        - generic [ref=e25]: Teachers
+        - heading "老师管理" [level=2] [ref=e26]
+        - paragraph [ref=e27]: 把教师账号和负责范围放到独立页面维护，减少和其它后台操作的干扰。
+      - generic [ref=e29]:
+        - generic [ref=e31]:
+          - generic [ref=e32]: 老师管理
+          - generic [ref=e33]:
+            - button "新增老师" [ref=e34] [cursor=pointer]:
+              - generic [ref=e35]: 新增老师
+            - button "刷新" [ref=e36] [cursor=pointer]:
+              - generic [ref=e37]: 刷新
+        - generic [ref=e38]:
+          - generic [ref=e40]:
+            - table [ref=e42]:
+              - rowgroup [ref=e54]:
+                - row "ID 用户名 角色 状态 姓名 学号 班级 手机号 微信OpenID 操作" [ref=e55]:
+                  - columnheader "ID" [ref=e56]:
+                    - generic [ref=e57]: ID
+                  - columnheader "用户名" [ref=e58]:
+                    - generic [ref=e59]: 用户名
+                  - columnheader "角色" [ref=e60]:
+                    - generic [ref=e61]: 角色
+                  - columnheader "状态" [ref=e62]:
+                    - generic [ref=e63]: 状态
+                  - columnheader "姓名" [ref=e64]:
+                    - generic [ref=e65]: 姓名
+                  - columnheader "学号" [ref=e66]:
+                    - generic [ref=e67]: 学号
+                  - columnheader "班级" [ref=e68]:
+                    - generic [ref=e69]: 班级
+                  - columnheader "手机号" [ref=e70]:
+                    - generic [ref=e71]: 手机号
+                  - columnheader "微信OpenID" [ref=e72]:
+                    - generic [ref=e73]: 微信OpenID
+                  - columnheader "操作" [ref=e74]:
+                    - generic [ref=e75]: 操作
+            - table [ref=e80]:
+              - rowgroup [ref=e92]:
+                - row "4 teacher3 teacher 启用 18567450723 编辑 删除" [ref=e93]:
+                  - cell "4" [ref=e94]:
+                    - generic [ref=e95]: "4"
+                  - cell "teacher3" [ref=e96]:
+                    - generic [ref=e97]: teacher3
+                  - cell "teacher" [ref=e98]:
+                    - generic [ref=e99]: teacher
+                  - cell "启用" [ref=e100]:
+                    - generic [ref=e102]:
+                      - switch [checked]
+                      - generic [ref=e104] [cursor=pointer]: 禁用
+                      - generic [ref=e108] [cursor=pointer]: 启用
+                  - cell [ref=e109]
+                  - cell [ref=e110]
+                  - cell [ref=e111]
+                  - cell "18567450723" [ref=e112]:
+                    - generic [ref=e113]: "18567450723"
+                  - cell [ref=e114]
+                  - cell "编辑 删除" [ref=e115]:
+                    - generic [ref=e116]:
+                      - button "编辑" [ref=e117] [cursor=pointer]:
+                        - generic [ref=e118]: 编辑
+                      - button "删除" [ref=e119] [cursor=pointer]:
+                        - generic [ref=e120]: 删除
+                - row "5 teacher1 teacher 启用 编辑 删除" [ref=e121]:
+                  - cell "5" [ref=e122]:
+                    - generic [ref=e123]: "5"
+                  - cell "teacher1" [ref=e124]:
+                    - generic [ref=e125]: teacher1
+                  - cell "teacher" [ref=e126]:
+                    - generic [ref=e127]: teacher
+                  - cell "启用" [ref=e128]:
+                    - generic [ref=e130]:
+                      - switch [checked]
+                      - generic [ref=e132] [cursor=pointer]: 禁用
+                      - generic [ref=e136] [cursor=pointer]: 启用
+                  - cell [ref=e137]
+                  - cell [ref=e138]
+                  - cell [ref=e139]
+                  - cell [ref=e140]
+                  - cell [ref=e141]
+                  - cell "编辑 删除" [ref=e142]:
+                    - generic [ref=e143]:
+                      - button "编辑" [ref=e144] [cursor=pointer]:
+                        - generic [ref=e145]: 编辑
+                      - button "删除" [ref=e146] [cursor=pointer]:
+                        - generic [ref=e147]: 删除
+          - generic [ref=e153]:
+            - button "上一页" [disabled] [ref=e154]:
+              - generic:
+                - img
+            - list [ref=e155]:
+              - listitem "第 1 页" [ref=e156]: "1"
+            - button "下一页" [disabled] [ref=e157]:
+              - generic:
+                - img

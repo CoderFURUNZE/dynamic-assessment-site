@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HoverTip from "./HoverTip.vue";
 
 type IndicatorItem = {
   id: number;
@@ -135,20 +136,16 @@ onMounted(loadSelection);
 
     <div v-if="!courseId" class="indicator-empty">
       <el-empty description="请先在页面顶部选择一门课程" :image-size="88" />
-      <el-alert
-        class="indicator-empty__tip"
-        type="info"
-        :closable="false"
-        title="先选课程，再勾选这门课要看的内容。保存后，后面的阶段数据和学生学习情况才会按这些内容计算。"
-      />
+      <div class="indicator-tip-inline">
+        <span>提示</span>
+        <HoverTip content="先选课程，再勾选这门课要看的内容。保存后，后面的阶段数据和学生学习情况才会按这些内容计算。" />
+      </div>
     </div>
     <div v-else class="indicator-list">
-      <el-alert
-        class="indicator-tip"
-        type="info"
-        :closable="false"
-        title="只勾选这门课真正会用到的内容。系统拿得到数据的内容，后面才更容易算出结果。"
-      />
+      <div class="indicator-tip-inline">
+        <span>勾选说明</span>
+        <HoverTip content="只勾选这门课真正会用到的内容。系统拿得到数据的内容，后面才更容易算出结果。" />
+      </div>
       <el-card v-for="dimension in items" :key="dimension.id" class="indicator-card" shadow="never">
         <template #header>
           <div class="indicator-card__header">
@@ -247,12 +244,13 @@ onMounted(loadSelection);
   gap: 14px;
 }
 
-.indicator-empty__tip {
-  margin-top: -6px;
-}
-
-.indicator-tip {
-  margin-bottom: 2px;
+.indicator-tip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #637995;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .indicator-card {

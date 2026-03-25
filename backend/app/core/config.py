@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     secret_key: str = "CHANGE_ME"
     # Default to 7 days to match the frontend "7天" remember option.
     access_token_exp_minutes: int = 60 * 24 * 7
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     media_dir: str = "media"
     media_url: str = "/media"
 

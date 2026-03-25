@@ -2,7 +2,6 @@
 import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
-import { getRole } from "../token";
 
 type Course = {
   id: number;
@@ -10,6 +9,11 @@ type Course = {
   title: string;
   description: string;
   active: boolean;
+  lifecycle_status?: string;
+  target_class?: string | null;
+  start_at?: string | null;
+  end_at?: string | null;
+  archived_at?: string | null;
   teacher_id?: number | null;
   max_students?: number;
   apply_deadline?: string | null;
@@ -21,29 +25,6 @@ type Teacher = {
   username: string;
   full_name: string;
   role: string;
-};
-
-type EnrolledStudent = {
-  id: number;
-  username: string;
-  full_name: string;
-  student_no?: string;
-  class_name?: string;
-  active: boolean;
-  enrolled_at?: string;
-};
-
-type CourseApplicationRow = {
-  id: number;
-  course_id: number;
-  course_title: string;
-  student_id: number;
-  student_name: string;
-  status: string;
-  apply_reason: string;
-  review_remark: string;
-  reject_reason: string;
-  created_at: string;
 };
 
 const loading = ref(false);
@@ -64,11 +45,21 @@ const form = reactive({
   title: "",
   description: "",
   active: true,
+  lifecycle_status: "draft",
+  target_class: "",
+  start_at: "",
+  end_at: "",
   teacher_id: null as number | null,
   max_students: 200,
   apply_deadline: "",
   enroll_status: "open",
 });
+
+const lifecycleOptions = [
+  { label: "待开课", value: "draft" },
+  { label: "开课中", value: "active" },
+  { label: "已归档", value: "archived" },
+];
 
 const enrollStatusOptions = [
   { label: "开放报名", value: "open" },
@@ -83,8 +74,6 @@ function normalizeIsoMinute(value?: string | null) {
 }
 
 const isEdit = computed(() => Boolean(editing.value));
-const isAdmin = computed(() => getRole() === "admin");
-const isTeacher = computed(() => getRole() === "teacher");
 const teacherNameMap = computed(() => {
   const map = new Map<number, string>();
   for (const item of teachers.value) {
@@ -93,23 +82,7 @@ const teacherNameMap = computed(() => {
   return map;
 });
 
-const studentDialogOpen = ref(false);
-const studentDialogLoading = ref(false);
-const studentDialogCourse = ref<Course | null>(null);
-const studentRows = ref<EnrolledStudent[]>([]);
-
-const reviewDialogOpen = ref(false);
-const reviewDialogLoading = ref(false);
-const reviewRows = ref<CourseApplicationRow[]>([]);
-const rejectDialogOpen = ref(false);
-const rejecting = ref<CourseApplicationRow | null>(null);
-const rejectReason = ref("");
-
 async function loadTeachers() {
-  if (!isAdmin.value) {
-    teachers.value = [];
-    return;
-  }
   const res = await api.get("/admin/users?page=1&page_size=200");
   teachers.value = (res.data.items ?? []).filter((item: Teacher) => item.role === "teacher");
 }
@@ -139,6 +112,10 @@ function openAdd() {
   form.title = "";
   form.description = "";
   form.active = true;
+  form.lifecycle_status = "draft";
+  form.target_class = "";
+  form.start_at = "";
+  form.end_at = "";
   form.teacher_id = null;
   form.max_students = 200;
   form.apply_deadline = "";
@@ -153,6 +130,10 @@ function openEdit(row: Course) {
   form.title = row.title;
   form.description = row.description;
   form.active = row.active;
+  form.lifecycle_status = row.lifecycle_status || (row.active ? "active" : "draft");
+  form.target_class = row.target_class || "";
+  form.start_at = row.start_at ? row.start_at.slice(0, 16) : "";
+  form.end_at = row.end_at ? row.end_at.slice(0, 16) : "";
   form.teacher_id = row.teacher_id ?? null;
   form.max_students = Number(row.max_students ?? 200);
   form.apply_deadline = row.apply_deadline ? row.apply_deadline.slice(0, 16) : "";
@@ -169,6 +150,10 @@ async function save() {
     title: normalizedTitle,
     description: form.description,
     active: form.active,
+    lifecycle_status: form.lifecycle_status,
+    target_class: form.target_class.trim() || null,
+    start_at: form.start_at ? new Date(form.start_at).toISOString() : null,
+    end_at: form.end_at ? new Date(form.end_at).toISOString() : null,
     teacher_id: form.teacher_id,
     max_students: Math.max(1, Number(form.max_students || 1)),
     apply_deadline: form.apply_deadline ? new Date(form.apply_deadline).toISOString() : null,
@@ -246,88 +231,6 @@ async function remove(row: Course) {
   }
 }
 
-async function openStudentDialog(row: Course) {
-  studentDialogCourse.value = row;
-  studentDialogOpen.value = true;
-  studentDialogLoading.value = true;
-  try {
-    const res = await api.get(`/graph/courses/${row.id}/students`);
-    studentRows.value = res.data?.items ?? [];
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "加载课程学生失败");
-    studentRows.value = [];
-  } finally {
-    studentDialogLoading.value = false;
-  }
-}
-
-async function removeStudent(row: EnrolledStudent) {
-  if (!studentDialogCourse.value) return;
-  try {
-    await api.delete(`/graph/courses/${studentDialogCourse.value.id}/students/${row.id}`);
-    ElMessage.success("学生已移出课程");
-    studentRows.value = studentRows.value.filter((item) => item.id !== row.id);
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "移出学生失败");
-  }
-}
-
-async function openReviewDialog() {
-  reviewDialogOpen.value = true;
-  reviewDialogLoading.value = true;
-  try {
-    const res = await api.get("/enrollment/teacher/applications", {
-      params: {
-        status: "pending",
-        page: 1,
-        page_size: 100,
-      },
-    });
-    reviewRows.value = res.data?.items ?? [];
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "加载待审核报名失败");
-    reviewRows.value = [];
-  } finally {
-    reviewDialogLoading.value = false;
-  }
-}
-
-async function approveApplication(row: CourseApplicationRow) {
-  try {
-    await api.post(`/enrollment/teacher/applications/${row.id}/approve`, { review_remark: "审核通过" });
-    ElMessage.success("已审核通过");
-    reviewRows.value = reviewRows.value.filter((item) => item.id !== row.id);
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "审核通过失败");
-  }
-}
-
-function openRejectDialog(row: CourseApplicationRow) {
-  rejecting.value = row;
-  rejectReason.value = "";
-  rejectDialogOpen.value = true;
-}
-
-async function submitReject() {
-  if (!rejecting.value) return;
-  if (!rejectReason.value.trim()) {
-    ElMessage.warning("请填写拒绝原因");
-    return;
-  }
-  try {
-    await api.post(`/enrollment/teacher/applications/${rejecting.value.id}/reject`, {
-      reject_reason: rejectReason.value.trim(),
-      review_remark: "审核拒绝",
-    });
-    ElMessage.success("已拒绝该报名");
-    reviewRows.value = reviewRows.value.filter((item) => item.id !== rejecting.value?.id);
-    rejectDialogOpen.value = false;
-    rejecting.value = null;
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "审核拒绝失败");
-  }
-}
-
 function setCourseActiveLocal(courseId: number, active: boolean) {
   courses.value = courses.value.map((item) => (item.id === courseId ? { ...item, active } : item));
 }
@@ -342,6 +245,11 @@ function enrollStatusLabel(value?: string) {
     enrollStatusOptions.find((item) => item.value === normalized)?.label
     ?? normalized
   );
+}
+
+function lifecycleLabel(value?: string) {
+  const normalized = String(value || "draft").toLowerCase();
+  return lifecycleOptions.find((item) => item.value === normalized)?.label || normalized;
 }
 
 async function probeCourseActive(row: Course) {
@@ -398,7 +306,7 @@ Promise.all([loadTeachers(), load()]);
         <div class="course-manager-header__main">
           <div class="course-manager-header__eyebrow">Course Admin</div>
           <div class="course-manager-header__title">课程管理</div>
-          <div class="course-manager-header__desc">统一维护课程、报名设置、负责教师和课程启用状态。</div>
+          <div class="course-manager-header__desc">管理员统一创建课程和配置基础信息。老师只能激活课程后，再去维护图谱和资源。</div>
         </div>
         <div class="course-manager-header__actions">
           <el-input
@@ -410,7 +318,6 @@ Promise.all([loadTeachers(), load()]);
           />
           <el-button size="small" type="primary" @click="() => { page = 1; load(); }">搜索</el-button>
           <el-button size="small" @click="load" :loading="loading">刷新</el-button>
-          <el-button v-if="isTeacher" size="small" type="warning" @click="openReviewDialog">报名审核</el-button>
           <el-button type="primary" @click="openAdd">新增课程</el-button>
         </div>
       </div>
@@ -422,6 +329,15 @@ Promise.all([loadTeachers(), load()]);
         <el-table-column prop="code" label="课程编码" width="140" />
         <el-table-column prop="title" label="课程名称" width="220" />
         <el-table-column prop="description" label="课程简介" min-width="240" />
+        <el-table-column label="教学设置" min-width="240">
+          <template #default="{ row }">
+            <div class="course-setting">
+              <span class="course-setting__item">状态：{{ lifecycleLabel(row.lifecycle_status) }}</span>
+              <span class="course-setting__item">目标班级：{{ row.target_class || "未设置" }}</span>
+              <span class="course-setting__item">开课周期：{{ row.start_at ? row.start_at.replace("T", " ").slice(0, 16) : "未设置" }} ~ {{ row.end_at ? row.end_at.replace("T", " ").slice(0, 16) : "未设置" }}</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="报名设置" min-width="220">
           <template #default="{ row }">
             <div class="course-setting">
@@ -431,20 +347,13 @@ Promise.all([loadTeachers(), load()]);
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="负责人" width="160">
+        <el-table-column label="激活老师" width="160">
           <template #default="{ row }">
             {{
               row.teacher_id
-                ? teacherNameMap.get(row.teacher_id) || (isAdmin ? `教师#${row.teacher_id}` : "当前教师")
-                : isAdmin
-                  ? "未分配"
-                  : "当前教师"
+                ? teacherNameMap.get(row.teacher_id) || `教师#${row.teacher_id}`
+                : "暂未激活"
             }}
-          </template>
-        </el-table-column>
-        <el-table-column v-if="isTeacher" label="学生管理" width="160">
-          <template #default="{ row }">
-            <el-button size="small" @click="openStudentDialog(row)">查看学生</el-button>
           </template>
         </el-table-column>
         <el-table-column prop="active" label="状态" width="120">
@@ -484,8 +393,8 @@ Promise.all([loadTeachers(), load()]);
         <el-form-item label="课程名称">
           <el-input v-model="form.title" placeholder="如 数据结构" />
         </el-form-item>
-        <el-form-item v-if="isAdmin" label="负责人">
-          <el-select v-model="form.teacher_id" clearable placeholder="选择教师" style="width: 100%">
+        <el-form-item label="激活老师">
+          <el-select v-model="form.teacher_id" clearable placeholder="不指定，等老师自己激活" style="width: 100%">
             <el-option
               v-for="teacher in teachers"
               :key="teacher.id"
@@ -496,6 +405,34 @@ Promise.all([loadTeachers(), load()]);
         </el-form-item>
         <el-form-item label="课程简介">
           <el-input v-model="form.description" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="开课状态">
+          <el-select v-model="form.lifecycle_status" style="width: 100%">
+            <el-option v-for="item in lifecycleOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="目标班级">
+          <el-input v-model="form.target_class" placeholder="例如 计科 221 / 软件 231" />
+        </el-form-item>
+        <el-form-item label="开始时间">
+          <el-date-picker
+            v-model="form.start_at"
+            type="datetime"
+            value-format="YYYY-MM-DDTHH:mm"
+            format="YYYY-MM-DD HH:mm"
+            placeholder="课程开始学习时间"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="结束时间">
+          <el-date-picker
+            v-model="form.end_at"
+            type="datetime"
+            value-format="YYYY-MM-DDTHH:mm"
+            format="YYYY-MM-DD HH:mm"
+            placeholder="课程结束或归档前时间"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="课程名额">
           <el-input-number v-model="form.max_students" :min="1" :max="9999" style="width: 100%" />
@@ -530,67 +467,6 @@ Promise.all([loadTeachers(), load()]);
       </template>
     </el-dialog>
 
-    <el-dialog
-      v-model="studentDialogOpen"
-      :title="studentDialogCourse ? `${studentDialogCourse.title} · 已报名学生` : '课程学生'"
-      width="760px"
-    >
-      <el-table :data="studentRows" size="small" v-loading="studentDialogLoading" style="width: 100%">
-        <el-table-column prop="username" label="账号" min-width="120" />
-        <el-table-column label="姓名" min-width="140">
-          <template #default="{ row }">{{ row.full_name || "-" }}</template>
-        </el-table-column>
-        <el-table-column label="学号" min-width="140">
-          <template #default="{ row }">{{ row.student_no || "-" }}</template>
-        </el-table-column>
-        <el-table-column label="班级" min-width="140">
-          <template #default="{ row }">{{ row.class_name || "-" }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="90">
-          <template #default="{ row }">{{ row.active ? "启用" : "停用" }}</template>
-        </el-table-column>
-        <el-table-column label="报名时间" min-width="180">
-          <template #default="{ row }">{{ row.enrolled_at ? row.enrolled_at.replace("T", " ").slice(0, 16) : "-" }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="110">
-          <template #default="{ row }">
-            <el-button size="small" type="danger" @click="removeStudent(row)">移出</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div v-if="!studentDialogLoading && studentRows.length === 0" class="course-student-empty">当前课程还没有学生报名。</div>
-    </el-dialog>
-
-    <el-dialog v-model="reviewDialogOpen" title="待审核报名" width="860px">
-      <el-table :data="reviewRows" size="small" v-loading="reviewDialogLoading" style="width: 100%">
-        <el-table-column prop="course_title" label="课程" min-width="160" />
-        <el-table-column prop="student_name" label="学生" min-width="120" />
-        <el-table-column prop="apply_reason" label="报名理由" min-width="220" />
-        <el-table-column prop="created_at" label="提交时间" width="170">
-          <template #default="{ row }">{{ row.created_at?.replace("T", " ").slice(0, 16) || "-" }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="180">
-          <template #default="{ row }">
-            <el-button size="small" type="primary" @click="approveApplication(row)">通过</el-button>
-            <el-button size="small" type="danger" @click="openRejectDialog(row)">拒绝</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div v-if="!reviewDialogLoading && reviewRows.length === 0" class="course-student-empty">当前没有待审核报名。</div>
-    </el-dialog>
-
-    <el-dialog v-model="rejectDialogOpen" title="填写拒绝原因" width="520px">
-      <el-input
-        v-model="rejectReason"
-        type="textarea"
-        :rows="4"
-        placeholder="请填写拒绝原因（必填）"
-      />
-      <template #footer>
-        <el-button @click="rejectDialogOpen = false">取消</el-button>
-        <el-button type="danger" @click="submitReject">确认拒绝</el-button>
-      </template>
-    </el-dialog>
   </el-card>
 </template>
 

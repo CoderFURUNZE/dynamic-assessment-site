@@ -1,6 +1,7 @@
 import json
 import math
 import random
+import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -26,6 +27,7 @@ from app.services.practice import practice_status
 from app.services.reco_policy import evidence_checklist, recent_wrong_streak, difficulty_band
 
 router = APIRouter(prefix="/practice", tags=["practice"])
+logger = logging.getLogger("app.practice")
 
 
 @router.get("/questions", response_model=list[PracticeQuestionOut])
@@ -93,37 +95,48 @@ def submit(
             duration_ms=payload.duration_ms,
         )
     )
-    _upsert_review_schedule(session, user_id=user.id, question=q, is_correct=is_correct)
+    _upsert_review_schedule(session=session, user_id=user.id, question=q, is_correct=is_correct)
     session.commit()
-    mastery = upsert_mastery(
-        session, user_id=user.id, kp_id=q.kp_id, subject=q.subject, grade=q.grade
-    )
-    log_behavior_event(
-        session,
-        user_id=user.id,
-        event_type="practice_submit",
-        subject=q.subject,
-        grade=q.grade,
-        kp_id=q.kp_id,
-        payload={
-            "question_id": q.id,
-            "correct": is_correct,
-            "difficulty": q.difficulty,
-            "duration_ms": payload.duration_ms,
-        },
-    )
-    recalculate_profile_snapshot(
-        session,
-        user_id=user.id,
-        subject=q.subject,
-        grade=q.grade,
-        refresh_mastery=False,
-        persist=True,
-    )
+    mastery_value = None
+    try:
+        mastery = upsert_mastery(
+            session, user_id=user.id, kp_id=q.kp_id, subject=q.subject, grade=q.grade
+        )
+        mastery_value = mastery.value
+        log_behavior_event(
+            session,
+            user_id=user.id,
+            event_type="practice_submit",
+            subject=q.subject,
+            grade=q.grade,
+            kp_id=q.kp_id,
+            payload={
+                "question_id": q.id,
+                "correct": is_correct,
+                "difficulty": q.difficulty,
+                "duration_ms": payload.duration_ms,
+            },
+        )
+        recalculate_profile_snapshot(
+            session,
+            user_id=user.id,
+            subject=q.subject,
+            grade=q.grade,
+            refresh_mastery=False,
+            persist=True,
+        )
+    except Exception:
+        session.rollback()
+        logger.exception(
+            "practice_submit_post_process_failed user_id=%s kp_id=%s question_id=%s",
+            user.id,
+            q.kp_id,
+            q.id,
+        )
     return {
         "correct": is_correct,
         "explanation": q.explanation,
-        "mastery": {"kp_id": q.kp_id, "value": mastery.value},
+        "mastery": {"kp_id": q.kp_id, "value": mastery_value},
     }
 
 

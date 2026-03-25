@@ -8,6 +8,7 @@ from app.db.models import EvalConfig, LearningResource, Quiz, QuizAttempt, QuizI
 from app.db.session import get_session
 from app.schemas.content import (
     QuizOut,
+    ResourceVisitIn,
     QuizSubmitIn,
     QuizSubmitOut,
     ResourceOut,
@@ -37,6 +38,36 @@ def list_resources(
 ):
     res = session.exec(select(LearningResource).where(LearningResource.kp_id == kp_id)).all()
     return [ResourceOut(**build_resource_payload(r)) for r in res if r.id is not None]
+
+
+@router.post("/resource/visit")
+def track_resource_visit(
+    payload: ResourceVisitIn,
+    session: Session = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    resource = session.get(LearningResource, payload.resource_id)
+    if resource is None or resource.kp_id != payload.kp_id:
+        raise HTTPException(status_code=400, detail="Invalid resource")
+    event_type = "resource_download" if str(payload.action or "").strip() == "download" else "resource_visit"
+    log_behavior_event(
+        session,
+        user_id=user.id,
+        event_type=event_type,
+        subject=resource.subject,
+        grade=resource.grade,
+        kp_id=resource.kp_id,
+        payload={"resource_id": int(resource.id), "resource_type": resource.type.value},
+    )
+    recalculate_profile_snapshot(
+        session,
+        user_id=user.id,
+        subject=resource.subject,
+        grade=resource.grade,
+        refresh_mastery=False,
+        persist=True,
+    )
+    return {"ok": True}
 
 
 @router.get("/quiz/{kp_id}", response_model=QuizOut)

@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HoverTip from "./HoverTip.vue";
 
 type Resource = {
   id: number;
@@ -34,6 +35,21 @@ const progressById = ref<Record<number, { watched_seconds: number; duration_seco
 
 const currentResource = computed(() => resources.value.find((r) => r.id === currentResourceId.value) ?? null);
 const learningResources = computed(() => resources.value.filter((r) => !["book", "recommend_book"].includes(r.type)));
+const learningResourceGroups = computed(() => {
+  const groups = [
+    { key: "video", title: "视频", description: "录播视频、讲解视频", items: [] as Resource[] },
+    { key: "document", title: "文档 / 课件", description: "PDF、PPT、讲义、Word", items: [] as Resource[] },
+    { key: "image", title: "图片", description: "图表、示意图、截图", items: [] as Resource[] },
+    { key: "link", title: "外部链接", description: "B 站、课程网站、在线资料", items: [] as Resource[] },
+    { key: "other", title: "其他资源", description: "暂未归类的资源", items: [] as Resource[] },
+  ];
+  const bucket = new Map(groups.map((item) => [item.key, item]));
+  for (const resource of learningResources.value) {
+    const key = resourceGroupKey(resource);
+    bucket.get(key)?.items.push(resource);
+  }
+  return groups.filter((group) => group.items.length > 0);
+});
 const videoResources = computed(() => learningResources.value.filter((r) => r.preview_type === "video_inline"));
 const isBilibiliEmbed = computed(() => {
   const url = currentResource.value?.url ?? "";
@@ -72,6 +88,53 @@ const currentPreviewLabel = computed(() => {
   return "资源访问";
 });
 
+function resourceGroupKey(resource: Resource) {
+  const type = String(resource.detected_resource_type || resource.type || "").toLowerCase();
+  const previewType = String(resource.preview_type || "").toLowerCase();
+  if (type === "video" || previewType === "video_inline") return "video";
+  if (type === "image" || previewType === "image_inline") return "image";
+  if (type === "link" || previewType === "external_link") return "link";
+  if (["pdf", "ppt", "pptx", "doc", "docx", "note"].includes(type) || previewType.includes("pdf")) return "document";
+  return "other";
+}
+
+function resourceTypeLabel(resource: Resource) {
+  const type = String(resource.detected_resource_type || resource.type || "").toLowerCase();
+  const map: Record<string, string> = {
+    video: "视频",
+    pdf: "PDF",
+    ppt: "PPT",
+    pptx: "PPT",
+    doc: "Word",
+    docx: "Word",
+    note: "文档",
+    image: "图片",
+    link: "外链",
+  };
+  return map[type] || "资源";
+}
+
+function previewStatusLabel(resource: Resource) {
+  const map: Record<string, string> = {
+    ready: "可预览",
+    processing: "处理中",
+    failed: "转换失败",
+  };
+  return map[String(resource.preview_status || "ready")] || "可访问";
+}
+
+async function trackResource(resource: Resource, action: "visit" | "download" = "visit") {
+  try {
+    await api.post("/content/resource/visit", {
+      kp_id: resource.kp_id,
+      resource_id: resource.id,
+      action,
+    });
+  } catch {
+    // ignore tracking failure
+  }
+}
+
 async function loadProgress() {
   if (!props.kpId) return;
   try {
@@ -102,7 +165,8 @@ async function load() {
   }
 }
 
-function openSupportResource(resource: Resource) {
+async function openSupportResource(resource: Resource, action: "visit" | "download" = "visit") {
+  await trackResource(resource, action);
   window.open(resource.original_file_url || resource.url, "_blank", "noopener,noreferrer");
   emit("progress-updated");
 }
@@ -216,6 +280,15 @@ function onEmbedVisible() {
 }
 
 watch(
+  () => currentResource.value?.id,
+  async (id, prevId) => {
+    if (!id || id === prevId || currentResource.value?.preview_type === "video_inline") return;
+    await trackResource(currentResource.value);
+    emit("progress-updated");
+  }
+);
+
+watch(
   () => props.kpId,
   () => load(),
   { immediate: true }
@@ -261,104 +334,114 @@ onBeforeUnmount(() => {
       <el-text type="info">请选择知识点</el-text>
     </div>
     <div v-else>
-      <div v-if="learningResources.length > 0" style="display: grid; gap: 10px; margin-bottom: 14px">
-        <el-select v-model="currentResourceId" placeholder="选择学习资源" style="width: 100%">
-          <el-option v-for="r in learningResources" :key="r.id" :label="r.title" :value="r.id" />
-        </el-select>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap">
-          <el-tag
-            v-for="r in learningResources"
-            :key="r.id"
-            :type="r.id === currentResourceId ? 'primary' : 'info'"
-            effect="plain"
-            style="cursor: pointer"
-            @click="currentResourceId = r.id"
-          >
-            {{ r.title }}
-          </el-tag>
-        </div>
-      </div>
-
-      <div v-if="currentResource">
-        <el-alert
-          v-if="currentResource.preview_status === 'processing'"
-          type="warning"
-          :title="`${currentResource.title} 还在处理中`"
-          description="Office 文档会先转换成 PDF，稍后刷新即可在线预览。"
-          show-icon
-          style="margin-bottom: 12px"
-        />
-        <el-alert
-          v-else-if="currentResource.preview_status === 'failed'"
-          type="error"
-          :title="`${currentResource.title} 预览转换失败`"
-          :description="currentResource.preview_error || '当前资源暂时只能下载查看'"
-          show-icon
-          style="margin-bottom: 12px"
-        />
-        <div>
-          <iframe
-            v-if="isBilibiliEmbed"
-            ref="iframeRef"
-            :src="currentResource.url"
-            style="width: 100%; height: 520px; border: 0; border-radius: 8px; background: #000"
-            @load="onEmbedVisible"
-          />
-          <iframe
-            v-else-if="canInlinePdfPreview"
-            ref="iframeRef"
-            :src="resolvedVideoUrl"
-            style="width: 100%; height: 620px; border: 1px solid var(--app-border); border-radius: 12px; background: #fff"
-          />
-          <img
-            v-else-if="currentResource.preview_type === 'image_inline' && resolvedVideoUrl"
-            :src="resolvedVideoUrl"
-            :alt="currentResource.title"
-            style="max-width: 100%; max-height: 620px; border-radius: 12px; border: 1px solid var(--app-border); background: #fff; object-fit: contain"
-          />
-          <video
-            v-else-if="currentResource.preview_type === 'video_inline'"
-            ref="videoRef"
-            :src="videoSrc"
-            controls
-            style="width: 100%; border-radius: 8px; background: #000"
-            @play="onPlay"
-          />
-          <div
-            v-else
-            style="display: grid; gap: 12px; padding: 18px; border: 1px dashed var(--app-border); border-radius: 12px; background: #fafbfd"
-          >
-            <strong style="color: var(--app-ink)">{{ currentResource.title }}</strong>
-            <el-text type="info">当前资源不支持直接内嵌，点击按钮查看或下载。</el-text>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap">
-              <el-button type="primary" @click="openSupportResource(currentResource)">打开资源</el-button>
-              <el-button v-if="currentResource.original_file_url" @click="openSupportResource({ ...currentResource, url: currentResource.original_file_url })">下载原文件</el-button>
+      <div v-if="learningResources.length > 0" class="resource-pane">
+        <section class="resource-pane__groups">
+          <div v-for="group in learningResourceGroups" :key="group.key" class="resource-pane__group">
+            <div class="resource-pane__group-head">
+              <div>
+                <strong>{{ group.title }}</strong>
+                <span>{{ group.description }}</span>
+              </div>
+              <small>{{ group.items.length }} 个</small>
+            </div>
+            <div class="resource-pane__group-list">
+              <button
+                v-for="resource in group.items"
+                :key="resource.id"
+                class="resource-pane__resource"
+                :class="{ active: resource.id === currentResourceId }"
+                @click="currentResourceId = resource.id"
+              >
+                <div class="resource-pane__resource-meta">
+                  <span>{{ resourceTypeLabel(resource) }}</span>
+                  <small>{{ previewStatusLabel(resource) }}</small>
+                </div>
+                <strong>{{ resource.title }}</strong>
+                <p>{{ resource.description || "打开后可查看该资源的预览、下载和学习进度。" }}</p>
+              </button>
             </div>
           </div>
+        </section>
+
+        <div v-if="currentResource" class="resource-pane__preview">
+          <el-alert
+            v-if="currentResource.preview_status === 'processing'"
+            type="warning"
+            :title="`${currentResource.title} 还在处理中`"
+            description="Office 文档会先转换成 PDF，稍后刷新即可在线预览。"
+            show-icon
+            style="margin-bottom: 12px"
+          />
+          <el-alert
+            v-else-if="currentResource.preview_status === 'failed'"
+            type="error"
+            :title="`${currentResource.title} 预览转换失败`"
+            :description="currentResource.preview_error || '当前资源暂时只能下载查看'"
+            show-icon
+            style="margin-bottom: 12px"
+          />
+          <div>
+            <iframe
+              v-if="isBilibiliEmbed"
+              ref="iframeRef"
+              :src="currentResource.url"
+              style="width: 100%; height: 520px; border: 0; border-radius: 8px; background: #000"
+              @load="onEmbedVisible"
+            />
+            <iframe
+              v-else-if="canInlinePdfPreview"
+              ref="iframeRef"
+              :src="resolvedVideoUrl"
+              style="width: 100%; height: 620px; border: 1px solid var(--app-border); border-radius: 12px; background: #fff"
+            />
+            <img
+              v-else-if="currentResource.preview_type === 'image_inline' && resolvedVideoUrl"
+              :src="resolvedVideoUrl"
+              :alt="currentResource.title"
+              style="max-width: 100%; max-height: 620px; border-radius: 12px; border: 1px solid var(--app-border); background: #fff; object-fit: contain"
+            />
+            <video
+              v-else-if="currentResource.preview_type === 'video_inline'"
+              ref="videoRef"
+              :src="videoSrc"
+              controls
+              style="width: 100%; border-radius: 8px; background: #000"
+              @play="onPlay"
+            />
+            <div
+              v-else
+              style="display: grid; gap: 12px; padding: 18px; border: 1px dashed var(--app-border); border-radius: 12px; background: #fafbfd"
+            >
+              <strong style="color: var(--app-ink)">{{ currentResource.title }}</strong>
+              <el-text type="info">当前资源不支持直接内嵌，点击按钮查看或下载。</el-text>
+              <div style="display: flex; gap: 10px; flex-wrap: wrap">
+                <el-button type="primary" @click="openSupportResource(currentResource, 'visit')">打开资源</el-button>
+                <el-button v-if="currentResource.original_file_url" @click="openSupportResource({ ...currentResource, url: currentResource.original_file_url }, 'download')">下载原文件</el-button>
+              </div>
+            </div>
+          </div>
+          <div class="resource-tip-inline">
+            <span>{{ currentPreviewLabel }}</span>
+            <HoverTip
+              :content="currentResource.preview_type === 'video_inline'
+                ? '系统只保存观看进度，不保存视频画面。B 站 iframe 只能记录停留时长。'
+                : ['pdf_inline', 'pdf_after_convert'].includes(currentResource.preview_type || '')
+                  ? currentResource.preview_type === 'pdf_after_convert'
+                    ? '当前展示的是系统自动转换后的 PDF 预览版，学生无需先下载。需要原文件时可单独下载。'
+                    : '当前资源展示的是在线 PDF 预览版，学生无需先下载。'
+                  : currentResource.preview_type === 'image_inline'
+                    ? '当前资源以图片方式直接在线预览。'
+                    : '当前资源通过外部地址或原文件打开。'"
+            />
+          </div>
+
+          <el-text v-if="currentResource.preview_type === 'video_inline' && currentProgress" type="info" style="display: inline-block; margin-top: 8px">
+            已记录：{{ Math.round(currentProgress.watched_seconds) }} 秒
+            <span v-if="currentProgress.duration_seconds > 0">
+              （约 {{ Math.round((currentProgress.watched_seconds / currentProgress.duration_seconds) * 100) }}%）
+            </span>
+          </el-text>
         </div>
-
-        <el-alert
-          style="margin-top: 10px"
-          type="info"
-          :title="currentPreviewLabel"
-          :description="currentResource.preview_type === 'video_inline'
-            ? '系统只保存观看进度，不保存视频画面。B 站 iframe 只能记录停留时长。'
-            : ['pdf_inline', 'pdf_after_convert'].includes(currentResource.preview_type || '')
-              ? currentResource.preview_type === 'pdf_after_convert'
-                ? '当前展示的是系统自动转换后的 PDF 预览版，学生无需先下载。需要原文件时可单独下载。'
-                : '当前资源展示的是在线 PDF 预览版，学生无需先下载。'
-              : currentResource.preview_type === 'image_inline'
-                ? '当前资源以图片方式直接在线预览。'
-                : '当前资源通过外部地址或原文件打开。'"
-          show-icon
-        />
-
-        <el-text v-if="currentResource.preview_type === 'video_inline' && currentProgress" type="info" style="display: inline-block; margin-top: 8px">
-          已记录：{{ Math.round(currentProgress.watched_seconds) }} 秒
-          <span v-if="currentProgress.duration_seconds > 0">
-            （约 {{ Math.round((currentProgress.watched_seconds / currentProgress.duration_seconds) * 100) }}%）
-          </span>
-        </el-text>
       </div>
 
       <div v-else>
@@ -369,4 +452,103 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.resource-pane {
+  display: grid;
+  gap: 16px;
+}
+
+.resource-pane__groups {
+  display: grid;
+  gap: 14px;
+}
+
+.resource-pane__group {
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  padding: 14px;
+  background: #fafcff;
+  display: grid;
+  gap: 12px;
+}
+
+.resource-pane__group-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.resource-pane__group-head strong {
+  display: block;
+  color: #27415f;
+  font-size: 15px;
+}
+
+.resource-pane__group-head span,
+.resource-pane__group-head small {
+  color: #6d819b;
+  font-size: 12px;
+}
+
+.resource-pane__group-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.resource-pane__resource {
+  border: 1px solid #dce6f2;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.resource-pane__resource.active {
+  border-color: #7ea7f0;
+  box-shadow: 0 10px 24px rgba(77, 116, 183, 0.12);
+  transform: translateY(-1px);
+}
+
+.resource-pane__resource-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #6b80a0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.resource-pane__resource strong {
+  color: #223654;
+  font-size: 15px;
+}
+
+.resource-pane__resource p {
+  margin: 0;
+  color: #72839b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.resource-pane__preview {
+  border: 1px solid var(--app-border);
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.resource-tip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: #637995;
+  font-size: 13px;
+  font-weight: 700;
+}
 </style>

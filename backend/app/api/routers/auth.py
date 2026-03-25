@@ -7,15 +7,7 @@ from app.api.deps import get_current_user
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.models import User, UserRole
 from app.db.session import get_session
-from app.schemas.auth import (
-    LoginRequest,
-    RegisterRequest,
-    RegisterStudentRequest,
-    RegisterTeacherRequest,
-    Token,
-    WechatBindRequest,
-    WechatLoginRequest,
-)
+from app.schemas.auth import LoginRequest, Token, WechatBindRequest, WechatLoginRequest
 from app.services.learner_profile import log_behavior_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -38,59 +30,18 @@ def _validate_password(password: str):
 
 
 @router.post("/register")
-def register(payload: RegisterRequest, session: Session = Depends(get_session)):
-    _validate_password(payload.password)
-    exists = session.exec(select(User).where(User.username == payload.username)).first()
-    if exists:
-        raise HTTPException(status_code=400, detail="Username already exists")
-    user = User(username=payload.username, password_hash=hash_password(payload.password), role=UserRole.student)
-    session.add(user)
-    session.commit()
-    return {"ok": True, "user_id": user.id}
+def register_disabled():
+    raise HTTPException(status_code=403, detail="账号统一由管理员创建，不开放自助注册")
 
 
 @router.post("/register/student")
-def register_student(payload: RegisterStudentRequest, session: Session = Depends(get_session)):
-    _validate_password(payload.password)
-    exists = session.exec(select(User).where(User.username == payload.username)).first()
-    if exists:
-        raise HTTPException(status_code=400, detail="Username already exists")
-    phone = _normalize_phone(payload.phone)
-    if phone:
-        exists_phone = session.exec(select(User).where(User.phone == phone)).first()
-        if exists_phone:
-            raise HTTPException(status_code=400, detail="手机号已被使用")
-    user = User(
-        username=payload.username,
-        password_hash=hash_password(payload.password),
-        role=UserRole.student,
-        phone=phone,
-    )
-    session.add(user)
-    session.commit()
-    return {"ok": True, "user_id": user.id}
+def register_student_disabled():
+    raise HTTPException(status_code=403, detail="学生账号统一由管理员创建，不开放自助注册")
 
 
 @router.post("/register/teacher")
-def register_teacher(payload: RegisterTeacherRequest, session: Session = Depends(get_session)):
-    _validate_password(payload.password)
-    exists = session.exec(select(User).where(User.username == payload.username)).first()
-    if exists:
-        raise HTTPException(status_code=400, detail="Username already exists")
-    phone = _normalize_phone(payload.phone)
-    if phone:
-        exists_phone = session.exec(select(User).where(User.phone == phone)).first()
-        if exists_phone:
-            raise HTTPException(status_code=400, detail="手机号已被使用")
-    user = User(
-        username=payload.username,
-        password_hash=hash_password(payload.password),
-        role=UserRole.teacher,
-        phone=phone,
-    )
-    session.add(user)
-    session.commit()
-    return {"ok": True, "user_id": user.id}
+def register_teacher_disabled():
+    raise HTTPException(status_code=403, detail="教师账号统一由管理员创建，不开放自助注册")
 
 
 @router.post("/login", response_model=Token)
@@ -150,20 +101,7 @@ def wechat_login(payload: WechatLoginRequest, session: Session = Depends(get_ses
         session.add(user)
         session.commit()
     if user is None:
-        if not phone:
-            return {"ok": True, "need_bind_phone": True}
-        exists_phone = session.exec(select(User).where(User.phone == phone)).first()
-        if exists_phone:
-            raise HTTPException(status_code=400, detail="手机号已被使用")
-        user = User(
-            username=f"wx_{openid[:10]}",
-            password_hash=hash_password(openid),
-            role=UserRole.student,
-            phone=phone,
-            wechat_openid=openid,
-        )
-        session.add(user)
-        session.commit()
+        raise HTTPException(status_code=403, detail="账号需由管理员预先创建后才能绑定微信登录")
     token = create_access_token(subject=user.username, role=user.role.value)
     log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return {"ok": True, "need_bind_phone": False, "access_token": token, "role": user.role.value}
@@ -182,15 +120,11 @@ def wechat_bind(payload: WechatBindRequest, session: Session = Depends(get_sessi
         raise HTTPException(status_code=400, detail="手机号已被使用")
     user = session.exec(select(User).where(User.wechat_openid == openid)).first()
     if user is None:
-        user = User(
-            username=f"wx_{openid[:10]}",
-            password_hash=hash_password(openid),
-            role=UserRole.student,
-            phone=phone,
-            wechat_openid=openid,
-        )
-    else:
-        user.phone = phone
+        user = session.exec(select(User).where(User.phone == phone)).first()
+        if user is None:
+            raise HTTPException(status_code=403, detail="账号需由管理员预先创建后才能绑定微信")
+        user.wechat_openid = openid
+    user.phone = phone
     session.add(user)
     session.commit()
     token = create_access_token(subject=user.username, role=user.role.value)

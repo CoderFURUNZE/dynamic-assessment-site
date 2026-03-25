@@ -56,6 +56,12 @@ type NodeDetail = {
   prerequisites: RelationNode[];
   downstream: RelationNode[];
   related: RelationNode[];
+  navigation?: {
+    chapter: string;
+    previous?: RelationNode | null;
+    next?: RelationNode | null;
+    chapter_nodes: RelationNode[];
+  } | null;
 };
 
 type RecoData = {
@@ -76,6 +82,7 @@ const activeMenu = ref<"resource" | "practice" | "recommend">("resource");
 const detail = ref<NodeDetail | null>(null);
 const reco = ref<RecoData | null>(null);
 const lastRecommendedTargetId = ref<number | null>(null);
+const deniedMessageShown = ref(false);
 const closureState = reactive({
   resourceDone: false,
   practiceDone: false,
@@ -115,6 +122,7 @@ const stats = computed(() => ({
   practice: detail.value?.practice_list?.length ?? 0,
   recommend: recommendedResources.value.length + (detail.value?.task_list?.length ?? 0),
 }));
+const navigation = computed(() => detail.value?.navigation ?? null);
 
 function goBack() {
   router.push({
@@ -165,15 +173,28 @@ async function loadDetail() {
   loading.value = true;
   try {
     const res = await api.get(`/graph/node/${kpId.value}`);
+    deniedMessageShown.value = false;
     detail.value = res.data;
     const blockedReason = res.data?.overlay?.blocked_reason;
     if (blockedReason) {
-      ElMessage.warning(blockedReason);
+      if (!deniedMessageShown.value) {
+        deniedMessageShown.value = true;
+        ElMessage.warning(blockedReason);
+      }
       goBack();
       return;
     }
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "加载学习内容失败");
+    const message = e?.response?.data?.detail ?? "加载学习内容失败";
+    if (e?.response?.status === 403) {
+      if (!deniedMessageShown.value) {
+        deniedMessageShown.value = true;
+        ElMessage.warning(message);
+      }
+      goBack();
+      return;
+    }
+    ElMessage.error(message);
   } finally {
     loading.value = false;
   }
@@ -223,14 +244,17 @@ onMounted(async () => {
     return;
   }
   await loadDetail();
+  if (deniedMessageShown.value) return;
   await loadRecommendation();
 });
 
-watch(kpId, () => {
+watch(kpId, async () => {
+  deniedMessageShown.value = false;
   closureState.resourceDone = false;
   closureState.practiceDone = false;
-  loadDetail();
-  loadRecommendation();
+  await loadDetail();
+  if (deniedMessageShown.value) return;
+  await loadRecommendation();
 });
 </script>
 
@@ -250,6 +274,34 @@ watch(kpId, () => {
         <small>{{ detail.kp.chapter || "未分章" }}</small>
       </div>
     </div>
+
+    <section v-if="navigation" class="student-content-nav-card">
+      <div class="student-content-nav-card__head">
+        <div>
+          <strong>知识点导航</strong>
+          <span>当前位于 {{ navigation.chapter || detail?.kp.chapter || "未分章" }}</span>
+        </div>
+        <div class="student-content-nav-card__actions">
+          <button class="student-content-page__back" :disabled="!navigation.previous" @click="navigation.previous && goToKp(navigation.previous.id)">
+            上一个知识点
+          </button>
+          <button class="student-content-reco__btn" :disabled="!navigation.next" @click="navigation.next && goToKp(navigation.next.id)">
+            下一个知识点
+          </button>
+        </div>
+      </div>
+      <div class="student-content-nav-card__list">
+        <button
+          v-for="item in navigation.chapter_nodes"
+          :key="item.id"
+          class="student-content-nav-card__node"
+          :class="{ active: item.id === kpId }"
+          @click="goToKp(item.id)"
+        >
+          {{ item.title }}
+        </button>
+      </div>
+    </section>
 
     <section class="student-content-overview">
       <div class="student-content-overview__item">
@@ -462,6 +514,66 @@ watch(kpId, () => {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.student-content-nav-card {
+  border-radius: 18px;
+  border: 1px solid var(--app-border);
+  background: #ffffff;
+  box-shadow: var(--app-shadow-soft);
+  padding: 16px 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.student-content-nav-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.student-content-nav-card__head strong {
+  display: block;
+  color: #23405f;
+  font-size: 16px;
+}
+
+.student-content-nav-card__head span {
+  display: block;
+  margin-top: 4px;
+  color: #6d819c;
+  font-size: 12px;
+}
+
+.student-content-nav-card__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.student-content-nav-card__list {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.student-content-nav-card__node {
+  border: 1px solid #dbe5f2;
+  background: #f8fbff;
+  color: #3d5775;
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.student-content-nav-card__node.active {
+  border-color: #7ea7f0;
+  background: #edf4ff;
+  color: #27476a;
 }
 
 .student-content-overview__item {

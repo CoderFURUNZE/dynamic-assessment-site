@@ -25,12 +25,24 @@ const page = ref(1);
 const pageSize = 15;
 const total = ref(0);
 const dialogOpen = ref(false);
+const createDialogOpen = ref(false);
 const editing = ref<UserRow | null>(null);
 
 const form = reactive({
   id: 0,
   username: "",
   role: "student",
+  active: true,
+  full_name: "",
+  student_no: "",
+  class_name: "",
+  phone: "",
+  password: "",
+});
+
+const createForm = reactive({
+  username: "",
+  role: props.mode === "teachers" ? "teacher" : "student",
   active: true,
   full_name: "",
   student_no: "",
@@ -74,6 +86,18 @@ function openEdit(row: UserRow) {
   dialogOpen.value = true;
 }
 
+function openCreate() {
+  createForm.username = "";
+  createForm.role = props.mode === "teachers" ? "teacher" : "student";
+  createForm.active = true;
+  createForm.full_name = "";
+  createForm.student_no = "";
+  createForm.class_name = "";
+  createForm.phone = "";
+  createForm.password = "";
+  createDialogOpen.value = true;
+}
+
 async function save() {
   try {
     await api.put(`/admin/users/${form.id}`, {
@@ -90,6 +114,26 @@ async function save() {
     await load();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "保存失败");
+  }
+}
+
+async function createUser() {
+  try {
+    await api.post("/admin/users", {
+      username: createForm.username,
+      role: props.mode === "teachers" ? "teacher" : createForm.role,
+      active: createForm.active,
+      full_name: createForm.full_name,
+      student_no: createForm.student_no,
+      class_name: createForm.class_name,
+      phone: createForm.phone || undefined,
+      password: createForm.password,
+    });
+    ElMessage.success("账号已创建");
+    createDialogOpen.value = false;
+    await load();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "创建失败");
   }
 }
 
@@ -130,7 +174,10 @@ watch(
     <template #header>
       <div style="display: flex; align-items: center; justify-content: space-between">
         <div>{{ titleText }}</div>
-        <el-button @click="load" :loading="loading">刷新</el-button>
+        <div style="display: flex; gap: 8px">
+          <el-button type="primary" @click="openCreate">新增{{ props.mode === "teachers" ? "老师" : "用户" }}</el-button>
+          <el-button @click="load" :loading="loading">刷新</el-button>
+        </div>
       </div>
     </template>
 
@@ -207,6 +254,43 @@ watch(
       <template #footer>
         <el-button @click="dialogOpen = false">取消</el-button>
         <el-button type="primary" @click="save">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="createDialogOpen" :title="`新增${props.mode === 'teachers' ? '老师' : '用户'}`" width="520px">
+      <el-form label-width="90px">
+        <el-form-item label="用户名">
+          <el-input v-model="createForm.username" />
+        </el-form-item>
+        <el-form-item label="角色">
+          <el-select v-model="createForm.role" style="width: 100%" :disabled="props.mode === 'teachers'">
+            <el-option label="teacher" value="teacher" />
+            <el-option label="student" value="student" />
+            <el-option label="admin" value="admin" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-switch v-model="createForm.active" active-text="启用" inactive-text="禁用" />
+        </el-form-item>
+        <el-form-item label="姓名">
+          <el-input v-model="createForm.full_name" />
+        </el-form-item>
+        <el-form-item label="学号">
+          <el-input v-model="createForm.student_no" />
+        </el-form-item>
+        <el-form-item label="班级">
+          <el-input v-model="createForm.class_name" />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <el-input v-model="createForm.phone" placeholder="留空表示未绑定" />
+        </el-form-item>
+        <el-form-item label="初始密码">
+          <el-input v-model="createForm.password" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDialogOpen = false">取消</el-button>
+        <el-button type="primary" @click="createUser">创建</el-button>
       </template>
     </el-dialog>
   </el-card>

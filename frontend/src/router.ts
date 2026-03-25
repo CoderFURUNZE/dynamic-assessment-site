@@ -16,6 +16,7 @@ const StudentGraphWorkspacePage = () => import("./pages/StudentGraphWorkspace.vu
 const StudentKpContentWorkspacePage = () => import("./pages/StudentKpContentWorkspace.vue");
 const StudentEnrollPage = () => import("./pages/StudentEnroll.vue");
 const AdminDashboardPage = () => import("./pages/AdminDashboardPage.vue");
+const AdminCoursesPage = () => import("./pages/AdminCoursesPage.vue");
 const AdminUsersPage = () => import("./pages/AdminUsersPage.vue");
 const AdminTeachersPage = () => import("./pages/AdminTeachersPage.vue");
 const AdminDimensionsPage = () => import("./pages/AdminDimensionsPage.vue");
@@ -88,6 +89,7 @@ router.addRoute({
 
 [
   "/admin/dashboard",
+  "/admin/courses",
   "/admin/users",
   "/admin/teachers",
   "/admin/dimensions",
@@ -95,6 +97,7 @@ router.addRoute({
 ].forEach((path) => {
   const component = {
     "/admin/dashboard": AdminDashboardPage,
+    "/admin/courses": AdminCoursesPage,
     "/admin/users": AdminUsersPage,
     "/admin/teachers": AdminTeachersPage,
     "/admin/dimensions": AdminDimensionsPage,
@@ -163,6 +166,7 @@ router.beforeEach((to) => {
       const allowedAdminPaths = new Set([
         "/admin",
         "/admin/dashboard",
+        "/admin/courses",
         "/admin/users",
         "/admin/teachers",
         "/admin/dimensions",
