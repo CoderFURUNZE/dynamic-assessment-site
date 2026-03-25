@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HoverTip from "./HoverTip.vue";
 import PortraitRadarChart from "./PortraitRadarChart.vue";
 
 const QUESTIONNAIRE_SCORE_OPTIONS = [
@@ -123,6 +124,18 @@ type ProfileData = {
     final_score_reference?: number;
     final_reason_summary?: string;
   };
+  kp_dimension_summary?: {
+    summary?: {
+      knowledge_total?: number;
+      knowledge_achieved?: number;
+      ability_target_total?: number;
+      ability_achieved?: number;
+      literacy_target_total?: number;
+      literacy_achieved?: number;
+      top_abilities?: Array<{ label: string; achieved_count: number; target_count: number }>;
+      top_literacies?: Array<{ label: string; achieved_count: number; target_count: number }>;
+    };
+  };
 };
 
 const props = defineProps<{ subject: string; grade: string; reloadKey?: number }>();
@@ -159,6 +172,9 @@ const termSummary = computed(() => profile.value?.term_summary ?? {});
 const portraitIndicatorRows = computed(() => currentStage.value?.portrait_indicators ?? profile.value?.portrait_indicators ?? []);
 const portraitIndicators = computed(() => portraitIndicatorRows.value.filter((item) => item.available));
 const hasQuestionnaireItems = computed(() => questionnaireIndicators.value.length > 0);
+const kpDimensionSummary = computed(() => profile.value?.kp_dimension_summary?.summary ?? {});
+const topAbilityRows = computed(() => kpDimensionSummary.value.top_abilities ?? []);
+const topLiteracyRows = computed(() => kpDimensionSummary.value.top_literacies ?? []);
 const mentorDimensionOrder = [
   "潜能与特质倾向",
   "情感与社会性发展",
@@ -232,14 +248,14 @@ const dimensions = computed(() => {
       { label: "学习投入", value: currentStage.value.engagement ?? 0, color: "#2f8cff" },
       { label: "学习成效", value: currentStage.value.achievement ?? 0, color: "#2cb67d" },
       { label: "学习习惯", value: currentStage.value.habit ?? 0, color: "#ff9b42" },
-      { label: "学习特征", value: currentStage.value.characteristic ?? 0, color: "#7b61ff" },
+      { label: "学习特征", value: currentStage.value.characteristic ?? 0, color: "#2f8cff" },
     ];
   }
   return [
     { label: "参与度 E", value: current.engagement ?? 0, color: "#2f8cff" },
     { label: "成效 A", value: current.achievement ?? 0, color: "#2cb67d" },
     { label: "效率 F", value: current.efficiency ?? 0, color: "#ff9b42" },
-    { label: "风险 R", value: current.risk ?? 0, color: "#f2545b" },
+    { label: "风险 R", value: current.risk ?? 0, color: "#ff9b42" },
   ];
 });
 
@@ -360,20 +376,18 @@ watch(
       <div class="report-header">
         <div class="report-header__main">
           <div class="report-header__eyebrow">Learning Report</div>
-          <div class="report-title">学习情况报告</div>
-          <div class="report-subtitle">系统会根据老师导入的数据、知识点掌握情况和学习过程，更新你的当前学习结果。</div>
+          <div class="report-title">我的学习情况</div>
+          <div class="report-subtitle">这里会告诉你现在学得怎么样、哪里学得好、下一步该做什么。</div>
         </div>
         <el-button size="small" @click="load" :loading="loading">刷新</el-button>
       </div>
     </template>
 
     <div v-if="profile" class="report-grid">
-      <el-alert
-        class="report-tip"
-        type="info"
-        :closable="false"
-        title="先看“当前结果”和“核心维度”，再看下面的详细内容，不需要一次看完所有信息。"
-      />
+      <div class="report-tip-inline">
+        <span>查看提示</span>
+        <HoverTip content="先看上面的结果，再看下面的详细内容，不需要一次看完。" />
+      </div>
       <section class="report-hero">
         <div class="hero-label">当前结果</div>
         <div class="hero-title">{{ profile.persona_label }}</div>
@@ -418,14 +432,14 @@ watch(
       </section>
 
       <section class="dimension-board">
-        <div class="board-title">期末总结果</div>
+        <div class="board-title">学期总结果</div>
         <div class="dimension-list">
           <div class="dimension-item">
             <div class="dimension-top"><span>覆盖阶段</span><strong>{{ termSummary.stage_count || 0 }}</strong></div>
-            <div class="dimension-bar"><div class="dimension-bar__value" :style="{ width: `${Math.min(100, (termSummary.stage_count || 0) * 20)}%`, background: '#5c7cff' }" /></div>
+            <div class="dimension-bar"><div class="dimension-bar__value" :style="{ width: `${Math.min(100, (termSummary.stage_count || 0) * 20)}%`, background: '#2f8cff' }" /></div>
           </div>
           <div class="dimension-item">
-            <div class="dimension-top"><span>期末参考分</span><strong>{{ Math.round((termSummary.final_score_reference || 0) * 100) }}%</strong></div>
+            <div class="dimension-top"><span>学期参考分</span><strong>{{ Math.round((termSummary.final_score_reference || 0) * 100) }}%</strong></div>
             <div class="dimension-bar"><div class="dimension-bar__value" :style="{ width: `${Math.round((termSummary.final_score_reference || 0) * 100)}%`, background: '#2cb67d' }" /></div>
           </div>
           <div class="dimension-item">
@@ -434,17 +448,81 @@ watch(
           </div>
         </div>
         <div class="empty-help__text" style="text-align:left; margin-top: 10px;">
-          {{ termSummary.final_reason_summary || "系统会把整个学期的阶段结果汇总成期末总画像和参考分。" }}
+          {{ termSummary.final_reason_summary || "系统会把整个学期的结果汇总到这里。" }}
         </div>
       </section>
 
       <section class="dimension-board">
-        <div class="board-title">五大类结果</div>
+        <div class="board-title">知识 / 能力 / 素养</div>
+        <div class="dimension-list">
+          <div class="dimension-item">
+            <div class="dimension-top">
+              <span>知识点达成</span>
+              <strong>{{ kpDimensionSummary.knowledge_achieved || 0 }}/{{ kpDimensionSummary.knowledge_total || 0 }}</strong>
+            </div>
+            <div class="dimension-bar">
+              <div
+                class="dimension-bar__value"
+                :style="{ width: `${Math.round(((kpDimensionSummary.knowledge_achieved || 0) / Math.max(1, kpDimensionSummary.knowledge_total || 0)) * 100)}%`, background: '#2ea96b' }"
+              />
+            </div>
+          </div>
+          <div class="dimension-item">
+            <div class="dimension-top">
+              <span>能力目标达成</span>
+              <strong>{{ kpDimensionSummary.ability_achieved || 0 }}/{{ kpDimensionSummary.ability_target_total || 0 }}</strong>
+            </div>
+            <div class="dimension-bar">
+              <div
+                class="dimension-bar__value"
+                :style="{ width: `${Math.round(((kpDimensionSummary.ability_achieved || 0) / Math.max(1, kpDimensionSummary.ability_target_total || 0)) * 100)}%`, background: '#f0b429' }"
+              />
+            </div>
+          </div>
+          <div class="dimension-item">
+            <div class="dimension-top">
+              <span>素养目标达成</span>
+              <strong>{{ kpDimensionSummary.literacy_achieved || 0 }}/{{ kpDimensionSummary.literacy_target_total || 0 }}</strong>
+            </div>
+            <div class="dimension-bar">
+              <div
+                class="dimension-bar__value"
+                :style="{ width: `${Math.round(((kpDimensionSummary.literacy_achieved || 0) / Math.max(1, kpDimensionSummary.literacy_target_total || 0)) * 100)}%`, background: '#2f8cff' }"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="kal-grid">
+          <div class="kal-card">
+            <div class="kal-card__title">当前较强能力</div>
+            <div v-if="topAbilityRows.length" class="kal-list">
+              <div v-for="item in topAbilityRows" :key="`ability-${item.label}`" class="kal-item">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.achieved_count }}/{{ item.target_count }}</strong>
+              </div>
+            </div>
+            <div v-else class="empty-help__text">当前还没有形成明显能力优势，先继续完成知识点学习与练习。</div>
+          </div>
+          <div class="kal-card">
+            <div class="kal-card__title">当前较强素养</div>
+            <div v-if="topLiteracyRows.length" class="kal-list">
+              <div v-for="item in topLiteracyRows" :key="`literacy-${item.label}`" class="kal-item">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.achieved_count }}/{{ item.target_count }}</strong>
+              </div>
+            </div>
+            <div v-else class="empty-help__text">当前素养证据还不多，可以多使用老师推荐资源、完成视频与拓展内容。</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="dimension-board">
+        <div class="board-title">当前阶段结果</div>
         <PortraitRadarChart
-          title="当前阶段五维雷达图"
-          subtitle="系统根据老师导入的数据、学习过程和补充评价，形成这张当前阶段画像图。"
+          title="当前阶段结果图"
+          subtitle="这张图表示你在当前阶段各方面的大致情况。"
           :items="portraitDimensions"
-          accent="#5c7cff"
+          accent="#2f8cff"
           empty-text="这门课当前还没有足够数据生成雷达图"
         />
         <div v-if="portraitDimensions.length" class="dimension-list">
@@ -457,25 +535,25 @@ watch(
               <div
                 v-if="item.score != null"
                 class="dimension-bar__value"
-                :style="{ width: `${Math.round(item.score * 100)}%`, background: '#5c7cff' }"
+                :style="{ width: `${Math.round(item.score * 100)}%`, background: '#2f8cff' }"
               />
             </div>
           </div>
         </div>
         <div v-else class="empty-help">
-          <el-empty description="这门课还没有形成五大类结果" />
-          <div class="empty-help__text">通常是因为老师还没导入阶段数据，或者这门课还没选好要看的内容。</div>
+          <el-empty description="这门课还没有生成阶段结果" />
+          <div class="empty-help__text">一般是因为老师还没导入阶段数据，或者这门课还没配置完成。</div>
         </div>
       </section>
 
       <section v-if="finalPortraitDimensions.length" class="dimension-board">
-        <div class="board-title">期末五大类汇总</div>
+        <div class="board-title">学期结果汇总</div>
         <PortraitRadarChart
-          title="期末五维雷达图"
-          subtitle="系统会把整个学期的阶段结果汇总成期末总画像，供老师评分、也方便你看自己哪方面更强。"
+          title="学期结果图"
+          subtitle="这张图是把整个学期的结果汇总后得到的。"
           :items="finalPortraitDimensions"
-          accent="#7b61ff"
-          empty-text="当前还没有可展示的期末雷达图"
+          accent="#2cb67d"
+          empty-text="当前还没有可展示的学期结果图"
         />
         <div class="dimension-list">
           <div v-for="item in finalPortraitDimensions" :key="item.dimension_title" class="dimension-item">
@@ -487,7 +565,7 @@ watch(
               <div
                 v-if="item.score != null"
                 class="dimension-bar__value"
-                :style="{ width: `${Math.round(item.score * 100)}%`, background: '#7b61ff' }"
+                :style="{ width: `${Math.round(item.score * 100)}%`, background: '#2cb67d' }"
               />
             </div>
           </div>
@@ -495,7 +573,7 @@ watch(
       </section>
 
       <section class="stage-board">
-        <div class="board-title">阶段变化</div>
+        <div class="board-title">学习变化</div>
         <div v-if="timelineCards.length" class="stage-list">
           <div v-for="item in timelineCards" :key="`${item.stage_id}-${item.stage_order}`" class="stage-card">
             <div class="stage-card__top">
@@ -518,26 +596,26 @@ watch(
       </section>
       <section class="detail-tabs">
         <el-tabs v-model="reportTab">
-          <el-tab-pane label="结果详情" name="summary">
+          <el-tab-pane label="结果和建议" name="summary">
             <div class="detail-grid">
               <section class="feedback-board">
-                <div class="board-title">教师补充评价</div>
+                <div class="board-title">老师建议</div>
                 <div v-if="profile.teacher_feedback" class="feedback-card">
                   <div class="feedback-tag">{{ profile.teacher_feedback.feedback_tag || "阶段评语" }}</div>
-                  <div class="feedback-text">{{ profile.teacher_feedback.comment || "教师暂未填写补充评价" }}</div>
+                  <div class="feedback-text">{{ profile.teacher_feedback.comment || "老师暂时还没有填写建议" }}</div>
                   <div class="feedback-meta">
                     {{ profile.teacher_feedback.updated_by || "教师" }}
                     <span v-if="profile.teacher_feedback.updated_at">· {{ new Date(profile.teacher_feedback.updated_at).toLocaleString() }}</span>
                   </div>
                 </div>
                 <div v-else class="empty-help empty-help--compact">
-                  <el-empty description="当前阶段暂无教师补充评价" :image-size="72" />
-                  <div class="empty-help__text">这不是错误，说明老师目前还没有补充填写这部分内容。</div>
+                  <el-empty description="当前阶段暂无老师建议" :image-size="72" />
+                  <div class="empty-help__text">这不是错误，只是老师暂时还没有填写。</div>
                 </div>
               </section>
 
               <section class="advice-board">
-                <div class="board-title">个性化建议</div>
+                <div class="board-title">下一步怎么学</div>
                 <div class="advice-list">
                   <div v-for="item in suggestions" :key="item" class="advice-item">{{ item }}</div>
                 </div>
@@ -545,10 +623,10 @@ watch(
             </div>
           </el-tab-pane>
 
-          <el-tab-pane label="老师看的内容" name="indicators">
+          <el-tab-pane label="详细结果" name="indicators">
             <div class="detail-grid">
               <section class="config-board">
-                <div class="board-title">老师现在看的内容</div>
+                <div class="board-title">老师当前参考的内容</div>
                 <div v-if="dimensionConfig.length" class="config-list">
                   <div v-for="item in dimensionConfig" :key="item.key" class="config-item">
                     <span>{{ item.label }}</span>
@@ -557,12 +635,12 @@ watch(
                 </div>
                 <div v-else class="empty-help empty-help--compact">
                   <el-empty description="老师还没设置当前阶段要看哪些内容" :image-size="72" />
-                  <div class="empty-help__text">老师先在“这门课看哪些内容”里勾选评价项，这里才会显示。</div>
+                  <div class="empty-help__text">老师先设置评价项，这里才会显示。</div>
                 </div>
               </section>
 
               <section class="config-board">
-                <div class="board-title">细项结果</div>
+                <div class="board-title">详细分项结果</div>
                 <div v-if="portraitIndicators.length" class="config-list">
                   <div v-for="item in portraitIndicators" :key="item.title" class="config-item config-item--stack">
                     <div class="config-item__title">{{ item.title }}</div>
@@ -580,16 +658,16 @@ watch(
                   </div>
                 </div>
                 <div v-else class="empty-help empty-help--compact">
-                  <el-empty description="当前阶段还没有细项结果" :image-size="72" />
-                  <div class="empty-help__text">老师导入数据后，系统会把数据自动映射成这里的细项结果。</div>
+                  <el-empty description="当前阶段还没有详细分项结果" :image-size="72" />
+                  <div class="empty-help__text">老师导入数据后，系统会自动生成这里的结果。</div>
                 </div>
               </section>
             </div>
           </el-tab-pane>
 
-          <el-tab-pane label="补充填写" name="questionnaire">
+          <el-tab-pane label="我来补充" name="questionnaire">
             <section class="config-board" v-loading="questionnaireLoading">
-              <div class="board-title">补充填写学习情况</div>
+              <div class="board-title">补充学习情况</div>
               <div v-if="hasQuestionnaireItems" class="config-list">
                 <div v-for="item in questionnaireIndicators" :key="item.indicator_id" class="config-item config-item--stack">
                   <div class="config-item__title">{{ item.indicator_title }}</div>
@@ -610,26 +688,26 @@ watch(
                     </el-radio-group>
                   </div>
                   <div class="questionnaire-row__hint">
-                    这里只需要按实际情况选择问卷答案并补充说明，权重由老师和系统预设，你不用调整评分规则。
+                    这里只需要按实际情况选择并补充说明，不用自己计算分数。
                   </div>
                   <el-input v-model="item.note" type="textarea" :rows="2" placeholder="补充标签或说明" />
                 </div>
                 <div class="questionnaire-actions">
-                  <el-button type="primary" :loading="savingQuestionnaire" @click="saveQuestionnaireIndicators">保存补充内容</el-button>
+                  <el-button type="primary" :loading="savingQuestionnaire" @click="saveQuestionnaireIndicators">保存</el-button>
                 </div>
               </div>
               <div v-else class="empty-help empty-help--compact">
-                <el-empty description="这门课还没有启用需要补充填写的内容" :image-size="72" />
-                <div class="empty-help__text">如果老师启用了“学生补充”类型的内容，你就可以在这里填写。</div>
+                <el-empty description="这门课还没有需要你补充填写的内容" :image-size="72" />
+                <div class="empty-help__text">如果老师开启了这部分内容，你就可以在这里填写。</div>
               </div>
             </section>
           </el-tab-pane>
 
-          <el-tab-pane label="多元智能映射" name="mi-map">
+          <el-tab-pane label="分类查看" name="mi-map">
             <section class="config-board">
-              <div class="board-title">五大类学习者画像映射</div>
+              <div class="board-title">按类别查看结果</div>
               <div class="mi-intro">
-                系统把当前课程结果映射到 5 大类维度，每类再展开子指标，便于查看“哪一类强、哪一类还需补充”。
+                这里会把结果按几大类分开，方便你看清楚自己哪一类更强，哪一类还要补。
               </div>
               <div v-if="mentorDimensionGroups.length" class="mi-grid">
                 <article v-for="group in mentorDimensionGroups" :key="group.title" class="mi-card">
@@ -661,20 +739,20 @@ watch(
                 </article>
               </div>
               <div v-else class="empty-help empty-help--compact">
-                <el-empty description="当前还没有可映射的多元智能结果" :image-size="72" />
-                <div class="empty-help__text">请先让老师完成阶段数据导入，并补充需要的教师/问卷指标。</div>
+                <el-empty description="当前还没有可展示的分类结果" :image-size="72" />
+                <div class="empty-help__text">请先让老师完成阶段数据导入，并补充需要的内容。</div>
               </div>
             </section>
           </el-tab-pane>
 
-          <el-tab-pane label="系统说明" name="explain">
+          <el-tab-pane label="怎么看" name="explain">
             <section class="config-board">
-              <div class="board-title">系统如何判断</div>
+              <div class="board-title">这页怎么看</div>
               <div class="config-list">
-                <div class="config-item">动态评价：老师导入阶段数据后，系统更新阶段评分和趋势，不按每次点击实时重算。</div>
-                <div class="config-item">学习情况：系统会把老师选的五大类和细项汇总起来，形成你的学习结果。</div>
-                <div class="config-item">知识图谱：图谱负责组织知识结构，并把资源、任务和练习挂到节点上。</div>
-                <div class="config-item">推荐结果：系统先判断该补哪个点，再结合画像决定推什么资源和练习。</div>
+                <div class="config-item">上面先看总结果，下面再看详细结果。</div>
+                <div class="config-item">如果有些内容还没显示，一般是因为老师还没导入数据。</div>
+                <div class="config-item">知识图谱页面适合看知识点、资源和学习顺序。</div>
+                <div class="config-item">这页更适合看你现在的整体学习情况和下一步建议。</div>
               </div>
             </section>
           </el-tab-pane>
@@ -683,12 +761,10 @@ watch(
     </div>
     <div v-else class="report-empty">
       <el-empty description="这门课还没有形成学习情况报告" :image-size="88" />
-      <el-alert
-        class="report-empty__tip"
-        type="info"
-        :closable="false"
-        title="先让老师完成三步：1. 选这门课要看的内容；2. 创建阶段；3. 导入阶段数据。完成后，这里就会自动出现结果。"
-      />
+      <div class="report-tip-inline">
+        <span>为什么还没有结果</span>
+        <HoverTip content="先让老师完成三步：1. 选这门课要看的内容；2. 创建阶段；3. 导入阶段数据。完成后，这里就会自动出现结果。" />
+      </div>
     </div>
   </el-card>
 </template>
@@ -749,8 +825,13 @@ watch(
   margin-top: -6px;
 }
 
-.report-tip {
-  margin-bottom: 2px;
+.report-tip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #637995;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .detail-tabs {
@@ -887,6 +968,42 @@ watch(
 .dimension-item {
   display: grid;
   gap: 6px;
+}
+
+.kal-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kal-card {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--app-border);
+  background: #fcfdff;
+  display: grid;
+  gap: 10px;
+}
+
+.kal-card__title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #243851;
+}
+
+.kal-list {
+  display: grid;
+  gap: 8px;
+}
+
+.kal-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+  color: #51657f;
 }
 
 .dimension-top,
@@ -1154,6 +1271,10 @@ watch(
 
   .report-header {
     align-items: flex-start;
+  }
+
+  .kal-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

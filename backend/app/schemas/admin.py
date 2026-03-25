@@ -61,6 +61,7 @@ class KnowledgePointIn(BaseModel):
     title: str
     description: str = ""
     chapter: str = ""
+    knowledge_tag: str = ""
     ability_tag: str = ""
     literacy_tag: str = ""
     importance: float = 0.5
@@ -74,6 +75,7 @@ class KnowledgePointUpdateIn(BaseModel):
     title: str | None = None
     description: str | None = None
     chapter: str | None = None
+    knowledge_tag: str | None = None
     ability_tag: str | None = None
     literacy_tag: str | None = None
     importance: float | None = None
@@ -139,8 +141,13 @@ class CourseOut(BaseModel):
     title: str
     description: str = ""
     active: bool
+    lifecycle_status: str = "draft"
     teacher_id: int | None = None
+    target_class: str = ""
     max_students: int = 200
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    archived_at: datetime | None = None
     apply_deadline: datetime | None = None
     enroll_status: str = "open"
 
@@ -150,8 +157,12 @@ class CourseIn(BaseModel):
     title: str
     description: str = ""
     active: bool = True
+    lifecycle_status: str = "draft"
     teacher_id: int | None = None
+    target_class: str = ""
     max_students: int = 200
+    start_at: datetime | None = None
+    end_at: datetime | None = None
     apply_deadline: datetime | None = None
     enroll_status: str = "open"
 
@@ -161,8 +172,13 @@ class CourseUpdateIn(BaseModel):
     title: str | None = None
     description: str | None = None
     active: bool | None = None
+    lifecycle_status: str | None = None
     teacher_id: int | None = None
+    target_class: str | None = None
     max_students: int | None = None
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    archived_at: datetime | None = None
     apply_deadline: datetime | None = None
     enroll_status: str | None = None
 

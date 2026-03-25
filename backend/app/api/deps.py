@@ -39,7 +39,6 @@ def require_role(*roles: UserRole):
         if user.role == UserRole.admin:
             path = request.url.path
             admin_content_prefixes = (
-                "/api/admin/courses",
                 "/api/admin/kps",
                 "/api/admin/edges",
                 "/api/admin/questions",

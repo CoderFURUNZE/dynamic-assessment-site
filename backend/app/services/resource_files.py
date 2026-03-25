@@ -16,6 +16,16 @@ from app.db.session import engine
 
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="resource-convert")
 
+RESOURCE_UPLOAD_RULES = {
+    "pdf": {"max_size_bytes": 25 * 1024 * 1024, "label": "PDF 文档"},
+    "ppt": {"max_size_bytes": 60 * 1024 * 1024, "label": "PPT 课件"},
+    "pptx": {"max_size_bytes": 60 * 1024 * 1024, "label": "PPT 课件"},
+    "doc": {"max_size_bytes": 25 * 1024 * 1024, "label": "Word 文档"},
+    "docx": {"max_size_bytes": 25 * 1024 * 1024, "label": "Word 文档"},
+    "image": {"max_size_bytes": 10 * 1024 * 1024, "label": "图片资源"},
+    "video": {"max_size_bytes": 300 * 1024 * 1024, "label": "视频资源"},
+}
+
 
 def _media_root() -> Path:
     root = Path(settings.media_dir).resolve()
@@ -117,6 +127,12 @@ def _signature_detect(payload: bytes, filename: str, content_type: str | None) -
 
 def detect_uploaded_file(*, filename: str, payload: bytes, content_type: str | None) -> dict:
     detected_mime_type, detected_resource_type = _signature_detect(payload, filename, content_type)
+    _validate_upload_constraints(
+        filename=filename,
+        payload=payload,
+        detected_resource_type=detected_resource_type,
+        detected_mime_type=detected_mime_type,
+    )
     ext = _guess_extension(filename)
     ext_map = {
         ".pdf": "pdf",
@@ -140,7 +156,28 @@ def detect_uploaded_file(*, filename: str, payload: bytes, content_type: str | N
         "detected_resource_type": detected_resource_type,
         "preview_type": _preview_type_for_detected(detected_resource_type),
         "extension_mismatch": bool(extension_detected and extension_detected != detected_resource_type),
+        "upload_rule": RESOURCE_UPLOAD_RULES.get(detected_resource_type, {}),
     }
+
+
+def _validate_upload_constraints(*, filename: str, payload: bytes, detected_resource_type: str, detected_mime_type: str) -> None:
+    normalized = (detected_resource_type or "").lower()
+    rule = RESOURCE_UPLOAD_RULES.get(normalized)
+    if rule:
+        max_size_bytes = int(rule.get("max_size_bytes", 0) or 0)
+        if max_size_bytes and len(payload) > max_size_bytes:
+            max_mb = max_size_bytes / 1024 / 1024
+            raise ValueError(f"{rule.get('label', '资源')}大小不能超过 {max_mb:.0f} MB")
+    if normalized == "video":
+        ext = _guess_extension(filename)
+        if ext not in {".mp4", ".webm"}:
+            raise ValueError("视频仅支持 MP4 或 WEBM 格式，建议使用 16:9 横屏资源")
+    if normalized == "image":
+        ext = _guess_extension(filename)
+        if ext not in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
+            raise ValueError("图片仅支持 PNG、JPG、GIF、WEBP 格式")
+    if normalized in {"ppt", "pptx", "doc", "docx", "pdf"} and not detected_mime_type:
+        raise ValueError("文档资源识别失败，请检查文件格式")
 
 
 def store_uploaded_file(*, kp_id: int, filename: str, payload: bytes, detected_resource_type: str) -> dict:

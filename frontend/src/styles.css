@@ -1,7 +1,7 @@
 :root {
-  --app-bg: #f7f8fa;
-  --app-bg-alt: #f3f5f7;
-  --app-bg-soft: #fcfcfd;
+  --app-bg: #f5f7fb;
+  --app-bg-alt: #eef3f8;
+  --app-bg-soft: #fbfcfe;
   --app-surface-muted: rgba(233, 240, 249, 0.85);
   --app-green: #2f6fed;
   --app-green-dark: #1f59c7;
@@ -11,18 +11,19 @@
   --app-card: #ffffff;
   --app-border: #dbe4ef;
   --app-border-strong: #c8d5e6;
-  --app-radius: 14px;
-  --app-radius-sm: 10px;
-  --app-button-height: 40px;
-  --app-button-height-sm: 32px;
-  --app-shadow: 0 2px 8px rgba(31, 52, 97, 0.04);
-  --app-shadow-soft: 0 1px 4px rgba(31, 52, 97, 0.03);
+  --app-radius: 16px;
+  --app-radius-sm: 12px;
+  --app-button-height: 42px;
+  --app-button-height-sm: 34px;
+  --app-button-padding: 0 18px;
+  --app-shadow: 0 12px 28px rgba(31, 52, 97, 0.08);
+  --app-shadow-soft: 0 6px 18px rgba(31, 52, 97, 0.05);
   --app-success: #2f9d6a;
   --app-warning: #ef9b2d;
   --app-error: #de5a5a;
   --app-info: #2f8cff;
   --app-header-bg: rgba(255, 255, 255, 0.94);
-  --app-gradient: none;
+  --app-gradient: radial-gradient(circle at top left, rgba(47, 111, 237, 0.08), transparent 32%);
 
   --el-color-primary: var(--app-green);
   --el-color-primary-light-3: #5e90f2;
@@ -113,7 +114,9 @@ body {
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-  background: transparent;
+  background:
+    var(--app-gradient),
+    linear-gradient(180deg, #f7f9fc 0%, #f3f6fb 100%);
 }
 
 .app-header {
@@ -127,7 +130,7 @@ body {
   padding: 14px 24px;
   background: var(--app-header-bg);
   border-bottom: 1px solid var(--app-border);
-  box-shadow: none;
+  box-shadow: 0 8px 24px rgba(31, 52, 97, 0.04);
   backdrop-filter: blur(6px);
   overflow-x: hidden;
 }
@@ -185,7 +188,7 @@ body {
 .panel-card {
   border-radius: var(--app-radius);
   background: var(--app-card);
-  box-shadow: none;
+  box-shadow: var(--app-shadow-soft);
   border: 1px solid var(--app-border);
   overflow: hidden;
 }
@@ -193,7 +196,7 @@ body {
 .el-card {
   border-radius: var(--app-radius);
   border: 1px solid var(--app-border);
-  box-shadow: none;
+  box-shadow: var(--app-shadow-soft);
   background: var(--app-card);
   overflow: hidden;
 }
@@ -352,14 +355,14 @@ body {
 .el-button {
   min-height: var(--app-button-height);
   height: var(--app-button-height);
-  border-radius: 12px;
-  padding: 0 16px;
+  border-radius: 999px;
+  padding: var(--app-button-padding);
   font-weight: 700;
   font-size: 14px;
   border: 1px solid var(--app-border);
-  background: #ffffff;
-  color: var(--app-ink);
-  box-shadow: none;
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+  color: #28415f;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -369,17 +372,17 @@ body {
 }
 
 .el-button:hover {
-  border-color: #c8d7e7;
-  color: var(--app-ink);
+  border-color: #bfd0e5;
+  color: #1e3552;
   transform: translateY(-1px);
-  box-shadow: none;
+  box-shadow: 0 10px 18px rgba(31, 52, 97, 0.08);
 }
 
 .el-button--primary {
-  background: var(--app-green);
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
   border: 1px solid var(--app-green);
   color: #ffffff;
-  box-shadow: none;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.2);
 }
 
 .el-button--primary:hover {
@@ -411,8 +414,8 @@ body {
 .el-button.el-button--default.el-button--small {
   min-height: var(--app-button-height-sm);
   height: var(--app-button-height-sm);
-  padding: 0 12px;
-  border-radius: 10px;
+  padding: 0 14px;
+  border-radius: 999px;
   font-size: 12px;
 }
 
@@ -445,7 +448,7 @@ body {
   min-height: 44px;
   border-radius: 12px;
   box-shadow: 0 0 0 1px var(--app-border) inset;
-  background: #f9fbfe;
+  background: #fbfcfe;
 }
 
 .el-input__wrapper.is-focus {

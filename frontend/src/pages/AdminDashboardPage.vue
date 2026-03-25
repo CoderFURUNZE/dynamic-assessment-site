@@ -13,6 +13,7 @@ const router = useRouter();
 
     <PageSectionCard eyebrow="Platform" title="平台概览" description="先看整体运行情况，再进入用户、老师和规则等独立管理页面。">
       <template #actions>
+          <el-button @click="router.push('/admin/courses')">课程管理</el-button>
           <el-button @click="router.push('/admin/users')">用户管理</el-button>
           <el-button @click="router.push('/admin/teachers')">老师管理</el-button>
           <el-button type="primary" @click="router.push('/admin/persona')">画像规则</el-button>

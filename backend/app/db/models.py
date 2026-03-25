@@ -20,6 +20,12 @@ class CourseEnrollStatus(str, Enum):
     expired = "expired"
 
 
+class CourseLifecycleStatus(str, Enum):
+    draft = "draft"
+    active = "active"
+    archived = "archived"
+
+
 class ApplicationStatus(str, Enum):
     pending = "pending"
     approved = "approved"
@@ -73,8 +79,13 @@ class Course(SQLModel, table=True):
     title: str
     description: str = ""
     active: bool = True
+    lifecycle_status: CourseLifecycleStatus = Field(default=CourseLifecycleStatus.draft, index=True)
     teacher_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    target_class: str = Field(default="", index=True)
     max_students: int = Field(default=200)
+    start_at: Optional[datetime] = Field(default=None, index=True)
+    end_at: Optional[datetime] = Field(default=None, index=True)
+    archived_at: Optional[datetime] = Field(default=None, index=True)
     apply_deadline: Optional[datetime] = Field(default=None, index=True)
     enroll_status: CourseEnrollStatus = Field(default=CourseEnrollStatus.open, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
@@ -145,6 +156,7 @@ class KnowledgePoint(SQLModel, table=True):
     title: str
     description: str = ""
     chapter: str = ""
+    knowledge_tag: str = ""
     ability_tag: str = ""
     literacy_tag: str = ""
     importance: float = 0.5
@@ -158,7 +170,9 @@ class KnowledgePoint(SQLModel, table=True):
 
 class RelationType(str, Enum):
     prerequisite = "prerequisite"
+    support = "support"
     related = "related"
+    contains = "contains"
 
 
 class KnowledgeEdge(SQLModel, table=True):

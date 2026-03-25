@@ -42,6 +42,15 @@ type DetectedUpload = {
   preview_type: string;
   preview_label: string;
   extension_mismatch: boolean;
+  upload_rule?: { max_size_bytes?: number; label?: string };
+};
+
+type ClientUploadMeta = {
+  kind: "video" | "image" | "other";
+  width?: number;
+  height?: number;
+  duration?: number;
+  warnings: string[];
 };
 
 type QuestionRow = {
@@ -92,6 +101,7 @@ const resourceForm = reactive({
 });
 const resourceUploadFile = ref<File | null>(null);
 const detectedUpload = ref<DetectedUpload | null>(null);
+const clientUploadMeta = ref<ClientUploadMeta | null>(null);
 
 const questionDialogOpen = ref(false);
 const questionEditingId = ref<number | null>(null);
@@ -119,6 +129,8 @@ const learningResources = computed(() =>
 const recommendResources = computed(() =>
   resources.value.filter((item) => (item.category || "learning") === "recommend")
 );
+const groupedLearningResources = computed(() => groupResources(learningResources.value));
+const groupedRecommendResources = computed(() => groupResources(recommendResources.value));
 const resourceTagPreview = computed(() =>
   resourceForm.tags
     .split(/[,，]/)
@@ -196,6 +208,38 @@ function previewLabel(item: { preview_type?: string }) {
   return map[item.preview_type || "download"] || "下载查看";
 }
 
+function resourceGroupKey(item: ResourceItem) {
+  const type = String(item.detected_resource_type || item.type || "").toLowerCase();
+  const previewType = String(item.preview_type || "").toLowerCase();
+  if (type === "video" || previewType === "video_inline") return "video";
+  if (type === "image" || previewType === "image_inline") return "image";
+  if (type === "link" || previewType === "external_link") return "link";
+  if (["pdf", "ppt", "pptx", "doc", "docx", "note"].includes(type) || previewType.includes("pdf")) return "document";
+  return "other";
+}
+
+function resourceGroupTitle(key: string) {
+  const map: Record<string, string> = {
+    video: "视频资源",
+    document: "文档 / 课件",
+    image: "图片资源",
+    link: "外部链接",
+    other: "其他资源",
+  };
+  return map[key] || "资源";
+}
+
+function groupResources(items: ResourceItem[]) {
+  const order = ["video", "document", "image", "link", "other"];
+  return order
+    .map((key) => ({
+      key,
+      title: resourceGroupTitle(key),
+      items: items.filter((item) => resourceGroupKey(item) === key),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
 function questionTypeLabel(type: string) {
   return type === "blank" ? "填空题" : "选择题";
 }
@@ -251,6 +295,7 @@ function openResourceCreate(mode: "learning" | "recommend") {
   resourceForm.source_kind = "upload";
   resourceUploadFile.value = null;
   detectedUpload.value = null;
+  clientUploadMeta.value = null;
   resourceDialogOpen.value = true;
 }
 
@@ -264,6 +309,7 @@ function openResourceEdit(item: ResourceItem, mode: "learning" | "recommend") {
   resourceForm.category = item.category || (mode === "recommend" ? "recommend" : "learning");
   resourceForm.source_kind = item.source_kind || "external";
   resourceUploadFile.value = null;
+  clientUploadMeta.value = null;
   detectedUpload.value = item.original_file_name
     ? {
         original_file_name: item.original_file_name || "",
@@ -287,12 +333,63 @@ async function inspectUpload(file: File) {
   detectedUpload.value = res.data;
 }
 
+async function inspectBrowserMeta(file: File, detectedType?: string) {
+  const normalized = String(detectedType || "").toLowerCase();
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    if (normalized === "video") {
+      const meta = await new Promise<ClientUploadMeta>((resolve, reject) => {
+        const video = document.createElement("video");
+        video.preload = "metadata";
+        video.onloadedmetadata = () => {
+          const warnings: string[] = [];
+          const width = Number(video.videoWidth || 0);
+          const height = Number(video.videoHeight || 0);
+          const duration = Number(video.duration || 0);
+          if (width > 0 && height > 0) {
+            const ratio = width / height;
+            if (ratio < 1.3) warnings.push("建议使用 16:9 左右的横屏视频，当前比例偏窄。");
+            if (width < 960 || height < 540) warnings.push("当前分辨率偏低，学生端播放可能不够清晰。");
+          }
+          if (duration > 1800) warnings.push("单个视频超过 30 分钟，建议拆分成多个短视频。");
+          resolve({ kind: "video", width, height, duration, warnings });
+        };
+        video.onerror = () => reject(new Error("读取视频元数据失败"));
+        video.src = objectUrl;
+      });
+      clientUploadMeta.value = meta;
+      return;
+    }
+    if (normalized === "image") {
+      const meta = await new Promise<ClientUploadMeta>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+          const warnings: string[] = [];
+          const width = Number(image.width || 0);
+          const height = Number(image.height || 0);
+          if (width < 960 || height < 540) warnings.push("当前图片尺寸偏小，投屏或大屏展示时可能不清晰。");
+          resolve({ kind: "image", width, height, warnings });
+        };
+        image.onerror = () => reject(new Error("读取图片尺寸失败"));
+        image.src = objectUrl;
+      });
+      clientUploadMeta.value = meta;
+      return;
+    }
+    clientUploadMeta.value = { kind: "other", warnings: [] };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 async function setUploadFile(file: File | null) {
   resourceUploadFile.value = file;
   detectedUpload.value = null;
+  clientUploadMeta.value = null;
   if (!file) return;
   try {
     await inspectUpload(file);
+    await inspectBrowserMeta(file, detectedUpload.value?.detected_resource_type);
     if (!resourceForm.title.trim()) {
       resourceForm.title = file.name.replace(/\.[^.]+$/, "");
     }
@@ -329,44 +426,83 @@ async function saveResource() {
   if (!kpId.value) return;
   saving.value = true;
   try {
+    const trimmedTitle = resourceForm.title.trim();
+    const trimmedUrl = resourceForm.url.trim();
+    const trimmedTags = resourceForm.tags.trim();
+    const trimmedDescription = resourceForm.description.trim();
     if (resourceEditingId.value) {
+      if (!trimmedTitle) {
+        ElMessage.warning("请输入资源名称");
+        saving.value = false;
+        return;
+      }
+      if (resourceForm.source_kind === "external" && !trimmedUrl) {
+        ElMessage.warning("请输入外部资源链接");
+        saving.value = false;
+        return;
+      }
       const payload = {
-        title: resourceForm.title,
-        url: resourceForm.source_kind === "external" ? resourceForm.url : undefined,
+        title: trimmedTitle,
+        url: resourceForm.source_kind === "external" ? trimmedUrl : undefined,
         category: resourceForm.category,
-        tags: resourceForm.tags,
-        description: resourceForm.description,
+        tags: trimmedTags,
+        description: trimmedDescription,
       };
       await api.put(`/admin/kp-resources/${resourceEditingId.value}`, payload);
       ElMessage.success("资源已更新");
     } else if (resourceForm.source_kind === "upload") {
+      if (!trimmedTitle) {
+        ElMessage.warning("请输入资源名称");
+        saving.value = false;
+        return;
+      }
       if (!resourceUploadFile.value || !detectedUpload.value) {
         ElMessage.warning("请先选择文件，系统识别成功后再保存");
         saving.value = false;
         return;
       }
+      if (clientUploadMeta.value?.warnings?.length && clientUploadMeta.value.kind === "video") {
+        const hardIssue = clientUploadMeta.value.warnings.find((item) => item.includes("偏窄"));
+        if (hardIssue) {
+          ElMessage.warning("当前视频更适合先调整为横屏教学视频后再上传");
+          saving.value = false;
+          return;
+        }
+      }
       const formData = new FormData();
       formData.append("kp_id", String(kpId.value));
-      formData.append("title", resourceForm.title);
+      formData.append("title", trimmedTitle);
       formData.append("category", resourceForm.category);
-      formData.append("tags", resourceForm.tags);
-      formData.append("description", resourceForm.description);
+      formData.append("tags", trimmedTags);
+      formData.append("description", trimmedDescription);
       formData.append("file", resourceUploadFile.value);
       await api.post("/admin/kp-resources/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       ElMessage.success("资源已上传");
     } else {
+      if (!trimmedTitle) {
+        ElMessage.warning("请输入资源名称");
+        saving.value = false;
+        return;
+      }
+      if (!trimmedUrl) {
+        ElMessage.warning("请输入外部资源链接");
+        saving.value = false;
+        return;
+      }
       const payload = {
         kp_id: kpId.value,
-        type: resourceForm.category === "recommend" ? "book" : "link",
-        title: resourceForm.title,
-        url: resourceForm.url,
+        type: "link",
+        title: trimmedTitle,
+        url: trimmedUrl,
         category: resourceForm.category,
-        tags: resourceForm.tags,
-        description: resourceForm.description,
+        tags: trimmedTags,
+        description: trimmedDescription,
       };
-      await api.post("/admin/kp-resources", payload);
+      await api.post("/admin/kp-resources", payload, {
+        headers: { "Content-Type": "application/json" },
+      });
       ElMessage.success("资源已添加");
     }
     resourceDialogOpen.value = false;
@@ -553,31 +689,39 @@ onMounted(async () => {
                 <el-button type="primary" @click="openResourceCreate('learning')">新增学习资源</el-button>
               </div>
               <div v-if="learningResources.length === 0" class="content-empty">还没有学习资源</div>
-              <div v-else class="content-list">
-                <div v-for="item in learningResources" :key="item.id" class="content-item">
-                  <div class="content-item__body">
-                    <div class="content-item__meta">
-                      <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
-                      <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">
-                        {{ previewStatusLabel(item.preview_status) }}
+              <div v-else class="content-group-list">
+                <section v-for="group in groupedLearningResources" :key="group.key" class="content-group">
+                  <div class="content-group__head">
+                    <strong>{{ group.title }}</strong>
+                    <span>{{ group.items.length }} 个</span>
+                  </div>
+                  <div class="content-list">
+                    <div v-for="item in group.items" :key="item.id" class="content-item">
+                      <div class="content-item__body">
+                        <div class="content-item__meta">
+                          <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
+                          <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">
+                            {{ previewStatusLabel(item.preview_status) }}
+                          </div>
+                        </div>
+                        <strong>{{ item.title }}</strong>
+                        <span>
+                          原始格式：{{ (item.file_extension || "").replace('.', '').toUpperCase() || resourceTypeLabel(item.type) }}
+                          · 预览方式：{{ previewLabel(item) }}
+                        </span>
+                        <span v-if="item.original_file_name">{{ item.original_file_name }}</span>
+                        <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
+                      </div>
+                      <div class="content-item__actions">
+                        <el-button size="small" :disabled="item.preview_status === 'processing'" @click="openPreview(item)">预览</el-button>
+                        <el-button size="small" @click="openOriginal(item)">下载原文件</el-button>
+                        <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
+                        <el-button size="small" @click="openResourceEdit(item, 'learning')">编辑</el-button>
+                        <el-button size="small" type="danger" @click="removeResource(item)">删除</el-button>
                       </div>
                     </div>
-                    <strong>{{ item.title }}</strong>
-                    <span>
-                      原始格式：{{ (item.file_extension || "").replace('.', '').toUpperCase() || resourceTypeLabel(item.type) }}
-                      · 预览方式：{{ previewLabel(item) }}
-                    </span>
-                    <span v-if="item.original_file_name">{{ item.original_file_name }}</span>
-                    <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
                   </div>
-                  <div class="content-item__actions">
-                    <el-button size="small" :disabled="item.preview_status === 'processing'" @click="openPreview(item)">预览</el-button>
-                    <el-button size="small" @click="openOriginal(item)">下载原文件</el-button>
-                    <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
-                    <el-button size="small" @click="openResourceEdit(item, 'learning')">编辑</el-button>
-                    <el-button size="small" type="danger" @click="removeResource(item)">删除</el-button>
-                  </div>
-                </div>
+                </section>
               </div>
             </section>
           </template>
@@ -642,31 +786,39 @@ onMounted(async () => {
                 <el-button type="primary" @click="openResourceCreate('recommend')">新增推荐资源</el-button>
               </div>
               <div v-if="recommendResources.length === 0" class="content-empty">还没有推荐资源</div>
-              <div v-else class="content-list">
-                <div v-for="item in recommendResources" :key="item.id" class="content-item">
-                  <div class="content-item__body">
-                    <div class="content-item__meta">
-                      <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
-                      <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">
-                        {{ previewStatusLabel(item.preview_status) }}
+              <div v-else class="content-group-list">
+                <section v-for="group in groupedRecommendResources" :key="group.key" class="content-group">
+                  <div class="content-group__head">
+                    <strong>{{ group.title }}</strong>
+                    <span>{{ group.items.length }} 个</span>
+                  </div>
+                  <div class="content-list">
+                    <div v-for="item in group.items" :key="item.id" class="content-item">
+                      <div class="content-item__body">
+                        <div class="content-item__meta">
+                          <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
+                          <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">
+                            {{ previewStatusLabel(item.preview_status) }}
+                          </div>
+                        </div>
+                        <strong>{{ item.title }}</strong>
+                        <span>
+                          原始格式：{{ (item.file_extension || "").replace('.', '').toUpperCase() || resourceTypeLabel(item.type) }}
+                          · 预览方式：{{ previewLabel(item) }}
+                        </span>
+                        <span v-if="item.original_file_name">{{ item.original_file_name }}</span>
+                        <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
+                      </div>
+                      <div class="content-item__actions">
+                        <el-button size="small" :disabled="item.preview_status === 'processing'" @click="openPreview(item)">预览</el-button>
+                        <el-button size="small" @click="openOriginal(item)">下载原文件</el-button>
+                        <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
+                        <el-button size="small" @click="openResourceEdit(item, 'recommend')">编辑</el-button>
+                        <el-button size="small" type="danger" @click="removeResource(item)">删除</el-button>
                       </div>
                     </div>
-                    <strong>{{ item.title }}</strong>
-                    <span>
-                      原始格式：{{ (item.file_extension || "").replace('.', '').toUpperCase() || resourceTypeLabel(item.type) }}
-                      · 预览方式：{{ previewLabel(item) }}
-                    </span>
-                    <span v-if="item.original_file_name">{{ item.original_file_name }}</span>
-                    <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
                   </div>
-                  <div class="content-item__actions">
-                    <el-button size="small" :disabled="item.preview_status === 'processing'" @click="openPreview(item)">预览</el-button>
-                    <el-button size="small" @click="openOriginal(item)">下载原文件</el-button>
-                    <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
-                    <el-button size="small" @click="openResourceEdit(item, 'recommend')">编辑</el-button>
-                    <el-button size="small" type="danger" @click="removeResource(item)">删除</el-button>
-                  </div>
-                </div>
+                </section>
               </div>
             </section>
           </template>
@@ -702,7 +854,7 @@ onMounted(async () => {
               <template #label>
                 <div class="resource-form__label">资源名称</div>
               </template>
-              <el-input v-model="resourceForm.title" placeholder="例如：牛顿第一定律课件" />
+              <el-input v-model="resourceForm.title" placeholder="例如：操作系统概念导学、同步与互斥讲解视频" />
             </el-form-item>
 
             <el-form-item>
@@ -726,7 +878,7 @@ onMounted(async () => {
             </el-form-item>
 
             <el-form-item label="标签">
-              <el-input v-model="resourceForm.tags" placeholder="例如：力学，初中衔接，必学" />
+              <el-input v-model="resourceForm.tags" placeholder="例如：必学、章节重点、实验前阅读" />
             </el-form-item>
             <div v-if="resourceTagPreview.length" class="resource-tag-preview">
               <span v-for="tag in resourceTagPreview" :key="tag" class="resource-tag-preview__item">{{ tag }}</span>
@@ -743,7 +895,7 @@ onMounted(async () => {
               >
                 <div class="resource-upload-dropzone__icon">↑</div>
                 <div class="resource-upload-dropzone__title">把文件拖到这里，或点击选择文件</div>
-                <div class="resource-upload-dropzone__hint">支持 PDF / PPT / PPTX / DOC / DOCX / MP4 / JPG / PNG / WebM</div>
+                <div class="resource-upload-dropzone__hint">文档、视频、图片会按类型分别校验。建议视频使用 MP4 / WebM，文档优先 PDF。</div>
                 <label class="resource-upload-dropzone__button">
                   选择文件
                   <input
@@ -758,11 +910,11 @@ onMounted(async () => {
                 <div class="resource-selected-file__name">
                   {{ resourceUploadFile?.name || detectedUpload?.original_file_name }}
                 </div>
-                <el-button text type="primary" @click="resourceUploadFile = null; detectedUpload = null">重新选择</el-button>
+                <el-button text type="primary" @click="resourceUploadFile = null; detectedUpload = null; clientUploadMeta = null">重新选择</el-button>
               </div>
             </template>
             <el-form-item v-else label="资源 URL / 外部地址">
-              <el-input v-model="resourceForm.url" placeholder="可填写课程网页、学习链接、公开资源地址等" />
+              <el-input v-model="resourceForm.url" placeholder="可填写 B 站、课程网站、公开学习链接，系统只保存跳转地址" />
             </el-form-item>
           </el-form>
         </section>
@@ -777,12 +929,18 @@ onMounted(async () => {
               <div><span>系统识别类型</span><strong>{{ resourceTypeLabel(detectedUpload.detected_resource_type) }}</strong></div>
               <div><span>学生预览方式</span><strong>{{ detectedUpload.preview_label }}</strong></div>
               <div><span>预览版本</span><strong>{{ detectedUpload.preview_type === "pdf_after_convert" ? "转换为 PDF 在线预览" : "原文件直接预览" }}</strong></div>
+              <div v-if="detectedUpload.upload_rule?.max_size_bytes"><span>大小限制</span><strong>{{ Math.round((detectedUpload.upload_rule.max_size_bytes || 0) / 1024 / 1024) }} MB</strong></div>
+              <div v-if="clientUploadMeta?.width && clientUploadMeta?.height"><span>画面尺寸</span><strong>{{ clientUploadMeta.width }} × {{ clientUploadMeta.height }}</strong></div>
+              <div v-if="clientUploadMeta?.duration"><span>视频时长</span><strong>{{ Math.round(clientUploadMeta.duration) }} 秒</strong></div>
             </div>
             <div v-else class="resource-detect-card__empty">
               选择文件后，这里会显示系统识别出的真实类型、学生预览方式和转换结果。
             </div>
             <div v-if="detectedUpload?.extension_mismatch" class="resource-detect-card__warning">
               检测到文件扩展名与真实类型不一致，请确认文件来源。
+            </div>
+            <div v-if="clientUploadMeta?.warnings?.length" class="resource-detect-card__warning">
+              <div v-for="warning in clientUploadMeta.warnings" :key="warning">{{ warning }}</div>
             </div>
           </div>
 
@@ -1041,6 +1199,38 @@ onMounted(async () => {
 .content-list {
   display: grid;
   gap: 10px;
+}
+
+.content-group-list {
+  display: grid;
+  gap: 14px;
+}
+
+.content-group {
+  border: 1px solid #dce5f0;
+  border-radius: 18px;
+  background: #fafcff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.content-group__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.content-group__head strong {
+  color: #23405f;
+  font-size: 16px;
+}
+
+.content-group__head span {
+  color: #70819a;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .content-item {

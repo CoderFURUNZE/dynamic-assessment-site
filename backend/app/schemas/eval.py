@@ -83,6 +83,7 @@ class ProfileOut(BaseModel):
     final_portrait_dimensions: list[dict] = []
     final_portrait_indicators: list[dict] = []
     term_summary: dict = {}
+    kp_dimension_summary: dict = {}
 
 
 class MasteryMapItem(BaseModel):

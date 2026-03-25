@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HoverTip from "./HoverTip.vue";
 
 type KP = {
   id: number;
@@ -10,6 +11,7 @@ type KP = {
   title: string;
   description: string;
   chapter?: string;
+  knowledge_tag?: string;
   ability_tag?: string;
   literacy_tag?: string;
   importance?: number;
@@ -52,6 +54,7 @@ type WorkbenchViewState = {
   panY: number;
   activeChapter: string;
   search: string;
+  showAllKps: boolean;
   selectedType: "kp" | "category";
   selectedId: number | null;
   selectedCategory: string | null;
@@ -59,8 +62,9 @@ type WorkbenchViewState = {
   detailTab: "overview" | "relations" | "content";
 };
 
-const props = withDefaults(defineProps<{ subject: string; grade: string; fullscreen?: boolean }>(), {
+const props = withDefaults(defineProps<{ subject: string; grade: string; fullscreen?: boolean; readonly?: boolean }>(), {
   fullscreen: false,
+  readonly: false,
 });
 const router = useRouter();
 const emit = defineEmits<{
@@ -84,9 +88,10 @@ const activeChapter = ref("全部");
 const selectedType = ref<"kp" | "category">("kp");
 const selectedId = ref<number | null>(null);
 const selectedCategory = ref<string | null>(null);
+const showAllKps = ref(false);
 const graphEditorOpen = ref(false);
-const linkSelectionMode = ref<null | "forward" | "backward" | "related">(null);
-const categoryLinkMode = ref<null | "prerequisite" | "related">(null);
+const linkSelectionMode = ref<null | "forward" | "backward" | "related" | "support" | "contains">(null);
+const categoryLinkMode = ref<null | "prerequisite" | "related" | "support">(null);
 const drawerOpen = ref(true);
 const detailTab = ref<"overview" | "relations" | "content">("overview");
 const DEFAULT_CANVAS_SCALE = 0.7;
@@ -122,6 +127,7 @@ const form = reactive({
   title: "",
   description: "",
   chapter: "",
+  knowledge_tag: "",
   ability_tag: "",
   literacy_tag: "",
   importance: 0.5,
@@ -137,6 +143,35 @@ const chapterSummary = computed(() => {
   return Array.from(bucket.entries()).map(([chapter, total]) => ({ chapter, total }));
 });
 
+function splitLabels(value?: string | null) {
+  return String(value || "")
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildLabelColorMap(labels: string[], palette: string[]) {
+  const map = new Map<string, string>();
+  labels.forEach((label, index) => {
+    map.set(label, palette[index % palette.length]);
+  });
+  return map;
+}
+
+const abilityColorMap = computed(() =>
+  buildLabelColorMap(
+    Array.from(new Set(kps.value.flatMap((kp) => splitLabels(kp.ability_tag)))),
+    ["#f0b429", "#5bb98c", "#4f7fe7", "#e28a49", "#7d72e9", "#39a0a4"],
+  ),
+);
+
+const literacyColorMap = computed(() =>
+  buildLabelColorMap(
+    Array.from(new Set(kps.value.flatMap((kp) => splitLabels(kp.literacy_tag)))),
+    ["#2f6fed", "#2ea96b", "#e0a128", "#8b7cf6", "#2f9ab6", "#de7465"],
+  ),
+);
+
 const categoryNodes = computed<CategoryNode[]>(() => chapterSummary.value.map((item) => ({ key: item.chapter, title: item.chapter, total: item.total })));
 
 const filteredKps = computed(() => {
@@ -147,6 +182,16 @@ const filteredKps = computed(() => {
     if (!kw) return true;
     return `${kp.code} ${kp.title} ${kp.description || ""} ${kp.chapter || ""}`.toLowerCase().includes(kw);
   });
+});
+
+const visibleKps = computed(() => {
+  if (showAllKps.value) return filteredKps.value;
+  const activeChapterKey =
+    selectedType.value === "category"
+      ? selectedCategory.value
+      : (selectedKp.value?.chapter || selectedCategory.value || null);
+  if (!activeChapterKey) return [] as KP[];
+  return filteredKps.value.filter((kp) => (kp.chapter || "未分章") === activeChapterKey);
 });
 
 const treeNodes = computed(() => {
@@ -174,18 +219,26 @@ const selectedCategoryNode = computed(() =>
 const drawerVisible = computed(() => drawerOpen.value && (selectedKp.value != null || selectedCategoryNode.value != null));
 
 const selectedConnections = computed(() => {
-  if (!selectedKp.value) return { incoming: [], outgoing: [], related: [] as KP[] };
+  if (!selectedKp.value) return { incoming: [], outgoing: [], related: [] as KP[], support: [] as KP[], contains: [] as KP[] };
   const currentId = selectedKp.value.id;
-  const incomingIds = edges.value.filter((edge) => edge.next_id === currentId && edge.relation_type !== "related").map((edge) => edge.prereq_id);
-  const outgoingIds = edges.value.filter((edge) => edge.prereq_id === currentId && edge.relation_type !== "related").map((edge) => edge.next_id);
+  const incomingIds = edges.value.filter((edge) => edge.next_id === currentId && edge.relation_type === "prerequisite").map((edge) => edge.prereq_id);
+  const outgoingIds = edges.value.filter((edge) => edge.prereq_id === currentId && edge.relation_type === "prerequisite").map((edge) => edge.next_id);
   const relatedIds = edges.value
     .filter((edge) => edge.relation_type === "related" && (edge.prereq_id === currentId || edge.next_id === currentId))
+    .map((edge) => (edge.prereq_id === currentId ? edge.next_id : edge.prereq_id));
+  const supportIds = edges.value
+    .filter((edge) => edge.relation_type === "support" && (edge.prereq_id === currentId || edge.next_id === currentId))
+    .map((edge) => (edge.prereq_id === currentId ? edge.next_id : edge.prereq_id));
+  const containsIds = edges.value
+    .filter((edge) => edge.relation_type === "contains" && (edge.prereq_id === currentId || edge.next_id === currentId))
     .map((edge) => (edge.prereq_id === currentId ? edge.next_id : edge.prereq_id));
 
   return {
     incoming: kps.value.filter((kp) => incomingIds.includes(kp.id)),
     outgoing: kps.value.filter((kp) => outgoingIds.includes(kp.id)),
     related: kps.value.filter((kp) => relatedIds.includes(kp.id)),
+    support: kps.value.filter((kp) => supportIds.includes(kp.id)),
+    contains: kps.value.filter((kp) => containsIds.includes(kp.id)),
   };
 });
 
@@ -232,7 +285,7 @@ const categoryOverview = computed(() => {
 });
 
 const stageStats = computed(() => ({
-  points: filteredKps.value.length,
+  points: visibleKps.value.length,
   edges: edges.value.length + chapterEdges.value.length,
   categories: categoryNodes.value.length,
 }));
@@ -251,7 +304,7 @@ function chapterPositionStorageKey() {
 
 function viewStateStorageKey() {
   if (!props.subject) return "";
-  return `da_teacher_graph_view_v3_${props.subject}_${props.grade}`;
+  return `da_teacher_graph_view_v4_${props.subject}_${props.grade}`;
 }
 
 function persistViewState() {
@@ -264,6 +317,7 @@ function persistViewState() {
     panY: panY.value,
     activeChapter: activeChapter.value,
     search: search.value,
+    showAllKps: showAllKps.value,
     selectedType: selectedType.value,
     selectedId: selectedId.value,
     selectedCategory: selectedCategory.value,
@@ -289,6 +343,7 @@ function restoreViewState() {
     panY.value = Number(parsed.panY ?? 0);
     activeChapter.value = typeof parsed.activeChapter === "string" && parsed.activeChapter ? parsed.activeChapter : "全部";
     search.value = typeof parsed.search === "string" ? parsed.search : "";
+    showAllKps.value = parsed.showAllKps === true;
     selectedType.value = parsed.selectedType === "category" ? "category" : "kp";
     selectedId.value = Number.isFinite(Number(parsed.selectedId)) ? Number(parsed.selectedId) : null;
     selectedCategory.value = typeof parsed.selectedCategory === "string" ? parsed.selectedCategory : null;
@@ -300,6 +355,64 @@ function restoreViewState() {
   } finally {
     mutingViewStatePersist.value = false;
   }
+}
+
+function normalizeWorkbenchSelectionState() {
+  let changed = false;
+  const chapterKeySet = new Set(categoryNodes.value.map((item) => item.key));
+  const firstChapter = categoryNodes.value[0]?.key || null;
+  const kpMap = new Map(kps.value.map((kp) => [kp.id, kp]));
+  const currentSelectedKp = selectedId.value != null ? kpMap.get(selectedId.value) ?? null : null;
+
+  if (currentSelectedKp) {
+    selectedType.value = "kp";
+    selectedCategory.value = currentSelectedKp.chapter || "未分章";
+    if (!chapterKeySet.has(selectedCategory.value)) {
+      selectedCategory.value = firstChapter;
+      changed = true;
+    }
+    if (selectedCategory.value) activeChapter.value = selectedCategory.value;
+  } else {
+    if (selectedId.value != null) changed = true;
+    selectedId.value = null;
+    if (selectedType.value === "kp") {
+      selectedType.value = "category";
+      changed = true;
+    }
+  }
+
+  if (!selectedCategory.value && activeChapter.value !== "全部" && chapterKeySet.has(activeChapter.value)) {
+    selectedCategory.value = activeChapter.value;
+    changed = true;
+  }
+
+  if (selectedCategory.value && !chapterKeySet.has(selectedCategory.value)) {
+    selectedCategory.value = null;
+    changed = true;
+  }
+
+  if (activeChapter.value !== "全部" && !chapterKeySet.has(activeChapter.value)) {
+    activeChapter.value = "全部";
+    changed = true;
+  }
+
+  if (!showAllKps.value && !selectedId.value && !selectedCategory.value) {
+    selectedType.value = "category";
+    selectedCategory.value = firstChapter;
+    activeChapter.value = firstChapter || "全部";
+    changed = true;
+  }
+
+  if (showAllKps.value && activeChapter.value !== "全部" && !chapterKeySet.has(activeChapter.value)) {
+    activeChapter.value = "全部";
+    changed = true;
+  }
+
+  if (!drawerVisible.value) {
+    drawerOpen.value = true;
+    changed = true;
+  }
+  return changed;
 }
 
 const defaultCategoryPositions = computed<Record<string, Point>>(() => {
@@ -322,7 +435,7 @@ const defaultCategoryPositions = computed<Record<string, Point>>(() => {
 const defaultKpPositions = computed<Record<number, Point>>(() => {
   const entries: Record<number, Point> = {};
   const groups = new Map<string, KP[]>();
-  for (const kp of filteredKps.value) {
+  for (const kp of visibleKps.value) {
     const key = kp.chapter || "未分章";
     const arr = groups.get(key) ?? [];
     arr.push(kp);
@@ -331,24 +444,17 @@ const defaultKpPositions = computed<Record<number, Point>>(() => {
 
   for (const [chapter, items] of groups.entries()) {
     const anchor = categoryPositions.value[chapter] ?? defaultCategoryPositions.value[chapter] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y - 360 };
-    const total = Math.max(items.length, 1);
-    const radiusX = Math.min(360, 220 + items.length * 10);
-    const radiusY = Math.min(220, 140 + items.length * 8);
-    const verticalLift = 240;
-    items.forEach((kp, index) => {
-      if (total === 1) {
-        entries[kp.id] = {
-          x: anchor.x,
-          y: anchor.y + 250,
-        };
-        return;
-      }
-      const angle = total === 1
-        ? Math.PI / 2
-        : (Math.PI * 0.08) + ((Math.PI * 0.84) * index) / (total - 1);
+    const ordered = [...items].sort((a, b) => String(a.code || "").localeCompare(String(b.code || ""), "zh-Hans-CN"));
+    const columns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(ordered.length))));
+    const gapX = 220;
+    const gapY = 170;
+    const startX = anchor.x - ((columns - 1) * gapX) / 2;
+    ordered.forEach((kp, index) => {
+      const col = index % columns;
+      const row = Math.floor(index / columns);
       entries[kp.id] = {
-        x: anchor.x + Math.cos(angle) * radiusX,
-        y: anchor.y + verticalLift + Math.sin(angle) * radiusY,
+        x: startX + col * gapX + (row % 2 === 0 ? 0 : 18),
+        y: anchor.y + 250 + row * gapY,
       };
     });
   }
@@ -405,7 +511,7 @@ function normalizePersistedKpPositions(rows: KP[]) {
 }
 
 const visibleEdges = computed(() => {
-  const ids = new Set(filteredKps.value.map((kp) => kp.id));
+  const ids = new Set(visibleKps.value.map((kp) => kp.id));
   return edges.value.filter((edge) => ids.has(edge.prereq_id) && ids.has(edge.next_id));
 });
 
@@ -506,6 +612,39 @@ function nodeRadius(kp: KP) {
   return kp.id === selectedKp.value?.id ? base + 10 : base;
 }
 
+function ringStroke(level: "ability" | "literacy", kp: KP) {
+  const labels = level === "ability" ? splitLabels(kp.ability_tag) : splitLabels(kp.literacy_tag);
+  if (!labels.length) return "transparent";
+  const map = level === "ability" ? abilityColorMap.value : literacyColorMap.value;
+  return map.get(labels[0]) || (level === "ability" ? "#f0b429" : "#2f6fed");
+}
+
+function edgeStroke(edge: Edge) {
+  if (edge.relation_type === "support") return "#46a57b";
+  if (edge.relation_type === "contains") return "#db9d37";
+  if (edge.relation_type === "related") return "rgba(74,120,213,0.6)";
+  return "rgba(100,116,139,0.45)";
+}
+
+function edgeDasharray(edge: Edge) {
+  if (edge.relation_type === "support") return "10 6";
+  if (edge.relation_type === "contains") return "2 6";
+  return undefined;
+}
+
+function edgeWidth(edge: Edge) {
+  if (edge.relation_type === "contains") return 2.2;
+  if (edge.relation_type === "support") return 2.1;
+  return 1.6;
+}
+
+function edgeMarker(edge: Edge) {
+  if (edge.relation_type === "related") return undefined;
+  if (edge.relation_type === "support") return "url(#teacher-edge-arrow-triangle)";
+  if (edge.relation_type === "contains") return "url(#teacher-edge-arrow-open)";
+  return "url(#teacher-edge-arrow)";
+}
+
 function syncFormFromSelected() {
   if (!selectedKp.value) return;
   Object.assign(form, {
@@ -514,6 +653,7 @@ function syncFormFromSelected() {
     title: selectedKp.value.title,
     description: selectedKp.value.description || "",
     chapter: selectedKp.value.chapter || "",
+    knowledge_tag: selectedKp.value.knowledge_tag || "",
     ability_tag: selectedKp.value.ability_tag || "",
     literacy_tag: selectedKp.value.literacy_tag || "",
     importance: selectedKp.value.importance ?? 0.5,
@@ -522,6 +662,10 @@ function syncFormFromSelected() {
 }
 
 function resetCreateForm(chapter = "") {
+  if (props.readonly) {
+    ElMessage.warning("当前课程已归档，图谱只读");
+    return;
+  }
   selectedType.value = "kp";
   selectedId.value = null;
   selectedCategory.value = null;
@@ -532,6 +676,7 @@ function resetCreateForm(chapter = "") {
     title: "",
     description: "",
     chapter,
+    knowledge_tag: "",
     ability_tag: "",
     literacy_tag: "",
     importance: 0.5,
@@ -540,6 +685,7 @@ function resetCreateForm(chapter = "") {
 }
 
 function selectKp(id: number) {
+  showAllKps.value = false;
   if (linkSelectionMode.value && selectedId.value && id !== selectedId.value) {
     createEdgeFromCanvas(id);
     return;
@@ -547,7 +693,7 @@ function selectKp(id: number) {
   categoryLinkMode.value = null;
   selectedType.value = "kp";
   selectedId.value = id;
-  selectedCategory.value = null;
+  selectedCategory.value = selectedKp.value?.chapter || kps.value.find((kp) => kp.id === id)?.chapter || null;
   drawerOpen.value = true;
   detailTab.value = "overview";
   syncFormFromSelected();
@@ -555,6 +701,7 @@ function selectKp(id: number) {
 }
 
 function selectCategory(chapter: string) {
+  showAllKps.value = false;
   if (categoryLinkMode.value && selectedCategory.value && chapter !== selectedCategory.value) {
     createChapterEdge(selectedCategory.value, chapter);
     return;
@@ -569,7 +716,18 @@ function selectCategory(chapter: string) {
   centerOnPoint(categoryPoint(chapter));
 }
 
+function toggleAllKps() {
+  showAllKps.value = !showAllKps.value;
+  if (showAllKps.value) {
+    activeChapter.value = "全部";
+  }
+}
+
 function openGraphEditorForSelected() {
+  if (props.readonly) {
+    ElMessage.warning("当前课程已归档，图谱只读");
+    return;
+  }
   if (!selectedKp.value) return;
   syncFormFromSelected();
   graphEditorOpen.value = true;
@@ -590,12 +748,24 @@ function openContentWorkspace() {
   });
 }
 
-function startLinkSelection(modeValue: "forward" | "backward" | "related") {
+function startLinkSelection(modeValue: "forward" | "backward" | "related" | "support" | "contains") {
+  if (props.readonly) {
+    ElMessage.warning("当前课程已归档，图谱只读");
+    return;
+  }
   if (!selectedKp.value) return;
   linkSelectionMode.value = modeValue;
   graphEditorOpen.value = false;
   ElMessage.info(
-    modeValue === "forward" ? "请选择后继知识点" : modeValue === "backward" ? "请选择前置知识点" : "请选择关联知识点",
+    modeValue === "forward"
+      ? "请选择后继知识点"
+      : modeValue === "backward"
+        ? "请选择前置知识点"
+        : modeValue === "support"
+          ? "请选择能力支撑知识点"
+          : modeValue === "contains"
+            ? "请选择包含或归属知识点"
+            : "请选择关联知识点",
   );
 }
 
@@ -603,10 +773,16 @@ function cancelLinkSelection() {
   linkSelectionMode.value = null;
 }
 
-function startCategoryLinkSelection(modeValue: "prerequisite" | "related") {
+function startCategoryLinkSelection(modeValue: "prerequisite" | "related" | "support") {
+  if (props.readonly) {
+    ElMessage.warning("当前课程已归档，图谱只读");
+    return;
+  }
   if (!selectedCategoryNode.value) return;
   categoryLinkMode.value = modeValue;
-  ElMessage.info(modeValue === "prerequisite" ? "请选择后续分类节点" : "请选择关联分类节点");
+  ElMessage.info(
+    modeValue === "prerequisite" ? "请选择后续分类节点" : modeValue === "support" ? "请选择支撑分类节点" : "请选择关联分类节点",
+  );
 }
 
 function cancelCategoryLinkSelection() {
@@ -720,6 +896,11 @@ function onWindowMouseMove(event: MouseEvent) {
 }
 
 async function stopDragging() {
+  if (props.readonly) {
+    draggingCanvas.value = false;
+    draggingNode.value = null;
+    return;
+  }
   if (draggingNode.value?.type === "kp" && draggingNode.value.id) {
     const kpId = Number(draggingNode.value.id);
     const point = kpPositions.value[kpId];
@@ -779,28 +960,10 @@ async function load() {
     }
     syncCategoryPositions();
     syncKpPositions();
-    const hasSelectedKp =
-      selectedType.value === "kp"
-      && selectedId.value != null
-      && kps.value.some((kp) => kp.id === selectedId.value);
-    const hasSelectedCategory =
-      selectedType.value === "category"
-      && !!selectedCategory.value
-      && categoryNodes.value.some((item) => item.key === selectedCategory.value);
-
-    if (hasSelectedKp) {
-      syncFormFromSelected();
-    } else if (hasSelectedCategory) {
-      // keep restored chapter focus
-      if (activeChapter.value !== "全部" && activeChapter.value !== selectedCategory.value) {
-        activeChapter.value = selectedCategory.value || "全部";
-      }
-    } else if (kps.value.length) {
-      selectedType.value = "kp";
-      selectedId.value = kps.value[0].id;
-      selectedCategory.value = null;
-      syncFormFromSelected();
-      centerOnPoint(kpPoint(kps.value[0].id));
+    const normalizedChanged = normalizeWorkbenchSelectionState();
+    if (normalizedChanged) {
+      if (selectedType.value === "kp" && selectedId.value) centerOnPoint(kpPoint(selectedId.value));
+      else if (selectedCategory.value) centerOnPoint(categoryPoint(selectedCategory.value));
     }
     persistViewState();
   } catch (e: any) {
@@ -811,6 +974,10 @@ async function load() {
 }
 
 async function saveKp() {
+  if (props.readonly) {
+    ElMessage.warning("当前课程已归档，图谱只读");
+    return;
+  }
   if (!props.subject) return;
   saving.value = true;
   try {
@@ -821,6 +988,7 @@ async function saveKp() {
         title: form.title,
         description: form.description,
         chapter: form.chapter,
+        knowledge_tag: form.knowledge_tag,
         ability_tag: form.ability_tag,
         literacy_tag: form.literacy_tag,
         importance: form.importance,
@@ -839,6 +1007,7 @@ async function saveKp() {
         title: form.title,
         description: form.description,
         chapter: form.chapter,
+        knowledge_tag: form.knowledge_tag,
         ability_tag: form.ability_tag,
         literacy_tag: form.literacy_tag,
         importance: form.importance,
@@ -862,6 +1031,10 @@ async function saveKp() {
 }
 
 async function removeKp() {
+  if (props.readonly) {
+    ElMessage.warning("当前课程已归档，图谱只读");
+    return;
+  }
   if (!selectedId.value) return;
   try {
     await api.delete(`/admin/kps/${selectedId.value}`);
@@ -875,6 +1048,10 @@ async function removeKp() {
 }
 
 async function createEdgeFromCanvas(targetId: number) {
+  if (props.readonly) {
+    ElMessage.warning("当前课程已归档，图谱只读");
+    return;
+  }
   if (!selectedId.value || !linkSelectionMode.value) return;
   let prereqId = selectedId.value;
   let nextId = targetId;
@@ -882,6 +1059,10 @@ async function createEdgeFromCanvas(targetId: number) {
   if (linkSelectionMode.value === "backward") {
     prereqId = targetId;
     nextId = selectedId.value;
+  } else if (linkSelectionMode.value === "support") {
+    relationType = "support";
+  } else if (linkSelectionMode.value === "contains") {
+    relationType = "contains";
   } else if (linkSelectionMode.value === "related") {
     relationType = "related";
   }
@@ -906,6 +1087,10 @@ async function createEdgeFromCanvas(targetId: number) {
 }
 
 async function createChapterEdge(sourceChapter: string, targetChapter: string) {
+  if (props.readonly) {
+    ElMessage.warning("当前课程已归档，图谱只读");
+    return;
+  }
   try {
     await api.post("/admin/chapter-edges", {
       subject: props.subject,
@@ -926,6 +1111,10 @@ async function createChapterEdge(sourceChapter: string, targetChapter: string) {
 }
 
 async function deleteChapterEdge(edgeId: number) {
+  if (props.readonly) {
+    ElMessage.warning("当前课程已归档，图谱只读");
+    return;
+  }
   try {
     await api.delete(`/admin/chapter-edges/${edgeId}`);
     ElMessage.success("分类关系已删除");
@@ -936,6 +1125,10 @@ async function deleteChapterEdge(edgeId: number) {
 }
 
 async function deleteEdge(edge: Edge) {
+  if (props.readonly) {
+    ElMessage.warning("当前课程已归档，图谱只读");
+    return;
+  }
   if (!selectedKp.value || (edge.prereq_id !== selectedKp.value.id && edge.next_id !== selectedKp.value.id)) {
     ElMessage.warning("这里只能删除当前选中节点的直接关系");
     return;
@@ -950,14 +1143,17 @@ async function deleteEdge(edge: Edge) {
 }
 
 function edgeLabel(edge: Edge) {
-  return edge.relation_type === "related" ? "关联" : "前置";
+  if (edge.relation_type === "related") return "关联";
+  if (edge.relation_type === "support") return "支撑";
+  if (edge.relation_type === "contains") return "包含";
+  return "前置";
 }
 
 function emitState() {
   emit("state-change", {
     kpCount: kps.value.length,
     categoryCount: categoryNodes.value.length,
-    filteredCount: filteredKps.value.length,
+    filteredCount: visibleKps.value.length,
     selectedType: selectedType.value,
     selectedKpId: selectedType.value === "kp" ? selectedId.value : null,
     selectedCategory: selectedType.value === "category" ? selectedCategory.value : null,
@@ -991,13 +1187,14 @@ watch(
   { immediate: true },
 );
 
-watch(filteredKps, () => {
+watch(visibleKps, () => {
   syncCategoryPositions();
   syncKpPositions();
+  normalizeWorkbenchSelectionState();
 });
 
 watch(
-  [kps, categoryNodes, filteredKps, selectedType, selectedId, selectedCategory],
+  [kps, categoryNodes, visibleKps, selectedType, selectedId, selectedCategory],
   () => {
     emitState();
   },
@@ -1005,7 +1202,7 @@ watch(
 );
 
 watch(
-  [canvasScale, panX, panY, activeChapter, search, selectedType, selectedId, selectedCategory, drawerOpen, detailTab],
+  [canvasScale, panX, panY, activeChapter, search, showAllKps, selectedType, selectedId, selectedCategory, drawerOpen, detailTab],
   () => {
     persistViewState();
   },
@@ -1058,9 +1255,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="teacher-guide">
-      <span>先找分类</span>
-      <span>再点节点</span>
-      <span>最后改内容或连关系</span>
+      <span>编辑说明</span>
+      <HoverTip content="先找分类，再点节点，最后改内容或连关系。" />
     </div>
 
     <div
@@ -1120,20 +1316,23 @@ onBeforeUnmount(() => {
           <div class="teacher-stage__legend">
             <span class="teacher-stage__legend-item">
               <i class="teacher-stage__legend-line teacher-stage__legend-line--solid"></i>
-              实线：知识点关系
+              实线箭头：前置 / 顺序关系
             </span>
             <span class="teacher-stage__legend-item">
               <i class="teacher-stage__legend-line teacher-stage__legend-line--chapter"></i>
-              虚线：分类关系
+              虚线 / 三角箭头：支撑、包含、分类关系
             </span>
             <span class="teacher-stage__legend-item">
               <i class="teacher-stage__legend-line teacher-stage__legend-line--attach"></i>
-              细虚线：分类与知识点归属
+              细虚线：分类与知识点归属，同色环表示同类能力/素养
             </span>
           </div>
         </div>
         <div class="teacher-stage__actions">
-          <button class="teacher-stage__button teacher-stage__button--primary" @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)">新建知识点</button>
+          <button class="teacher-stage__button" @click="toggleAllKps">
+            {{ showAllKps ? "仅看分类" : "显示全部节点" }}
+          </button>
+          <button class="teacher-stage__button teacher-stage__button--primary" :disabled="props.readonly" @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)">新建知识点</button>
           <button class="teacher-stage__button" @click="resetViewport">重置画布</button>
           <button class="teacher-stage__button" @click="detailTab = 'relations'; drawerOpen = true">管理关系</button>
         </div>
@@ -1150,6 +1349,12 @@ onBeforeUnmount(() => {
           <marker id="teacher-edge-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(100,116,139,0.55)" />
           </marker>
+          <marker id="teacher-edge-arrow-triangle" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M 1 1 L 9 5 L 1 9 z" fill="#46a57b" />
+          </marker>
+          <marker id="teacher-edge-arrow-open" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#db9d37" stroke-width="1.5" />
+          </marker>
           <marker id="teacher-chapter-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(75,94,130,0.55)" />
           </marker>
@@ -1162,7 +1367,7 @@ onBeforeUnmount(() => {
           :y1="categoryPoint(edge.source_chapter).y"
           :x2="categoryPoint(edge.target_chapter).x"
           :y2="categoryPoint(edge.target_chapter).y"
-          :stroke="edge.relation_type === 'related' ? 'rgba(74,120,213,0.42)' : 'rgba(75,94,130,0.52)'"
+          :stroke="edge.relation_type === 'support' ? 'rgba(70,165,123,0.5)' : (edge.relation_type === 'related' ? 'rgba(74,120,213,0.42)' : 'rgba(75,94,130,0.52)')"
           stroke-width="2.2"
           stroke-dasharray="6 6"
           :marker-end="edge.relation_type === 'related' ? undefined : 'url(#teacher-chapter-arrow)'"
@@ -1175,14 +1380,15 @@ onBeforeUnmount(() => {
           :y1="edgeLine(edge).y1"
           :x2="edgeLine(edge).x2"
           :y2="edgeLine(edge).y2"
-          :stroke="edge.relation_type === 'related' ? 'rgba(74,120,213,0.6)' : 'rgba(100,116,139,0.4)'"
-          stroke-width="1.5"
+          :stroke="edgeStroke(edge)"
+          :stroke-width="edgeWidth(edge)"
           stroke-linecap="round"
-          :marker-end="edge.relation_type === 'related' ? undefined : 'url(#teacher-edge-arrow)'"
+          :stroke-dasharray="edgeDasharray(edge)"
+          :marker-end="edgeMarker(edge)"
         />
 
         <line
-          v-for="kp in filteredKps"
+          v-for="kp in visibleKps"
           :key="`cat-${kp.id}`"
           :x1="categoryKpLine(kp).x1"
           :y1="categoryKpLine(kp).y1"
@@ -1208,13 +1414,15 @@ onBeforeUnmount(() => {
         </g>
 
         <g
-          v-for="kp in filteredKps"
+          v-for="kp in visibleKps"
           :key="kp.id"
           class="teacher-node"
           :transform="`translate(${kpPoint(kp.id).x}, ${kpPoint(kp.id).y})`"
           @click="selectKp(kp.id)"
           @mousedown="onNodeMouseDown($event, 'kp', kp.id)"
         >
+          <circle :r="nodeRadius(kp) + 18" fill="transparent" :stroke="ringStroke('literacy', kp)" :stroke-width="splitLabels(kp.literacy_tag).length ? 5 : 0" />
+          <circle :r="nodeRadius(kp) + 10" fill="transparent" :stroke="ringStroke('ability', kp)" :stroke-width="splitLabels(kp.ability_tag).length ? 5 : 0" />
           <circle :r="nodeRadius(kp) + 12" fill="rgba(96,139,232,0.14)" />
           <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#eef5ff' : '#ffffff'" :stroke="kp.id === selectedKp?.id ? '#7ca9f3' : '#d7e2f0'" stroke-width="2" />
           <text class="teacher-node__code" text-anchor="middle" y="-8">{{ kp.code }}</text>
@@ -1228,9 +1436,9 @@ onBeforeUnmount(() => {
         :class="{ 'teacher-stage__menu--below': selectedMenuBelow }"
         :style="selectedMenuStyle"
       >
-        <button @click="openGraphEditorForSelected">编辑节点</button>
-        <button @click="detailTab = 'relations'; drawerOpen = true">连关系</button>
-        <button class="danger" @click="removeKp">删除</button>
+        <button :disabled="props.readonly" @click="openGraphEditorForSelected">编辑节点</button>
+        <button :disabled="props.readonly" @click="detailTab = 'relations'; drawerOpen = true">连关系</button>
+        <button class="danger" :disabled="props.readonly" @click="removeKp">删除</button>
       </div>
 
       <div v-if="linkSelectionMode" class="teacher-stage__hint">
@@ -1240,7 +1448,11 @@ onBeforeUnmount(() => {
               ? '连线模式：请选择后继知识点'
               : linkSelectionMode === 'backward'
                 ? '连线模式：请选择前置知识点'
-                : '连线模式：请选择关联知识点'
+                : linkSelectionMode === 'support'
+                  ? '连线模式：请选择能力支撑知识点'
+                  : linkSelectionMode === 'contains'
+                    ? '连线模式：请选择包含或归属知识点'
+                    : '连线模式：请选择关联知识点'
           }}
         </span>
         <button @click="cancelLinkSelection">取消</button>
@@ -1248,12 +1460,18 @@ onBeforeUnmount(() => {
 
       <div v-if="categoryLinkMode" class="teacher-stage__hint teacher-stage__hint--chapter">
         <span>
-          {{ categoryLinkMode === 'prerequisite' ? '分类连线模式：请选择后续分类节点' : '分类连线模式：请选择关联分类节点' }}
+          {{ categoryLinkMode === 'prerequisite' ? '分类连线模式：请选择后续分类节点' : categoryLinkMode === 'support' ? '分类连线模式：请选择支撑分类节点' : '分类连线模式：请选择关联分类节点' }}
         </span>
         <button @click="cancelCategoryLinkSelection">取消</button>
       </div>
 
-      <section v-if="graphEditorOpen" class="teacher-editor-float">
+      <section
+        v-if="graphEditorOpen"
+        class="teacher-editor-float"
+        @wheel.stop
+        @mousedown.stop
+        @touchmove.stop
+      >
         <div class="teacher-editor-float__title">{{ form.id ? '编辑知识点' : '新建知识点' }}</div>
         <div class="teacher-editor-float__body">
           <el-form label-position="top" size="small">
@@ -1263,9 +1481,12 @@ onBeforeUnmount(() => {
             </div>
             <div class="teacher-form-grid">
               <el-form-item label="章节"><el-input v-model="form.chapter" /></el-form-item>
-              <el-form-item label="适合培养什么能力"><el-input v-model="form.ability_tag" placeholder="例如 分析问题、动手操作" /></el-form-item>
+              <el-form-item label="知识目标"><el-input v-model="form.knowledge_tag" placeholder="例如 同步与互斥、页式存储" /></el-form-item>
             </div>
-            <el-form-item label="适合培养什么习惯"><el-input v-model="form.literacy_tag" placeholder="例如 团队合作、规范意识" /></el-form-item>
+            <div class="teacher-form-grid">
+              <el-form-item label="能力目标"><el-input v-model="form.ability_tag" placeholder="例如 逻辑推理、系统分析，可用逗号分隔" /></el-form-item>
+              <el-form-item label="素养目标"><el-input v-model="form.literacy_tag" placeholder="例如 主动学习、规范意识，可用逗号分隔" /></el-form-item>
+            </div>
             <el-form-item label="描述"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>
             <div class="teacher-form-grid">
               <el-form-item label="学习重点"><el-input-number v-model="form.importance" :min="0" :max="1" :step="0.05" /></el-form-item>
@@ -1298,9 +1519,9 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div v-else-if="!loading && filteredKps.length === 0" class="teacher-stage__empty">
+      <div v-else-if="!loading && visibleKps.length === 0" class="teacher-stage__empty">
         <strong>当前没有可显示的知识点</strong>
-        <span>先选择章节、清空搜索词，或点击“新建知识点”。</span>
+        <span>默认只显示分类节点。点击某个分类，或点击“显示全部节点”。</span>
       </div>
     </section>
 
@@ -1313,7 +1534,10 @@ onBeforeUnmount(() => {
       <div class="teacher-drawer__content">
         <template v-if="selectedType === 'category' && selectedCategoryNode && categoryOverview">
           <div class="teacher-drawer__meta">共 {{ categoryOverview.total }} 个知识点</div>
-          <div class="teacher-drawer__guide">这里显示这个分类的整体情况。先看分类里有多少知识点，再点下面的知识点进入具体编辑。</div>
+          <div class="teacher-drawer__guide-inline">
+            <span>分类说明</span>
+            <HoverTip content="这里显示这个分类的整体情况。先看分类里有多少知识点，再点下面的知识点进入具体编辑。" />
+          </div>
 
           <div class="teacher-drawer__metrics teacher-drawer__metrics--triple">
             <div class="teacher-drawer__metric">
@@ -1355,6 +1579,7 @@ onBeforeUnmount(() => {
             <h4 class="teacher-drawer__section-title">分类关系</h4>
             <div class="teacher-drawer__actions teacher-drawer__actions--compact">
               <button class="teacher-drawer__secondary" @click="startCategoryLinkSelection('prerequisite')">新增后续分类</button>
+              <button class="teacher-drawer__secondary" @click="startCategoryLinkSelection('support')">新增支撑分类</button>
               <button class="teacher-drawer__secondary" @click="startCategoryLinkSelection('related')">新增关联分类</button>
             </div>
             <div
@@ -1366,7 +1591,7 @@ onBeforeUnmount(() => {
                 :key="`c-${edge.id}`"
                 class="teacher-drawer__relation-item"
               >
-                <span>{{ edge.source_chapter }} → {{ edge.target_chapter }}（{{ edge.relation_type === 'related' ? '关联' : '前置' }}）</span>
+                <span>{{ edge.source_chapter }} → {{ edge.target_chapter }}（{{ edge.relation_type === 'related' ? '关联' : edge.relation_type === 'support' ? '支撑' : '前置' }}）</span>
                 <button @click="deleteChapterEdge(edge.id)">删除</button>
               </div>
             </div>
@@ -1381,14 +1606,17 @@ onBeforeUnmount(() => {
             <button :class="{ active: detailTab === 'content' }" @click="detailTab = 'content'">资源内容</button>
           </div>
           <div class="teacher-drawer__meta">{{ selectedKp.code }} · {{ selectedKp.chapter || '未分章' }}</div>
-          <div class="teacher-drawer__guide">
-            {{
-              detailTab === 'overview'
-                ? '这里只处理当前知识点的基本信息。'
-                : detailTab === 'relations'
-                  ? '这里只处理前置、后续和关联关系。'
-                  : '资源内容单独进入一个页面处理，不和其他功能混在一起。'
-            }}
+          <div class="teacher-drawer__guide-inline">
+            <span>当前区域说明</span>
+            <HoverTip
+              :content="
+                detailTab === 'overview'
+                  ? '这里只处理当前知识点的基本信息。'
+                  : detailTab === 'relations'
+                    ? '这里只处理前置、后续和关联关系。'
+                    : '资源内容单独进入一个页面处理，不和其他功能混在一起。'
+              "
+            />
           </div>
 
           <div class="teacher-drawer__metrics">
@@ -1411,8 +1639,32 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="teacher-drawer__section">
+              <h4 class="teacher-drawer__section-title">知识点详细内容</h4>
+              <div class="teacher-drawer__detail-grid">
+                <div class="teacher-drawer__detail-item">
+                  <span>章节</span>
+                  <strong>{{ selectedKp.chapter || "未分章" }}</strong>
+                </div>
+                <div class="teacher-drawer__detail-item">
+                  <span>知识目标</span>
+                  <strong>{{ selectedKp.knowledge_tag || selectedKp.title || "暂未设置" }}</strong>
+                </div>
+                <div class="teacher-drawer__detail-item">
+                  <span>能力目标</span>
+                  <strong>{{ selectedKp.ability_tag || "暂未设置" }}</strong>
+                </div>
+                <div class="teacher-drawer__detail-item">
+                  <span>素养目标</span>
+                  <strong>{{ selectedKp.literacy_tag || "暂未设置" }}</strong>
+                </div>
+              </div>
+              <div class="teacher-drawer__desc">{{ selectedKp.description || "暂未填写描述" }}</div>
+            </div>
+
+            <div class="teacher-drawer__section">
               <h4 class="teacher-drawer__section-title">当前标签</h4>
               <div class="teacher-drawer__tags">
+                <span class="teacher-drawer__tag">{{ selectedKp.knowledge_tag || "未设置知识目标" }}</span>
                 <span class="teacher-drawer__tag">{{ selectedKp.ability_tag || "未设置能力标签" }}</span>
                 <span class="teacher-drawer__tag">{{ selectedKp.literacy_tag || "未设置素养标签" }}</span>
               </div>
@@ -1423,10 +1675,12 @@ onBeforeUnmount(() => {
             <div class="teacher-drawer__section">
               <h4 class="teacher-drawer__section-title">当前关系</h4>
               <div class="teacher-drawer__actions teacher-drawer__actions--compact">
-                <button class="teacher-drawer__secondary" @click="startLinkSelection('forward')">新增后继</button>
-                <button class="teacher-drawer__secondary" @click="startLinkSelection('backward')">新增前置</button>
-                <button class="teacher-drawer__secondary" @click="startLinkSelection('related')">添加关联</button>
-              </div>
+              <button class="teacher-drawer__secondary" @click="startLinkSelection('forward')">新增后继</button>
+              <button class="teacher-drawer__secondary" @click="startLinkSelection('backward')">新增前置</button>
+              <button class="teacher-drawer__secondary" @click="startLinkSelection('support')">新增支撑</button>
+              <button class="teacher-drawer__secondary" @click="startLinkSelection('contains')">新增包含</button>
+              <button class="teacher-drawer__secondary" @click="startLinkSelection('related')">添加关联</button>
+            </div>
               <div class="teacher-drawer__relation-group">
                 <strong>前置</strong>
                 <div v-if="selectedConnections.incoming.length === 0" class="teacher-drawer__empty">无前置知识点</div>
@@ -1448,11 +1702,23 @@ onBeforeUnmount(() => {
                   <button v-for="kp in selectedConnections.related" :key="kp.id" class="teacher-drawer__tag" @click="selectKp(kp.id)">{{ kp.title }}</button>
                 </div>
               </div>
+
+              <div class="teacher-drawer__section">
+                <h4 class="teacher-drawer__section-title">支撑与包含</h4>
+                <div v-if="selectedConnections.support.length === 0 && selectedConnections.contains.length === 0" class="teacher-drawer__empty">暂无支撑或包含关系</div>
+                <div v-else class="teacher-drawer__tags">
+                  <button v-for="kp in selectedConnections.support" :key="`sup-${kp.id}`" class="teacher-drawer__tag" @click="selectKp(kp.id)">支撑：{{ kp.title }}</button>
+                  <button v-for="kp in selectedConnections.contains" :key="`con-${kp.id}`" class="teacher-drawer__tag" @click="selectKp(kp.id)">包含：{{ kp.title }}</button>
+                </div>
+              </div>
             </div>
 
             <div class="teacher-drawer__section">
               <h4 class="teacher-drawer__section-title">关系删除</h4>
-              <div class="teacher-drawer__relation-tip">这里只显示当前节点的直接关系，不能跨层删除更上级或更下级的关系。</div>
+              <div class="teacher-drawer__guide-inline">
+                <span>删除说明</span>
+                <HoverTip content="这里只显示当前节点的直接关系，不能跨层删除更上级或更下级的关系。" />
+              </div>
               <div class="teacher-drawer__list" v-if="deletableEdges.length">
                 <div v-for="item in deletableEdges" :key="item.edge.id" class="teacher-drawer__relation-item">
                   <div class="teacher-drawer__relation-copy">
@@ -1470,8 +1736,9 @@ onBeforeUnmount(() => {
           <div v-else>
             <div class="teacher-drawer__section">
               <h4 class="teacher-drawer__section-title">资源内容入口</h4>
-              <div class="teacher-drawer__guide">
-                点击下面按钮，进入独立的“资源内容页面”，单独维护视频、练习和推荐资源。
+              <div class="teacher-drawer__guide-inline">
+                <span>资源说明</span>
+                <HoverTip content="点击下面按钮，进入独立的资源内容页面，单独维护视频、练习和推荐资源。" />
               </div>
               <div class="teacher-drawer__actions">
                 <button class="teacher-drawer__primary" @click="openContentWorkspace">进入资源内容页</button>
@@ -1563,22 +1830,24 @@ onBeforeUnmount(() => {
 }
 
 .teacher-btn {
-  min-height: 40px;
-  padding: 0 15px;
+  min-height: 42px;
+  padding: 0 16px;
   border: 1px solid #d8e2ef;
   border-radius: 999px;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
   color: #35507f;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease;
+  box-shadow: var(--app-shadow-soft);
 }
 
 .teacher-btn--primary {
-  border-color: #cfe0fb;
-  background: #edf4ff;
-  color: #2459ab;
+  border-color: var(--app-green);
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
 }
 
 .teacher-btn:hover {
@@ -1814,8 +2083,8 @@ onBeforeUnmount(() => {
 
 .teacher-stage__pill,
 .teacher-stage__button {
-  min-height: 38px;
-  padding: 8px 14px;
+  min-height: 40px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 1px solid #dce6f2;
   background: #ffffff;
@@ -1838,8 +2107,10 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__button--primary {
-  background: #edf4ff;
-  border-color: #cfe0fb;
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  border-color: var(--app-green);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
 }
 
 .teacher-stage__actions {
@@ -1909,14 +2180,14 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__menu button {
-  padding: 6px 10px;
+  padding: 0 12px;
   border-radius: 999px;
   background: #eff5ff;
   color: #35507f;
   font-size: 12px;
   font-weight: 500;
   transition: background 0.2s ease;
-  min-height: 30px;
+  min-height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1951,7 +2222,8 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__hint button {
-  padding: 4px 8px;
+  min-height: 32px;
+  padding: 0 10px;
   border-radius: 999px;
   background: #eff5ff;
   color: #35507f;
@@ -2032,8 +2304,8 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__zoom button {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   background: #eff5ff;
   color: #35507f;
@@ -2080,14 +2352,15 @@ onBeforeUnmount(() => {
 
 .teacher-stage__empty-btn {
   border: 1px solid #cfe0fb;
-  background: #edf4ff;
-  color: #2459ab;
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
   border-radius: 999px;
-  min-height: 40px;
+  min-height: 42px;
   padding: 0 18px;
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
 }
 
 .teacher-drawer {
@@ -2123,15 +2396,23 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer__close {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 999px;
   background: #eff5ff;
   color: #35507f;
   font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+}
+
+.teacher-drawer__guide-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: #617792;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .teacher-drawer__close:hover {
@@ -2169,8 +2450,9 @@ onBeforeUnmount(() => {
 
 .teacher-drawer__tabs button {
   border: 1px solid #dce6f2;
-  padding: 8px 0;
-  border-radius: 4px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
   background: #f8fafc;
   color: #475569;
   font-size: 12px;
@@ -2225,6 +2507,42 @@ onBeforeUnmount(() => {
   margin-bottom: 20px;
 }
 
+.teacher-drawer__detail-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.teacher-drawer__detail-item {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid #dde7f2;
+  background: #f8fbff;
+  display: grid;
+  gap: 4px;
+}
+
+.teacher-drawer__detail-item span {
+  font-size: 11px;
+  color: #728299;
+}
+
+.teacher-drawer__detail-item strong {
+  font-size: 13px;
+  color: #233447;
+  line-height: 1.7;
+}
+
+.teacher-drawer__desc {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid #dde7f2;
+  background: #f8fbff;
+  color: #51657f;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 .teacher-drawer__section-title {
   font-size: 13px;
   font-weight: 600;
@@ -2245,7 +2563,8 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer__tag {
-  padding: 8px 12px;
+  min-height: 34px;
+  padding: 0 12px;
   border: 1px solid #dce6f2;
   border-radius: 999px;
   background: #ffffff;
@@ -2253,6 +2572,8 @@ onBeforeUnmount(() => {
   font-size: 11px;
   cursor: pointer;
   transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
 }
 
 .teacher-drawer__tag:hover {
@@ -2309,12 +2630,12 @@ onBeforeUnmount(() => {
 
 .teacher-drawer__primary,
 .teacher-drawer__secondary {
-  padding: 8px 14px;
+  padding: 0 14px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 500;
   transition: all 0.2s ease;
-  min-height: 38px;
+  min-height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2322,13 +2643,14 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer__primary {
-  background: #e3f2fd;
-  color: #1565c0;
-  border: 1px solid #90caf9;
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
+  border: 1px solid var(--app-green);
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
 }
 
 .teacher-drawer__primary:hover {
-  background: #bbdefb;
+  transform: translateY(-1px);
 }
 
 .teacher-drawer__secondary {

@@ -15,6 +15,11 @@ type EnrollableCourse = {
   apply_deadline?: string | null;
   enroll_status: string;
   application_status?: string | null;
+  enrollment_mode?: string;
+  target_class?: string | null;
+  lifecycle_status?: string;
+  start_at?: string | null;
+  end_at?: string | null;
 };
 
 type CourseApplication = {
@@ -63,8 +68,20 @@ function appStatusLabel(status?: string | null) {
   if (!value) return "未报名";
   if (value === "pending") return "审核中";
   if (value === "approved") return "已通过";
+  if (value === "linked") return "已自动关联";
   if (value === "rejected") return "已拒绝";
   return status;
+}
+
+function autoJoinHint(course: EnrollableCourse) {
+  if (normalizeStatus(course.application_status) === "linked") return "系统已按班级自动关联，你可以直接进入课程学习。";
+  if (normalizeStatus(course.application_status) === "approved") return "已进入课程";
+  if (normalizeStatus(course.application_status) === "pending") return "等待老师确认";
+  if (normalizeStatus(course.lifecycle_status) === "archived") return "课程已归档，当前只保留查看记录。";
+  if (normalizeStatus(course.lifecycle_status) === "draft") return "课程还未正式开课，开课后会自动开放。";
+  if (normalizeStatus(course.enrollment_mode) === "class_auto") return `系统会按班级 ${course.target_class || ""} 自动关联。`;
+  if (normalizeStatus(course.enroll_status) !== "open") return "当前不在开放加入时间";
+  return "如管理员已绑定班级，可自动进入课程；也可提交加入申请。";
 }
 
 async function loadAll() {
@@ -128,8 +145,8 @@ onMounted(loadAll);
   <div class="enroll-page" v-loading="loading">
     <header class="enroll-header panel-card">
       <div>
-        <div class="enroll-kicker">Course Enrollment</div>
-        <h1>课程报名与审核状态</h1>
+        <div class="enroll-kicker">课程关联</div>
+        <h1>课程加入与通知</h1>
       </div>
       <div class="enroll-header__actions">
         <el-button @click="goBackStudy">返回学习中心</el-button>
@@ -139,7 +156,7 @@ onMounted(loadAll);
 
     <section class="panel-card block">
       <div class="block__head">
-        <h3>可报名课程</h3>
+        <h3>课程关联结果</h3>
       </div>
       <div class="enroll-list">
         <div v-for="course in courses" :key="course.id" class="enroll-item">
@@ -148,22 +165,26 @@ onMounted(loadAll);
             <span>{{ course.code }} · {{ course.teacher_name || "未分配老师" }}</span>
             <span>名额 {{ course.enrolled_count }}/{{ course.max_students }} · {{ statusLabel(course.enroll_status) }}</span>
             <span v-if="course.apply_deadline">截止：{{ course.apply_deadline.replace("T", " ").slice(0, 16) }}</span>
+            <span>教学状态：{{ course.lifecycle_status === "active" ? "开课中" : course.lifecycle_status === "archived" ? "已归档" : "待开课" }}</span>
+            <span v-if="course.target_class">目标班级：{{ course.target_class }}</span>
+            <span v-if="course.start_at || course.end_at">开课周期：{{ course.start_at ? course.start_at.replace("T", " ").slice(0, 16) : "未设置" }} ~ {{ course.end_at ? course.end_at.replace("T", " ").slice(0, 16) : "未设置" }}</span>
             <span>当前报名状态：{{ appStatusLabel(course.application_status) }}</span>
+            <span>{{ autoJoinHint(course) }}</span>
           </div>
           <div class="enroll-item__actions">
             <el-input
               v-model="applyReasonMap[course.id]"
               placeholder="可填写报名理由（选填）"
               style="width: 260px"
-              :disabled="!!course.application_status"
+              :disabled="!!course.application_status || normalizeStatus(course.enrollment_mode) === 'class_auto'"
             />
             <el-button
               type="primary"
               :loading="applying === course.id"
-              :disabled="!!course.application_status || normalizeStatus(course.enroll_status) !== 'open'"
+              :disabled="!!course.application_status || normalizeStatus(course.enroll_status) !== 'open' || normalizeStatus(course.enrollment_mode) === 'class_auto'"
               @click="applyCourse(course)"
             >
-              提交报名
+              {{ normalizeStatus(course.enrollment_mode) === "class_auto" ? "自动关联课程" : "提交报名" }}
             </el-button>
           </div>
         </div>

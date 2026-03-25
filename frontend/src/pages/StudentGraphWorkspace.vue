@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api, getWithCache } from "../api";
+import HoverTip from "../components/HoverTip.vue";
 import KnowledgeGraphWorkspace from "../components/KnowledgeGraphWorkspace.vue";
 
 type Course = { id: number; code: string; title: string };
@@ -74,35 +75,10 @@ const recommendedPathTitles = computed(() =>
 );
 const recommendationStageLabel = computed(() => {
   if (reco.value?.recommendation_stage_label) return reco.value.recommendation_stage_label;
-  if (blockedPrereqTitles.value.length) return "先补前置";
-  if (reco.value?.unlock?.can_unlock_next) return "继续推进";
-  return "当前推荐";
+  if (blockedPrereqTitles.value.length) return "先补前面的";
+  if (reco.value?.unlock?.can_unlock_next) return "可以继续";
+  return "系统建议";
 });
-const studentGuideSteps = computed(() => [
-  {
-    title: "第一步：先选课程",
-    done: !!subject.value,
-    text: subject.value ? `当前课程：${subject.value}` : "请先选择课程",
-  },
-  {
-    title: "第二步：从左侧找章节",
-    done: workspaceState.value.categoryCount > 0,
-    text:
-      workspaceState.value.categoryCount > 0
-        ? `可选章节 ${workspaceState.value.categoryCount} 个`
-        : "当前课程还没有章节分类",
-  },
-  {
-    title: "第三步：点中间知识点",
-    done: !!workspaceState.value.selectedKpId,
-    text: workspaceState.value.selectedKpId ? "已选中知识点，可看详情" : "请点击一个知识点节点",
-  },
-  {
-    title: "第四步：进入学习内容页",
-    done: !!workspaceState.value.selectedKpId,
-    text: "点“进入学习内容页”，在一个页面里学习资源和练习",
-  },
-]);
 
 async function loadCourses() {
   try {
@@ -238,7 +214,7 @@ onMounted(async () => {
         </button>
         <div>
           <div class="workspace-page__title">学习者知识图谱工作台</div>
-          <div class="workspace-page__subtitle">先选课程，再点节点，最后进入学习内容页。</div>
+          <div class="workspace-page__subtitle">先点左边章节，再点中间知识点，然后去学习。</div>
         </div>
       </div>
 
@@ -251,22 +227,9 @@ onMounted(async () => {
       </div>
     </div>
 
-    <section class="workspace-guide">
-      <div class="workspace-guide__head">
-        <h2>学习步骤提示</h2>
-        <p>按顺序操作，不会迷路。</p>
-      </div>
-      <div class="workspace-guide__grid">
-        <div
-          v-for="step in studentGuideSteps"
-          :key="step.title"
-          class="workspace-guide__item"
-          :class="{ 'workspace-guide__item--done': step.done }"
-        >
-          <strong>{{ step.title }}</strong>
-          <span>{{ step.text }}</span>
-        </div>
-      </div>
+    <section class="workspace-guide workspace-guide--simple">
+      <strong>使用方法</strong>
+      <HoverTip content="左边选章节，中间点知识点，右边看内容，再点“去学习”即可。" />
     </section>
 
     <section v-if="reco" class="workspace-reco">
@@ -278,9 +241,7 @@ onMounted(async () => {
         <p class="workspace-reco__desc">{{ reco.reason_summary }}</p>
         <div class="workspace-reco__meta">
           <span>{{ recommendationStageLabel }}</span>
-          <span>画像策略：{{ reco.persona_label || reco.persona_strategy_tag }}</span>
-          <span>动态评分：{{ Math.round((reco.dynamic_score || 0) * 100) }}%</span>
-          <span>风险：{{ reco.risk_level || "正常" }}</span>
+          <span>建议先学这个点</span>
         </div>
         <div v-if="blockedPrereqTitles.length" class="workspace-reco__tips">
           需要先补：{{ blockedPrereqTitles.join("、") }}
@@ -330,7 +291,7 @@ onMounted(async () => {
   border-radius: 20px;
   background: #ffffff;
   border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-soft);
+  box-shadow: var(--app-shadow);
 }
 
 .workspace-page__left {
@@ -340,20 +301,20 @@ onMounted(async () => {
 }
 
 .workspace-page__back {
-  border: 0;
+  border: 1px solid var(--app-border);
   border-radius: 999px;
-  padding: 12px 18px;
-  background: #f4f7fb;
+  padding: 0 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
   color: #39506d;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid var(--app-border);
-  min-height: 40px;
+  min-height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
+  box-shadow: var(--app-shadow-soft);
 }
 
 .workspace-page__title {
@@ -375,31 +336,32 @@ onMounted(async () => {
 
 .workspace-page__minor-btn {
   border: 1px solid var(--app-border);
-  background: #f7f9fc;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
   color: #39506d;
   border-radius: 999px;
-  padding: 10px 14px;
+  padding: 0 16px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  min-height: 40px;
+  min-height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
+  box-shadow: var(--app-shadow-soft);
 }
 
 .workspace-page__primary-btn {
-  border: 1px solid #c7d7ea;
-  background: #f1f6fd;
-  color: #294b73;
+  border: 1px solid var(--app-green);
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
   border-radius: 999px;
-  padding: 10px 16px;
+  padding: 0 16px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: none;
-  min-height: 40px;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+  min-height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -407,12 +369,15 @@ onMounted(async () => {
 }
 
 .workspace-page__chip {
-  padding: 13px 18px;
+  min-height: 42px;
+  padding: 0 18px;
   border-radius: 999px;
   background: #fafbfd;
   border: 1px solid var(--app-border);
   color: #314661;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
 }
 
 .workspace-guide {
@@ -423,48 +388,11 @@ onMounted(async () => {
   box-shadow: var(--app-shadow-soft);
 }
 
-.workspace-guide__head h2 {
-  margin: 0;
-  font-size: 18px;
-  color: #243449;
-}
-
-.workspace-guide__head p {
-  margin: 4px 0 0;
-  color: #617289;
-  font-size: 13px;
-}
-
-.workspace-guide__grid {
-  margin-top: 10px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.workspace-guide__item {
-  border: 1px solid var(--app-border);
-  border-radius: 14px;
-  padding: 10px 12px;
-  background: #fcfdff;
-  display: grid;
-  gap: 4px;
-}
-
-.workspace-guide__item strong {
-  font-size: 13px;
-  color: #334b70;
-}
-
-.workspace-guide__item span {
-  font-size: 12px;
-  color: #64758c;
-  line-height: 1.45;
-}
-
-.workspace-guide__item--done {
-  border-color: #cfe4d7;
-  background: #f5faf6;
+.workspace-guide--simple {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .workspace-reco {
@@ -476,7 +404,7 @@ onMounted(async () => {
   border-radius: 20px;
   background: #ffffff;
   border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-soft);
+  box-shadow: var(--app-shadow);
 }
 
 .workspace-reco__body {
@@ -560,19 +488,9 @@ onMounted(async () => {
     width: 100%;
   }
 
-  .workspace-guide__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .workspace-reco {
     flex-direction: column;
     align-items: flex-start;
-  }
-}
-
-@media (max-width: 760px) {
-  .workspace-guide__grid {
-    grid-template-columns: 1fr;
   }
 }
 </style>

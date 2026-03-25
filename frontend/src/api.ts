@@ -8,9 +8,13 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
 
 // 重试机制
 const MAX_RETRIES = 3;
+const defaultApiBaseUrl =
+  typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:8000/api`
+    : "http://localhost:8000/api";
 
 const api = axios.create({
-  baseURL: "http://localhost:8000/api",
+  baseURL: (import.meta.env.VITE_API_BASE_URL as string | undefined) || defaultApiBaseUrl,
   timeout: 10000, // 10秒超时
 });
 
@@ -86,4 +90,3 @@ export async function getWithCache<T = any>(url: string, params?: Record<string,
 }
 
 export { api };
-

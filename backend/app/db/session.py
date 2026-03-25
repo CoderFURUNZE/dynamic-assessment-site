@@ -14,6 +14,7 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
     _ensure_portrait_indicator_source_values()
     _ensure_resource_type_values()
+    _ensure_relation_type_values()
     _ensure_user_columns()
     _ensure_kp_practice_total_column()
     _ensure_question_meta_columns()
@@ -81,6 +82,21 @@ def _ensure_resource_type_values() -> None:
         "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'link'",
         "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'book'",
         "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'recommend_book'",
+    ]
+    for stmt in statements:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        except Exception:
+            pass
+
+
+def _ensure_relation_type_values() -> None:
+    if not _is_postgres():
+        return
+    statements = [
+        "ALTER TYPE relationtype ADD VALUE IF NOT EXISTS 'support'",
+        "ALTER TYPE relationtype ADD VALUE IF NOT EXISTS 'contains'",
     ]
     for stmt in statements:
         try:
@@ -158,12 +174,23 @@ def _ensure_course_columns() -> None:
     _ensure_columns(
         "course",
         {
+            "lifecycle_status": "lifecycle_status TEXT DEFAULT 'draft'",
             "teacher_id": "teacher_id INTEGER",
+            "target_class": "target_class TEXT DEFAULT ''",
             "max_students": "max_students INTEGER DEFAULT 200",
+            "start_at": f"start_at {apply_deadline_type}",
+            "end_at": f"end_at {apply_deadline_type}",
+            "archived_at": f"archived_at {apply_deadline_type}",
             "apply_deadline": f"apply_deadline {apply_deadline_type}",
             "enroll_status": "enroll_status TEXT DEFAULT 'open'",
         },
     )
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE course SET lifecycle_status='draft' WHERE lifecycle_status IS NULL"))
+            conn.execute(text("UPDATE course SET target_class='' WHERE target_class IS NULL"))
+    except Exception:
+        pass
 
 
 def _ensure_legacy_course_teacher_assignment() -> None:
@@ -186,6 +213,7 @@ def _ensure_knowledgepoint_columns() -> None:
         "knowledgepoint",
         {
             "chapter": "chapter TEXT DEFAULT ''",
+            "knowledge_tag": "knowledge_tag TEXT DEFAULT ''",
             "ability_tag": "ability_tag TEXT DEFAULT ''",
             "literacy_tag": "literacy_tag TEXT DEFAULT ''",
             "importance": "importance FLOAT DEFAULT 0.5",
@@ -206,6 +234,8 @@ def _ensure_knowledgeedge_columns() -> None:
     try:
         with engine.begin() as conn:
             conn.execute(text("UPDATE knowledgeedge SET relation_type='prerequisite' WHERE relation_type IS NULL"))
+            conn.execute(text("UPDATE knowledgeedge SET relation_type='prerequisite' WHERE relation_type='forward'"))
+            conn.execute(text("UPDATE knowledgeedge SET relation_type='support' WHERE relation_type='backward'"))
     except Exception:
         pass
 

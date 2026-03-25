@@ -25,32 +25,26 @@ const navItems = computed(() => {
     return [
       { label: "首页", path: "/student/overview" },
       { label: "图谱", path: "/student/graph-workspace" },
-      { label: "问卷", path: "/student/questionnaire" },
       { label: "报告", path: "/student/report" },
-      { label: "报名", path: "/student/enroll" },
+      { label: "问卷", path: "/student/questionnaire" },
     ];
   }
   if (routeGroup.value === "teacher") {
     return [
       { label: "课程", path: "/teacher/courses" },
       { label: "图谱", path: "/teacher/graph-workspace" },
-      { label: "阶段", path: "/teacher/stages" },
       { label: "导入", path: "/teacher/imports" },
-      { label: "指标", path: "/teacher/indicators" },
-      { label: "分析", path: "/teacher/analytics" },
-      { label: "画像", path: "/teacher/profiles" },
       { label: "学生", path: "/teacher/students" },
-      { label: "审核", path: "/teacher/enrollments" },
       { label: "评分", path: "/teacher/final-review" },
     ];
   }
   if (routeGroup.value === "admin") {
     return [
       { label: "概览", path: "/admin/dashboard" },
+      { label: "课程", path: "/admin/courses" },
       { label: "用户", path: "/admin/users" },
-      { label: "老师", path: "/admin/teachers" },
-      { label: "指标", path: "/admin/dimensions" },
       { label: "规则", path: "/admin/persona" },
+      { label: "指标", path: "/admin/dimensions" },
     ];
   }
   return [];
@@ -80,7 +74,7 @@ function navigateTo(path: string) {
     <el-header v-if="!isAuthPage" class="app-header">
       <div class="app-header__main">
         <div class="app-brand">动态评价系统</div>
-        <div class="app-header__meta">聚焦学习过程、阶段成长与可解释反馈</div>
+        <div class="app-header__meta">选课程，看图谱，学内容，看结果</div>
       </div>
       <nav v-if="navItems.length" class="app-nav">
         <button
@@ -170,37 +164,44 @@ function navigateTo(path: string) {
 }
 
 .app-nav__item {
+  min-height: 38px;
   border: 1px solid transparent;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.6);
   color: var(--app-ink-soft);
   border-radius: 999px;
-  padding: 7px 12px;
+  padding: 0 14px;
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .app-nav__item:hover {
-  background: #f7f9fc;
+  background: #ffffff;
   color: var(--app-ink);
 }
 
 .app-nav__item--active {
   border-color: #d7e1ed;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
   color: var(--app-ink);
-  box-shadow: none;
+  box-shadow: var(--app-shadow-soft);
 }
 
 .app-menu-label {
-  padding: 7px 12px;
+  min-height: 38px;
+  padding: 0 14px;
   border-radius: 999px;
   background: #ffffff;
   color: #62758f;
   font-weight: 700;
   font-size: 12px;
   border: 1px solid var(--app-border);
+  display: inline-flex;
+  align-items: center;
 }
 
 .app-menu-label--admin {

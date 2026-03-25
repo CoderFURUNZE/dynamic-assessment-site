@@ -1,0 +1,110 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "课程" [ref=e9] [cursor=pointer]
+      - button "图谱" [ref=e10] [cursor=pointer]
+      - button "导入" [ref=e11] [cursor=pointer]
+      - button "学生" [ref=e12] [cursor=pointer]
+      - button "评分" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]: 教师工作台
+    - generic [ref=e15]:
+      - button "学习者端预览" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 学习者端预览
+      - button "退出" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 退出
+  - main [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e26]: Teacher Final Review
+            - generic [ref=e27]: 老师最终评分确认页
+            - generic [ref=e28]: 按学期阶段趋势、期末雷达图和推荐收口情况，给出老师最终确认分。
+          - generic [ref=e29]:
+            - generic [ref=e31] [cursor=pointer]:
+              - generic:
+                - combobox [ref=e33]
+                - generic [ref=e34]: 操作系统
+              - img [ref=e37]
+            - button "返回教师首页" [ref=e39] [cursor=pointer]:
+              - generic [ref=e40]: 返回教师首页
+            - button "去报名审核页" [ref=e41] [cursor=pointer]:
+              - generic [ref=e42]: 去报名审核页
+            - button "刷新详情" [ref=e43] [cursor=pointer]:
+              - generic [ref=e44]: 刷新详情
+        - generic [ref=e45]: 当前课程：操作系统，已确认 0/1
+      - generic [ref=e46]:
+        - complementary [ref=e47]:
+          - generic [ref=e49]:
+            - generic [ref=e50]: Student List
+            - generic [ref=e51]: 学生名单
+            - generic [ref=e52]: 先选学生，再确认期末成绩。
+          - button "202220164205 拖延风险型 · 风险 建议 0%" [ref=e54] [cursor=pointer]:
+            - generic [ref=e55]:
+              - strong [ref=e56]: "202220164205"
+              - generic [ref=e57]: 拖延风险型 · 风险
+            - generic [ref=e59]: 建议 0%
+        - main [ref=e60]:
+          - generic [ref=e61]:
+            - generic [ref=e62]:
+              - generic [ref=e63]: 期末画像雷达图
+              - generic [ref=e65]:
+                - generic [ref=e67]:
+                  - generic [ref=e68]: 学期最终五维结果
+                  - generic [ref=e69]: 系统根据各阶段快照汇总得到的期末结果
+                - generic [ref=e70]: 当前还没有足够数据生成雷达图
+            - generic [ref=e71]:
+              - generic [ref=e72]: 最终评分确认
+              - generic [ref=e74]:
+                - generic [ref=e75]:
+                  - generic [ref=e76]: 学生
+                  - generic [ref=e77]: "202220164205"
+                - generic [ref=e78]:
+                  - generic [ref=e79]: 确认分
+                  - generic [ref=e80]:
+                    - button "减少数值" [ref=e81]:
+                      - img [ref=e83]
+                    - button "增加数值" [ref=e85] [cursor=pointer]:
+                      - img [ref=e87]
+                    - spinbutton [ref=e91]: "0"
+                - generic [ref=e92]:
+                  - generic [ref=e93]: 等级
+                  - generic [ref=e95] [cursor=pointer]:
+                    - generic:
+                      - combobox [ref=e97]
+                      - generic [ref=e98]: 选择等级
+                    - img [ref=e101]
+                - generic [ref=e103]:
+                  - generic [ref=e104]: 推荐链路收口说明
+                  - textbox "总结推荐链路最后收口情况" [ref=e106]: 当前知识点“操作系统的概念”掌握度仍偏低，需要继续补强。
+                - generic [ref=e107]:
+                  - generic [ref=e108]: 老师确认说明
+                  - textbox "填写最终评分依据、教学观察或补充说明" [ref=e110]
+                - generic [ref=e111]:
+                  - button "确认并归档" [ref=e112] [cursor=pointer]:
+                    - generic [ref=e113]: 确认并归档
+                  - button "打开学生详情" [ref=e114] [cursor=pointer]:
+                    - generic [ref=e115]: 打开学生详情
+          - generic [ref=e116]:
+            - generic [ref=e117]:
+              - generic [ref=e118]: 阶段变化趋势
+              - generic [ref=e120]: 暂无阶段数据
+            - generic [ref=e121]:
+              - generic [ref=e122]: 推荐链路最后收口
+              - generic [ref=e124]:
+                - generic [ref=e125]:
+                  - generic [ref=e126]: 最后一次推荐时间
+                  - strong [ref=e127]: 2026-03-19 09:03
+                - generic [ref=e128]:
+                  - generic [ref=e129]: 最后推荐目标
+                  - strong [ref=e130]: "1"
+                - generic [ref=e131]:
+                  - generic [ref=e132]: 系统推荐结论
+                  - strong [ref=e133]: 当前知识点“操作系统的概念”掌握度仍偏低，需要继续补强。
+                - generic [ref=e134]:
+                  - generic [ref=e135]: 当前收口摘要
+                  - strong [ref=e136]: 当前知识点“操作系统的概念”掌握度仍偏低，需要继续补强。
+          - img [ref=e139]

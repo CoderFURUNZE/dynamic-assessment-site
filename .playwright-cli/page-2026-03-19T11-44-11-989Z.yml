@@ -1,0 +1,41 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "首页" [ref=e9] [cursor=pointer]
+      - button "图谱" [ref=e10] [cursor=pointer]
+      - button "报告" [ref=e11] [cursor=pointer]
+      - button "问卷" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]: 学习中心
+    - button "退出" [ref=e15] [cursor=pointer]:
+      - generic [ref=e16]: 退出
+  - main [ref=e17]:
+    - generic [ref=e18]:
+      - generic [ref=e20]:
+        - button "返回图谱" [ref=e21] [cursor=pointer]
+        - generic [ref=e22]:
+          - heading "知识点学习内容" [level=1] [ref=e23]
+          - paragraph [ref=e24]: 把资源、练习和推荐内容集中在一个页面学习。
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - generic [ref=e27]: 学习资源
+          - strong [ref=e28]: "0"
+        - generic [ref=e29]:
+          - generic [ref=e30]: 练习题
+          - strong [ref=e31]: "0"
+        - generic [ref=e32]:
+          - generic [ref=e33]: 推荐内容
+          - strong [ref=e34]: "0"
+      - generic [ref=e35]:
+        - complementary [ref=e36]:
+          - button "学习资源" [ref=e37] [cursor=pointer]
+          - button "练习题" [ref=e38] [cursor=pointer]
+          - button "推荐资源" [ref=e39] [cursor=pointer]
+        - main [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]: 学习资源
+            - generic [ref=e46]: 当前知识点未配置学习资源
+      - img [ref=e49]
+  - generic [ref=e51]: 加载中...

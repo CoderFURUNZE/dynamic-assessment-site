@@ -9,6 +9,7 @@ class KnowledgePointOut(BaseModel):
     title: str
     description: str
     chapter: str = ""
+    knowledge_tag: str = ""
     ability_tag: str = ""
     literacy_tag: str = ""
     importance: float = 0.5
@@ -22,6 +23,12 @@ class GraphRelationNodeOut(BaseModel):
     id: int
     code: str
     title: str
+
+
+class GraphNodeNavOut(BaseModel):
+    previous: GraphRelationNodeOut | None = None
+    next: GraphRelationNodeOut | None = None
+    chapter_nodes: list[GraphRelationNodeOut] = []
 
 
 class KnowledgeEdgeOut(BaseModel):
@@ -50,6 +57,16 @@ class GraphOverlayNodeOut(BaseModel):
     status: str
     recommended: bool = False
     blocked_reason: str | None = None
+    knowledge_enabled: bool = True
+    ability_enabled: bool = False
+    literacy_enabled: bool = False
+    knowledge_status: str = "not_started"
+    ability_status: str = "not_started"
+    literacy_status: str = "not_started"
+    knowledge_label: str = ""
+    ability_labels: list[str] = []
+    literacy_labels: list[str] = []
+    evidence: dict = {}
 
 
 class GraphBaseOut(BaseModel):
@@ -117,6 +134,7 @@ class GraphQuizExamOut(BaseModel):
 class GraphNodeDetailOut(BaseModel):
     kp: KnowledgePointOut
     overlay: GraphOverlayNodeOut | None = None
+    navigation: GraphNodeNavOut | None = None
     prerequisites: list[GraphRelationNodeOut] = []
     downstream: list[GraphRelationNodeOut] = []
     related: list[GraphRelationNodeOut] = []

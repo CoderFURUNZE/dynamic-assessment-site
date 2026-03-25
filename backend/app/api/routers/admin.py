@@ -5,6 +5,7 @@ import shutil
 from io import BytesIO
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 from sqlmodel import Session, select
@@ -13,6 +14,7 @@ from app.api.deps import require_role
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.models import (
+    CourseLifecycleStatus,
     CourseEnrollStatus,
     ChapterEdge,
     Course,
@@ -32,6 +34,8 @@ from app.db.models import (
     ResourceType,
     KpQuestionAssignment,
     PracticeAttempt,
+    Enrollment,
+    EnrollmentStatus,
     Question,
     Quiz,
     QuizAttempt,
@@ -161,6 +165,47 @@ def _ensure_teacher_id(session: Session, teacher_id: int | None) -> int | None:
     if teacher is None or teacher.role != UserRole.teacher:
         raise HTTPException(status_code=400, detail="teacher_id must reference a teacher user")
     return int(teacher.id)
+
+
+def _sync_course_class_enrollments(session: Session, course: Course) -> None:
+    if course.id is None:
+        return
+    course_id = int(course.id)
+    lifecycle = course.lifecycle_status.value if hasattr(course.lifecycle_status, "value") else str(course.lifecycle_status or "draft")
+    target_class = str(course.target_class or "").strip()
+    if not course.active or lifecycle != CourseLifecycleStatus.active.value or not target_class:
+        return
+    students = session.exec(
+        select(User).where(
+            User.role == UserRole.student,
+            User.active == True,  # noqa: E712
+            User.class_name == target_class,
+        )
+    ).all()
+    if not students:
+        return
+    existing = session.exec(
+        select(Enrollment).where(
+            Enrollment.course_id == course_id,
+            Enrollment.status == EnrollmentStatus.active,
+        )
+    ).all()
+    existing_ids = {int(item.student_id) for item in existing}
+    created = False
+    for student in students:
+        if student.id is None or int(student.id) in existing_ids:
+            continue
+        session.add(
+            Enrollment(
+                student_id=int(student.id),
+                course_id=course_id,
+                application_id=None,
+                status=EnrollmentStatus.active,
+            )
+        )
+        created = True
+    if created:
+        session.commit()
 
 
 def _snapshot_for_user(session: Session, *, user_id: int, subject: str, grade: str):
@@ -455,8 +500,13 @@ def _course_to_out(course: Course) -> CourseOut:
         title=course.title,
         description=course.description,
         active=bool(course.active),
+        lifecycle_status=course.lifecycle_status.value if hasattr(course.lifecycle_status, "value") else str(course.lifecycle_status or "draft"),
         teacher_id=int(course.teacher_id) if course.teacher_id is not None else None,
+        target_class=str(course.target_class or ""),
         max_students=int(course.max_students or 200),
+        start_at=course.start_at,
+        end_at=course.end_at,
+        archived_at=course.archived_at,
         apply_deadline=course.apply_deadline,
         enroll_status=course.enroll_status.value if hasattr(course.enroll_status, "value") else str(course.enroll_status),
     )
@@ -465,6 +515,14 @@ def _course_to_out(course: Course) -> CourseOut:
 def _safe_filename(name: str) -> str:
     name = re.sub(r"[^A-Za-z0-9._-]", "_", name)
     return name.strip("._") or "video.mp4"
+
+
+def _validate_external_url(url: str) -> str:
+    normalized = url.strip()
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="外部链接必须是有效的 http/https 地址")
+    return normalized
 
 
 def _resource_type_value(value) -> str:
@@ -735,7 +793,7 @@ def create_kp_resource(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid resource type") from exc
     title = payload.title.strip()
-    url = payload.url.strip()
+    url = _validate_external_url(payload.url)
     if not title or not url:
         raise HTTPException(status_code=400, detail="title/url required")
     row = LearningResource(
@@ -785,7 +843,7 @@ def update_kp_resource(
     if payload.category is not None and payload.category in {"learning", "recommend"}:
         row.category = payload.category
     if payload.url is not None:
-        url = payload.url.strip()
+        url = _validate_external_url(payload.url)
         if not url:
             raise HTTPException(status_code=400, detail="url required")
         row.url = url
@@ -935,7 +993,7 @@ def delete_kp_task(
 def create_user(
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    _admin=Depends(require_role(UserRole.admin)),
 ):
     username = payload.get("username", "").strip()
     password = payload.get("password", "").strip()
@@ -977,11 +1035,9 @@ def list_courses(
     page_size: int = 15,
     keyword: str | None = None,
     session: Session = Depends(get_session),
-    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin)),
 ):
     q = select(Course)
-    if admin.role == UserRole.teacher:
-        q = q.where(Course.teacher_id == admin.id)
     if keyword:
         like = f"%{keyword.strip()}%"
         q = q.where(or_(Course.code.like(like), Course.title.like(like), Course.description.like(like)))
@@ -994,7 +1050,7 @@ def list_courses(
 def create_course(
     payload: CourseIn,
     session: Session = Depends(get_session),
-    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin)),
 ):
     code = payload.code.strip()
     title = payload.title.strip()
@@ -1004,8 +1060,10 @@ def create_course(
     if exists:
         raise HTTPException(status_code=400, detail="Course code exists")
     teacher_id = _ensure_teacher_id(session, payload.teacher_id)
-    if admin.role == UserRole.teacher:
-        teacher_id = int(admin.id)
+    try:
+        lifecycle_status = CourseLifecycleStatus(str(payload.lifecycle_status or "draft").strip().lower())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的课程生命周期状态")
     try:
         enroll_status = CourseEnrollStatus(str(payload.enroll_status or "open").strip().lower())
     except ValueError:
@@ -1015,14 +1073,20 @@ def create_course(
         title=title,
         description=payload.description or "",
         active=bool(payload.active),
+        lifecycle_status=lifecycle_status,
         teacher_id=teacher_id,
+        target_class=str(payload.target_class or "").strip(),
         max_students=max(1, int(payload.max_students or 200)),
+        start_at=payload.start_at,
+        end_at=payload.end_at,
+        archived_at=datetime.utcnow() if lifecycle_status == CourseLifecycleStatus.archived else None,
         apply_deadline=payload.apply_deadline,
         enroll_status=enroll_status,
     )
     session.add(course)
     session.commit()
     session.refresh(course)
+    _sync_course_class_enrollments(session, course)
     _log_action(session, admin, "course_create", f"code={code} title={title} teacher_id={teacher_id}")
     return _course_to_out(course)
 
@@ -1032,13 +1096,11 @@ def update_course(
     course_id: int,
     payload: CourseUpdateIn,
     session: Session = Depends(get_session),
-    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin)),
 ):
     course = session.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
-    if admin.role == UserRole.teacher and course.teacher_id != admin.id:
-        raise HTTPException(status_code=403, detail="No permission for this course")
     if payload.code is not None:
         code = payload.code.strip()
         if not code:
@@ -1056,8 +1118,27 @@ def update_course(
         course.description = payload.description
     if payload.active is not None:
         course.active = bool(payload.active)
+    if payload.lifecycle_status is not None:
+        try:
+            course.lifecycle_status = CourseLifecycleStatus(str(payload.lifecycle_status).strip().lower())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="无效的课程生命周期状态")
+        if course.lifecycle_status == CourseLifecycleStatus.archived:
+            course.archived_at = payload.archived_at or datetime.utcnow()
+            course.active = False
+        elif course.lifecycle_status == CourseLifecycleStatus.active:
+            course.archived_at = None
+            course.active = True
     if payload.max_students is not None:
         course.max_students = max(1, int(payload.max_students))
+    if payload.target_class is not None:
+        course.target_class = str(payload.target_class).strip()
+    if payload.start_at is not None:
+        course.start_at = payload.start_at
+    if payload.end_at is not None:
+        course.end_at = payload.end_at
+    if payload.archived_at is not None:
+        course.archived_at = payload.archived_at
     if payload.apply_deadline is not None:
         course.apply_deadline = payload.apply_deadline
     if payload.enroll_status is not None:
@@ -1067,11 +1148,10 @@ def update_course(
             raise HTTPException(status_code=400, detail="无效的报名开放状态")
     if payload.teacher_id is not None:
         course.teacher_id = _ensure_teacher_id(session, payload.teacher_id)
-    if admin.role == UserRole.teacher:
-        course.teacher_id = int(admin.id)
     session.add(course)
     session.commit()
     session.refresh(course)
+    _sync_course_class_enrollments(session, course)
     _log_action(session, admin, "course_update", f"id={course_id} code={course.code} teacher_id={course.teacher_id}")
     return _course_to_out(course)
 
@@ -1080,13 +1160,11 @@ def update_course(
 def delete_course(
     course_id: int,
     session: Session = Depends(get_session),
-    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin)),
 ):
     course = session.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
-    if admin.role == UserRole.teacher and course.teacher_id != admin.id:
-        raise HTTPException(status_code=403, detail="No permission for this course")
     kp_count = session.exec(select(func.count()).select_from(KnowledgePoint).where(KnowledgePoint.subject == course.title)).one()
     if kp_count:
         raise HTTPException(status_code=400, detail="Course has knowledge points, cannot delete")
@@ -1101,7 +1179,7 @@ def list_users(
     page_size: int = 15,
     role: str | None = None,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    _admin=Depends(require_role(UserRole.admin)),
 ):
     page = max(1, page)
     page_size = max(1, min(100, page_size))
@@ -1223,7 +1301,7 @@ def update_user(
     user_id: int,
     payload: UserUpdateIn,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    _admin=Depends(require_role(UserRole.admin)),
 ):
     u = session.get(User, user_id)
     if u is None:
@@ -1267,7 +1345,7 @@ def update_user(
 def delete_user(
     user_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    _admin=Depends(require_role(UserRole.admin)),
 ):
     u = session.get(User, user_id)
     if u is None:
@@ -1339,6 +1417,7 @@ def create_kp(
         title=payload.title.strip(),
         description=payload.description.strip(),
         chapter=payload.chapter.strip(),
+        knowledge_tag=payload.knowledge_tag.strip(),
         ability_tag=payload.ability_tag.strip(),
         literacy_tag=payload.literacy_tag.strip(),
         importance=max(0.0, min(1.0, float(payload.importance))),
@@ -1376,6 +1455,8 @@ def update_kp(
         kp.description = payload.description
     if payload.chapter is not None:
         kp.chapter = payload.chapter
+    if payload.knowledge_tag is not None:
+        kp.knowledge_tag = payload.knowledge_tag
     if payload.ability_tag is not None:
         kp.ability_tag = payload.ability_tag
     if payload.literacy_tag is not None:

@@ -1,0 +1,61 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "首页" [ref=e9] [cursor=pointer]
+      - button "图谱" [ref=e10] [cursor=pointer]
+      - button "报告" [ref=e11] [cursor=pointer]
+      - button "问卷" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]: 学习中心
+    - button "退出" [ref=e15] [cursor=pointer]:
+      - generic [ref=e16]: 退出
+  - main [ref=e17]:
+    - generic [ref=e18]:
+      - generic [ref=e19]:
+        - generic [ref=e20]:
+          - generic [ref=e21]: Course Enrollment
+          - heading "课程报名与审核状态" [level=1] [ref=e22]
+        - generic [ref=e23]:
+          - button "返回学习中心" [ref=e24] [cursor=pointer]:
+            - generic [ref=e25]: 返回学习中心
+          - button "刷新" [ref=e26] [cursor=pointer]:
+            - generic [ref=e27]: 刷新
+      - generic [ref=e28]:
+        - heading "可报名课程" [level=3] [ref=e30]
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - strong [ref=e34]: 操作系统
+            - generic [ref=e35]: OS · teacher1
+            - generic [ref=e36]: 名额 1/200 · 可报名
+            - generic [ref=e37]: 当前报名状态：未报名
+          - generic [ref=e38]:
+            - textbox "可填写报名理由（选填）" [ref=e41]
+            - button "提交报名" [ref=e42] [cursor=pointer]:
+              - generic [ref=e43]: 提交报名
+      - generic [ref=e44]:
+        - heading "我的报名记录" [level=3] [ref=e46]
+        - generic [ref=e48]:
+          - table [ref=e50]:
+            - rowgroup [ref=e58]:
+              - row "课程 状态 报名理由 审核备注 拒绝原因 提交时间" [ref=e59]:
+                - columnheader "课程" [ref=e60]:
+                  - generic [ref=e61]: 课程
+                - columnheader "状态" [ref=e62]:
+                  - generic [ref=e63]: 状态
+                - columnheader "报名理由" [ref=e64]:
+                  - generic [ref=e65]: 报名理由
+                - columnheader "审核备注" [ref=e66]:
+                  - generic [ref=e67]: 审核备注
+                - columnheader "拒绝原因" [ref=e68]:
+                  - generic [ref=e69]: 拒绝原因
+                - columnheader "提交时间" [ref=e70]:
+                  - generic [ref=e71]: 提交时间
+          - generic [ref=e75]:
+            - table:
+              - rowgroup
+            - generic [ref=e77]: 暂无数据
+      - generic [ref=e78]:
+        - heading "站内通知" [level=3] [ref=e80]
+        - generic [ref=e81]: 暂无通知

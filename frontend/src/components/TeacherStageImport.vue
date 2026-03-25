@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HoverTip from "./HoverTip.vue";
 
 type Stage = {
   id: number;
@@ -417,12 +418,10 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="panel-mini-title">全班阶段数据导入</div>
-          <el-alert
-            class="import-tip"
-            type="info"
-            :closable="false"
-            title="按顺序做：先选阶段，再选数据类型，再下载模板，最后上传全班 CSV / XLSX。导入成功后系统会批量重算该阶段学生画像。"
-          />
+          <div class="import-tip-inline">
+            <span>导入说明</span>
+            <HoverTip content="按顺序做：先选阶段，再选数据类型，再下载模板，最后上传全班 CSV / XLSX。导入成功后系统会批量重算该阶段学生画像。" />
+          </div>
           <el-form label-width="110px">
             <el-form-item label="课程">
               <el-input :model-value="subject || '未选择课程'" disabled />
@@ -884,8 +883,14 @@ onBeforeUnmount(() => {
   background: #f8fbff;
 }
 
-.import-tip {
+.import-tip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 14px;
+  color: #637995;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .ok-text {

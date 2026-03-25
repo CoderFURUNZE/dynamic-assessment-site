@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HoverTip from "./HoverTip.vue";
 
 type GraphKp = {
   id: number;
@@ -9,6 +10,9 @@ type GraphKp = {
   title: string;
   description: string;
   chapter?: string;
+  knowledge_tag?: string;
+  ability_tag?: string;
+  literacy_tag?: string;
   importance?: number;
   difficulty?: number;
   pos_x?: number | null;
@@ -34,6 +38,16 @@ type OverlayNode = {
   status: string;
   recommended?: boolean;
   blocked_reason?: string | null;
+  knowledge_enabled?: boolean;
+  ability_enabled?: boolean;
+  literacy_enabled?: boolean;
+  knowledge_status?: string;
+  ability_status?: string;
+  literacy_status?: string;
+  knowledge_label?: string;
+  ability_labels?: string[];
+  literacy_labels?: string[];
+  evidence?: Record<string, any>;
 };
 
 type RelationNode = {
@@ -43,7 +57,7 @@ type RelationNode = {
 };
 
 type NodeDetail = {
-  kp: GraphKp & { ability_tag?: string; literacy_tag?: string };
+  kp: GraphKp;
   overlay?: OverlayNode | null;
   prerequisites: RelationNode[];
   downstream: RelationNode[];
@@ -81,6 +95,7 @@ type StudentWorkspaceViewState = {
   search: string;
   drawerOpen: boolean;
   sidebarOpen: boolean;
+  showAllKps: boolean;
   selectedType: "kp" | "category";
   selectedId: number | null;
   selectedCategory: string | null;
@@ -128,6 +143,7 @@ const overlay = ref<OverlayNode[]>([]);
 const selectedType = ref<"kp" | "category">("kp");
 const selectedId = ref<number | null>(null);
 const selectedCategory = ref<string | null>(null);
+const showAllKps = ref(false);
 const nodeDetail = ref<NodeDetail | null>(null);
 const drawerOpen = ref(true);
 const sidebarOpen = ref(true);
@@ -145,6 +161,7 @@ const kpPositions = ref<Record<number, Point>>({});
 const categoryPositions = ref<Record<string, Point>>({});
 const mutingLayoutPersist = ref(false);
 const layoutRestored = ref(false);
+const useLegacyFallbackLayout = ref(false);
 
 const overlayMap = computed(() => new Map(overlay.value.map((item) => [item.kp_id, item])));
 const effectiveOverlayMap = computed(() => {
@@ -161,6 +178,35 @@ const effectiveOverlayMap = computed(() => {
   }
   return map;
 });
+
+function splitLabels(value?: string | null) {
+  return String(value || "")
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildLabelColorMap(labels: string[], palette: string[]) {
+  const map = new Map<string, string>();
+  labels.forEach((label, index) => {
+    map.set(label, palette[index % palette.length]);
+  });
+  return map;
+}
+
+const abilityColorMap = computed(() =>
+  buildLabelColorMap(
+    Array.from(new Set(overlay.value.flatMap((item) => item.ability_labels ?? []).concat(kps.value.flatMap((kp) => splitLabels(kp.ability_tag))))),
+    ["#f0b429", "#5bb98c", "#4f7fe7", "#e28a49", "#7d72e9", "#39a0a4"],
+  ),
+);
+
+const literacyColorMap = computed(() =>
+  buildLabelColorMap(
+    Array.from(new Set(overlay.value.flatMap((item) => item.literacy_labels ?? []).concat(kps.value.flatMap((kp) => splitLabels(kp.literacy_tag))))),
+    ["#2f6fed", "#2ea96b", "#e0a128", "#8b7cf6", "#2f9ab6", "#de7465"],
+  ),
+);
 
 const chapterSummary = computed(() => {
   const bucket = new Map<string, number>();
@@ -181,6 +227,16 @@ const filteredKps = computed(() => {
     if (!kw) return true;
     return `${kp.code} ${kp.title} ${kp.description} ${kp.chapter || ""}`.toLowerCase().includes(kw);
   });
+});
+
+const visibleKps = computed(() => {
+  if (showAllKps.value) return filteredKps.value;
+  const activeChapterKey =
+    selectedType.value === "category"
+      ? selectedCategory.value
+      : (selectedKp.value?.chapter || selectedCategory.value || null);
+  if (!activeChapterKey) return [] as GraphKp[];
+  return filteredKps.value.filter((kp) => (kp.chapter || "未分章") === activeChapterKey);
 });
 
 const treeNodes = computed(() => {
@@ -204,7 +260,7 @@ const stageStats = computed(() => {
   let learning = 0;
   let risk = 0;
   let idle = 0;
-  for (const kp of filteredKps.value) {
+  for (const kp of visibleKps.value) {
     const status = overlayMap.value.get(kp.id)?.status ?? "not_started";
     if (status === "mastered") mastered += 1;
     else if (status === "learning") learning += 1;
@@ -236,7 +292,7 @@ const defaultCategoryPositions = computed<Record<string, Point>>(() => {
 const defaultKpPositions = computed<Record<number, Point>>(() => {
   const entries: Record<number, Point> = {};
   const groups = new Map<string, GraphKp[]>();
-  for (const kp of filteredKps.value) {
+  for (const kp of visibleKps.value) {
     const key = kp.chapter || "未分章";
     const arr = groups.get(key) ?? [];
     arr.push(kp);
@@ -245,24 +301,17 @@ const defaultKpPositions = computed<Record<number, Point>>(() => {
 
   for (const [chapter, items] of groups.entries()) {
     const anchor = categoryPositions.value[chapter] ?? defaultCategoryPositions.value[chapter] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y - 360 };
-    const total = Math.max(items.length, 1);
-    const radiusX = Math.min(360, 220 + items.length * 10);
-    const radiusY = Math.min(220, 140 + items.length * 8);
-    const verticalLift = 240;
-    items.forEach((kp, index) => {
-      if (total === 1) {
-        entries[kp.id] = {
-          x: anchor.x,
-          y: anchor.y + 250,
-        };
-        return;
-      }
-      const angle = total === 1
-        ? Math.PI / 2
-        : (Math.PI * 0.08) + ((Math.PI * 0.84) * index) / (total - 1);
+    const ordered = [...items].sort((a, b) => String(a.code || "").localeCompare(String(b.code || ""), "zh-Hans-CN"));
+    const columns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(ordered.length))));
+    const gapX = 220;
+    const gapY = 170;
+    const startX = anchor.x - ((columns - 1) * gapX) / 2;
+    ordered.forEach((kp, index) => {
+      const col = index % columns;
+      const row = Math.floor(index / columns);
       entries[kp.id] = {
-        x: anchor.x + Math.cos(angle) * radiusX,
-        y: anchor.y + verticalLift + Math.sin(angle) * radiusY,
+        x: startX + col * gapX + (row % 2 === 0 ? 0 : 18),
+        y: anchor.y + 250 + row * gapY,
       };
     });
   }
@@ -270,8 +319,57 @@ const defaultKpPositions = computed<Record<number, Point>>(() => {
   return entries;
 });
 
+function isLegacyCoordinateLayout(rows: GraphKp[]) {
+  const withPos = rows.filter((kp) => kp.pos_x != null && kp.pos_y != null);
+  if (withPos.length === 0) return false;
+  const nearOriginCount = withPos.filter((kp) => Number(kp.pos_x) < 12000 && Number(kp.pos_y) < 12000).length;
+  return nearOriginCount / withPos.length >= 0.5;
+}
+
+function normalizePersistedKpPositions(rows: GraphKp[]) {
+  const entries: Record<number, Point> = {};
+  const withPos = rows.filter((kp) => kp.id && kp.pos_x != null && kp.pos_y != null);
+  if (withPos.length === 0) return entries;
+
+  const legacyRows = withPos.filter((kp) => Number(kp.pos_x) < 12000 && Number(kp.pos_y) < 12000);
+  const useLegacy = isLegacyCoordinateLayout(rows);
+  useLegacyFallbackLayout.value = useLegacy;
+
+  if (!useLegacy) {
+    for (const kp of withPos) {
+      entries[kp.id] = { x: Number(kp.pos_x), y: Number(kp.pos_y) };
+    }
+    return entries;
+  }
+
+  const minX = Math.min(...legacyRows.map((kp) => Number(kp.pos_x)));
+  const maxX = Math.max(...legacyRows.map((kp) => Number(kp.pos_x)));
+  const minY = Math.min(...legacyRows.map((kp) => Number(kp.pos_y)));
+  const maxY = Math.max(...legacyRows.map((kp) => Number(kp.pos_y)));
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const scale = 2.2;
+
+  for (const kp of withPos) {
+    const rawX = Number(kp.pos_x);
+    const rawY = Number(kp.pos_y);
+    const legacyLike = rawX < 12000 && rawY < 12000;
+    if (!legacyLike) {
+      entries[kp.id] = { x: rawX, y: rawY };
+      continue;
+    }
+    const mappedX = INITIAL_CENTER_X + (rawX - centerX) * scale;
+    const mappedY = (INITIAL_CENTER_Y + 180) + (rawY - centerY) * scale;
+    entries[kp.id] = {
+      x: Math.max(96, Math.min(CANVAS_WIDTH - 96, mappedX)),
+      y: Math.max(96, Math.min(CANVAS_HEIGHT - 96, mappedY)),
+    };
+  }
+  return entries;
+}
+
 const visibleEdges = computed(() => {
-  const ids = new Set(filteredKps.value.map((kp) => kp.id));
+  const ids = new Set(visibleKps.value.map((kp) => kp.id));
   return edges.value.filter((edge) => ids.has(edge.prereq_id) && ids.has(edge.next_id));
 });
 
@@ -390,23 +488,21 @@ function studentActorKey() {
 
 function studentLayoutStorageKey() {
   if (!props.subject) return "";
-  return `da_student_graph_layout_v3_${studentActorKey()}_${props.subject}_${props.grade}`;
+  return `da_student_graph_layout_v4_${studentActorKey()}_${props.subject}_${props.grade}`;
 }
 
 function studentViewStateStorageKey() {
   if (!props.subject) return "";
-  return `da_student_graph_view_v3_${studentActorKey()}_${props.subject}_${props.grade}`;
+  return `da_student_graph_view_v4_${studentActorKey()}_${props.subject}_${props.grade}`;
+}
+
+function teacherCategoryPositionStorageKey() {
+  if (!props.subject) return "";
+  return `da_teacher_category_pos_v2_${props.subject}_${props.grade}`;
 }
 
 function persistStudentLayout() {
-  if (mutingLayoutPersist.value) return;
-  const key = studentLayoutStorageKey();
-  if (!key) return;
-  const payload: StudentWorkspaceLayout = {
-    kpPositions: kpPositions.value,
-    categoryPositions: categoryPositions.value,
-  };
-  localStorage.setItem(key, JSON.stringify(payload));
+  return;
 }
 
 function persistStudentViewState() {
@@ -424,46 +520,33 @@ function persistStudentViewState() {
     selectedType: selectedType.value,
     selectedId: selectedId.value,
     selectedCategory: selectedCategory.value,
+    showAllKps: showAllKps.value,
   };
   localStorage.setItem(key, JSON.stringify(payload));
 }
 
 function restoreStudentLayout() {
-  const key = studentLayoutStorageKey();
-  if (!key) return false;
-  const raw = localStorage.getItem(key);
-  if (!raw) return false;
+  return false;
+}
+
+function restoreTeacherCategoryPositions() {
+  const key = teacherCategoryPositionStorageKey();
+  if (!key) return;
   try {
-    const parsed = JSON.parse(raw) as Partial<StudentWorkspaceLayout>;
-    mutingLayoutPersist.value = true;
-    if (parsed.kpPositions && typeof parsed.kpPositions === "object") {
-      const next: Record<number, Point> = {};
-      for (const [id, point] of Object.entries(parsed.kpPositions)) {
-        const x = Number((point as any)?.x);
-        const y = Number((point as any)?.y);
-        const numId = Number(id);
-        if (Number.isFinite(numId) && Number.isFinite(x) && Number.isFinite(y)) {
-          next[numId] = { x, y };
-        }
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== "object") return;
+    const next: Record<string, Point> = {};
+    for (const [key, point] of Object.entries(parsed)) {
+      const x = Number((point as any)?.x);
+      const y = Number((point as any)?.y);
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        next[key] = { x, y };
       }
-      kpPositions.value = next;
     }
-    if (parsed.categoryPositions && typeof parsed.categoryPositions === "object") {
-      const next: Record<string, Point> = {};
-      for (const [key, point] of Object.entries(parsed.categoryPositions)) {
-        const x = Number((point as any)?.x);
-        const y = Number((point as any)?.y);
-        if (Number.isFinite(x) && Number.isFinite(y)) {
-          next[key] = { x, y };
-        }
-      }
-      categoryPositions.value = next;
-    }
-    return true;
+    categoryPositions.value = next;
   } catch {
-    return false;
-  } finally {
-    mutingLayoutPersist.value = false;
+    categoryPositions.value = {};
   }
 }
 
@@ -488,12 +571,61 @@ function restoreStudentViewState() {
     selectedType.value = parsed.selectedType === "category" ? "category" : "kp";
     selectedId.value = Number.isFinite(Number(parsed.selectedId)) ? Number(parsed.selectedId) : null;
     selectedCategory.value = typeof parsed.selectedCategory === "string" ? parsed.selectedCategory : null;
+    showAllKps.value = parsed.showAllKps === true;
     return true;
   } catch {
     return false;
   } finally {
     mutingLayoutPersist.value = false;
   }
+}
+
+function normalizeStudentSelectionState() {
+  let changed = false;
+  const chapterKeySet = new Set(categoryNodes.value.map((item) => item.key));
+  const firstChapter = categoryNodes.value[0]?.key || null;
+  const kpMap = new Map(kps.value.map((kp) => [kp.id, kp]));
+  const currentSelectedKp = selectedId.value != null ? kpMap.get(selectedId.value) ?? null : null;
+
+  if (currentSelectedKp) {
+    selectedType.value = "kp";
+    selectedCategory.value = currentSelectedKp.chapter || "未分章";
+    if (!chapterKeySet.has(selectedCategory.value)) {
+      selectedCategory.value = firstChapter;
+      changed = true;
+    }
+    if (selectedCategory.value) activeChapter.value = selectedCategory.value;
+  } else {
+    if (selectedId.value != null) changed = true;
+    selectedId.value = null;
+    if (selectedType.value === "kp") {
+      selectedType.value = "category";
+      changed = true;
+    }
+  }
+
+  if (!selectedCategory.value && activeChapter.value !== "全部" && chapterKeySet.has(activeChapter.value)) {
+    selectedCategory.value = activeChapter.value;
+    changed = true;
+  }
+
+  if (selectedCategory.value && !chapterKeySet.has(selectedCategory.value)) {
+    selectedCategory.value = null;
+    changed = true;
+  }
+
+  if (activeChapter.value !== "全部" && !chapterKeySet.has(activeChapter.value)) {
+    activeChapter.value = "全部";
+    changed = true;
+  }
+
+  if (!showAllKps.value && !selectedId.value && !selectedCategory.value) {
+    selectedType.value = "category";
+    selectedCategory.value = firstChapter;
+    activeChapter.value = firstChapter || "全部";
+    changed = true;
+  }
+  return changed;
 }
 
 function syncCategoryPositions() {
@@ -517,8 +649,8 @@ function syncKpPositions() {
 }
 
 function nodeLabel(status?: string) {
-  if (status === "mastered") return "已掌握";
-  if (status === "learning") return "学习中";
+  if (status === "mastered" || status === "achieved") return "已达成";
+  if (status === "learning" || status === "in_progress") return "进行中";
   if (status === "risk") return "风险";
   return "未开始";
 }
@@ -537,11 +669,78 @@ function isPathEdge(edge: GraphEdge) {
   return highlightedKpSet.value.has(edge.prereq_id) && highlightedKpSet.value.has(edge.next_id);
 }
 
+function edgeStroke(edge: GraphEdge) {
+  if (isPathEdge(edge)) return "#5a8ef0";
+  if (edge.relation_type === "support") return "#46a57b";
+  if (edge.relation_type === "contains") return "#db9d37";
+  if (edge.relation_type === "related") return "rgba(74,120,213,0.6)";
+  return "rgba(100,116,139,0.5)";
+}
+
+function edgeDasharray(edge: GraphEdge) {
+  if (isPathEdge(edge)) return "8 5";
+  if (edge.relation_type === "support") return "10 6";
+  if (edge.relation_type === "contains") return "2 6";
+  return undefined;
+}
+
+function edgeWidth(edge: GraphEdge) {
+  if (isPathEdge(edge)) return 2.8;
+  if (edge.relation_type === "contains") return 2.2;
+  if (edge.relation_type === "support") return 2.1;
+  return 1.6;
+}
+
+function edgeMarker(edge: GraphEdge) {
+  if (edge.relation_type === "related") return undefined;
+  if (isPathEdge(edge)) return "url(#student-edge-arrow-path)";
+  if (edge.relation_type === "support") return "url(#student-edge-arrow-triangle)";
+  if (edge.relation_type === "contains") return "url(#student-edge-arrow-open)";
+  return "url(#student-edge-arrow)";
+}
+
+function chapterEdgeStroke(edge: ChapterEdge) {
+  if (edge.relation_type === "related") return "rgba(74,120,213,0.42)";
+  if (edge.relation_type === "support") return "rgba(70,165,123,0.5)";
+  return "rgba(75,94,130,0.52)";
+}
+
 function nodeRadius(kp: GraphKp) {
   const base = 62 + Math.round((kp.importance ?? 0.5) * 16);
   if (kp.id === selectedKp.value?.id) return base + 10;
   if (isRecommended(kp.id)) return base + 6;
   return base;
+}
+
+function ringColor(level: "knowledge" | "ability" | "literacy", status?: string, labels?: string[]) {
+  if (level === "ability") {
+    const label = labels?.[0];
+    if (label && abilityColorMap.value.has(label)) return abilityColorMap.value.get(label) as string;
+  }
+  if (level === "literacy") {
+    const label = labels?.[0];
+    if (label && literacyColorMap.value.has(label)) return literacyColorMap.value.get(label) as string;
+  }
+  const palette = {
+    knowledge: { achieved: "#2ea96b", in_progress: "#86cfa8", not_started: "#d7e7dd" },
+    ability: { achieved: "#f0b429", in_progress: "#f6d67a", not_started: "#efe4bf" },
+    literacy: { achieved: "#2f6fed", in_progress: "#8db0f6", not_started: "#d7e3fb" },
+  };
+  const key = status === "achieved" || status === "in_progress" ? status : "not_started";
+  return palette[level][key];
+}
+
+async function openResource(item: { id: number; kp_id: number; url: string }, action: "visit" | "download" = "visit") {
+  try {
+    await api.post("/content/resource/visit", {
+      kp_id: item.kp_id,
+      resource_id: item.id,
+      action,
+    });
+  } catch {
+    // ignore tracking failure
+  }
+  window.open(item.url, "_blank", "noopener,noreferrer");
 }
 
 function metricPercent(value?: number | null) {
@@ -552,7 +751,7 @@ function emitState() {
   emit("state-change", {
     kpCount: kps.value.length,
     categoryCount: categoryNodes.value.length,
-    filteredCount: filteredKps.value.length,
+    filteredCount: visibleKps.value.length,
     selectedType: selectedType.value,
     selectedKpId: selectedType.value === "kp" ? selectedId.value : null,
     selectedCategory: selectedType.value === "category" ? selectedCategory.value : null,
@@ -568,29 +767,24 @@ async function load() {
     edges.value = res.data.base?.edges ?? [];
     overlay.value = res.data.overlay ?? [];
 
-    const restored = restoreStudentLayout();
+    const normalizedPersisted = normalizePersistedKpPositions(kps.value);
+
     const restoredView = restoreStudentViewState();
-    layoutRestored.value = restored;
-    if (!restored) {
-      kpPositions.value = {};
-      categoryPositions.value = {};
-    }
+    layoutRestored.value = restoredView;
+    kpPositions.value = normalizedPersisted;
+    restoreTeacherCategoryPositions();
 
     syncCategoryPositions();
     syncKpPositions();
-    const restoredKpValid = selectedType.value === "kp" && selectedId.value != null && kps.value.some((item) => item.id === selectedId.value);
-    const restoredCategoryValid = selectedType.value === "category" && !!selectedCategory.value && categoryNodes.value.some((item) => item.key === selectedCategory.value);
-    if ((restoredKpValid || restoredCategoryValid) && restoredView) {
-      // 恢复本地布局时，优先保持学生上次保存的视图与选中状态
-    } else {
-      const valid = props.currentKpId && kps.value.some((item) => item.id === props.currentKpId);
-      if (valid) {
-        selectedType.value = "kp";
-        selectedId.value = props.currentKpId ?? null;
-      } else if (!selectedId.value && kps.value.length) {
-        selectedType.value = "kp";
-        selectedId.value = kps.value[0].id;
-      }
+    const valid = props.currentKpId && kps.value.some((item) => item.id === props.currentKpId);
+    if (valid) {
+      selectedType.value = "kp";
+      selectedId.value = props.currentKpId ?? null;
+      selectedCategory.value = kps.value.find((item) => item.id === props.currentKpId)?.chapter || null;
+    }
+    const normalizedChanged = normalizeStudentSelectionState();
+    if (normalizedChanged) {
+      layoutRestored.value = false;
     }
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载知识图谱失败");
@@ -644,9 +838,10 @@ async function loadNodeDetail(id: number | null) {
 }
 
 function selectKp(id: number) {
+  showAllKps.value = false;
   selectedType.value = "kp";
   selectedId.value = id;
-  selectedCategory.value = null;
+  selectedCategory.value = selectedKp.value?.chapter || kps.value.find((item) => item.id === id)?.chapter || null;
   drawerOpen.value = true;
   emit("select-kp", id);
   centerOnPoint(kpPoint(id));
@@ -666,6 +861,7 @@ function openContentFromSelected() {
 }
 
 function selectCategory(chapter: string) {
+  showAllKps.value = false;
   selectedType.value = "category";
   selectedCategory.value = chapter;
   selectedId.value = null;
@@ -673,6 +869,13 @@ function selectCategory(chapter: string) {
   activeChapter.value = chapter;
   drawerOpen.value = true;
   centerOnPoint(categoryPoint(chapter));
+}
+
+function toggleAllKps() {
+  showAllKps.value = !showAllKps.value;
+  if (showAllKps.value) {
+    activeChapter.value = "全部";
+  }
 }
 
 function zoomIn() {
@@ -700,10 +903,6 @@ function resetViewport() {
     }
     if (props.currentKpId && kps.value.some((item) => item.id === props.currentKpId)) {
       centerOnPoint(kpPoint(props.currentKpId));
-      return;
-    }
-    if (kps.value.length) {
-      centerOnPoint(kpPoint(kps.value[0].id));
       return;
     }
     centerOnPoint({ x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y });
@@ -742,39 +941,9 @@ function onStageMouseDown(event: MouseEvent) {
 
 function onNodeMouseDown(event: MouseEvent, type: "kp" | "category", id: number | string) {
   event.stopPropagation();
-  const origin = type === "kp" ? kpPoint(Number(id)) : categoryPoint(String(id));
-  draggingNode.value = { type, id, origin };
-  dragStartX.value = event.clientX;
-  dragStartY.value = event.clientY;
 }
 
 function onWindowMouseMove(event: MouseEvent) {
-  if (draggingNode.value) {
-    const dx = (event.clientX - dragStartX.value) / canvasScale.value;
-    const dy = (event.clientY - dragStartY.value) / canvasScale.value;
-    if (draggingNode.value.type === "kp") {
-      const current = kps.value.find((item) => item.id === Number(draggingNode.value.id));
-      const radius = current ? nodeRadius(current) + 18 : 80;
-      kpPositions.value = {
-        ...kpPositions.value,
-        [Number(draggingNode.value.id)]: {
-          x: Math.max(radius, Math.min(CANVAS_WIDTH - radius, draggingNode.value.origin.x + dx)),
-          y: Math.max(radius, Math.min(CANVAS_HEIGHT - radius, draggingNode.value.origin.y + dy)),
-        },
-      };
-    } else {
-      const halfWidth = 112;
-      const halfHeight = 44;
-      categoryPositions.value = {
-        ...categoryPositions.value,
-        [String(draggingNode.value.id)]: {
-          x: Math.max(halfWidth, Math.min(CANVAS_WIDTH - halfWidth, draggingNode.value.origin.x + dx)),
-          y: Math.max(halfHeight, Math.min(CANVAS_HEIGHT - halfHeight, draggingNode.value.origin.y + dy)),
-        },
-      };
-    }
-    return;
-  }
   if (!draggingCanvas.value) return;
   panX.value = dragOriginX.value + (event.clientX - dragStartX.value);
   panY.value = dragOriginY.value + (event.clientY - dragStartY.value);
@@ -782,14 +951,11 @@ function onWindowMouseMove(event: MouseEvent) {
 
 function stopDragging() {
   draggingCanvas.value = false;
-  if (draggingNode.value) {
-    persistStudentLayout();
-  }
   draggingNode.value = null;
 }
 
 watch(
-  [kps, categoryNodes, filteredKps, selectedType, selectedId, selectedCategory],
+  [kps, categoryNodes, visibleKps, selectedType, selectedId, selectedCategory],
   () => {
     emitState();
   },
@@ -802,24 +968,17 @@ watch(selectedId, (value) => {
   }
 });
 
-watch(filteredKps, () => {
+watch(visibleKps, () => {
   syncCategoryPositions();
   syncKpPositions();
+  normalizeStudentSelectionState();
 });
 
 watch(
-  [canvasScale, panX, panY, activeChapter, search, drawerOpen, sidebarOpen, selectedType, selectedId, selectedCategory],
+  [canvasScale, panX, panY, activeChapter, search, drawerOpen, sidebarOpen, selectedType, selectedId, selectedCategory, showAllKps],
   () => {
     persistStudentViewState();
   },
-);
-
-watch(
-  [kpPositions, categoryPositions],
-  () => {
-    persistStudentLayout();
-  },
-  { deep: true },
 );
 
 window.addEventListener("mousemove", onWindowMouseMove);
@@ -845,9 +1004,8 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="workspace-guide">
-      <span>先在左边找分类</span>
-      <span>再点中间节点看内容</span>
-      <span>最后在右边看资源和前后关系</span>
+      <span>图谱说明</span>
+      <HoverTip content="先在左边找分类，再点中间节点，最后在右边看资源和前后关系。" />
     </div>
 
     <div class="workspace-content">
@@ -888,21 +1046,21 @@ onBeforeUnmount(() => {
           <div class="workspace-stage__top-main">
             <div class="workspace-stage__stats">
               <span class="workspace-stage__pill">分类 {{ categoryNodes.length }}</span>
-              <span class="workspace-stage__pill">知识点 {{ filteredKps.length }}</span>
+              <span class="workspace-stage__pill">知识点 {{ visibleKps.length }}</span>
               <span class="workspace-stage__pill">{{ selectedType === "kp" ? "当前知识点" : "当前分类" }}</span>
             </div>
             <div class="workspace-stage__legend">
               <span class="workspace-stage__legend-item">
                 <i class="workspace-stage__legend-line workspace-stage__legend-line--solid"></i>
-                实线：知识点关系
+                实线箭头：前置 / 顺序关系
               </span>
               <span class="workspace-stage__legend-item">
                 <i class="workspace-stage__legend-line workspace-stage__legend-line--dashed"></i>
-                虚线：分类归属
+                虚线 / 三角箭头：支撑、包含、分类归属
               </span>
               <span class="workspace-stage__legend-item">
                 <i class="workspace-stage__legend-line workspace-stage__legend-line--path"></i>
-                蓝色虚线：推荐路径
+                蓝色虚线：推荐路径，同色环表示同类能力或素养
               </span>
             </div>
           </div>
@@ -910,6 +1068,9 @@ onBeforeUnmount(() => {
             <span>
               {{ selectedType === "kp" ? (selectedKp?.title || "未选择知识点") : (selectedCategoryNode?.title || "未选择分类") }}
             </span>
+            <button class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
+              {{ showAllKps ? "仅看分类" : "显示全部节点" }}
+            </button>
             <button v-if="selectedType === 'kp' && selectedKp" class="workspace-stage__learn-btn" @click.stop="openContentFromSelected">
               去学习
             </button>
@@ -929,6 +1090,12 @@ onBeforeUnmount(() => {
             <marker id="student-edge-arrow-path" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a8ef0" />
             </marker>
+            <marker id="student-edge-arrow-triangle" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 1 1 L 9 5 L 1 9 z" fill="#46a57b" />
+            </marker>
+            <marker id="student-edge-arrow-open" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#db9d37" stroke-width="1.5" />
+            </marker>
             <marker id="student-chapter-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(75,94,130,0.55)" />
             </marker>
@@ -941,7 +1108,7 @@ onBeforeUnmount(() => {
             :y1="categoryPoint(edge.source_chapter).y"
             :x2="categoryPoint(edge.target_chapter).x"
             :y2="categoryPoint(edge.target_chapter).y"
-            :stroke="edge.relation_type === 'related' ? 'rgba(74,120,213,0.42)' : 'rgba(75,94,130,0.52)'"
+            :stroke="chapterEdgeStroke(edge)"
             stroke-width="2.2"
             stroke-dasharray="6 6"
             :marker-end="edge.relation_type === 'related' ? undefined : 'url(#student-chapter-arrow)'"
@@ -954,15 +1121,15 @@ onBeforeUnmount(() => {
             :y1="edgeLine(edge).y1"
             :x2="edgeLine(edge).x2"
             :y2="edgeLine(edge).y2"
-            :stroke="isPathEdge(edge) ? '#5a8ef0' : (edge.relation_type === 'related' ? 'rgba(74,120,213,0.6)' : 'rgba(100,116,139,0.4)')"
-            :stroke-width="isPathEdge(edge) ? 2.8 : 1.5"
+            :stroke="edgeStroke(edge)"
+            :stroke-width="edgeWidth(edge)"
             stroke-linecap="round"
-            :stroke-dasharray="isPathEdge(edge) ? '8 5' : undefined"
-            :marker-end="isPathEdge(edge) ? 'url(#student-edge-arrow-path)' : (edge.relation_type === 'related' ? undefined : 'url(#student-edge-arrow)')"
+            :stroke-dasharray="edgeDasharray(edge)"
+            :marker-end="edgeMarker(edge)"
           />
 
           <line
-            v-for="kp in filteredKps"
+            v-for="kp in visibleKps"
             :key="`cat-${kp.id}`"
             :x1="categoryKpLine(kp).x1"
             :y1="categoryKpLine(kp).y1"
@@ -988,14 +1155,17 @@ onBeforeUnmount(() => {
           </g>
 
           <g
-            v-for="kp in filteredKps"
+            v-for="kp in visibleKps"
             :key="kp.id"
             class="workspace-node"
             :transform="`translate(${kpPoint(kp.id).x}, ${kpPoint(kp.id).y})`"
             @click="selectKp(kp.id)"
             @mousedown="onNodeMouseDown($event, 'kp', kp.id)"
           >
-            <circle :r="nodeRadius(kp) + 12" :fill="isRecommended(kp.id) || isPathNode(kp.id) ? 'rgba(70, 122, 235, 0.2)' : 'rgba(96,139,232,0.14)'" />
+            <circle :r="nodeRadius(kp) + 18" :fill="'transparent'" :stroke="ringColor('literacy', effectiveOverlayMap.get(kp.id)?.literacy_status, effectiveOverlayMap.get(kp.id)?.literacy_labels || splitLabels(kp.literacy_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.literacy_enabled ? 5 : 0" />
+            <circle :r="nodeRadius(kp) + 10" :fill="'transparent'" :stroke="ringColor('ability', effectiveOverlayMap.get(kp.id)?.ability_status, effectiveOverlayMap.get(kp.id)?.ability_labels || splitLabels(kp.ability_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.ability_enabled ? 5 : 0" />
+            <circle :r="nodeRadius(kp) + 2" :fill="'transparent'" :stroke="ringColor('knowledge', effectiveOverlayMap.get(kp.id)?.knowledge_status)" :stroke-width="4" />
+            <circle :r="nodeRadius(kp) + 22" :fill="isRecommended(kp.id) || isPathNode(kp.id) ? 'rgba(70, 122, 235, 0.14)' : 'rgba(96,139,232,0.08)'" />
             <circle
               :r="nodeRadius(kp)"
               :fill="kp.id === selectedKp?.id ? '#eef5ff' : ((isRecommended(kp.id) || isPathNode(kp.id)) ? '#f4f8ff' : '#ffffff')"
@@ -1038,12 +1208,40 @@ onBeforeUnmount(() => {
           <template v-if="selectedType === 'kp' && selectedKp">
             <div class="workspace-drawer__meta">{{ selectedKp.code }} · {{ selectedKp.chapter || "未分章" }}</div>
             <div class="workspace-drawer__status">{{ nodeLabel(activeOverlay?.status) }}</div>
-            <div class="workspace-drawer__guide">这里会显示这个知识点的学习状态、学习资源和前面要先学的内容。</div>
+            <div class="workspace-drawer__guide-inline">
+              <span>知识点说明</span>
+              <HoverTip content="这里会显示这个知识点的学习状态、学习资源和前面要先学的内容。" />
+            </div>
             <div v-if="activeOverlay?.recommended" class="workspace-drawer__recommend">
               这是系统当前推荐你优先学习的知识点。
             </div>
             <div v-if="activeOverlay?.blocked_reason" class="workspace-drawer__blocked">
               前置阻塞：{{ activeOverlay.blocked_reason }}
+            </div>
+
+            <div class="workspace-drawer__section">
+              <h4 class="workspace-drawer__section-title">知识点详细内容</h4>
+              <div class="workspace-drawer__detail-grid">
+                <div class="workspace-drawer__detail-item">
+                  <span>章节</span>
+                  <strong>{{ selectedKp.chapter || "未分章" }}</strong>
+                </div>
+                <div class="workspace-drawer__detail-item">
+                  <span>知识目标</span>
+                  <strong>{{ activeOverlay?.knowledge_label || selectedKp.knowledge_tag || selectedKp.title }}</strong>
+                </div>
+                <div class="workspace-drawer__detail-item">
+                  <span>能力目标</span>
+                  <strong>{{ (activeOverlay?.ability_labels ?? []).join("、") || selectedKp.ability_tag || "暂未设置" }}</strong>
+                </div>
+                <div class="workspace-drawer__detail-item">
+                  <span>素养目标</span>
+                  <strong>{{ (activeOverlay?.literacy_labels ?? []).join("、") || selectedKp.literacy_tag || "暂未设置" }}</strong>
+                </div>
+              </div>
+              <div class="workspace-drawer__desc">
+                {{ selectedKp.description || "暂未填写描述" }}
+              </div>
             </div>
 
             <div class="workspace-drawer__metrics">
@@ -1058,12 +1256,47 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="workspace-drawer__section">
+              <h4 class="workspace-drawer__section-title">知识 / 能力 / 素养</h4>
+              <div class="workspace-drawer__tags">
+                <span class="workspace-drawer__tag workspace-drawer__tag--knowledge">
+                  知识：{{ activeOverlay?.knowledge_label || selectedKp.knowledge_tag || selectedKp.title }}
+                </span>
+                <span v-for="item in activeOverlay?.ability_labels ?? []" :key="`a-${item}`" class="workspace-drawer__tag workspace-drawer__tag--ability">
+                  能力：{{ item }}
+                </span>
+                <span v-for="item in activeOverlay?.literacy_labels ?? []" :key="`l-${item}`" class="workspace-drawer__tag workspace-drawer__tag--literacy">
+                  素养：{{ item }}
+                </span>
+              </div>
+              <div class="workspace-drawer__status-grid">
+                <div class="workspace-drawer__mini-metric">
+                  <span>知识达成</span>
+                  <strong>{{ nodeLabel(activeOverlay?.knowledge_status || 'not_started') }}</strong>
+                </div>
+                <div class="workspace-drawer__mini-metric">
+                  <span>能力达成</span>
+                  <strong>{{ nodeLabel(activeOverlay?.ability_status || 'not_started') }}</strong>
+                </div>
+                <div class="workspace-drawer__mini-metric">
+                  <span>素养达成</span>
+                  <strong>{{ nodeLabel(activeOverlay?.literacy_status || 'not_started') }}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="workspace-drawer__section">
               <h4 class="workspace-drawer__section-title">学习资源</h4>
               <button class="workspace-drawer__learn-btn" @click="openContentFromSelected">资源内容 / 去学习</button>
               <div v-if="(nodeDetail?.resource_list?.length ?? 0) === 0" class="workspace-drawer__empty">暂无资源</div>
-              <a v-for="item in nodeDetail?.resource_list ?? []" :key="item.id" class="workspace-drawer__link" :href="item.url" target="_blank" rel="noreferrer">
+              <button
+                v-for="item in nodeDetail?.resource_list ?? []"
+                :key="item.id"
+                type="button"
+                class="workspace-drawer__link workspace-drawer__link-btn"
+                @click="openResource(item)"
+              >
                 {{ item.title }}
-              </a>
+              </button>
             </div>
 
             <div class="workspace-drawer__section">
@@ -1082,7 +1315,10 @@ onBeforeUnmount(() => {
 
           <template v-else-if="selectedCategoryNode && selectedCategoryOverview">
             <div class="workspace-drawer__meta">共 {{ selectedCategoryOverview.total }} 个知识点</div>
-            <div class="workspace-drawer__guide">这里是这个分类的总览。先看整体情况，再点下面的知识点进入具体内容。</div>
+            <div class="workspace-drawer__guide-inline">
+              <span>分类说明</span>
+              <HoverTip content="这里是这个分类的总览。先看整体情况，再点下面的知识点进入具体内容。" />
+            </div>
 
             <div class="workspace-drawer__metrics">
               <div class="workspace-drawer__metric"><span>已掌握</span><strong>{{ selectedCategoryOverview.mastered }}</strong></div>
@@ -1149,6 +1385,16 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
+.workspace-drawer__guide-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: #617792;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .workspace-heading {
   display: grid;
   gap: 4px;
@@ -1192,11 +1438,11 @@ onBeforeUnmount(() => {
 }
 
 .workspace-btn {
-  min-height: 40px;
-  padding: 0 15px;
+  min-height: 42px;
+  padding: 0 16px;
   border: 1px solid #d8e2ef;
   border-radius: 999px;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
   color: #35507f;
   font-size: 13px;
   font-weight: 700;
@@ -1206,6 +1452,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   line-height: 1;
+  box-shadow: var(--app-shadow-soft);
 }
 
 .workspace-btn:hover {
@@ -1213,8 +1460,10 @@ onBeforeUnmount(() => {
 }
 
 .workspace-btn--primary {
-  background: #edf4ff;
-  border-color: #cfe0fb;
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  border-color: var(--app-green);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
 }
 
 .workspace-content {
@@ -1423,7 +1672,7 @@ onBeforeUnmount(() => {
 .workspace-stage__pill,
 .workspace-stage__focus {
   min-height: 38px;
-  padding: 8px 14px;
+  padding: 0 14px;
   border-radius: 999px;
   background: #ffffff;
   border: 1px solid #dce6f2;
@@ -1449,19 +1698,34 @@ onBeforeUnmount(() => {
 }
 
 .workspace-stage__learn-btn {
-  min-height: 28px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 1px solid #cde0fb;
-  background: #edf4ff;
-  color: #2d5b9d;
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(47, 111, 237, 0.16);
 }
 
 .workspace-stage__learn-btn:hover {
-  background: #dfeeff;
+  transform: translateY(-1px);
+}
+
+.workspace-stage__learn-btn--ghost {
+  background: #ffffff;
+  border-color: #dce6f2;
+  color: #35507f;
+  box-shadow: none;
+}
+
+.workspace-stage__learn-btn--ghost:hover {
+  background: #f8fbff;
 }
 
 .workspace-canvas {
@@ -1545,8 +1809,8 @@ onBeforeUnmount(() => {
 }
 
 .workspace-zoom button {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 999px;
   background: #eff5ff;
@@ -1596,8 +1860,8 @@ onBeforeUnmount(() => {
 }
 
 .workspace-drawer__close {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 999px;
   background: #eff5ff;
@@ -1670,8 +1934,70 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
+.workspace-drawer__status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.workspace-drawer__mini-metric {
+  padding: 10px;
+  border-radius: 14px;
+  background: #fafcff;
+  border: 1px solid #e1eaf1;
+}
+
+.workspace-drawer__mini-metric span {
+  display: block;
+  font-size: 11px;
+  color: #728299;
+  margin-bottom: 4px;
+}
+
+.workspace-drawer__mini-metric strong {
+  font-size: 13px;
+  color: #233447;
+}
+
 .workspace-drawer__section {
   margin-bottom: 20px;
+}
+
+.workspace-drawer__detail-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.workspace-drawer__detail-item {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #fafcff;
+  border: 1px solid #e1eaf1;
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-drawer__detail-item span {
+  font-size: 11px;
+  color: #728299;
+}
+
+.workspace-drawer__detail-item strong {
+  font-size: 13px;
+  color: #233447;
+  line-height: 1.6;
+}
+
+.workspace-drawer__desc {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #fafcff;
+  border: 1px solid #e1eaf1;
+  color: #51657f;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .workspace-drawer__section-title {
@@ -1683,19 +2009,20 @@ onBeforeUnmount(() => {
 
 .workspace-drawer__learn-btn {
   margin-bottom: 8px;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid #cde0fb;
-  background: #edf4ff;
-  color: #2d5b9d;
-  font-size: 12px;
-  font-weight: 700;
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--app-green);
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
   cursor: pointer;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
 }
 
 .workspace-drawer__learn-btn:hover {
-  background: #dfeeff;
+  transform: translateY(-1px);
 }
 
 .workspace-drawer__empty {
@@ -1712,6 +2039,15 @@ onBeforeUnmount(() => {
   margin-bottom: 4px;
 }
 
+.workspace-drawer__link-btn {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
 .workspace-drawer__link:hover {
   text-decoration: underline;
 }
@@ -1723,7 +2059,8 @@ onBeforeUnmount(() => {
 }
 
 .workspace-drawer__tag {
-  padding: 8px 12px;
+  min-height: 34px;
+  padding: 0 12px;
   border: 1px solid #dce6f2;
   border-radius: 999px;
   background: #ffffff;
@@ -1731,10 +2068,30 @@ onBeforeUnmount(() => {
   font-size: 11px;
   cursor: pointer;
   transition: background 0.2s ease;
+  display: inline-flex;
+  align-items: center;
 }
 
 .workspace-drawer__tag:hover {
   background: #eff5ff;
+}
+
+.workspace-drawer__tag--knowledge {
+  border-color: #b8dfc9;
+  background: #f1fbf5;
+  color: #1e7e4f;
+}
+
+.workspace-drawer__tag--ability {
+  border-color: #eed28c;
+  background: #fff8e5;
+  color: #a26d00;
+}
+
+.workspace-drawer__tag--literacy {
+  border-color: #bcd0fb;
+  background: #f2f6ff;
+  color: #2f6fed;
 }
 
 @media (max-width: 1200px) {

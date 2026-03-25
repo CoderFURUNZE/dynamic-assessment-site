@@ -1,0 +1,69 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "课程" [ref=e9] [cursor=pointer]
+      - button "图谱" [ref=e10] [cursor=pointer]
+      - button "导入" [ref=e11] [cursor=pointer]
+      - button "学生" [ref=e12] [cursor=pointer]
+      - button "评分" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]: 教师工作台
+    - generic [ref=e15]:
+      - button "学习者端预览" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 学习者端预览
+      - button "退出" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 退出
+  - main [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26]: Teacher Stages
+          - generic [ref=e27]: 阶段管理
+        - generic [ref=e28]:
+          - generic [ref=e30] [cursor=pointer]:
+            - generic:
+              - combobox [ref=e32]
+              - generic [ref=e33]: 操作系统
+            - img [ref=e36]
+          - button "去导入数据" [ref=e38] [cursor=pointer]:
+            - generic [ref=e39]: 去导入数据
+      - generic [ref=e40]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Stages
+          - heading "阶段管理" [level=2] [ref=e44]
+        - generic [ref=e46]:
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - generic [ref=e50]: 课程阶段管理
+              - generic [ref=e51]: 教师可按学期安排定义多个阶段，后续导入和动态评价都依赖这里的阶段结构。
+            - generic [ref=e52]:
+              - button "刷新" [ref=e53] [cursor=pointer]:
+                - generic [ref=e54]: 刷新
+              - button "新增阶段" [ref=e55] [cursor=pointer]:
+                - generic [ref=e56]: 新增阶段
+          - generic [ref=e57]:
+            - generic [ref=e59]:
+              - table [ref=e61]:
+                - rowgroup [ref=e69]:
+                  - row "顺序 阶段名称 时间范围 层级 说明 操作" [ref=e70]:
+                    - columnheader "顺序" [ref=e71]:
+                      - generic [ref=e72]: 顺序
+                    - columnheader "阶段名称" [ref=e73]:
+                      - generic [ref=e74]: 阶段名称
+                    - columnheader "时间范围" [ref=e75]:
+                      - generic [ref=e76]: 时间范围
+                    - columnheader "层级" [ref=e77]:
+                      - generic [ref=e78]: 层级
+                    - columnheader "说明" [ref=e79]:
+                      - generic [ref=e80]: 说明
+                    - columnheader "操作" [ref=e81]:
+                      - generic [ref=e82]: 操作
+              - generic [ref=e86]:
+                - table:
+                  - rowgroup
+                - generic [ref=e88]: 暂无数据
+            - generic [ref=e89]:
+              - img [ref=e91]
+              - paragraph [ref=e108]: 当前课程还没有阶段，先创建阶段再导入数据。

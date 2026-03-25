@@ -1,0 +1,404 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "课程" [ref=e9] [cursor=pointer]
+      - button "图谱" [ref=e10] [cursor=pointer]
+      - button "导入" [ref=e11] [cursor=pointer]
+      - button "学生" [ref=e12] [cursor=pointer]
+      - button "评分" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]: 教师工作台
+    - generic [ref=e15]:
+      - button "学习者端预览" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 学习者端预览
+      - button "退出" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 退出
+  - main [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26]: Teacher Indicators
+          - generic [ref=e27]: 评价内容选择
+        - generic [ref=e28]:
+          - generic [ref=e30] [cursor=pointer]:
+            - generic:
+              - combobox [ref=e32]
+              - generic [ref=e33]: 操作系统
+            - img [ref=e36]
+          - button "看分析" [ref=e38] [cursor=pointer]:
+            - generic [ref=e39]: 看分析
+      - generic [ref=e40]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Indicators
+          - heading "评价内容" [level=2] [ref=e44]
+        - generic [ref=e46]:
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - generic [ref=e50]: Course Indicator Setup
+              - generic [ref=e51]: 这门课看哪些内容
+              - generic [ref=e52]: 先勾选这门课真正会用到的评价项。后面系统会按这些评价项生成学生学习情况。
+            - generic [ref=e53]:
+              - generic [ref=e54]:
+                - generic [ref=e55]: 当前课程
+                - strong [ref=e56]: 操作系统
+              - generic [ref=e57]:
+                - generic [ref=e58]: 已选内容
+                - strong [ref=e59]: "0"
+              - generic [ref=e60]:
+                - generic [ref=e61]: 一级维度
+                - strong [ref=e62]: "5"
+              - button "保存设置" [ref=e63] [cursor=pointer]:
+                - generic [ref=e64]: 保存设置
+          - generic [ref=e66]:
+            - generic [ref=e67]:
+              - generic [ref=e68]: 勾选说明
+              - button "查看提示" [ref=e69] [cursor=pointer]: "?"
+            - generic [ref=e70]:
+              - generic [ref=e72]:
+                - generic [ref=e73]:
+                  - generic [ref=e74]: potential_trait
+                  - generic [ref=e75]: 潜能与特质倾向
+                  - generic [ref=e76]: 用于描述学习者在创造性、迁移能力和价值判断方面的潜在特征。
+                - generic [ref=e77]: 总和 0.00
+              - generic [ref=e79]:
+                - generic [ref=e80]:
+                  - generic [ref=e81]:
+                    - generic [ref=e82] [cursor=pointer]:
+                      - generic [ref=e83]:
+                        - checkbox "创造性思维倾向"
+                      - generic [ref=e85]: 创造性思维倾向
+                    - generic [ref=e86]:
+                      - generic [ref=e87]: creative_thinking
+                      - generic [ref=e88]: 老师填写
+                    - generic [ref=e89]: 主要依据教师对开放性任务、项目作品和综合创新表现的阶段评价。
+                  - generic [ref=e90]:
+                    - generic [ref=e91]: 比重
+                    - generic [ref=e92]:
+                      - button "减少数值" [ref=e93] [cursor=pointer]:
+                        - img [ref=e95]
+                      - button "增加数值" [ref=e97]:
+                        - img [ref=e99]
+                      - spinbutton [ref=e103]: "1"
+                - generic [ref=e104]:
+                  - generic [ref=e105]:
+                    - generic [ref=e106] [cursor=pointer]:
+                      - generic [ref=e107]:
+                        - checkbox "跨情境迁移能力"
+                      - generic [ref=e109]: 跨情境迁移能力
+                    - generic [ref=e110]:
+                      - generic [ref=e111]: cross_context_transfer
+                      - generic [ref=e112]: 阶段导入
+                    - generic [ref=e113]: 主要依据阶段导入的综合任务、迁移题和跨知识点应用结果。
+                  - generic [ref=e114]:
+                    - generic [ref=e115]: 比重
+                    - generic [ref=e116]:
+                      - button "减少数值" [ref=e117] [cursor=pointer]:
+                        - img [ref=e119]
+                      - button "增加数值" [ref=e121]:
+                        - img [ref=e123]
+                      - spinbutton [ref=e127]: "1"
+                - generic [ref=e128]:
+                  - generic [ref=e129]:
+                    - generic [ref=e130] [cursor=pointer]:
+                      - generic [ref=e131]:
+                        - checkbox "存在思考与价值判断"
+                      - generic [ref=e133]: 存在思考与价值判断
+                    - generic [ref=e134]:
+                      - generic [ref=e135]: value_judgement
+                      - generic [ref=e136]: 老师填写
+                    - generic [ref=e137]: 主要依据教师补充评价、反思作业和高层次判断记录。
+                  - generic [ref=e138]:
+                    - generic [ref=e139]: 比重
+                    - generic [ref=e140]:
+                      - button "减少数值" [ref=e141] [cursor=pointer]:
+                        - img [ref=e143]
+                      - button "增加数值" [ref=e145]:
+                        - img [ref=e147]
+                      - spinbutton [ref=e151]: "1"
+            - generic [ref=e152]:
+              - generic [ref=e154]:
+                - generic [ref=e155]:
+                  - generic [ref=e156]: social_emotional
+                  - generic [ref=e157]: 情感与社会性发展
+                  - generic [ref=e158]: 用于描述协作、动机、自我调节和社会性表现。
+                - generic [ref=e159]: 总和 0.00
+              - generic [ref=e161]:
+                - generic [ref=e162]:
+                  - generic [ref=e163]:
+                    - generic [ref=e164] [cursor=pointer]:
+                      - generic [ref=e165]:
+                        - checkbox "协作能力与社交网络"
+                      - generic [ref=e167]: 协作能力与社交网络
+                    - generic [ref=e168]:
+                      - generic [ref=e169]: collaboration
+                      - generic [ref=e170]: 老师填写
+                    - generic [ref=e171]: 关注协作参与和同伴互动。
+                  - generic [ref=e172]:
+                    - generic [ref=e173]: 比重
+                    - generic [ref=e174]:
+                      - button "减少数值" [ref=e175] [cursor=pointer]:
+                        - img [ref=e177]
+                      - button "增加数值" [ref=e179]:
+                        - img [ref=e181]
+                      - spinbutton [ref=e185]: "1"
+                - generic [ref=e186]:
+                  - generic [ref=e187]:
+                    - generic [ref=e188] [cursor=pointer]:
+                      - generic [ref=e189]:
+                        - checkbox "学习动机与态度"
+                      - generic [ref=e191]: 学习动机与态度
+                    - generic [ref=e192]:
+                      - generic [ref=e193]: motivation
+                      - generic [ref=e194]: 阶段导入
+                    - generic [ref=e195]: 主要依据阶段导入的出勤、投入、任务完成连续性，并允许教师补充修正。
+                  - generic [ref=e196]:
+                    - generic [ref=e197]: 比重
+                    - generic [ref=e198]:
+                      - button "减少数值" [ref=e199] [cursor=pointer]:
+                        - img [ref=e201]
+                      - button "增加数值" [ref=e203]:
+                        - img [ref=e205]
+                      - spinbutton [ref=e209]: "1"
+                - generic [ref=e210]:
+                  - generic [ref=e211]:
+                    - generic [ref=e212] [cursor=pointer]:
+                      - generic [ref=e213]:
+                        - checkbox "自我调节与元认知"
+                      - generic [ref=e215]: 自我调节与元认知
+                    - generic [ref=e216]:
+                      - generic [ref=e217]: self_regulation
+                      - generic [ref=e218]: 老师填写
+                    - generic [ref=e219]: 关注反馈吸收和学习调整。
+                  - generic [ref=e220]:
+                    - generic [ref=e221]: 比重
+                    - generic [ref=e222]:
+                      - button "减少数值" [ref=e223] [cursor=pointer]:
+                        - img [ref=e225]
+                      - button "增加数值" [ref=e227]:
+                        - img [ref=e229]
+                      - spinbutton [ref=e233]: "1"
+            - generic [ref=e234]:
+              - generic [ref=e236]:
+                - generic [ref=e237]:
+                  - generic [ref=e238]: knowledge_cognition
+                  - generic [ref=e239]: 知识与认知状态
+                  - generic [ref=e240]: 用于描述知识掌握、认知层级和跨学科关联能力。
+                - generic [ref=e241]: 总和 0.00
+              - generic [ref=e243]:
+                - generic [ref=e244]:
+                  - generic [ref=e245]:
+                    - generic [ref=e246] [cursor=pointer]:
+                      - generic [ref=e247]:
+                        - checkbox "跨学科知识关联能力"
+                      - generic [ref=e249]: 跨学科知识关联能力
+                    - generic [ref=e250]:
+                      - generic [ref=e251]: cross_discipline_link
+                      - generic [ref=e252]: 系统自动
+                    - generic [ref=e253]: 关注知识之间的关联和整合。
+                  - generic [ref=e254]:
+                    - generic [ref=e255]: 比重
+                    - generic [ref=e256]:
+                      - button "减少数值" [ref=e257] [cursor=pointer]:
+                        - img [ref=e259]
+                      - button "增加数值" [ref=e261]:
+                        - img [ref=e263]
+                      - spinbutton [ref=e267]: "1"
+                - generic [ref=e268]:
+                  - generic [ref=e269]:
+                    - generic [ref=e270] [cursor=pointer]:
+                      - generic [ref=e271]:
+                        - checkbox "学科能力层级与认知路径"
+                      - generic [ref=e273]: 学科能力层级与认知路径
+                    - generic [ref=e274]:
+                      - generic [ref=e275]: discipline_level
+                      - generic [ref=e276]: 系统自动
+                    - generic [ref=e277]: 关注认知层级和能力进阶。
+                  - generic [ref=e278]:
+                    - generic [ref=e279]: 比重
+                    - generic [ref=e280]:
+                      - button "减少数值" [ref=e281] [cursor=pointer]:
+                        - img [ref=e283]
+                      - button "增加数值" [ref=e285]:
+                        - img [ref=e287]
+                      - spinbutton [ref=e291]: "1"
+                - generic [ref=e292]:
+                  - generic [ref=e293]:
+                    - generic [ref=e294] [cursor=pointer]:
+                      - generic [ref=e295]:
+                        - checkbox "语言类知识掌握度"
+                      - generic [ref=e297]: 语言类知识掌握度
+                    - generic [ref=e298]:
+                      - generic [ref=e299]: language_mastery
+                      - generic [ref=e300]: 阶段导入
+                    - generic [ref=e301]: 主要依据阶段导入的表达类作业、小测和文本型任务结果。
+                  - generic [ref=e302]:
+                    - generic [ref=e303]: 比重
+                    - generic [ref=e304]:
+                      - button "减少数值" [ref=e305] [cursor=pointer]:
+                        - img [ref=e307]
+                      - button "增加数值" [ref=e309]:
+                        - img [ref=e311]
+                      - spinbutton [ref=e315]: "1"
+                - generic [ref=e316]:
+                  - generic [ref=e317]:
+                    - generic [ref=e318] [cursor=pointer]:
+                      - generic [ref=e319]:
+                        - checkbox "逻辑类知识掌握度"
+                      - generic [ref=e321]: 逻辑类知识掌握度
+                    - generic [ref=e322]:
+                      - generic [ref=e323]: logic_mastery
+                      - generic [ref=e324]: 阶段导入
+                    - generic [ref=e325]: 主要依据阶段导入的小测、练习和推理型任务结果。
+                  - generic [ref=e326]:
+                    - generic [ref=e327]: 比重
+                    - generic [ref=e328]:
+                      - button "减少数值" [ref=e329] [cursor=pointer]:
+                        - img [ref=e331]
+                      - button "增加数值" [ref=e333]:
+                        - img [ref=e335]
+                      - spinbutton [ref=e339]: "1"
+            - generic [ref=e340]:
+              - generic [ref=e342]:
+                - generic [ref=e343]:
+                  - generic [ref=e344]: learning_behavior
+                  - generic [ref=e345]: 学习行为与过程
+                  - generic [ref=e346]: 用于描述资源偏好、策略偏好和交互方式。
+                - generic [ref=e347]: 总和 0.00
+              - generic [ref=e349]:
+                - generic [ref=e350]:
+                  - generic [ref=e351]:
+                    - generic [ref=e352] [cursor=pointer]:
+                      - generic [ref=e353]:
+                        - checkbox "资源偏好"
+                      - generic [ref=e355]: 资源偏好
+                    - generic [ref=e356]:
+                      - generic [ref=e357]: resource_preference
+                      - generic [ref=e358]: 系统自动
+                    - generic [ref=e359]: 关注视频、图像、文本等资源偏好。
+                  - generic [ref=e360]:
+                    - generic [ref=e361]: 比重
+                    - generic [ref=e362]:
+                      - button "减少数值" [ref=e363] [cursor=pointer]:
+                        - img [ref=e365]
+                      - button "增加数值" [ref=e367]:
+                        - img [ref=e369]
+                      - spinbutton [ref=e373]: "1"
+                - generic [ref=e374]:
+                  - generic [ref=e375]:
+                    - generic [ref=e376] [cursor=pointer]:
+                      - generic [ref=e377]:
+                        - checkbox "辅助学习策略"
+                      - generic [ref=e379]: 辅助学习策略
+                    - generic [ref=e380]:
+                      - generic [ref=e381]: strategy_preference
+                      - generic [ref=e382]: 阶段导入
+                    - generic [ref=e383]: 主要依据阶段导入的补救学习、学习路径调整和老师补充观察。
+                  - generic [ref=e384]:
+                    - generic [ref=e385]: 比重
+                    - generic [ref=e386]:
+                      - button "减少数值" [ref=e387] [cursor=pointer]:
+                        - img [ref=e389]
+                      - button "增加数值" [ref=e391]:
+                        - img [ref=e393]
+                      - spinbutton [ref=e397]: "1"
+                - generic [ref=e398]:
+                  - generic [ref=e399]:
+                    - generic [ref=e400] [cursor=pointer]:
+                      - generic [ref=e401]:
+                        - checkbox "文本/讨论型交互偏好"
+                      - generic [ref=e403]: 文本/讨论型交互偏好
+                    - generic [ref=e404]:
+                      - generic [ref=e405]: text_discussion_interaction
+                      - generic [ref=e406]: 系统自动
+                    - generic [ref=e407]: 关注讨论、文本表达类交互。
+                  - generic [ref=e408]:
+                    - generic [ref=e409]: 比重
+                    - generic [ref=e410]:
+                      - button "减少数值" [ref=e411] [cursor=pointer]:
+                        - img [ref=e413]
+                      - button "增加数值" [ref=e415]:
+                        - img [ref=e417]
+                      - spinbutton [ref=e421]: "1"
+                - generic [ref=e422]:
+                  - generic [ref=e423]:
+                    - generic [ref=e424] [cursor=pointer]:
+                      - generic [ref=e425]:
+                        - checkbox "实践/体验型交互偏好"
+                      - generic [ref=e427]: 实践/体验型交互偏好
+                    - generic [ref=e428]:
+                      - generic [ref=e429]: practice_experience_interaction
+                      - generic [ref=e430]: 系统自动
+                    - generic [ref=e431]: 关注实验、练习、体验类交互。
+                  - generic [ref=e432]:
+                    - generic [ref=e433]: 比重
+                    - generic [ref=e434]:
+                      - button "减少数值" [ref=e435] [cursor=pointer]:
+                        - img [ref=e437]
+                      - button "增加数值" [ref=e439]:
+                        - img [ref=e441]
+                      - spinbutton [ref=e445]: "1"
+            - generic [ref=e446]:
+              - generic [ref=e448]:
+                - generic [ref=e449]:
+                  - generic [ref=e450]: individual_background
+                  - generic [ref=e451]: 个体基础特征
+                  - generic [ref=e452]: 用于描述基础背景、兴趣类型和智能优势方向。
+                - generic [ref=e453]: 总和 0.00
+              - generic [ref=e455]:
+                - generic [ref=e456]:
+                  - generic [ref=e457]:
+                    - generic [ref=e458] [cursor=pointer]:
+                      - generic [ref=e459]:
+                        - checkbox "人口学背景与学业经历"
+                      - generic [ref=e461]: 人口学背景与学业经历
+                    - generic [ref=e462]:
+                      - generic [ref=e463]: academic_background
+                      - generic [ref=e464]: 学生补充
+                    - generic [ref=e465]: 关注基本背景信息和学业经历。
+                  - generic [ref=e466]:
+                    - generic [ref=e467]: 比重
+                    - generic [ref=e468]:
+                      - button "减少数值" [ref=e469] [cursor=pointer]:
+                        - img [ref=e471]
+                      - button "增加数值" [ref=e473]:
+                        - img [ref=e475]
+                      - spinbutton [ref=e479]: "1"
+                - generic [ref=e480]:
+                  - generic [ref=e481]:
+                    - generic [ref=e482] [cursor=pointer]:
+                      - generic [ref=e483]:
+                        - checkbox "探究兴趣类型"
+                      - generic [ref=e485]: 探究兴趣类型
+                    - generic [ref=e486]:
+                      - generic [ref=e487]: interest_type
+                      - generic [ref=e488]: 学生补充
+                    - generic [ref=e489]: 关注学习兴趣和问题探究倾向。
+                  - generic [ref=e490]:
+                    - generic [ref=e491]: 比重
+                    - generic [ref=e492]:
+                      - button "减少数值" [ref=e493] [cursor=pointer]:
+                        - img [ref=e495]
+                      - button "增加数值" [ref=e497]:
+                        - img [ref=e499]
+                      - spinbutton [ref=e503]: "1"
+                - generic [ref=e504]:
+                  - generic [ref=e505]:
+                    - generic [ref=e506] [cursor=pointer]:
+                      - generic [ref=e507]:
+                        - checkbox "智能优势倾向标签"
+                      - generic [ref=e509]: 智能优势倾向标签
+                    - generic [ref=e510]:
+                      - generic [ref=e511]: intelligence_advantage
+                      - generic [ref=e512]: 学生补充
+                    - generic [ref=e513]: 关注多元智能优势标签。
+                  - generic [ref=e514]:
+                    - generic [ref=e515]: 比重
+                    - generic [ref=e516]:
+                      - button "减少数值" [ref=e517] [cursor=pointer]:
+                        - img [ref=e519]
+                      - button "增加数值" [ref=e521]:
+                        - img [ref=e523]
+                      - spinbutton [ref=e527]: "1"
+          - img [ref=e530]

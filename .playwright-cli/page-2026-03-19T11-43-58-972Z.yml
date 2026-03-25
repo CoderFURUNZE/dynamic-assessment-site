@@ -1,0 +1,103 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "课程" [ref=e9] [cursor=pointer]
+      - button "图谱" [ref=e10] [cursor=pointer]
+      - button "导入" [ref=e11] [cursor=pointer]
+      - button "学生" [ref=e12] [cursor=pointer]
+      - button "评分" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]: 教师工作台
+    - generic [ref=e15]:
+      - button "学习者端预览" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 学习者端预览
+      - button "退出" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 退出
+  - main [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]:
+            - button "返回图谱" [ref=e25] [cursor=pointer]
+            - generic [ref=e26]:
+              - generic [ref=e27]: Teacher Content Workspace
+              - heading "老师资源配置页" [level=1] [ref=e28]
+              - paragraph [ref=e29]: 围绕单个知识点统一配置学习内容、练习和推荐资源。
+          - generic [ref=e30]:
+            - generic [ref=e31]: "1.1"
+            - strong [ref=e32]: 操作系统的概念
+            - generic [ref=e33]: 第一章
+        - generic [ref=e34]:
+          - generic [ref=e35]:
+            - generic [ref=e36]: 学习内容
+            - strong [ref=e37]: "2"
+            - generic [ref=e38]: 视频、文档、链接
+          - generic [ref=e39]:
+            - generic [ref=e40]: 练习
+            - strong [ref=e41]: "3"
+            - generic [ref=e42]: 题库与练习顺序
+          - generic [ref=e43]:
+            - generic [ref=e44]: 推荐资源
+            - strong [ref=e45]: "1"
+            - generic [ref=e46]: 书籍与拓展阅读
+        - generic [ref=e47]:
+          - complementary [ref=e48]:
+            - button "学习内容 视频、文档、链接" [ref=e49] [cursor=pointer]:
+              - strong [ref=e50]: 学习内容
+              - generic [ref=e51]: 视频、文档、链接
+            - button "练习 题库与练习顺序" [ref=e52] [cursor=pointer]:
+              - strong [ref=e53]: 练习
+              - generic [ref=e54]: 题库与练习顺序
+            - button "推荐资源 书籍与拓展阅读" [ref=e55] [cursor=pointer]:
+              - strong [ref=e56]: 推荐资源
+              - generic [ref=e57]: 书籍与拓展阅读
+          - main [ref=e58]:
+            - generic [ref=e59]:
+              - generic [ref=e60]:
+                - generic [ref=e61]:
+                  - heading "学习内容" [level=3] [ref=e62]
+                  - paragraph [ref=e63]: 先配学生要看的视频、文档、课件或外部链接。
+                - button "新增学习资源" [ref=e64] [cursor=pointer]:
+                  - generic [ref=e65]: 新增学习资源
+              - generic [ref=e66]:
+                - generic [ref=e67]:
+                  - generic [ref=e68]:
+                    - generic [ref=e69]:
+                      - generic [ref=e70]: PDF 文档
+                      - generic [ref=e71]: 可预览
+                    - strong [ref=e72]: 【哈喜老师】计算机网络真题考点分布导图
+                    - generic [ref=e73]: 原始格式：PDF · 预览方式：PDF 在线预览
+                    - generic [ref=e74]: 【哈喜老师】计算机网络真题考点分布导图.pdf
+                  - generic [ref=e75]:
+                    - button "预览" [ref=e76] [cursor=pointer]:
+                      - generic [ref=e77]: 预览
+                    - button "下载原文件" [ref=e78] [cursor=pointer]:
+                      - generic [ref=e79]: 下载原文件
+                    - button "详细配置" [ref=e80] [cursor=pointer]:
+                      - generic [ref=e81]: 详细配置
+                    - button "编辑" [ref=e82] [cursor=pointer]:
+                      - generic [ref=e83]: 编辑
+                    - button "删除" [ref=e84] [cursor=pointer]:
+                      - generic [ref=e85]: 删除
+                - generic [ref=e86]:
+                  - generic [ref=e87]:
+                    - generic [ref=e88]:
+                      - generic [ref=e89]: PDF 文档
+                      - generic [ref=e90]: 可预览
+                    - strong [ref=e91]: 【框图版】一页纸-知识点手册
+                    - generic [ref=e92]: 原始格式：PDF · 预览方式：PDF 在线预览
+                    - generic [ref=e93]: 【框图版】一页纸-知识点手册.pdf
+                  - generic [ref=e94]:
+                    - button "预览" [ref=e95] [cursor=pointer]:
+                      - generic [ref=e96]: 预览
+                    - button "下载原文件" [ref=e97] [cursor=pointer]:
+                      - generic [ref=e98]: 下载原文件
+                    - button "详细配置" [ref=e99] [cursor=pointer]:
+                      - generic [ref=e100]: 详细配置
+                    - button "编辑" [ref=e101] [cursor=pointer]:
+                      - generic [ref=e102]: 编辑
+                    - button "删除" [ref=e103] [cursor=pointer]:
+                      - generic [ref=e104]: 删除
+      - img [ref=e107]

@@ -1,0 +1,84 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "首页" [ref=e9] [cursor=pointer]
+      - button "图谱" [ref=e10] [cursor=pointer]
+      - button "报告" [ref=e11] [cursor=pointer]
+      - button "问卷" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]: 学习中心
+    - button "退出" [ref=e15] [cursor=pointer]:
+      - generic [ref=e16]: 退出
+  - main [ref=e17]:
+    - generic [ref=e18]:
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - generic [ref=e23]: 学生端
+          - generic [ref=e24]: 学习首页
+        - generic [ref=e27] [cursor=pointer]:
+          - generic:
+            - combobox [ref=e29]
+            - generic [ref=e30]: 选择课程
+          - img [ref=e33]
+      - generic [ref=e35]:
+        - strong [ref=e36]: 最简单的使用方法
+        - generic [ref=e37]: 先选课程和知识点，再点“打开图谱”或“去学习”，最后看报告。
+        - generic [ref=e38]:
+          - button "打开图谱" [disabled] [ref=e39]:
+            - generic [ref=e40]: 打开图谱
+          - button "看报告" [ref=e41] [cursor=pointer]:
+            - generic [ref=e42]: 看报告
+          - button "填问卷" [ref=e43] [cursor=pointer]:
+            - generic [ref=e44]: 填问卷
+      - generic [ref=e45]:
+        - generic [ref=e46]:
+          - generic [ref=e48]: 我的课程
+          - generic [ref=e50]: 学习导航
+          - generic [ref=e51]:
+            - generic [ref=e52]: 暂无课程
+            - button "查看提示" [ref=e53] [cursor=pointer]: "?"
+          - generic [ref=e54]:
+            - generic [ref=e55]: "1"
+            - generic [ref=e56]:
+              - generic [ref=e57]: 先选知识点
+              - generic [ref=e59]:
+                - generic:
+                  - combobox [disabled] [ref=e61]
+                  - generic [ref=e62]: 选择知识点
+                - generic:
+                  - generic:
+                    - img
+          - generic [ref=e63]:
+            - generic [ref=e64]: "2"
+            - generic [ref=e65]:
+              - generic [ref=e66]: 接下来做什么
+              - generic [ref=e67]:
+                - button "打开图谱" [disabled] [ref=e68]:
+                  - generic [ref=e69]: 打开图谱
+                - button "给我建议" [disabled] [ref=e70]:
+                  - generic [ref=e71]: 给我建议
+                - button "看报告" [disabled] [ref=e72]:
+                  - generic [ref=e73]: 看报告
+        - generic [ref=e75]:
+          - generic [ref=e78]:
+            - generic [ref=e79]: 学习总览
+            - button "刷新" [disabled]:
+              - generic:
+                - img
+              - generic: 刷新
+          - generic [ref=e88]:
+            - button "打开图谱 在图谱里点知识点，然后进入学习页面。" [ref=e89] [cursor=pointer]:
+              - strong [ref=e90]: 打开图谱
+              - generic [ref=e91]: 在图谱里点知识点，然后进入学习页面。
+            - button "填写问卷 补充你的学习情况。" [ref=e92] [cursor=pointer]:
+              - strong [ref=e93]: 填写问卷
+              - generic [ref=e94]: 补充你的学习情况。
+            - button "查看报告 看看你学得怎么样，下一步该做什么。" [ref=e95] [cursor=pointer]:
+              - strong [ref=e96]: 查看报告
+              - generic [ref=e97]: 看看你学得怎么样，下一步该做什么。
+            - button "系统建议 先点“给我建议”再看这里" [disabled] [ref=e98]:
+              - strong [ref=e99]: 系统建议
+              - generic [ref=e100]: 先点“给我建议”再看这里
+  - generic [ref=e101]: 加载中...

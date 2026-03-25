@@ -352,3 +352,16 @@
 2026-03-16 21:36:01,903 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=1
 2026-03-16 21:36:23,334 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=6 resource_id=7 type=pdf
 2026-03-16 21:37:16,246 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=1 resource_id=8 type=pdf
+2026-03-17 10:00:53,167 INFO app.audit actor=admin role=admin action=user_delete detail=user_id=3 username=teacher1
+2026-03-17 10:01:23,447 INFO app.audit actor=admin role=admin action=user_update detail=user_id=4
+2026-03-17 10:01:24,199 INFO app.audit actor=admin role=admin action=user_update detail=user_id=4
+2026-03-17 10:03:02,726 INFO app.audit actor=teacher1 role=teacher action=course_create detail=code=OS title=操作系统 teacher_id=5
+2026-03-17 10:45:25,002 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=1 resource_id=1 type=pdf
+2026-03-17 10:56:12,931 INFO app.audit actor=teacher1 role=teacher action=kp_resource_create detail=kp_id=1 resource_id=2
+2026-03-17 15:33:18,773 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=1 resource_id=54 type=pdf
+2026-03-17 15:35:10,902 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=4
+2026-03-17 15:35:11,974 INFO app.audit actor=teacher1 role=teacher action=kp_resource_delete detail=resource_id=3
+2026-03-17 15:36:51,229 INFO app.audit actor=teacher1 role=teacher action=kp_resource_upload detail=kp_id=1 resource_id=55 type=pdf
+2026-03-17 15:42:59,751 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=1 code=OS teacher_id=5
+2026-03-19 17:45:19,030 INFO app.audit actor=teacher1 role=teacher action=course_update detail=id=1 code=OS teacher_id=5
+2026-03-19 19:41:23,580 INFO app.audit actor=admin role=admin action=user_create detail=username=pw_student role=student

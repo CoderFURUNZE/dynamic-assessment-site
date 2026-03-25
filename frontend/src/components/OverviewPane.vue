@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HoverTip from "./HoverTip.vue";
 
 const props = defineProps<{ subject: string; grade: string }>();
 
@@ -149,14 +150,10 @@ watch(
         </el-card>
       </div>
 
-      <el-alert
-        v-if="profile?.reason_summary"
-        style="margin-top: 12px"
-        type="info"
-        :title="profile.reason_summary"
-        :closable="false"
-        show-icon
-      />
+      <div v-if="profile?.reason_summary" class="overview-tip-inline" style="margin-top: 12px">
+        <span>当前判断依据</span>
+        <HoverTip :content="profile.reason_summary" />
+      </div>
 
       <div v-if="currentStage" style="margin-top: 12px; display: grid; gap: 12px; grid-template-columns: minmax(320px, 1.1fr) minmax(260px, 0.9fr);">
         <el-card shadow="never">
@@ -261,3 +258,14 @@ watch(
     </div>
   </el-card>
 </template>
+
+<style scoped>
+.overview-tip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #637995;
+  font-size: 13px;
+  font-weight: 700;
+}
+</style>

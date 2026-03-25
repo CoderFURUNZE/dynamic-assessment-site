@@ -1,0 +1,173 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 动态评价系统
+      - generic [ref=e7]: 选课程，看图谱，学内容，看结果
+    - navigation [ref=e8]:
+      - button "课程" [ref=e9] [cursor=pointer]
+      - button "图谱" [ref=e10] [cursor=pointer]
+      - button "导入" [ref=e11] [cursor=pointer]
+      - button "学生" [ref=e12] [cursor=pointer]
+      - button "评分" [ref=e13] [cursor=pointer]
+    - generic [ref=e14]: 教师工作台
+    - generic [ref=e15]:
+      - button "学习者端预览" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 学习者端预览
+      - button "退出" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 退出
+  - main [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26]: Teacher Imports
+          - generic [ref=e27]: 阶段数据导入
+        - generic [ref=e28]:
+          - generic [ref=e30] [cursor=pointer]:
+            - generic:
+              - combobox [ref=e32]
+              - generic [ref=e33]: 操作系统
+            - img [ref=e36]
+          - button "返回阶段管理" [ref=e38] [cursor=pointer]:
+            - generic [ref=e39]: 返回阶段管理
+      - generic [ref=e40]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Imports
+          - heading "全班阶段数据导入" [level=2] [ref=e44]
+        - generic [ref=e46]:
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - generic [ref=e50]: 阶段数据导入
+              - generic [ref=e51]: 按阶段上传视频、作业、考勤或任务数据，作为后续画像与动态评价的输入来源。
+            - generic [ref=e52]:
+              - button "刷新" [ref=e223] [cursor=pointer]:
+                - generic [ref=e224]: 刷新
+              - button "下载模板" [ref=e53] [cursor=pointer]:
+                - generic [ref=e54]: 下载模板
+          - generic [ref=e55]:
+            - generic [ref=e56]:
+              - generic [ref=e57]:
+                - generic [ref=e58]: 当前课程
+                - strong [ref=e59]: 操作系统
+                - generic [ref=e60]: 先选阶段，再导入整班阶段数据
+              - generic [ref=e61]:
+                - generic [ref=e62]: 当前阶段
+                - strong [ref=e63]: 未选择阶段
+                - generic [ref=e64]: 一份表可包含全班学生记录
+              - generic [ref=e65]:
+                - generic [ref=e66]: 最近重算人数
+                - strong [ref=e67]: "0"
+                - generic [ref=e68]: 最近一次导入后生成画像的学生数
+            - generic [ref=e69]:
+              - generic [ref=e70]:
+                - generic [ref=e71]:
+                  - generic [ref=e72]: 系统自动汇总
+                  - generic [ref=e73]: 系统会先按当前课程和阶段，自动汇总平台内已有的学习数据：视频学习、练习、推荐推进、问卷更新和当前掌握度。
+                  - generic [ref=e74]:
+                    - generic [ref=e75]: 系统汇总映射配置
+                    - generic [ref=e76]:
+                      - generic [ref=e77]:
+                        - generic [ref=e78]:
+                          - switch "视频学习数据 映射为“视频学习记录”，写入观看分钟数和平均完成率。" [checked]
+                        - generic [ref=e81]:
+                          - strong [ref=e82]: 视频学习数据
+                          - generic [ref=e83]: 映射为“视频学习记录”，写入观看分钟数和平均完成率。
+                      - generic [ref=e84]:
+                        - generic [ref=e85]:
+                          - switch "练习表现数据 映射为“作业完成记录”，写入练习次数、正确率和完成度。" [checked]
+                        - generic [ref=e88]:
+                          - strong [ref=e89]: 练习表现数据
+                          - generic [ref=e90]: 映射为“作业完成记录”，写入练习次数、正确率和完成度。
+                      - generic [ref=e91]:
+                        - generic [ref=e92]:
+                          - switch "掌握与推进数据 映射为“任务完成记录”，写入掌握度、推荐推进和问卷补充情况。" [checked]
+                        - generic [ref=e95]:
+                          - strong [ref=e96]: 掌握与推进数据
+                          - generic [ref=e97]: 映射为“任务完成记录”，写入掌握度、推荐推进和问卷补充情况。
+                    - generic [ref=e98]: 当前会生成 3 类阶段记录。后续外部补充导入会叠加到同一阶段，再次重算学生画像。
+                  - generic [ref=e99]:
+                    - button "刷新系统数据" [ref=e100] [cursor=pointer]:
+                      - generic [ref=e101]: 刷新系统数据
+                    - button "导出系统汇总 CSV" [ref=e102] [cursor=pointer]:
+                      - generic [ref=e103]: 导出系统汇总 CSV
+                    - button "一键应用并生成画像" [ref=e104] [cursor=pointer]:
+                      - generic [ref=e105]: 一键应用并生成画像
+                - generic [ref=e106]: 全班阶段数据导入
+                - generic [ref=e107]:
+                  - generic [ref=e108]: 导入说明
+                  - button "查看提示" [ref=e109] [cursor=pointer]: "?"
+                - generic [ref=e110]:
+                  - generic [ref=e111]:
+                    - generic [ref=e112]: 课程
+                    - textbox "课程" [disabled] [ref=e116]: 操作系统
+                  - generic [ref=e117]:
+                    - generic [ref=e119]: 阶段
+                    - generic [ref=e122] [cursor=pointer]:
+                      - generic:
+                        - combobox "阶段" [ref=e124]
+                        - generic [ref=e125]: 选择阶段
+                      - img [ref=e128]
+                  - generic [ref=e130]:
+                    - generic [ref=e132]: 数据类型
+                    - generic [ref=e135] [cursor=pointer]:
+                      - generic:
+                        - combobox "数据类型" [ref=e137]
+                        - generic [ref=e138]: 视频学习记录
+                      - img [ref=e141]
+                  - group "上传文件" [ref=e143]:
+                    - generic [ref=e144]: 上传文件
+                    - generic [ref=e146]:
+                      - button "选择全班 CSV / XLSX" [ref=e147] [cursor=pointer]:
+                        - button "选择全班 CSV / XLSX" [ref=e148]:
+                          - generic [ref=e149]: 选择全班 CSV / XLSX
+                      - list
+                  - button "一键导入并生成画像" [disabled] [ref=e152]:
+                    - generic [ref=e153]: 一键导入并生成画像
+                - generic [ref=e154]: "当前支持按模板一次导入整班阶段数据。建议先下载模板，再按示例字段填充，至少保证 `username` 或 `student_no` 能匹配到学生。"
+                - generic [ref=e155]: 系统自动汇总生成的阶段记录，与老师后续上传的线下考勤、课堂参与、口头展示等补充数据，会共同保留在当前阶段并再次触发重算。
+              - generic [ref=e156]:
+                - generic [ref=e157]:
+                  - generic [ref=e158]: 当前数据类型说明
+                  - generic [ref=e159]: 用于反映学生在本阶段的视频学习投入、学习连续性和资源使用情况。
+                  - generic [ref=e160]:
+                    - generic [ref=e161]: 模板字段
+                    - generic [ref=e162]:
+                      - generic [ref=e163]: username
+                      - generic [ref=e164]: student_no
+                      - generic [ref=e165]: kp_code
+                      - generic [ref=e166]: watched_minutes
+                      - generic [ref=e167]: completion_ratio
+                      - generic [ref=e168]: happened_at
+                      - generic [ref=e169]: note
+                  - generic [ref=e170]:
+                    - generic [ref=e171]: 影响的一级维度
+                    - generic [ref=e172]:
+                      - generic [ref=e173]: 学习行为与过程
+                      - generic [ref=e174]: 情感与社会性发展
+                  - generic [ref=e175]:
+                    - generic [ref=e176]: 主要影响的二级指标
+                    - generic [ref=e177]:
+                      - generic [ref=e178]: 学习动机与态度
+                      - generic [ref=e179]: 辅助学习策略
+                      - generic [ref=e180]: 资源偏好：图像/空间型
+                  - generic [ref=e181]: 导入完成后，系统会重算本阶段的投入类与资源偏好类结果，老师可去“单学生详情”查看阶段画像。
+                - generic [ref=e182]: 导入历史
+                - generic [ref=e184]:
+                  - table [ref=e186]:
+                    - rowgroup [ref=e194]:
+                      - row "时间 阶段 类型 文件 结果 错误预览" [ref=e195]:
+                        - columnheader "时间" [ref=e196]:
+                          - generic [ref=e197]: 时间
+                        - columnheader "阶段" [ref=e198]:
+                          - generic [ref=e199]: 阶段
+                        - columnheader "类型" [ref=e200]:
+                          - generic [ref=e201]: 类型
+                        - columnheader "文件" [ref=e202]:
+                          - generic [ref=e203]: 文件
+                        - columnheader "结果" [ref=e204]:
+                          - generic [ref=e205]: 结果
+                        - columnheader "错误预览" [ref=e206]:
+                          - generic [ref=e207]: 错误预览
+                  - generic [ref=e211]:
+                    - table:
+                      - rowgroup
+                    - generic [ref=e213]: 暂无数据
