@@ -101,331 +101,184 @@ onMounted(loadCatalog);
 </script>
 
 <template>
-  <div class="teacher-course-page" v-loading="loading">
-    <section class="teacher-course-header">
-      <div class="teacher-course-header__main">
-        <h1 class="teacher-course-header__title">课程</h1>
+  <div class="edu-page one-screen" v-loading="loading">
+    <header class="edu-header compact">
+      <div class="edu-header__left">
+        <h1 class="edu-header__title">我的课程</h1>
+        <p class="edu-header__desc">管理和激活您负责的教学课程，建立知识图谱与教学资源。</p>
       </div>
-      <div class="teacher-course-header__actions">
-        <el-button type="primary" @click="loadCatalog" :loading="loading">刷新课程列表</el-button>
+      <div class="edu-header__actions">
+        <el-button type="primary" plain @click="loadCatalog" :loading="loading">
+          <el-icon><Refresh /></el-icon> 刷新列表
+        </el-button>
+      </div>
+    </header>
+
+    <section class="edu-stats-grid compact">
+      <div class="edu-stat-card">
+        <span class="edu-stat-card__label">已激活课程</span>
+        <strong class="edu-stat-card__value">{{ myCourses.length }}</strong>
+      </div>
+      <div class="edu-stat-card">
+        <span class="edu-stat-card__label">待激活课程</span>
+        <strong class="edu-stat-card__value">{{ availableRows.filter(item => item.can_activate).length }}</strong>
+      </div>
+      <div class="edu-stat-card">
+        <span class="edu-stat-card__label">暂不可用</span>
+        <strong class="edu-stat-card__value">{{ disabledRows.length }}</strong>
       </div>
     </section>
 
-    <section class="teacher-course-summary">
-      <div class="teacher-course-summary__item">
-        <span>我已激活</span>
-        <strong>{{ myCourses.length }}</strong>
-      </div>
-      <div class="teacher-course-summary__item">
-        <span>可激活</span>
-        <strong>{{ availableRows.filter((item) => item.can_activate).length }}</strong>
-      </div>
-      <div class="teacher-course-summary__item">
-        <span>暂不可用</span>
-        <strong>{{ disabledRows.length }}</strong>
-      </div>
-    </section>
+    <div class="edu-grid-2 main-layout-content">
+      <section class="edu-panel flex-panel">
+        <header class="edu-panel__header">
+          <h2 class="edu-panel__title">已激活课程</h2>
+          <el-tag round type="success">{{ myCourses.length }} 门</el-tag>
+        </header>
 
-    <section class="teacher-course-board">
-      <div class="teacher-course-panel">
-        <div class="teacher-course-column__head">
-          <div>
-            <div class="teacher-course-column__title">我已激活的课程</div>
-          </div>
-          <span class="teacher-course-column__badge">{{ myCourses.length }} 门</span>
-        </div>
-
-        <div v-if="myCourses.length" class="teacher-course-list">
-          <article v-for="row in myCourses" :key="`mine-${row.id}`" class="teacher-course-card teacher-course-card--active">
-            <div class="teacher-course-card__head">
-              <div class="teacher-course-card__main">
-                <div class="teacher-course-card__code">{{ row.code }}</div>
-                <div>
-                  <div class="teacher-course-card__title">{{ row.title }}</div>
-                  <div class="teacher-course-card__desc">{{ row.description || "管理员暂未填写课程简介。" }}</div>
-                </div>
+        <div v-if="myCourses.length" class="course-list-scroll">
+          <div class="course-list">
+            <article v-for="row in myCourses" :key="`mine-${row.id}`" class="edu-course-card">
+              <span class="edu-course-card__tag">{{ row.code }}</span>
+              <h3 class="course-title">{{ row.title }}</h3>
+              <p class="course-desc">{{ row.description || "管理员暂未填写课程简介。" }}</p>
+              
+              <div class="course-meta">
+                <div class="meta-item"><span>状态</span> {{ lifecycleLabel(row.lifecycle_status) }}</div>
+                <div class="meta-item"><span>班级</span> {{ row.target_class || "未绑定" }}</div>
               </div>
-              <el-tag size="small" type="success">已激活</el-tag>
-            </div>
-            <div class="teacher-course-card__info">
-              <span>教学状态：{{ lifecycleLabel(row.lifecycle_status) }}</span>
-              <span>目标班级：{{ row.target_class || "未绑定班级" }}</span>
-              <span>开课时间：{{ row.start_at ? row.start_at.replace("T", " ").slice(0, 16) : "未设置" }}</span>
-              <span>报名状态：{{ enrollStatusLabel(row.enroll_status) }}</span>
-              <span>人数上限：{{ row.max_students ?? 200 }}</span>
-            </div>
-            <div class="teacher-course-card__actions">
-              <el-button type="primary" @click="openCourseWorkspace(row)">进入图谱工作区</el-button>
-              <el-button @click="openCourseStages(row)">进入阶段管理</el-button>
-            </div>
-          </article>
-        </div>
-        <div v-else class="teacher-course-empty">
-          <div class="teacher-course-empty__title">暂无已激活课程</div>
-        </div>
-      </div>
 
-      <div class="teacher-course-panel">
-        <div class="teacher-course-column__head">
-          <div>
-            <div class="teacher-course-column__title">可激活课程</div>
-          </div>
-          <span class="teacher-course-column__badge">{{ availableRows.length }} 门</span>
-        </div>
-
-        <div v-if="availableRows.length" class="teacher-course-list">
-          <article v-for="row in availableRows" :key="`available-${row.id}`" class="teacher-course-card">
-            <div class="teacher-course-card__head">
-              <div class="teacher-course-card__main">
-                <div class="teacher-course-card__code">{{ row.code }}</div>
-                <div>
-                  <div class="teacher-course-card__title">{{ row.title }}</div>
-                  <div class="teacher-course-card__desc">{{ row.description || "管理员暂未填写课程简介。" }}</div>
-                </div>
+              <div class="course-actions">
+                <el-button type="primary" @click="openCourseWorkspace(row)">工作区</el-button>
+                <el-button plain @click="openCourseStages(row)">阶段</el-button>
               </div>
-              <el-tag size="small" :type="row.can_activate ? 'info' : 'warning'">{{ courseStatusText(row) }}</el-tag>
-            </div>
-            <div class="teacher-course-card__info">
-              <span>课程状态：{{ row.active ? "已启用" : "未启用" }}</span>
-              <span>教学状态：{{ lifecycleLabel(row.lifecycle_status) }}</span>
-              <span>目标班级：{{ row.target_class || "未绑定班级" }}</span>
-              <span>报名状态：{{ enrollStatusLabel(row.enroll_status) }}</span>
-            </div>
-            <div class="teacher-course-card__info" v-if="row.start_at || row.end_at || row.activation_status">
-              <span>开课时间：{{ row.start_at ? row.start_at.replace("T", " ").slice(0, 16) : "未设置" }}</span>
-              <span>结束时间：{{ row.end_at ? row.end_at.replace("T", " ").slice(0, 16) : "未设置" }}</span>
-              <span>{{ row.activation_status || "管理员配置后可激活" }}</span>
-            </div>
-            <div class="teacher-course-card__actions">
-              <el-button
-                type="primary"
-                :disabled="!row.can_activate"
-                :loading="activatingId === row.id"
-                @click="activateCourse(row)"
-              >
-                激活这门课
-              </el-button>
-            </div>
-          </article>
+            </article>
+          </div>
         </div>
-        <div v-else class="teacher-course-empty">
-          <div class="teacher-course-empty__title">暂无可激活课程</div>
+        <el-empty v-else description="暂无已激活课程" />
+      </section>
+
+      <section class="edu-panel flex-panel">
+        <header class="edu-panel__header">
+          <h2 class="edu-panel__title">可激活课程</h2>
+          <el-tag round type="info">{{ availableRows.length }} 门</el-tag>
+        </header>
+
+        <div v-if="availableRows.length" class="course-list-scroll">
+          <div class="course-list">
+            <article v-for="row in availableRows" :key="`available-${row.id}`" class="edu-course-card available">
+              <span class="edu-course-card__tag">{{ row.code }}</span>
+              <h3 class="course-title">{{ row.title }}</h3>
+              <p class="course-desc">{{ row.description || "管理员暂未填写课程简介。" }}</p>
+              
+              <div class="course-meta">
+                <div class="meta-item"><span>权限</span> {{ row.can_activate ? '可激活' : '待配置' }}</div>
+              </div>
+
+              <div class="course-actions">
+                <el-button 
+                  type="primary" 
+                  plain
+                  :disabled="!row.can_activate" 
+                  :loading="activatingId === row.id" 
+                  @click="activateCourse(row)"
+                >
+                  激活课程
+                </el-button>
+              </div>
+            </article>
+          </div>
         </div>
-      </div>
-    </section>
+        <el-empty v-else description="暂无可激活课程" />
+      </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.teacher-course-page {
-  display: grid;
-  gap: 16px;
-}
-
-.teacher-course-header {
+.one-screen {
+  height: 100%;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.edu-header.compact {
+  margin-bottom: 16px;
+  padding: 12px 0;
+}
+
+.edu-stats-grid.compact {
+  margin-bottom: 16px;
   gap: 16px;
-  align-items: flex-start;
-  padding: 18px 20px;
-  border-radius: 22px;
-  background: #ffffff;
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-soft);
 }
 
-.teacher-course-header__main {
-  display: grid;
-  gap: 8px;
+.edu-stat-card {
+  padding: 12px 20px;
 }
 
-.teacher-course-header__title {
-  margin: 0;
+.edu-stat-card__value {
   font-size: 24px;
-  line-height: 1.2;
-  font-weight: 800;
-  color: #1d3250;
 }
 
-.teacher-course-summary {
+.main-layout-content {
+  flex: 1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.teacher-course-summary__item {
-  padding: 16px 18px;
-  border-radius: 18px;
-  background: #ffffff;
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-soft);
-  display: grid;
-  gap: 6px;
-}
-
-.teacher-course-summary__item span {
-  color: #6c8099;
-  font-size: 13px;
-}
-
-.teacher-course-summary__item strong {
-  color: #213858;
-  font-size: 28px;
-}
-
-.teacher-course-board {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
-  align-items: start;
+  min-height: 0;
 }
 
-.teacher-course-panel {
-  padding: 18px;
-  border-radius: 22px;
-  border: 1px solid var(--app-border);
-  background: #ffffff;
-  box-shadow: var(--app-shadow-soft);
-  display: grid;
-  gap: 14px;
-  align-content: start;
-}
-
-.teacher-course-column__head {
+.flex-panel {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
+  flex-direction: column;
+  min-height: 0;
+  padding: 20px;
 }
 
-.teacher-course-column__title {
-  font-size: 20px;
-  font-weight: 800;
-  color: #1f3655;
+.course-list-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
 }
 
-.teacher-course-column__desc {
-  display: none;
-}
-
-.teacher-course-column__badge {
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: #eef4ff;
-  color: #2c5aa1;
-  font-size: 13px;
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-}
-
-.teacher-course-list {
+.course-list {
   display: grid;
   gap: 12px;
 }
 
-.teacher-course-card {
+.edu-course-card {
   padding: 16px;
-  border-radius: 18px;
-  border: 1px solid #dce5f0;
-  background: #ffffff;
-  box-shadow: none;
-  display: grid;
-  gap: 10px;
 }
 
-.teacher-course-card--active {
-  background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+.course-title {
+  font-size: 16px;
+  margin-bottom: 4px;
 }
 
-.teacher-course-card__head,
-.teacher-course-card__info,
-.teacher-course-card__actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.teacher-course-card__main {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-.teacher-course-card__code {
-  width: fit-content;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: #eef4ff;
-  color: #2b5aa1;
+.course-desc {
   font-size: 12px;
-  font-weight: 800;
-  display: inline-flex;
-  align-items: center;
+  margin-bottom: 12px;
+  -webkit-line-clamp: 1;
 }
 
-.teacher-course-card__title {
-  font-size: 20px;
-  font-weight: 800;
-  color: #203756;
+.course-meta {
+  margin-bottom: 12px;
+  padding: 8px;
+  gap: 12px;
 }
 
-.teacher-course-card__desc {
-  color: #566b85;
-  line-height: 1.65;
-  font-size: 14px;
+.meta-item {
+  font-size: 11px;
 }
 
-.teacher-course-card__info {
-  color: #6d8098;
+.course-actions .el-button {
+  padding: 8px 12px;
   font-size: 13px;
 }
 
-.teacher-course-empty {
-  min-height: 220px;
-  border-radius: 18px;
-  border: 1px dashed #d7e1ec;
-  background: #fbfcfe;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  padding: 24px;
-}
-
-.teacher-course-empty__title {
-  font-size: 18px;
-  font-weight: 800;
-  color: #233b5b;
-}
-
-.teacher-course-empty__text {
-  display: none;
-}
-
-@media (max-width: 1100px) {
-  .teacher-course-summary,
-  .teacher-course-board {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .teacher-course-header {
-    flex-direction: column;
-    padding: 16px;
-  }
-
-  .teacher-course-header__title {
-    font-size: 24px;
-  }
-
-  .teacher-course-panel {
-    padding: 16px;
-  }
+@media (max-height: 800px) {
+  .edu-header__desc { display: none; }
+  .edu-stats-grid { display: none; }
 }
 </style>

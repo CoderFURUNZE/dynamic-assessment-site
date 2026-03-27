@@ -6,6 +6,7 @@ import { api } from "../api";
 import WorkspaceTopbar from "../components/WorkspaceTopbar.vue";
 import TeacherStageImport from "../components/TeacherStageImport.vue";
 import PageSectionCard from "../components/PageSectionCard.vue";
+import HintButton from "../components/HintButton.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
 type Course = { id: number; code: string; title: string };
@@ -21,7 +22,8 @@ onMounted(loadCourses);
 <template>
   <div class="teacher-page">
     <WorkspaceTopbar v-model="subject" :courses="courses" badge="Teacher Imports" title="阶段数据导入" @change="syncQuery">
-      <el-button @click="router.push({ path: '/teacher/stages', query: { subject: subject || undefined } })">返回阶段管理</el-button>
+      <HintButton tip="回到阶段管理页，继续维护阶段结构。" @click="router.push({ path: '/teacher/stages', query: { subject: subject || undefined } })">返回阶段管理</HintButton>
+      <HintButton tip="查看系统行为信号汇总和画像报表。" @click="router.push({ path: '/teacher/behavior-report', query: { subject: subject || undefined } })">行为画像报表</HintButton>
     </WorkspaceTopbar>
     <PageSectionCard eyebrow="Imports" title="全班阶段数据导入">
       <TeacherStageImport

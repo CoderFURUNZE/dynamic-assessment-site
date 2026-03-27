@@ -16,7 +16,7 @@ from app.db.models import (
     RelationType,
 )
 from app.services.eval import upsert_mastery
-from app.services.learner_profile import get_or_create_persona_rule, persona_label, recalculate_profile_snapshot
+from app.services.learner_profile import build_kp_dimension_summary, get_or_create_persona_rule, persona_label, recalculate_profile_snapshot
 
 
 def _mastery_value(session: Session, *, user_id: int, kp_id: int, subject: str, grade: str) -> Mastery:
@@ -113,6 +113,14 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
         persist=True,
     )
     current_mastery = _mastery_value(session, user_id=user_id, kp_id=kp_id, subject=subject, grade=grade)
+    dimension_snapshot = build_kp_dimension_summary(
+        session,
+        user_id=user_id,
+        subject=subject,
+        grade=grade,
+        kps=[current_kp],
+        mastery_map={kp_id: current_mastery},
+    ).get("by_kp", {}).get(kp_id, {})
     rule = get_or_create_persona_rule(session, subject=subject, grade=grade)
     strategies = json.loads(rule.strategy_json or "{}")
 
@@ -140,6 +148,12 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
     elif float(current_mastery.value) < 0.7:
         target_kp_id = kp_id
         stage = "current_remedial"
+    elif bool(dimension_snapshot.get("ability_enabled")) and str(dimension_snapshot.get("ability_status")) != "achieved":
+        target_kp_id = kp_id
+        stage = "ability_strengthen"
+    elif bool(dimension_snapshot.get("literacy_enabled")) and str(dimension_snapshot.get("literacy_status")) != "achieved":
+        target_kp_id = kp_id
+        stage = "literacy_strengthen"
     elif unlocked_next:
         scored = []
         for candidate_id in unlocked_next:
@@ -163,6 +177,8 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
     reason_map = {
         "blocked_prerequisite": f"当前知识点依赖的前置点还不稳，先补“{target_kp.title}”更有效。",
         "current_remedial": f"当前知识点“{target_kp.title}”掌握度仍偏低，需要继续补强。",
+        "ability_strengthen": f"知识掌握度已达标，但能力目标尚未达成，建议围绕“{target_kp.title}”再做一轮能力强化。",
+        "literacy_strengthen": f"知识掌握度已达标，但素养目标尚未达成，建议围绕“{target_kp.title}”补齐学习行为证据。",
         "next_unlocked": f"前置条件已满足，可以推进到下一知识点“{target_kp.title}”。",
         "related_extension": f"主线已较稳定，建议通过相关知识点“{target_kp.title}”做扩展巩固。",
         "current": f"继续围绕“{target_kp.title}”进行标准学习。",
@@ -170,6 +186,8 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
     stage_label_map = {
         "blocked_prerequisite": "先补前置",
         "current_remedial": "当前补救",
+        "ability_strengthen": "强化能力",
+        "literacy_strengthen": "补齐素养",
         "next_unlocked": "继续推进",
         "related_extension": "拓展学习",
         "current": "当前推荐",
@@ -221,6 +239,20 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
         "reason_summary": reason_summary,
         "recommendation_stage": stage,
         "recommendation_stage_label": stage_label_map.get(stage, stage_label_map["current"]),
+        "triple": {
+            "knowledge": {
+                "label": str(dimension_snapshot.get("knowledge_label") or target_kp.title),
+                "status": str(dimension_snapshot.get("knowledge_status") or "not_started"),
+            },
+            "ability": {
+                "labels": list(dimension_snapshot.get("ability_labels") or []),
+                "status": str(dimension_snapshot.get("ability_status") or "not_started"),
+            },
+            "literacy": {
+                "labels": list(dimension_snapshot.get("literacy_labels") or []),
+                "status": str(dimension_snapshot.get("literacy_status") or "not_started"),
+            },
+        },
         "resource_list": resource_list,
         "practice_list": practice_list,
         "advice_text": advice_text,

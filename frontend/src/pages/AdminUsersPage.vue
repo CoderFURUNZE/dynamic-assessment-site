@@ -1,8 +1,15 @@
 <template>
-  <div class="admin-page">
-    <PageSectionCard eyebrow="Users" title="用户管理" description="这里单独维护平台用户账号、角色和基础信息。">
+  <div class="edu-page">
+    <header class="edu-header">
+      <div class="edu-header__left">
+        <h1 class="edu-header__title">用户管理</h1>
+        <p class="edu-header__desc">统一管理平台用户账号、角色及基础信息。</p>
+      </div>
+    </header>
+
+    <section class="edu-panel">
       <AdminUserManager mode="users" />
-    </PageSectionCard>
+    </section>
   </div>
 </template>
 

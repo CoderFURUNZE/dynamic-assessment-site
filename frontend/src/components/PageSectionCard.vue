@@ -58,7 +58,7 @@ defineProps<{
   font-size: 20px;
   line-height: 1.2;
   font-weight: 800;
-  color: #203657;
+  color: var(--app-ink);
 }
 
 .page-section-card__description {
@@ -66,7 +66,7 @@ defineProps<{
   max-width: 640px;
   font-size: 12px;
   line-height: 1.6;
-  color: #5e7697;
+  color: var(--app-ink-soft);
 }
 
 .page-section-card__actions {

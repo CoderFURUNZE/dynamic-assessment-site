@@ -4,6 +4,7 @@ import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { setRole, setToken, validateInput } from "../token";
 import { useRouter } from "vue-router";
+import { User, Lock, Monitor, ArrowRight } from "@element-plus/icons-vue";
 
 const router = useRouter();
 const loading = ref(false);
@@ -75,221 +76,385 @@ async function submitLogin() {
 </script>
 
 <template>
-  <div class="login-page">
-    <div class="login-bg" />
-    <div class="login-shell">
-      <div class="brand-panel">
-        <div class="brand-kicker">Learning Intelligence</div>
-        <div class="brand-logo">CS</div>
-        <div class="brand-title">动态评价系统</div>
-        <div class="brand-sub">知识图谱 · 自适应练习 · 行为信号</div>
-        <div class="brand-desc">
-          集成课程、图谱、练习与学习报告，支持管理员统一配置老师和学生账号。
-        </div>
-        <div class="brand-points">
-          <div class="brand-point">
-            <strong>账号统一管理</strong>
-            <span>老师和学生账号由管理员创建、启用、禁用和重置密码。</span>
+  <div class="login-container">
+    <div class="mesh-gradient"></div>
+    
+    <main class="login-content">
+      <div class="login-shell">
+        <!-- 左侧：品牌展示 -->
+        <section class="brand-section">
+          <div class="brand-badge">Dynamic Assessment 2.0</div>
+          <h1 class="brand-title">
+            释放数据价值<br />
+            <span class="text-gradient">重塑评价体系</span>
+          </h1>
+          <p class="brand-description">
+            基于知识图谱与动态行为分析，为每一位学习者构建精准的能力画像。
+          </p>
+          
+          <div class="feature-list">
+            <div class="feature-item">
+              <div class="feature-icon">🎯</div>
+              <div class="feature-text">
+                <h3>自适应练习</h3>
+                <p>根据掌握度动态调整难度</p>
+              </div>
+            </div>
+            <div class="feature-item">
+              <div class="feature-icon">📊</div>
+              <div class="feature-text">
+                <h3>多维能力画像</h3>
+                <p>实时反馈学习状态与瓶颈</p>
+              </div>
+            </div>
           </div>
-          <div class="brand-point">
-            <strong>不开放注册</strong>
-            <span>前台不提供自助注册，避免任意用户自行创建系统账号。</span>
+        </section>
+
+        <!-- 右侧：登录表单 -->
+        <section class="form-section">
+          <div class="login-card glass-card">
+            <header class="card-header">
+              <h2>欢迎回来</h2>
+              <p>请登录您的账号以继续</p>
+            </header>
+
+            <div class="role-selector">
+              <div 
+                class="role-tab" 
+                :class="{ active: loginForm.role === 'student' }"
+                @click="loginForm.role = 'student'"
+              >
+                学生登录
+              </div>
+              <div 
+                class="role-tab" 
+                :class="{ active: loginForm.role === 'admin' }"
+                @click="loginForm.role = 'admin'"
+              >
+                教师 / 管理员
+              </div>
+            </div>
+
+            <form class="login-form" @submit.prevent="submitLogin">
+              <div class="form-group">
+                <label>{{ loginAccountLabel }}</label>
+                <el-input 
+                  v-model="loginForm.username" 
+                  :placeholder="loginAccountPlaceholder"
+                  :prefix-icon="User"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>密码</label>
+                <el-input 
+                  v-model="loginForm.password" 
+                  type="password" 
+                  show-password 
+                  placeholder="请输入密码"
+                  :prefix-icon="Lock"
+                />
+              </div>
+
+              <div class="form-footer">
+                <el-checkbox v-model="loginForm.remember">记住我</el-checkbox>
+                <a href="#" class="forgot-pwd">忘记密码？</a>
+              </div>
+
+              <el-button 
+                type="primary" 
+                class="login-btn" 
+                :loading="loading"
+                @click="submitLogin"
+              >
+                立即登录
+                <el-icon class="el-icon--right"><ArrowRight /></el-icon>
+              </el-button>
+            </form>
+
+            <footer class="card-footer">
+              <p>系统由管理员统一分配账号</p>
+              <div class="demo-account">
+                <span>演示账号:</span> admin / teacher1
+              </div>
+            </footer>
           </div>
-        </div>
+        </section>
       </div>
-
-      <el-card class="login-card" shadow="never">
-        <div class="card-header">
-          <div class="card-title">账号登录</div>
-          <div class="card-sub">账号由管理员统一配置，登录后进入对应工作台</div>
-        </div>
-
-        <el-form label-width="90px" class="login-form">
-          <el-form-item label="登录类型">
-            <el-radio-group v-model="loginForm.role">
-              <el-radio value="student">学生登录</el-radio>
-              <el-radio value="admin">教师/管理员登录</el-radio>
-            </el-radio-group>
-          </el-form-item>
-          <el-form-item :label="loginAccountLabel">
-            <el-input v-model="loginForm.username" :placeholder="loginAccountPlaceholder" />
-          </el-form-item>
-          <el-form-item label="密码">
-            <el-input v-model="loginForm.password" type="password" show-password placeholder="请输入密码" />
-          </el-form-item>
-          <el-form-item label="记住登录">
-            <el-switch v-model="loginForm.remember" active-text="7天" inactive-text="仅本次" />
-          </el-form-item>
-          <div class="login-helper-row">
-            <span>如需新建账号或重置密码，请联系管理员处理</span>
-          </div>
-          <el-form-item>
-            <el-button type="primary" :loading="loading" class="full-btn" @click="submitLogin">登录</el-button>
-          </el-form-item>
-          <div class="login-tip">
-            默认演示账号：admin/admin123；teacher1/teacher123。学生账号由管理员统一配置。
-          </div>
-        </el-form>
-      </el-card>
-    </div>
+    </main>
   </div>
 </template>
 
 <style scoped>
-.login-page {
-  min-height: 100vh;
-  position: relative;
+.login-container {
+  height: 100vh;
+  width: 100vw;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 20px;
-  background: var(--app-bg);
+  position: relative;
+  overflow: hidden;
+  background-color: #f8fafc;
+}
+
+/* 现代网格背景动效 */
+.mesh-gradient {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(at 0% 0%, rgba(79, 140, 255, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(245, 158, 11, 0.1) 0px, transparent 50%);
+  filter: blur(80px);
+  z-index: 0;
+}
+
+.login-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1200px;
+  padding: 40px 24px;
 }
 
 .login-shell {
-  position: relative;
-  width: min(1100px, 100%);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 40px;
+  gap: 80px;
   align-items: center;
 }
 
-.brand-panel {
-  padding: 42px 34px;
-  border-radius: calc(var(--app-radius) + 8px);
-  border: 1px solid var(--app-border);
-  background: #ffffff;
-  box-shadow: var(--app-shadow-soft);
+/* 左侧样式 */
+.brand-section {
+  animation: slideInLeft 0.6s ease-out;
 }
 
-.brand-kicker {
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #6f87ad;
-  font-weight: 800;
-  margin-bottom: 18px;
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
-.brand-logo {
-  width: 66px;
-  height: 66px;
-  border-radius: 18px;
-  display: grid;
-  place-items: center;
-  background: #f4f7fb;
-  color: var(--app-ink);
-  font-weight: 800;
+.brand-badge {
+  display: inline-block;
+  padding: 6px 16px;
+  background: rgba(79, 140, 255, 0.1);
+  color: #4f8cff;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
   margin-bottom: 24px;
 }
 
 .brand-title {
-  font-size: 40px;
-  line-height: 1.05;
-  font-weight: 800;
-  color: var(--app-ink);
+  font-size: 56px;
+  line-height: 1.1;
+  font-weight: 900;
+  color: #0f172a;
+  margin-bottom: 24px;
+  letter-spacing: -0.04em;
 }
 
-.brand-sub {
-  margin-top: 10px;
-  color: #5d7396;
-  font-size: 15px;
+.text-gradient {
+  background: linear-gradient(135deg, #4f8cff 0%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.brand-desc {
-  margin-top: 26px;
-  color: #60758f;
-  line-height: 1.8;
-  font-size: 14px;
+.brand-description {
+  font-size: 18px;
+  color: #64748b;
+  margin-bottom: 48px;
+  max-width: 480px;
 }
 
-.brand-points {
-  margin-top: 28px;
+.feature-list {
   display: grid;
+  gap: 24px;
+}
+
+.feature-item {
+  display: flex;
   gap: 16px;
+  align-items: flex-start;
 }
 
-.brand-point {
-  padding: 18px 18px 16px;
-  border-radius: 20px;
-  background: #f8fbff;
-  border: 1px solid #dbe6f2;
+.feature-icon {
+  width: 48px;
+  height: 48px;
+  background: #fff;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
-.brand-point strong {
-  display: block;
-  margin-bottom: 6px;
-  color: #243851;
-  font-size: 15px;
+.feature-text h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 4px;
 }
 
-.brand-point span {
-  color: #667c98;
-  font-size: 13px;
-  line-height: 1.7;
+.feature-text p {
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* 右侧样式 */
+.form-section {
+  display: flex;
+  justify-content: flex-end;
+  animation: slideInRight 0.6s ease-out;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .login-card {
-  border-radius: calc(var(--app-radius) + 8px);
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-soft);
+  width: 100%;
+  max-width: 440px;
+  padding: 40px;
+  border-radius: 24px;
 }
 
 .card-header {
-  margin-bottom: 18px;
+  margin-bottom: 32px;
+  text-align: center;
 }
 
-.card-title {
+.card-header h2 {
   font-size: 28px;
   font-weight: 800;
-  color: var(--app-ink);
+  color: #0f172a;
+  margin-bottom: 8px;
 }
 
-.card-sub {
-  margin-top: 8px;
-  color: #6a7f99;
-  font-size: 13px;
+.card-header p {
+  color: #64748b;
+  font-size: 15px;
+}
+
+.role-selector {
+  display: flex;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 12px;
+  margin-bottom: 32px;
+}
+
+.role-tab {
+  flex: 1;
+  text-align: center;
+  padding: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.role-tab.active {
+  background: #fff;
+  color: #4f8cff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 .login-form {
-  margin-top: 10px;
+  display: grid;
+  gap: 24px;
 }
 
-.login-helper-row {
-  margin: 2px 0 14px;
-  color: #6f84a1;
+.form-group {
+  display: grid;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.forgot-pwd {
+  font-size: 14px;
+  color: #4f8cff;
+  font-weight: 600;
+}
+
+.login-btn {
+  height: 52px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 12px;
+  margin-top: 8px;
+}
+
+.card-footer {
+  margin-top: 32px;
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.card-footer p {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+
+.demo-account {
   font-size: 12px;
+  color: #64748b;
+  background: #f8fafc;
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: inline-block;
 }
 
-.full-btn {
-  width: 100%;
+.demo-account span {
+  font-weight: 700;
 }
 
-.login-tip {
-  margin-top: 6px;
-  color: #8a9ab0;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.login-bg {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at top left, rgba(140, 177, 255, 0.18), transparent 36%),
-    radial-gradient(circle at bottom right, rgba(104, 174, 150, 0.18), transparent 32%);
-  pointer-events: none;
-}
-
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .login-shell {
     grid-template-columns: 1fr;
-    gap: 20px;
+    gap: 60px;
   }
-
+  
+  .brand-section {
+    text-align: center;
+  }
+  
+  .brand-description {
+    margin: 0 auto 48px;
+  }
+  
+  .feature-list {
+    justify-content: center;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  
+  .form-section {
+    justify-content: center;
+  }
+  
   .brand-title {
-    font-size: 32px;
+    font-size: 40px;
   }
 }
 </style>

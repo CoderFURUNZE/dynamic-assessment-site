@@ -107,6 +107,7 @@ from app.services.resource_files import (
     maybe_prepare_preview,
     store_uploaded_file,
 )
+from app.services.kp_tagging import auto_tag_knowledge_points
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger("app.audit")
@@ -2892,6 +2893,8 @@ def seed_full_system(
                     "explanation": "\u793a\u4f8b\u89e3\u6790",
                 },
             )
+
+        auto_tag_knowledge_points(session, subject=subj_name, grade=grade_name, overwrite=False)
 
     _log_action(session, _admin, "seed_full", f"created_kp={created_kp} created_questions={created_questions}")
     return {"ok": True, "created_kp": created_kp, "created_questions": created_questions}

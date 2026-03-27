@@ -838,16 +838,36 @@ def path(
     next_ids = [int(e.next_id) for e in next_edges]
 
     blocked_prereqs: list[int] = []
+    prereq_titles: dict[int, str] = {}
+    next_titles: dict[int, str] = {}
     kp = session.get(KnowledgePoint, kp_id)
+    if kp is not None:
+        prereq_kps = session.exec(select(KnowledgePoint).where(KnowledgePoint.id.in_(prereq_ids))).all() if prereq_ids else []
+        next_kps = session.exec(select(KnowledgePoint).where(KnowledgePoint.id.in_(next_ids))).all() if next_ids else []
+        prereq_titles = {int(item.id): item.title for item in prereq_kps if item.id is not None}
+        next_titles = {int(item.id): item.title for item in next_kps if item.id is not None}
     if user.role == UserRole.student and kp is not None:
         for prereq_id in prereq_ids:
             mastery = upsert_mastery(session, user_id=user.id, kp_id=prereq_id, subject=kp.subject, grade=kp.grade)
             if float(mastery.value) < 0.6:
                 blocked_prereqs.append(prereq_id)
+    blocked_titles = [prereq_titles.get(pid, str(pid)) for pid in blocked_prereqs]
+    next_title_list = [next_titles.get(nid, str(nid)) for nid in next_ids]
+    can_unlock_next = bool(next_ids) and len(blocked_prereqs) == 0
+    if blocked_titles:
+        path_summary = f"当前知识点需要先补前置：{'、'.join(blocked_titles)}"
+    elif next_title_list:
+        path_summary = f"前置已满足，可以继续学习后继知识点：{'、'.join(next_title_list[:3])}"
+    else:
+        path_summary = "当前知识点暂无明确后继，可在相关知识点中做补充学习"
 
     return GraphPathOut(
         kp_id=kp_id,
         prereq_chain=prereq_ids + [kp_id],
         blocked_prereqs=blocked_prereqs,
         next_candidates=next_ids,
+        blocked_titles=blocked_titles,
+        next_titles=next_title_list,
+        can_unlock_next=can_unlock_next,
+        path_summary=path_summary,
     )

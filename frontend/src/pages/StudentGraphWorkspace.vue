@@ -32,6 +32,17 @@ type RecoData = {
   unlock?: { can_unlock_next: boolean; next_candidates: number[] };
 };
 
+type PathData = {
+  kp_id: number;
+  prereq_chain: number[];
+  blocked_prereqs: number[];
+  blocked_titles: string[];
+  next_candidates: number[];
+  next_titles: string[];
+  can_unlock_next: boolean;
+  path_summary: string;
+};
+
 const route = useRoute();
 const router = useRouter();
 
@@ -41,6 +52,7 @@ const grade = ref("通用");
 const kps = ref<KP[]>([]);
 const currentKpId = ref<number | null>(null);
 const reco = ref<RecoData | null>(null);
+const pathInfo = ref<PathData | null>(null);
 const workspaceState = ref<WorkspaceState>({
   kpCount: 0,
   categoryCount: 0,
@@ -78,6 +90,24 @@ const recommendationStageLabel = computed(() => {
   if (blockedPrereqTitles.value.length) return "先补前面的";
   if (reco.value?.unlock?.can_unlock_next) return "可以继续";
   return "系统建议";
+});
+const pathSummary = computed(() => pathInfo.value?.path_summary || reco.value?.reason_summary || "先看路径，再开始学习。");
+const lockSummary = computed(() => {
+  if (!pathInfo.value) return "";
+  if (pathInfo.value.can_unlock_next) {
+    return "当前知识点已解锁，可以继续进入后继知识点或直接开始学习。";
+  }
+  if (pathInfo.value.blocked_titles.length) {
+    return `当前知识点被锁定，因为前置知识点尚未完成：${pathInfo.value.blocked_titles.join("、")}。`;
+  }
+  return "当前知识点暂未解锁，建议先补齐相关前置知识点。";
+});
+const lockNextTips = computed(() => {
+  if (!pathInfo.value) return [];
+  if (pathInfo.value.can_unlock_next) {
+    return pathInfo.value.next_titles.slice(0, 3);
+  }
+  return pathInfo.value.blocked_titles.slice(0, 3);
 });
 
 async function loadCourses() {
@@ -117,6 +147,19 @@ async function loadRecommendation() {
   }
 }
 
+async function loadPathInfo() {
+  if (!currentKpId.value) {
+    pathInfo.value = null;
+    return;
+  }
+  try {
+    const res = await api.get(`/graph/path/${currentKpId.value}`);
+    pathInfo.value = res.data ?? null;
+  } catch {
+    pathInfo.value = null;
+  }
+}
+
 function syncQuery() {
   const preview = String(route.query.preview || "");
   router.replace({
@@ -132,8 +175,10 @@ function syncQuery() {
 async function onCourseChange() {
   currentKpId.value = null;
   reco.value = null;
+  pathInfo.value = null;
   await loadKps();
   await loadRecommendation();
+  await loadPathInfo();
   syncQuery();
 }
 
@@ -193,12 +238,14 @@ watch(
 watch(currentKpId, async (value, oldValue) => {
   if (value === oldValue) return;
   await loadRecommendation();
+  await loadPathInfo();
 });
 
 onMounted(async () => {
   await loadCourses();
   await loadKps();
   await loadRecommendation();
+  await loadPathInfo();
 });
 </script>
 
@@ -208,7 +255,7 @@ onMounted(async () => {
       <div class="workspace-page__left">
         <button
           class="workspace-page__back"
-          @click="router.push({ path: '/student/graph', query: route.query.preview ? { preview: String(route.query.preview) } : undefined })"
+          @click="router.push({ path: '/student/graph', query: route.query })"
         >
           返回学习页
         </button>
@@ -230,6 +277,47 @@ onMounted(async () => {
     <section class="workspace-guide workspace-guide--simple">
       <strong>使用方法</strong>
       <HoverTip content="左边选章节，中间点知识点，右边看内容，再点“去学习”即可。" />
+    </section>
+
+    <section v-if="pathInfo" class="workspace-path">
+      <div class="workspace-path__body">
+        <div class="workspace-path__eyebrow">知识路径解释</div>
+        <div class="workspace-path__title">{{ pathInfo.path_summary }}</div>
+        <div class="workspace-path__summary">{{ pathSummary }}</div>
+        <div class="workspace-path__meta">
+          <span>前置链：{{ pathInfo.prereq_chain.length }} 个节点</span>
+          <span>后继候选：{{ pathInfo.next_candidates.length }} 个节点</span>
+          <span>{{ pathInfo.can_unlock_next ? "当前可继续推进" : "仍需补前置" }}</span>
+        </div>
+        <div v-if="pathInfo.blocked_titles.length" class="workspace-path__tips">
+          需先补：{{ pathInfo.blocked_titles.join("、") }}
+        </div>
+        <div v-else-if="pathInfo.next_titles.length" class="workspace-path__tips">
+          可继续：{{ pathInfo.next_titles.slice(0, 3).join("、") }}
+        </div>
+      </div>
+      <div class="workspace-path__actions">
+        <button class="workspace-page__minor-btn" @click="loadPathInfo">刷新路径解释</button>
+        <button class="workspace-page__primary-btn" :disabled="!currentKpId" @click="goKpContent()">进入学习</button>
+      </div>
+    </section>
+
+    <section v-if="pathInfo" class="workspace-lockbox" :class="{ 'workspace-lockbox--open': pathInfo.can_unlock_next }">
+      <div class="workspace-lockbox__header">
+        <div>
+          <div class="workspace-lockbox__eyebrow">解锁说明</div>
+          <div class="workspace-lockbox__title">{{ pathInfo.can_unlock_next ? "当前已解锁" : "当前暂时锁定" }}</div>
+        </div>
+        <el-tag :type="pathInfo.can_unlock_next ? 'success' : 'warning'">{{ pathInfo.can_unlock_next ? "可继续" : "需补前置" }}</el-tag>
+      </div>
+      <div class="workspace-lockbox__summary">{{ lockSummary }}</div>
+      <div v-if="lockNextTips.length" class="workspace-lockbox__tips">
+        <span v-for="item in lockNextTips" :key="item" class="workspace-lockbox__pill">{{ item }}</span>
+      </div>
+      <div class="workspace-lockbox__footer">
+        <span>规则：满足前置掌握后，系统才开放后继知识点。</span>
+        <button class="workspace-page__minor-btn" @click="loadPathInfo">重新检查解锁状态</button>
+      </div>
     </section>
 
     <section v-if="reco" class="workspace-reco">
@@ -395,6 +483,143 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
+.workspace-path {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: #ffffff;
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.workspace-path__body {
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-path__eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #6c84a7;
+  text-transform: uppercase;
+}
+
+.workspace-path__title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #243449;
+  line-height: 1.5;
+}
+
+.workspace-path__summary {
+  color: #5f748e;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.workspace-path__meta,
+.workspace-path__tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-path__meta span,
+.workspace-path__tips {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(198, 212, 238, 0.92);
+  background: rgba(255, 255, 255, 0.78);
+  color: #4b6282;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace-path__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.workspace-lockbox {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.workspace-lockbox--open {
+  border-color: rgba(98, 179, 111, 0.35);
+}
+
+.workspace-lockbox__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.workspace-lockbox__eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #6c84a7;
+  text-transform: uppercase;
+}
+
+.workspace-lockbox__title {
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #243449;
+}
+
+.workspace-lockbox__summary {
+  color: #5f748e;
+  line-height: 1.8;
+}
+
+.workspace-lockbox__tips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-lockbox__pill {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #edf4ff;
+  border: 1px solid rgba(89, 132, 210, 0.18);
+  color: #3c5b89;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace-lockbox__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #60758f;
+  font-size: 13px;
+}
+
 .workspace-reco {
   display: flex;
   justify-content: space-between;
@@ -489,6 +714,11 @@ onMounted(async () => {
   }
 
   .workspace-reco {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .workspace-path {
     flex-direction: column;
     align-items: flex-start;
   }

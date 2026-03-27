@@ -1,8 +1,15 @@
 <template>
-  <div class="admin-page">
-    <PageSectionCard eyebrow="Teachers" title="老师管理" description="把教师账号和负责范围放到独立页面维护，减少和其它后台操作的干扰。">
+  <div class="edu-page">
+    <header class="edu-header">
+      <div class="edu-header__left">
+        <h1 class="edu-header__title">老师管理</h1>
+        <p class="edu-header__desc">维护教师账号及权限，支持批量管理与状态切换。</p>
+      </div>
+    </header>
+
+    <section class="edu-panel">
       <AdminUserManager mode="teachers" />
-    </PageSectionCard>
+    </section>
   </div>
 </template>
 

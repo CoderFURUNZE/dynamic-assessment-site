@@ -48,7 +48,11 @@ class GraphPathOut(BaseModel):
     kp_id: int
     prereq_chain: list[int]
     blocked_prereqs: list[int]
+    blocked_titles: list[str] = []
     next_candidates: list[int]
+    next_titles: list[str] = []
+    can_unlock_next: bool = False
+    path_summary: str = ""
 
 
 class GraphOverlayNodeOut(BaseModel):

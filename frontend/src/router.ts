@@ -28,6 +28,7 @@ const TeacherIndicatorsPage = () => import("./pages/TeacherIndicatorsPage.vue");
 const TeacherAnalyticsPage = () => import("./pages/TeacherAnalyticsPage.vue");
 const TeacherProfilesPage = () => import("./pages/TeacherProfilesPage.vue");
 const TeacherStudentsPage = () => import("./pages/TeacherStudentsPage.vue");
+const TeacherBehaviorReportPage = () => import("./pages/TeacherBehaviorReportPage.vue");
 const TeacherGraphWorkspacePage = () => import("./pages/TeacherGraphWorkspace.vue");
 const TeacherKpContentWorkspacePage = () => import("./pages/TeacherKpContentWorkspace.vue");
 const TeacherResourceDetailPage = () => import("./pages/TeacherResourceDetail.vue");
@@ -61,7 +62,10 @@ router.addRoute({
   "/student/report",
 ].forEach((path) => {
   if (path === "/student/graph") {
-    router.addRoute({ path, redirect: "/student/graph-workspace" });
+    router.addRoute({
+      path,
+      redirect: (to) => ({ path: "/student/graph-workspace", query: to.query }),
+    });
     return;
   }
   if (path === "/student/graph-workspace") {
@@ -118,9 +122,13 @@ router.addRoute({
   "/teacher/analytics",
   "/teacher/profiles",
   "/teacher/students",
+  "/teacher/behavior-report",
 ].forEach((path) => {
   if (path === "/teacher/graph") {
-    router.addRoute({ path, redirect: "/teacher/graph-workspace" });
+    router.addRoute({
+      path,
+      redirect: (to) => ({ path: "/teacher/graph-workspace", query: to.query }),
+    });
     return;
   }
   const component = {
@@ -131,6 +139,7 @@ router.addRoute({
     "/teacher/analytics": TeacherAnalyticsPage,
     "/teacher/profiles": TeacherProfilesPage,
     "/teacher/students": TeacherStudentsPage,
+    "/teacher/behavior-report": TeacherBehaviorReportPage,
     "/teacher/graph-workspace": TeacherGraphWorkspacePage,
     "/teacher/enrollments": TeacherEnrollmentReviewPage,
     "/teacher/final-review": TeacherFinalScoreReviewPage,
@@ -140,18 +149,42 @@ router.addRoute({
 router.addRoute({ path: "/teacher/resources/:resourceId", component: TeacherResourceDetailPage });
 router.addRoute({ path: "/teacher/kp-content/:kpId", component: TeacherKpContentWorkspacePage });
 
-router.addRoute({ path: "/student", redirect: "/student/overview" });
-router.addRoute({ path: "/student/interview", redirect: "/student/overview" });
-router.addRoute({ path: "/student/resource", redirect: "/student/graph" });
-router.addRoute({ path: "/student/quiz", redirect: "/student/graph" });
-router.addRoute({ path: "/student/practice", redirect: "/student/graph" });
-router.addRoute({ path: "/student/:pathMatch(.*)*", redirect: "/student/overview" });
+router.addRoute({
+  path: "/student",
+  redirect: (to) => ({ path: "/student/overview", query: to.query }),
+});
+router.addRoute({
+  path: "/student/interview",
+  redirect: (to) => ({ path: "/student/overview", query: to.query }),
+});
+router.addRoute({
+  path: "/student/resource",
+  redirect: (to) => ({ path: "/student/graph", query: to.query }),
+});
+router.addRoute({
+  path: "/student/quiz",
+  redirect: (to) => ({ path: "/student/graph", query: to.query }),
+});
+router.addRoute({
+  path: "/student/practice",
+  redirect: (to) => ({ path: "/student/graph", query: to.query }),
+});
+router.addRoute({
+  path: "/student/:pathMatch(.*)*",
+  redirect: (to) => ({ path: "/student/overview", query: to.query }),
+});
 
 router.addRoute({ path: "/admin", redirect: "/admin/dashboard" });
 router.addRoute({ path: "/admin/:pathMatch(.*)*", redirect: "/admin/dashboard" });
 
-router.addRoute({ path: "/teacher", redirect: "/teacher/courses" });
-router.addRoute({ path: "/teacher/:pathMatch(.*)*", redirect: "/teacher/courses" });
+router.addRoute({
+  path: "/teacher",
+  redirect: (to) => ({ path: "/teacher/courses", query: to.query }),
+});
+router.addRoute({
+  path: "/teacher/:pathMatch(.*)*",
+  redirect: (to) => ({ path: "/teacher/courses", query: to.query }),
+});
 
 router.addRoute({ path: "/:pathMatch(.*)*", redirect: "/start" });
 
@@ -182,11 +215,10 @@ router.beforeEach((to) => {
     return true;
   }
   if (to.path.startsWith("/student")) {
-    if (role === "admin") return "/admin/dashboard";
-    if (role === "teacher") {
-      const preview = String(to.query.preview || "");
-      if (preview !== "1") return "/teacher/courses";
-    }
+    const preview = String(to.query.preview || "");
+    const previewEnabled = preview === "1";
+    if (role === "admin" && !previewEnabled) return "/admin/dashboard";
+    if (role === "teacher" && !previewEnabled) return "/teacher/courses";
   }
   const username = getUsername();
   if (username) {

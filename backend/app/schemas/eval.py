@@ -19,6 +19,39 @@ class ProfileTrendPointOut(BaseModel):
     trend_label: str | None = None
 
 
+class PortraitTimelinePointOut(BaseModel):
+    updated_at: str
+    persona_label: str
+    dynamic_score: float
+    course_mastery: float
+    risk_level: str = "预警"
+    stage_title: str | None = None
+    trend_label: str | None = None
+    reason_summary: str = ""
+
+
+class DynamicBreakdownOut(BaseModel):
+    learning_frequency: float = 0.0
+    study_duration: float = 0.0
+    resource_completion: float = 0.0
+    streak: float = 0.0
+    practice_accuracy: float = 0.0
+    quiz_accuracy: float = 0.0
+    mastery_growth: float = 0.0
+    unit_time_accuracy: float = 0.0
+    task_completion: float = 0.0
+    overdue_rate: float = 0.0
+    wrong_streak: float = 0.0
+    abandonment_rate: float = 0.0
+    engagement_score: float = 0.0
+    achievement_score: float = 0.0
+    efficiency_score: float = 0.0
+    risk_score: float = 0.0
+    dynamic_score: float = 0.0
+    stability: float = 0.0
+    summary: str = ""
+
+
 class StageDimensionConfigOut(BaseModel):
     key: str
     label: str
@@ -84,6 +117,8 @@ class ProfileOut(BaseModel):
     final_portrait_indicators: list[dict] = []
     term_summary: dict = {}
     kp_dimension_summary: dict = {}
+    portrait_timeline: list[PortraitTimelinePointOut] = []
+    dynamic_breakdown: DynamicBreakdownOut | None = None
 
 
 class MasteryMapItem(BaseModel):

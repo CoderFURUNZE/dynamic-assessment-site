@@ -42,112 +42,109 @@ onMounted(load);
 
 <template>
   <div class="dashboard-shell" v-loading="loading">
-    <el-card class="panel-card" shadow="never">
-      <template #header>
-        <div class="dashboard-header">
-          <div>
-            <div class="dashboard-title">平台治理概览</div>
-            <div class="dashboard-sub">管理员只看平台级数据：账号、角色、指标和画像规则底座。</div>
+    <div class="edu-stats-grid">
+      <div class="edu-stat-card">
+        <span class="edu-stat-card__label">用户总数</span>
+        <strong class="edu-stat-card__value">{{ stats.totalUsers }}</strong>
+      </div>
+      <div class="edu-stat-card">
+        <span class="edu-stat-card__label">教师数量</span>
+        <strong class="edu-stat-card__value">{{ stats.totalTeachers }}</strong>
+      </div>
+      <div class="edu-stat-card">
+        <span class="edu-stat-card__label">学生数量</span>
+        <strong class="edu-stat-card__value">{{ stats.totalStudents }}</strong>
+      </div>
+      <div class="edu-stat-card">
+        <span class="edu-stat-card__label">管理员数量</span>
+        <strong class="edu-stat-card__value">{{ stats.totalAdmins }}</strong>
+      </div>
+      <div class="edu-stat-card">
+        <span class="edu-stat-card__label">一级指标数</span>
+        <strong class="edu-stat-card__value">{{ stats.totalDimensions }}</strong>
+      </div>
+      <div class="edu-stat-card">
+        <span class="edu-stat-card__label">二级指标数</span>
+        <strong class="edu-stat-card__value">{{ stats.totalIndicators }}</strong>
+      </div>
+    </div>
+
+    <section class="edu-panel">
+      <header class="edu-panel__header">
+        <h2 class="edu-panel__title">管理员操作建议</h2>
+      </header>
+      <div class="todo-content">
+        <div class="todo-item">
+          <div class="todo-index">1</div>
+          <div class="todo-text">
+            <strong>维护账号状态</strong>
+            <span>管理用户和老师账号的基础信息、角色及启用/禁用状态。</span>
           </div>
-          <el-button size="small" @click="load" :loading="loading">刷新</el-button>
         </div>
-      </template>
-      <div class="metric-grid">
-        <div class="metric-card">
-          <div class="metric-label">用户总数</div>
-          <div class="metric-value">{{ stats.totalUsers }}</div>
+        <div class="todo-item">
+          <div class="todo-index">2</div>
+          <div class="todo-text">
+            <strong>维护指标池</strong>
+            <span>定义系统核心的一级维度和二级指标，这是画像生成的底座。</span>
+          </div>
         </div>
-        <div class="metric-card">
-          <div class="metric-label">教师数量</div>
-          <div class="metric-value">{{ stats.totalTeachers }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">学生数量</div>
-          <div class="metric-value">{{ stats.totalStudents }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">管理员数量</div>
-          <div class="metric-value">{{ stats.totalAdmins }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">一级指标数</div>
-          <div class="metric-value">{{ stats.totalDimensions }}</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">二级指标数</div>
-          <div class="metric-value">{{ stats.totalIndicators }}</div>
+        <div class="todo-item">
+          <div class="todo-index">3</div>
+          <div class="todo-text">
+            <strong>配置画像规则</strong>
+            <span>设置阈值、权重及策略模板，供教师端在具体课程中应用。</span>
+          </div>
         </div>
       </div>
-    </el-card>
-
-    <el-card class="panel-card" shadow="never">
-      <template #header>管理员操作建议</template>
-      <ol class="todo-list">
-        <li>先维护用户和老师账号状态（启用/禁用、角色、基础信息）。</li>
-        <li>再维护指标池（一级维度和二级指标）。</li>
-        <li>最后维护画像规则（阈值、权重、策略模板），供教师端按课程使用。</li>
-      </ol>
-    </el-card>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .dashboard-shell {
   display: grid;
+  gap: 24px;
+}
+
+.todo-content {
+  display: grid;
   gap: 16px;
 }
 
-.dashboard-header {
+.todo-item {
   display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: var(--edu-bg);
+  border-radius: 16px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 
-.dashboard-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--app-ink);
+.todo-index {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--edu-primary);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  flex-shrink: 0;
 }
 
-.dashboard-sub {
-  margin-top: 4px;
-  color: var(--app-ink-soft);
+.todo-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.todo-text strong {
+  font-size: 15px;
+  color: var(--edu-text-main);
+}
+
+.todo-text span {
   font-size: 13px;
-}
-
-.metric-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-
-.metric-card {
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
-  background: #fff;
-  padding: 14px;
-}
-
-.metric-label {
-  color: var(--app-ink-soft);
-  font-size: 12px;
-}
-
-.metric-value {
-  margin-top: 8px;
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--app-ink);
-}
-
-.todo-list {
-  margin: 0;
-  padding-left: 20px;
-  color: var(--app-ink);
-  display: grid;
-  gap: 8px;
-  line-height: 1.6;
+  color: var(--edu-text-soft);
 }
 </style>
 

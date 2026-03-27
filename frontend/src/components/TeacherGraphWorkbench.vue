@@ -1545,7 +1545,7 @@ onBeforeUnmount(() => {
               <strong>{{ categoryOverview.abilityTags.length }}</strong>
             </div>
             <div class="teacher-drawer__metric">
-              <span>培养习惯</span>
+                <span>培养素养</span>
               <strong>{{ categoryOverview.literacyTags.length }}</strong>
             </div>
             <div class="teacher-drawer__metric">

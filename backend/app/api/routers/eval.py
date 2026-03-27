@@ -17,12 +17,14 @@ from app.db.models import (
 from app.db.session import get_session
 from app.schemas.eval import (
     CurrentStageOut,
+    DynamicBreakdownOut,
     MasteryMapItem,
     MasteryOut,
     OverviewOut,
     OverviewPracticeOut,
     OverviewRecentOut,
     OverviewSummaryOut,
+    PortraitTimelinePointOut,
     ProfileOut,
     ProfileTrendPointOut,
     StageDimensionConfigOut,
@@ -42,6 +44,16 @@ from app.services.learner_profile import (
 )
 
 router = APIRouter(prefix="/eval", tags=["eval"])
+
+
+def _risk_level_label(dynamic_score: float) -> str:
+    if dynamic_score >= 0.85:
+        return "优秀"
+    if dynamic_score >= 0.70:
+        return "良好"
+    if dynamic_score >= 0.50:
+        return "预警"
+    return "风险"
 
 
 @router.get("/mastery", response_model=MasteryOut)
@@ -69,6 +81,7 @@ def mastery(
 def profile(
     subject: str,
     grade: str,
+    days: int = 14,
     session: Session = Depends(get_session),
     user=Depends(get_current_user),
 ):
@@ -106,7 +119,9 @@ def profile(
         )
         if value < 0.5:
             weak_points.append(int(kp.id))
-    stage_rows = list(reversed(get_stage_snapshot_trend(session, user_id=user.id, subject=subject, grade=grade)))
+    stage_rows = list(
+        reversed(get_stage_snapshot_trend(session, user_id=user.id, subject=subject, grade=grade, days=days))
+    )
     if stage_rows:
         trend = [
             ProfileTrendPointOut(
@@ -146,6 +161,36 @@ def profile(
         stage_id=int(current_stage.stage_id) if current_stage is not None else None,
     )
     portrait_summary = _json_load(snapshot.portrait_summary_json, {})
+    portrait_timeline = []
+    if stage_rows:
+        portrait_timeline = [
+            PortraitTimelinePointOut(
+                updated_at=item.updated_at.isoformat(),
+                persona_label=persona_label(item.persona_type),
+                dynamic_score=float(item.dynamic_score),
+                course_mastery=float(item.course_mastery),
+                risk_level=_risk_level_label(float(item.dynamic_score)),
+                stage_title=item.stage_title,
+                trend_label=item.trend_label,
+                reason_summary=item.reason_summary,
+            )
+            for item in stage_rows
+        ]
+    else:
+        portrait_timeline = [
+            PortraitTimelinePointOut(
+                updated_at=item.updated_at.isoformat(),
+                persona_label=persona_label(item.persona_type),
+                dynamic_score=float(item.dynamic_score),
+                course_mastery=float(item.course_mastery),
+                risk_level=_risk_level_label(float(item.dynamic_score)),
+                stage_title=item.stage_title,
+                trend_label=item.trend_label,
+                reason_summary="",
+            )
+            for item in reversed(get_profile_trend(session, user_id=user.id, subject=subject, grade=grade, days=days))
+        ]
+    breakdown_payload = portrait_summary.get("dynamic_breakdown") or {}
     course = session.exec(
         select(Course)
         .where(Course.title == subject)
@@ -248,6 +293,8 @@ def profile(
         final_portrait_indicators=portrait_summary.get("final_portrait_indicators", []),
         term_summary=portrait_summary.get("term_summary", {}),
         kp_dimension_summary=kp_dimension_summary,
+        portrait_timeline=portrait_timeline,
+        dynamic_breakdown=DynamicBreakdownOut(**breakdown_payload) if breakdown_payload else None,
     )
 
 
@@ -255,11 +302,12 @@ def profile(
 def overview(
     subject: str,
     grade: str,
+    days: int = 14,
     session: Session = Depends(get_session),
     user=Depends(get_current_user),
 ):
     refresh_subject_mastery(session, user_id=user.id, subject=subject, grade=grade)
-    profile_data = profile(subject=subject, grade=grade, session=session, user=user)
+    profile_data = profile(subject=subject, grade=grade, days=days, session=session, user=user)
     kps = session.exec(
         select(KnowledgePoint)
         .where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)

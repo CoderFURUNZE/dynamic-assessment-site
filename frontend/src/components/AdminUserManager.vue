@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HintButton from "./HintButton.vue";
 
 const props = withDefaults(defineProps<{ mode?: "users" | "teachers" }>(), {
   mode: "users",
@@ -175,8 +176,8 @@ watch(
       <div style="display: flex; align-items: center; justify-content: space-between">
         <div>{{ titleText }}</div>
         <div style="display: flex; gap: 8px">
-          <el-button type="primary" @click="openCreate">新增{{ props.mode === "teachers" ? "老师" : "用户" }}</el-button>
-          <el-button @click="load" :loading="loading">刷新</el-button>
+          <HintButton type="primary" tip="新增一个老师或学生账号。" @click="openCreate">新增{{ props.mode === "teachers" ? "老师" : "用户" }}</HintButton>
+          <HintButton tip="刷新用户列表。" @click="load" :loading="loading">刷新</HintButton>
         </div>
       </div>
     </template>
@@ -203,8 +204,8 @@ watch(
       <el-table-column prop="wechat_openid" label="微信OpenID" width="180" />
       <el-table-column label="操作" width="160">
         <template #default="{ row }">
-          <el-button size="small" @click="openEdit(row)">编辑</el-button>
-          <el-button size="small" type="danger" @click="remove(row)" :disabled="row.username === 'admin'">删除</el-button>
+          <HintButton size="small" tip="编辑该用户的姓名、班级、手机号和状态。" @click="openEdit(row)">编辑</HintButton>
+          <HintButton size="small" type="danger" tip="删除该用户账号，管理员默认账号不可删。" @click="remove(row)" :disabled="row.username === 'admin'">删除</HintButton>
         </template>
       </el-table-column>
     </el-table>
@@ -252,8 +253,8 @@ watch(
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogOpen = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <HintButton tip="关闭编辑窗口，不保存当前修改。" @click="dialogOpen = false">取消</HintButton>
+        <HintButton type="primary" tip="保存当前用户信息修改。" @click="save">保存</HintButton>
       </template>
     </el-dialog>
 
@@ -289,8 +290,8 @@ watch(
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createDialogOpen = false">取消</el-button>
-        <el-button type="primary" @click="createUser">创建</el-button>
+        <HintButton tip="关闭创建窗口，不提交。" @click="createDialogOpen = false">取消</HintButton>
+        <HintButton type="primary" tip="创建这个账号并写入系统。" @click="createUser">创建</HintButton>
       </template>
     </el-dialog>
   </el-card>

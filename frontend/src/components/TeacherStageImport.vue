@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import HoverTip from "./HoverTip.vue";
+import HintButton from "./HintButton.vue";
+import TeacherBehaviorImport from "./TeacherBehaviorImport.vue";
 
 type Stage = {
   id: number;
@@ -329,8 +331,8 @@ onBeforeUnmount(() => {
           <div class="import-subtitle">按阶段上传视频、作业、考勤或任务数据，作为后续画像与动态评价的输入来源。</div>
         </div>
         <div class="import-actions">
-          <el-button size="small" @click="refresh" :loading="loading">刷新</el-button>
-          <el-button size="small" @click="downloadTemplate">下载模板</el-button>
+          <HintButton size="small" tip="刷新导入历史、模板和系统汇总。" @click="refresh" :loading="loading">刷新</HintButton>
+          <HintButton size="small" tip="下载当前数据类型对应的导入模板。" @click="downloadTemplate">下载模板</HintButton>
         </div>
       </div>
     </template>
@@ -393,9 +395,9 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="import-auto-card__actions">
-            <el-button @click="loadInternalSummary">刷新系统数据</el-button>
-            <el-button @click="downloadInternalSummary">导出系统汇总 CSV</el-button>
-            <el-button type="primary" @click="applyInternalSummary">一键应用并生成画像</el-button>
+            <HintButton tip="重新加载系统自动采集到的阶段数据。" @click="loadInternalSummary">刷新系统数据</HintButton>
+            <HintButton tip="导出系统采集到的阶段行为汇总 CSV。" @click="downloadInternalSummary">导出系统汇总 CSV</HintButton>
+            <HintButton type="primary" tip="把系统汇总写入阶段画像并重算学生画像。" @click="applyInternalSummary">一键应用并生成画像</HintButton>
           </div>
             <div v-if="internalSummary" class="import-auto-card__stats">
               <div class="import-auto-card__stat">
@@ -452,7 +454,7 @@ onBeforeUnmount(() => {
               </el-upload>
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :disabled="!canUpload" @click="upload">一键导入并生成画像</el-button>
+              <HintButton type="primary" :disabled="!canUpload" tip="上传整班文件，并按当前阶段批量生成画像。" @click="upload">一键导入并生成画像</HintButton>
             </el-form-item>
           </el-form>
           <div class="import-hint">
@@ -461,6 +463,13 @@ onBeforeUnmount(() => {
           <div class="import-hint import-hint--merge">
             系统自动汇总生成的阶段记录，与老师后续上传的线下考勤、课堂参与、口头展示等补充数据，会共同保留在当前阶段并再次触发重算。
           </div>
+          <TeacherBehaviorImport
+            :course-id="courseId"
+            :stage-id="selectedStageId"
+            :subject="subject"
+            :grade="grade"
+            :stage-title="stages.find((item) => item.id === selectedStageId)?.title || ''"
+          />
         </section>
 
         <section class="import-panel import-panel--history">
@@ -511,7 +520,7 @@ onBeforeUnmount(() => {
               {{ lastResult.next_action || "导入完成后，可直接进入学生画像页查看这次阶段重算结果。" }}
             </div>
             <div class="import-result-card__actions">
-              <el-button type="primary" @click="openProfiles">查看学生画像</el-button>
+              <HintButton type="primary" tip="跳转到学生画像页查看本次导入结果。" @click="openProfiles">查看学生画像</HintButton>
             </div>
             <div v-if="lastResult.errors?.length" class="error-stack">
               <div v-for="item in lastResult.errors.slice(0, 5)" :key="item">{{ item }}</div>

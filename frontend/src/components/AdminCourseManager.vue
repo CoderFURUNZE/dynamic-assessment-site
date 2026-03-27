@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import HintButton from "./HintButton.vue";
 
 type Course = {
   id: number;
@@ -316,9 +317,9 @@ Promise.all([loadTeachers(), load()]);
             class="course-manager-search"
             @keyup.enter="() => { page = 1; load(); }"
           />
-          <el-button size="small" type="primary" @click="() => { page = 1; load(); }">搜索</el-button>
-          <el-button size="small" @click="load" :loading="loading">刷新</el-button>
-          <el-button type="primary" @click="openAdd">新增课程</el-button>
+          <HintButton size="small" type="primary" tip="按课程名称或编码搜索课程。" @click="() => { page = 1; load(); }">搜索</HintButton>
+          <HintButton size="small" tip="重新加载课程列表。" @click="load" :loading="loading">刷新</HintButton>
+          <HintButton type="primary" tip="新增一门课程，作为后续图谱和题库的容器。" @click="openAdd">新增课程</HintButton>
         </div>
       </div>
     </template>
@@ -367,8 +368,8 @@ Promise.all([loadTeachers(), load()]);
         </el-table-column>
         <el-table-column label="操作" width="160">
           <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="remove(row)">删除</el-button>
+            <HintButton size="small" tip="修改课程基础信息、教师和报名设置。" @click="openEdit(row)">编辑</HintButton>
+            <HintButton size="small" type="danger" tip="删除该课程及其相关配置。" @click="remove(row)">删除</HintButton>
           </template>
         </el-table-column>
       </el-table>
@@ -462,8 +463,8 @@ Promise.all([loadTeachers(), load()]);
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogOpen = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        <HintButton tip="关闭窗口，不保存当前修改。" @click="dialogOpen = false">取消</HintButton>
+        <HintButton type="primary" :loading="saving" tip="保存课程配置并更新列表。" @click="save">保存</HintButton>
       </template>
     </el-dialog>
 

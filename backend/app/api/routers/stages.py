@@ -1,11 +1,13 @@
 import csv
 import json
 import logging
+from collections import Counter
 from datetime import datetime, timedelta
 from io import BytesIO, StringIO
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from sqlmodel import Session, select
+from sqlalchemy import or_
 
 from app.api.deps import require_role
 from app.db.models import (
@@ -14,8 +16,10 @@ from app.db.models import (
     CourseStage,
     Enrollment,
     EnrollmentStatus,
+    ExpressionEvent,
     KnowledgePoint,
     LearnerProfileSnapshot,
+    LearningBehaviorEvent,
     Mastery,
     PracticeAttempt,
     QuestionnairePortraitIndicatorInput,
@@ -333,6 +337,16 @@ def _stage_window(stage: CourseStage) -> tuple[datetime, datetime]:
     return start, end
 
 
+def _json_payload(raw: str | None) -> dict[str, object]:
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+        return value if isinstance(value, dict) else {}
+    except Exception:
+        return {}
+
+
 def _internal_stage_rows(session: Session, *, course: Course, stage: CourseStage) -> tuple[dict[str, object], list[dict[str, object]]]:
     enrollments = session.exec(
         select(Enrollment).where(
@@ -489,6 +503,450 @@ def _internal_stage_rows(session: Session, *, course: Course, stage: CourseStage
         "recommendation_students": len([row for row in rows if int(row["recommendation_count"]) > 0]),
     }
     return summary, rows
+
+
+_BEHAVIOR_POSITIVE_WEIGHTS = {
+    "resource_visit": 1.0,
+    "resource_download": 1.2,
+    "graph_view": 0.9,
+    "recommendation_open": 0.7,
+    "recommendation_click": 0.7,
+    "video_progress": 1.0,
+    "video_play": 0.8,
+    "video_complete": 1.2,
+    "practice_submit": 1.1,
+    "quiz_submit": 1.15,
+    "note_create": 0.9,
+    "questionnaire_submit": 0.8,
+    "stage_view": 0.5,
+    "course_view": 0.5,
+}
+
+_BEHAVIOR_NEGATIVE_WEIGHTS = {
+    "distracted": 1.2,
+    "fidgeting": 1.0,
+    "no_face": 0.8,
+    "eat": 1.1,
+    "eating": 1.1,
+    "offtask": 1.0,
+    "sleepy": 1.0,
+    "confused": 0.6,
+    "strained": 0.8,
+}
+
+_BEHAVIOR_POSITIVE_LABELS = {"focused", "relaxed", "neutral"}
+_BEHAVIOR_NEGATIVE_LABELS = {"distracted", "fidgeting", "no_face", "confused", "strained", "eat", "eating", "offtask", "sleepy"}
+
+
+def _behavior_signal_score(*, event_type: str, payload: dict[str, object], expression_label: str | None = None, confidence: float = 0.0) -> tuple[float, float]:
+    positive = 0.0
+    negative = 0.0
+    normalized_type = (event_type or "").strip().lower()
+    if normalized_type in _BEHAVIOR_POSITIVE_WEIGHTS:
+        positive += float(_BEHAVIOR_POSITIVE_WEIGHTS[normalized_type])
+    elif normalized_type in _BEHAVIOR_NEGATIVE_WEIGHTS:
+        negative += float(_BEHAVIOR_NEGATIVE_WEIGHTS[normalized_type])
+    else:
+        positive += 0.2
+
+    label = (expression_label or str(payload.get("label") or payload.get("emotion") or "")).strip().lower()
+    if label in _BEHAVIOR_POSITIVE_LABELS:
+        positive += 0.9 * max(0.3, float(confidence) or 0.0)
+    elif label in _BEHAVIOR_NEGATIVE_LABELS:
+        negative += 0.9 * max(0.3, float(confidence) or 0.0)
+
+    hint = str(payload.get("signal") or payload.get("type") or payload.get("kind") or "").strip().lower()
+    if hint in _BEHAVIOR_POSITIVE_WEIGHTS:
+        positive += 0.4
+    elif hint in _BEHAVIOR_NEGATIVE_WEIGHTS:
+        negative += 0.4
+
+    return positive, negative
+
+
+def _behavior_stage_rows(session: Session, *, course: Course, stage: CourseStage) -> tuple[dict[str, object], list[dict[str, object]]]:
+    enrollments = session.exec(
+        select(Enrollment).where(
+            Enrollment.course_id == int(course.id),
+            Enrollment.status == EnrollmentStatus.active,
+        )
+    ).all()
+    student_ids = [int(item.student_id) for item in enrollments if item.student_id is not None]
+    if not student_ids:
+        return {
+            "course_id": int(course.id),
+            "stage_id": int(stage.id),
+            "stage_title": stage.title,
+            "student_count": 0,
+            "behavior_students": 0,
+            "expression_students": 0,
+            "positive_events": 0,
+            "negative_events": 0,
+        }, []
+
+    students = session.exec(select(User).where(User.id.in_(student_ids))).all()
+    student_map = {int(item.id): item for item in students if item.id is not None}
+    kp_ids = [
+        int(item)
+        for item in session.exec(
+            select(KnowledgePoint.id).where(
+                KnowledgePoint.subject == stage.subject,
+                KnowledgePoint.grade == stage.grade,
+            )
+        ).all()
+        if item is not None
+    ]
+    start, end = _stage_window(stage)
+
+    behavior_stmt = select(LearningBehaviorEvent).where(
+        LearningBehaviorEvent.user_id.in_(student_ids),
+        LearningBehaviorEvent.created_at >= start,
+        LearningBehaviorEvent.created_at <= end,
+    )
+    if kp_ids:
+        behavior_stmt = behavior_stmt.where(or_(LearningBehaviorEvent.course_id == int(course.id), LearningBehaviorEvent.kp_id.in_(kp_ids)))
+    else:
+        behavior_stmt = behavior_stmt.where(or_(LearningBehaviorEvent.course_id == int(course.id), LearningBehaviorEvent.course_id.is_(None)))
+    behavior_rows = session.exec(behavior_stmt).all()
+
+    expression_stmt = select(ExpressionEvent).where(
+        ExpressionEvent.user_id.in_(student_ids),
+        ExpressionEvent.created_at >= start,
+        ExpressionEvent.created_at <= end,
+    )
+    if kp_ids:
+        expression_stmt = expression_stmt.where(ExpressionEvent.kp_id.in_(kp_ids))
+    expression_rows = session.exec(expression_stmt).all()
+
+    behavior_map: dict[int, list[LearningBehaviorEvent]] = {}
+    for row in behavior_rows:
+        behavior_map.setdefault(int(row.user_id), []).append(row)
+    expression_map: dict[int, list[ExpressionEvent]] = {}
+    for row in expression_rows:
+        expression_map.setdefault(int(row.user_id), []).append(row)
+
+    rows: list[dict[str, object]] = []
+    for student_id in student_ids:
+        student = student_map.get(student_id)
+        if student is None:
+            continue
+        behaviors = behavior_map.get(student_id, [])
+        expressions = expression_map.get(student_id, [])
+        active_days = set()
+        positive_total = 0.0
+        negative_total = 0.0
+        confidence_values: list[float] = []
+        behavior_counter: Counter[str] = Counter()
+
+        for row in behaviors:
+            payload = _json_payload(row.value_json)
+            active_days.add(row.created_at.date())
+            behavior_counter[row.event_type] += 1
+            positive, negative = _behavior_signal_score(event_type=row.event_type, payload=payload)
+            positive_total += positive
+            negative_total += negative
+            if payload.get("confidence") is not None:
+                try:
+                    confidence_values.append(float(payload.get("confidence") or 0.0))
+                except Exception:
+                    pass
+
+        expression_focus = 0
+        expression_distracted = 0
+        for row in expressions:
+            payload = {"label": row.label, "difficulty": row.difficulty, "confidence": row.confidence}
+            active_days.add(row.created_at.date())
+            behavior_counter[f"expression:{row.label}"] += 1
+            positive, negative = _behavior_signal_score(
+                event_type=row.label,
+                payload=payload,
+                expression_label=row.label,
+                confidence=float(row.confidence or 0.0),
+            )
+            positive_total += positive
+            negative_total += negative
+            label = str(row.label or "").strip().lower()
+            if label in _BEHAVIOR_POSITIVE_LABELS:
+                expression_focus += 1
+            elif label in _BEHAVIOR_NEGATIVE_LABELS:
+                expression_distracted += 1
+            if row.confidence is not None:
+                confidence_values.append(float(row.confidence))
+
+        total_events = len(behaviors) + len(expressions)
+        active_day_count = len(active_days)
+        signal_balance = positive_total - negative_total
+        behavior_score = _clamp01(0.46 + 0.09 * (positive_total ** 0.5) + 0.025 * min(active_day_count, 7) - 0.10 * negative_total)
+        if total_events == 0:
+            behavior_score = 0.0
+        avg_confidence = sum(confidence_values) / len(confidence_values) if confidence_values else 0.0
+        snapshot = session.exec(
+            select(LearnerProfileSnapshot).where(
+                LearnerProfileSnapshot.user_id == student_id,
+                LearnerProfileSnapshot.subject == stage.subject,
+                LearnerProfileSnapshot.grade == stage.grade,
+            )
+        ).first()
+        dynamic_score = float(snapshot.dynamic_score or 0.0) if snapshot is not None else behavior_score
+        rows.append(
+            {
+                "user_id": student_id,
+                "username": student.username,
+                "student_no": student.student_no or "",
+                "full_name": student.full_name or "",
+                "class_name": student.class_name or "",
+                "behavior_events": total_events,
+                "active_days": active_day_count,
+                "positive_events": round(positive_total, 2),
+                "negative_events": round(negative_total, 2),
+                "expression_events": len(expressions),
+                "expression_focus": expression_focus,
+                "expression_distracted": expression_distracted,
+                "avg_confidence": round(avg_confidence, 4),
+                "behavior_score": round(behavior_score, 4),
+                "signal_balance": round(signal_balance, 2),
+                "dominant_signal": "积极" if behavior_score >= 0.65 and signal_balance >= 0 else ("分心" if negative_total > positive_total else "观察"),
+                "dynamic_score": round(dynamic_score, 4),
+                "risk_level": _risk_level(dynamic_score),
+            }
+        )
+
+    summary = {
+        "course_id": int(course.id),
+        "stage_id": int(stage.id),
+        "stage_title": stage.title,
+        "student_count": len(rows),
+        "behavior_students": len([row for row in rows if int(row["behavior_events"]) > 0]),
+        "expression_students": len([row for row in rows if int(row["expression_events"]) > 0]),
+        "positive_events": int(round(sum(float(row["positive_events"]) for row in rows))),
+        "negative_events": int(round(sum(float(row["negative_events"]) for row in rows))),
+    }
+    return summary, rows
+
+
+def _apply_behavior_stage_rows(
+    session: Session,
+    *,
+    course: Course,
+    stage: CourseStage,
+    user: User,
+) -> tuple[StageImportBatch, int]:
+    enrollments = session.exec(
+        select(Enrollment).where(
+            Enrollment.course_id == int(course.id),
+            Enrollment.status == EnrollmentStatus.active,
+        )
+    ).all()
+    student_ids = [int(item.student_id) for item in enrollments if item.student_id is not None]
+    if not student_ids:
+        batch = StageImportBatch(
+            course_id=int(course.id),
+            stage_id=int(stage.id),
+            subject=stage.subject,
+            grade=stage.grade,
+            metric_type=StageMetricType.participation,
+            file_name="system_behavior_summary",
+            uploaded_by=user.username,
+            total_rows=0,
+            success_rows=0,
+            failed_rows=0,
+            error_json="[]",
+        )
+        session.add(batch)
+        session.commit()
+        session.refresh(batch)
+        return batch, 0
+
+    students = session.exec(select(User).where(User.id.in_(student_ids))).all()
+    student_map = {int(item.id): item for item in students if item.id is not None}
+    kp_ids = [
+        int(item)
+        for item in session.exec(
+            select(KnowledgePoint.id).where(
+                KnowledgePoint.subject == stage.subject,
+                KnowledgePoint.grade == stage.grade,
+            )
+        ).all()
+        if item is not None
+    ]
+    start, end = _stage_window(stage)
+
+    behavior_stmt = select(LearningBehaviorEvent).where(
+        LearningBehaviorEvent.user_id.in_(student_ids),
+        LearningBehaviorEvent.created_at >= start,
+        LearningBehaviorEvent.created_at <= end,
+    )
+    if kp_ids:
+        behavior_stmt = behavior_stmt.where(or_(LearningBehaviorEvent.course_id == int(course.id), LearningBehaviorEvent.kp_id.in_(kp_ids)))
+    else:
+        behavior_stmt = behavior_stmt.where(or_(LearningBehaviorEvent.course_id == int(course.id), LearningBehaviorEvent.course_id.is_(None)))
+    behavior_rows = session.exec(behavior_stmt).all()
+
+    expression_stmt = select(ExpressionEvent).where(
+        ExpressionEvent.user_id.in_(student_ids),
+        ExpressionEvent.created_at >= start,
+        ExpressionEvent.created_at <= end,
+    )
+    if kp_ids:
+        expression_stmt = expression_stmt.where(ExpressionEvent.kp_id.in_(kp_ids))
+    expression_rows = session.exec(expression_stmt).all()
+
+    per_student_day: dict[tuple[int, datetime.date], dict[str, object]] = {}
+
+    def bucket(user_id: int, day: datetime.date) -> dict[str, object]:
+        key = (user_id, day)
+        item = per_student_day.setdefault(
+            key,
+            {
+                "behavior_events": 0,
+                "active_days": 0,
+                "positive_events": 0.0,
+                "negative_events": 0.0,
+                "expression_events": 0,
+                "expression_focus": 0,
+                "expression_distracted": 0,
+                "confidence_values": [],
+                "signal_counter": Counter(),
+            },
+        )
+        item["active_days"] = 1
+        return item
+
+    for row in behavior_rows:
+        payload = _json_payload(row.value_json)
+        day = row.created_at.date()
+        item = bucket(int(row.user_id), day)
+        item["behavior_events"] = int(item["behavior_events"]) + 1
+        item["signal_counter"][row.event_type] += 1
+        positive, negative = _behavior_signal_score(event_type=row.event_type, payload=payload)
+        item["positive_events"] = float(item["positive_events"]) + positive
+        item["negative_events"] = float(item["negative_events"]) + negative
+        if payload.get("confidence") is not None:
+            try:
+                item["confidence_values"].append(float(payload.get("confidence") or 0.0))
+            except Exception:
+                pass
+
+    for row in expression_rows:
+        day = row.created_at.date()
+        item = bucket(int(row.user_id), day)
+        payload = {"label": row.label, "difficulty": row.difficulty, "confidence": row.confidence}
+        item["behavior_events"] = int(item["behavior_events"]) + 1
+        item["expression_events"] = int(item["expression_events"]) + 1
+        item["signal_counter"][f"expression:{row.label}"] += 1
+        positive, negative = _behavior_signal_score(
+            event_type=row.label,
+            payload=payload,
+            expression_label=row.label,
+            confidence=float(row.confidence or 0.0),
+        )
+        item["positive_events"] = float(item["positive_events"]) + positive
+        item["negative_events"] = float(item["negative_events"]) + negative
+        label = str(row.label or "").strip().lower()
+        if label in _BEHAVIOR_POSITIVE_LABELS:
+            item["expression_focus"] = int(item["expression_focus"]) + 1
+        elif label in _BEHAVIOR_NEGATIVE_LABELS:
+            item["expression_distracted"] = int(item["expression_distracted"]) + 1
+        if row.confidence is not None:
+            item["confidence_values"].append(float(row.confidence))
+
+    existing_rows = session.exec(
+        select(StageImportRecord).where(
+            StageImportRecord.stage_id == int(stage.id),
+            StageImportRecord.status == "behavior_auto",
+        )
+    ).all()
+    for row in existing_rows:
+        session.delete(row)
+    session.commit()
+
+    batch = StageImportBatch(
+        course_id=int(course.id),
+        stage_id=int(stage.id),
+        subject=stage.subject,
+        grade=stage.grade,
+        metric_type=StageMetricType.participation,
+        file_name="system_behavior_summary",
+        uploaded_by=user.username,
+        total_rows=len(per_student_day),
+        success_rows=0,
+        failed_rows=0,
+        error_json="[]",
+    )
+    session.add(batch)
+    session.commit()
+    session.refresh(batch)
+
+    affected_users: set[int] = set()
+    success = 0
+    for (user_id, day), item in sorted(per_student_day.items(), key=lambda x: (x[0][0], x[0][1])):
+        student = student_map.get(user_id)
+        if student is None:
+            continue
+        behavior_events = int(item["behavior_events"])
+        active_days = int(item["active_days"])
+        positive_events = float(item["positive_events"])
+        negative_events = float(item["negative_events"])
+        expression_events = int(item["expression_events"])
+        confidence_values = list(item["confidence_values"])
+        behavior_score = _clamp01(0.46 + 0.09 * (positive_events ** 0.5) + 0.025 * min(1, active_days) - 0.10 * negative_events)
+        signal_balance = positive_events - negative_events
+        status = "distracted" if negative_events > positive_events else "observed"
+        if behavior_score >= 0.72 and negative_events <= positive_events:
+            status = "engaged"
+        record = StageImportRecord(
+            batch_id=int(batch.id),
+            course_id=int(course.id),
+            stage_id=int(stage.id),
+            user_id=user_id,
+            subject=stage.subject,
+            grade=stage.grade,
+            metric_type=StageMetricType.participation,
+            score_value=round(behavior_score * 100, 4),
+            completion_value=_clamp01(behavior_events / 12.0),
+            duration_minutes=float(min(60.0, behavior_events * 1.5)),
+            status=status,
+            note=(
+                f"系统行为导入：{behavior_events} 条事件，"
+                f"{active_days} 天活跃，{expression_events} 条表情/行为信号"
+            ),
+            happened_at=datetime.combine(day, datetime.min.time()) + timedelta(hours=12),
+            raw_json=json.dumps(
+                {
+                    "source": "behavior_auto",
+                    "day": day.isoformat(),
+                    "user_id": user_id,
+                    "row": {
+                        "behavior_events": behavior_events,
+                        "positive_events": positive_events,
+                        "negative_events": negative_events,
+                        "expression_events": expression_events,
+                        "expression_focus": int(item["expression_focus"]),
+                        "expression_distracted": int(item["expression_distracted"]),
+                        "avg_confidence": (sum(confidence_values) / len(confidence_values)) if confidence_values else 0.0,
+                        "signal_balance": signal_balance,
+                    },
+                },
+                ensure_ascii=False,
+            ),
+        )
+        session.add(record)
+        success += 1
+        affected_users.add(user_id)
+
+    batch.success_rows = success
+    batch.failed_rows = 0
+    session.add(batch)
+    session.commit()
+
+    if affected_users:
+        recalculate_stage_snapshots_for_stage(
+            session,
+            stage_id=int(stage.id),
+            user_ids=sorted(affected_users),
+            persist=True,
+        )
+    return batch, len(affected_users)
 
 
 def _apply_internal_stage_rows(
@@ -886,6 +1344,93 @@ def export_internal_stage_summary(
     )
 
 
+@router.get("/internal-behavior-summary")
+def internal_behavior_summary(
+    course_id: int,
+    stage_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    course = _get_course_or_403(session, user, course_id)
+    stage = _get_stage_or_403(session, user, stage_id)
+    if stage.course_id != course_id:
+        raise HTTPException(status_code=400, detail="stage does not belong to the course")
+    summary, rows = _behavior_stage_rows(session, course=course, stage=stage)
+    return {
+        "summary": summary,
+        "rows": rows,
+        "columns": [
+            "username",
+            "student_no",
+            "full_name",
+            "class_name",
+            "behavior_events",
+            "active_days",
+            "positive_events",
+            "negative_events",
+            "expression_events",
+            "behavior_score",
+            "dynamic_score",
+            "risk_level",
+        ],
+    }
+
+
+@router.get("/internal-behavior-summary/export")
+def export_internal_behavior_summary(
+    course_id: int,
+    stage_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    course = _get_course_or_403(session, user, course_id)
+    stage = _get_stage_or_403(session, user, stage_id)
+    if stage.course_id != course_id:
+        raise HTTPException(status_code=400, detail="stage does not belong to the course")
+    _, rows = _behavior_stage_rows(session, course=course, stage=stage)
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(
+        [
+            "账号",
+            "学号",
+            "姓名",
+            "班级",
+            "行为事件数",
+            "活跃天数",
+            "正向信号",
+            "负向信号",
+            "表情信号数",
+            "行为得分",
+            "当前画像分",
+            "风险等级",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row["username"],
+                row["student_no"],
+                row["full_name"],
+                row["class_name"],
+                row["behavior_events"],
+                row["active_days"],
+                row["positive_events"],
+                row["negative_events"],
+                row["expression_events"],
+                f'{round(float(row["behavior_score"]) * 100, 1)}%',
+                f'{round(float(row["dynamic_score"]) * 100, 1)}%',
+                row["risk_level"],
+            ]
+        )
+    filename = f"stage_behavior_summary_{course_id}_{stage_id}.csv"
+    return Response(
+        content="\ufeff" + buffer.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 @router.post("/internal-summary/apply", response_model=StageImportResultOut)
 def apply_internal_stage_summary(
     course_id: int = Form(...),
@@ -936,6 +1481,43 @@ def apply_internal_stage_summary(
         affected_indicators=affected_indicators,
         recalculated_users=recalculated_users,
         next_action="系统已按当前映射将平台内学习数据写入该阶段记录。后续外部补充导入会继续叠加到同一阶段，并再次重算学生画像。",
+    )
+
+
+@router.post("/internal-behavior-summary/apply", response_model=StageImportResultOut)
+def apply_internal_behavior_summary(
+    course_id: int = Form(...),
+    stage_id: int = Form(...),
+    session: Session = Depends(get_session),
+    user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    course = _get_course_or_403(session, user, course_id)
+    stage = _get_stage_or_403(session, user, stage_id)
+    if stage.course_id != course_id:
+        raise HTTPException(status_code=400, detail="stage does not belong to the course")
+    batch, recalculated_users = _apply_behavior_stage_rows(
+        session,
+        course=course,
+        stage=stage,
+        user=user,
+    )
+    _log_action(
+        session,
+        user,
+        "stage_internal_behavior_apply",
+        "course_id=%s stage_id=%s success=%s" % (course_id, stage_id, batch.success_rows),
+    )
+    return StageImportResultOut(
+        batch_id=int(batch.id),
+        metric_type="behavior_auto",
+        total_rows=int(batch.total_rows),
+        success_rows=int(batch.success_rows),
+        failed_rows=int(batch.failed_rows),
+        errors=[],
+        affected_dimensions=["学习行为与过程", "情感与社会性发展"],
+        affected_indicators=["学习动机与态度", "协作能力与社交网络", "自主调节与专注度"],
+        recalculated_users=recalculated_users,
+        next_action="系统行为事件已导入到当前阶段画像，后续可继续叠加线下补充数据并再次重算。",
     )
 
 

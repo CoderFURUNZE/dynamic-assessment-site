@@ -24,6 +24,7 @@ class RecommendationOut(BaseModel):
     risk_level: str
     diagnosis: dict
     evidence: dict
+    triple: dict = {}
     remedy: dict
     remedy_path: dict
     resources: list[dict]

@@ -12,7 +12,13 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <el-tooltip :content="content" :placement="placement" :trigger="trigger" :show-after="showAfter">
+  <el-tooltip
+    :content="content"
+    :placement="placement"
+    :trigger="trigger"
+    :show-after="showAfter"
+    popper-class="app-tooltip-popper"
+  >
     <button type="button" class="hover-tip" aria-label="查看提示">
       ?
     </button>
@@ -39,5 +45,6 @@ withDefaults(defineProps<{
 .hover-tip:hover {
   color: #2f6fed;
   border-color: #c7d6ea;
+  transform: translateY(-1px);
 }
 </style>

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -28,6 +28,14 @@ async function loadCourses() {
   }
 }
 
+function studentQuery(extra: Record<string, string | undefined> = {}) {
+  const preview = String(route.query.preview || "");
+  return {
+    ...(preview === "1" ? { preview: "1" } : {}),
+    ...extra,
+  };
+}
+
 function syncQuery() {
   const preview = String(route.query.preview || "");
   router.replace({
@@ -55,8 +63,8 @@ onMounted(async () => {
       title="补充问卷"
       @change="syncQuery"
     >
-      <el-button @click="router.push('/student/overview')">返回学习首页</el-button>
-      <el-button type="primary" @click="router.push({ path: '/student/report', query: { subject: subject || undefined } })">
+      <el-button @click="router.push({ path: '/student/overview', query: studentQuery() })">返回学习首页</el-button>
+      <el-button type="primary" @click="router.push({ path: '/student/report', query: studentQuery({ subject: subject || undefined }) })">
         去看学习报告
       </el-button>
     </WorkspaceTopbar>

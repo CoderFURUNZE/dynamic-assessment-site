@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { clearToken, getRole, getToken } from "./token";
 import { isLoading } from "./loading";
 import { buildTeacherSubjectQuery, getSavedTeacherSubject } from "./utils/teacherCourse";
+import { Monitor, SwitchButton, User } from "@element-plus/icons-vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -18,6 +19,12 @@ const routeGroup = computed<"admin" | "teacher" | "student" | "start" | "login">
   if (route.path === "/start") return "start";
   return "login";
 });
+const isStudentPreview = computed(
+  () =>
+    routeGroup.value === "student"
+    && (role.value === "admin" || role.value === "teacher")
+    && String(route.query.preview || "") === "1",
+);
 
 const isAuthPage = computed(() => routeGroup.value === "login" || routeGroup.value === "start");
 const navItems = computed(() => {
@@ -60,9 +67,14 @@ function isNavActive(path: string) {
 }
 
 function navigateTo(path: string) {
+  const preview = String(route.query.preview || "");
+  if (routeGroup.value === "student" && preview === "1" && path.startsWith("/student")) {
+    router.push({ path, query: { ...route.query, preview: "1" } });
+    return;
+  }
   if (routeGroup.value === "teacher" && path.startsWith("/teacher")) {
     const subject = String(route.query.subject || getSavedTeacherSubject() || "");
-    router.push({ path, query: buildTeacherSubjectQuery(subject) });
+    router.push({ path, query: { ...route.query, ...buildTeacherSubjectQuery(subject) } });
     return;
   }
   router.push(path);
@@ -70,167 +82,322 @@ function navigateTo(path: string) {
 </script>
 
 <template>
-  <el-container class="app-shell" :class="{ 'login-container': isAuthPage }">
-    <el-header v-if="!isAuthPage" class="app-header">
-      <div class="app-header__main">
-        <div class="app-brand">动态评价系统</div>
-        <div class="app-header__meta">选课程，看图谱，学内容，看结果</div>
-      </div>
-      <nav v-if="navItems.length" class="app-nav">
-        <button
-          v-for="item in navItems"
-          :key="item.path"
-          class="app-nav__item"
-          :class="{ 'app-nav__item--active': isNavActive(item.path) }"
-          @click="navigateTo(item.path)"
-        >
-          {{ item.label }}
-        </button>
-      </nav>
-      <div class="app-menu-label" :class="`app-menu-label--${routeGroup}`">
-        {{ routeGroup === "admin" ? "管理端" : routeGroup === "teacher" ? "教师工作台" : "学习中心" }}
-      </div>
-      <div class="app-header__actions">
-        <el-button v-if="(routeGroup === 'admin' && isAdmin) || (routeGroup === 'teacher' && isTeacher)" size="small" @click="router.push('/student/overview')">
-          学习者端预览
-        </el-button>
-        <el-button v-if="getToken()" type="default" @click="logout">退出</el-button>
-      </div>
-    </el-header>
+  <div class="app-root" :class="{ 'is-auth': isAuthPage }">
+    <!-- 顶部导航 -->
+    <header v-if="!isAuthPage" class="global-header glass-card">
+      <div class="header-content">
+        <!-- Logo -->
+        <div class="header-left">
+          <div class="logo-wrapper" @click="router.push('/')">
+            <div class="logo-icon"></div>
+            <div class="logo-text">
+              <span class="name">动态评价系统</span>
+              <span class="tag">DYNAMIC ASSESSMENT</span>
+            </div>
+          </div>
+        </div>
 
-    <template v-if="!isAuthPage">
-      <el-main class="app-main">
-        <router-view />
-      </el-main>
-    </template>
-    <template v-else>
-      <router-view />
-    </template>
+        <!-- 导航项 -->
+        <nav class="header-center">
+          <div class="nav-pills">
+            <button
+              v-for="item in navItems"
+              :key="item.path"
+              class="nav-pill"
+              :class="{ active: isNavActive(item.path) }"
+              @click="navigateTo(item.path)"
+            >
+              {{ item.label }}
+            </button>
+          </div>
+        </nav>
 
-    <div v-if="isLoading" class="global-loading-mask">加载中...</div>
-  </el-container>
+        <!-- 用户操作 -->
+        <div class="header-right">
+          <div class="user-profile">
+            <div class="role-tag" :class="routeGroup">
+              {{
+                isStudentPreview
+                  ? "预览模式"
+                  : routeGroup === "admin"
+                    ? "管理员"
+                    : routeGroup === "teacher"
+                      ? "教师"
+                      : "学生"
+              }}
+            </div>
+            
+            <div class="action-buttons">
+              <el-tooltip v-if="(routeGroup === 'admin' && isAdmin) || (routeGroup === 'teacher' && isTeacher)" content="预览学生端" placement="bottom">
+                <button class="icon-btn" @click="router.push({ path: '/student/overview', query: { ...route.query, preview: '1' } })">
+                  <el-icon><Monitor /></el-icon>
+                </button>
+              </el-tooltip>
+              
+              <el-dropdown trigger="click">
+                <button class="icon-btn profile-trigger">
+                  <el-icon><User /></el-icon>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item @click="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主体内容 -->
+    <main class="global-main" :class="{ 'has-header': !isAuthPage }">
+      <div class="main-content-wrapper">
+        <router-view v-slot="{ Component }">
+          <transition name="page-fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </div>
+    </main>
+
+    <!-- 全局加载状态 -->
+    <div v-if="isLoading" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <span>正在处理中...</span>
+    </div>
+  </div>
 </template>
 
 <style>
-.login-container {
-  display: block;
+/* 全局布局样式 */
+.app-root {
   height: 100vh;
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 确保根容器不溢出 */
 }
 
-.global-loading-mask {
+.global-header {
+  position: absolute; /* 改为绝对定位以更好控制流 */
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 48px);
+  max-width: 1400px;
+  height: 64px;
+  z-index: 1000;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.header-content {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Logo 样式 */
+.logo-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #4f8cff 0%, #6366f1 100%);
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(79, 140, 255, 0.3);
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.logo-text .name {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.logo-text .tag {
+  font-size: 9px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.1em;
+}
+
+/* 导航药丸样式 */
+.header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.nav-pills {
+  display: flex;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.05);
+  padding: 4px;
+  border-radius: 14px;
+}
+
+.nav-pill {
+  padding: 8px 18px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-pill:hover {
+  color: #4f8cff;
+}
+
+.nav-pill.active {
+  background: #fff;
+  color: #4f8cff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* 右侧用户区域 */
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.role-tag {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.role-tag.admin { background: #fef2f2; color: #ef4444; }
+.role-tag.teacher { background: #f0fdf4; color: #10b981; }
+.role-tag.student { background: #eff6ff; color: #4f8cff; }
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-btn:hover {
+  color: #4f8cff;
+  border-color: #4f8cff;
+  background: #eff6ff;
+}
+
+/* 主体区域 */
+.global-main {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 禁止主区域滚动 */
+}
+
+.global-main.has-header {
+  padding-top: 96px; /* 留出 header 空间 + 间距 */
+  padding-bottom: 24px;
+}
+
+/* 页面内容容器适配一屏 */
+.main-content-wrapper {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 过渡动画 */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* 加载遮罩 */
+.loading-overlay {
   position: fixed;
   inset: 0;
+  z-index: 2000;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(4px);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(18, 31, 51, 0.2);
-  color: #fff;
-  z-index: 3000;
-  font-size: 15px;
-  font-weight: 700;
-  backdrop-filter: blur(6px);
+  gap: 16px;
+  color: #4f8cff;
+  font-weight: 600;
 }
 
-.app-header__main {
-  display: grid;
-  gap: 4px;
-  min-width: 220px;
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #eff6ff;
+  border-top-color: #4f8cff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
-.app-header__meta {
-  font-size: 12px;
-  color: var(--app-ink-soft);
-  letter-spacing: 0.02em;
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-.app-header__actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.app-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  padding: 2px 0;
-}
-
-.app-nav__item {
-  min-height: 38px;
-  border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.6);
-  color: var(--app-ink-soft);
-  border-radius: 999px;
-  padding: 0 14px;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.app-nav__item:hover {
-  background: #ffffff;
-  color: var(--app-ink);
-}
-
-.app-nav__item--active {
-  border-color: #d7e1ed;
-  background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
-  color: var(--app-ink);
-  box-shadow: var(--app-shadow-soft);
-}
-
-.app-menu-label {
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #62758f;
-  font-weight: 700;
-  font-size: 12px;
-  border: 1px solid var(--app-border);
-  display: inline-flex;
-  align-items: center;
-}
-
-.app-menu-label--admin {
-  background: #f7f9fc;
-}
-
-.app-menu-label--teacher {
-  background: #f7faf8;
-  color: #587a66;
-  border-color: #dcebe4;
-}
-
-.app-menu-label--student {
-  background: #f7f9fc;
-  color: #62758f;
-}
-
-@media (max-width: 900px) {
-  .app-header__main {
-    width: 100%;
+@media (max-width: 1024px) {
+  .global-header {
+    width: calc(100% - 24px);
+    top: 12px;
   }
-
-  .app-nav {
-    width: 100%;
-    order: 4;
-  }
-
-  .app-header__actions {
-    width: 100%;
+  .header-center {
+    display: none; /* 移动端隐藏中间导航 */
   }
 }
 </style>

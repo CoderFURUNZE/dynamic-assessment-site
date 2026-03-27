@@ -7,7 +7,16 @@ connect_args = {}
 if settings.database_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
-engine = create_engine(settings.database_url, echo=False, connect_args=connect_args)
+try:
+    engine = create_engine(settings.database_url, echo=False, connect_args=connect_args)
+except ModuleNotFoundError as exc:
+    if "psycopg2" in str(exc) and settings.database_url.startswith("postgresql"):
+        raise RuntimeError(
+            "PostgreSQL 连接依赖未安装：psycopg2-binary。\n"
+            "请先在 backend 环境中执行：pip install -r requirements.txt\n"
+            "然后再启动后端或运行初始化脚本。"
+        ) from exc
+    raise
 
 
 def init_db() -> None:

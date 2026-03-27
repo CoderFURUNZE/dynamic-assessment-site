@@ -198,14 +198,23 @@ def main() -> int:
             detail=f"payload={data}",
         )
 
-    code, admin_courses = _request_json(
+    code, _ = _request_json(
         method="GET",
         base_url=args.base_url,
         path="/api/admin/courses",
         token=teacher_token,
         timeout=args.timeout,
     )
-    _expect_status(results, name="教师课程管理列表 /api/admin/courses", code=code)
+    _expect_status(results, name="教师访问管理员课程接口应被拒绝 /api/admin/courses", code=code, expected=(403,))
+
+    code, admin_courses = _request_json(
+        method="GET",
+        base_url=args.base_url,
+        path="/api/admin/courses",
+        token=admin_token,
+        timeout=args.timeout,
+    )
+    _expect_status(results, name="管理员课程管理列表 /api/admin/courses", code=code)
 
     code, _ = _request_json(
         method="GET",
@@ -279,7 +288,16 @@ def main() -> int:
         token=student_token,
         timeout=args.timeout,
     )
-    _expect_status(results, name="学生课程列表 /api/graph/courses", code=code)
+    _expect_status(results, name="学生已选课程列表 /api/graph/courses", code=code)
+
+    code, _ = _request_json(
+        method="GET",
+        base_url=args.base_url,
+        path="/api/graph/available-courses",
+        token=student_token,
+        timeout=args.timeout,
+    )
+    _expect_status(results, name="学生可学习课程列表 /api/graph/available-courses", code=code)
 
     subject = ""
     grade = ""

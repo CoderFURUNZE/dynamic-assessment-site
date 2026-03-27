@@ -1062,6 +1062,14 @@ onBeforeUnmount(() => {
                 <i class="workspace-stage__legend-line workspace-stage__legend-line--path"></i>
                 蓝色虚线：推荐路径，同色环表示同类能力或素养
               </span>
+              <span class="workspace-stage__legend-item">
+                <i class="workspace-stage__legend-rings">
+                  <span class="ring ring--literacy"></span>
+                  <span class="ring ring--ability"></span>
+                  <span class="ring ring--knowledge"></span>
+                </i>
+                三层环：知识（内）/ 能力（中）/ 素养（外）
+              </span>
             </div>
           </div>
           <div class="workspace-stage__focus">
@@ -1667,6 +1675,40 @@ onBeforeUnmount(() => {
   border-top-color: #5a8ef0;
   border-top-style: dashed;
   border-top-width: 3px;
+}
+
+.workspace-stage__legend-rings {
+  width: 28px;
+  height: 18px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.workspace-stage__legend-rings .ring {
+  position: absolute;
+  border-radius: 999px;
+  border: 2px solid transparent;
+}
+
+.workspace-stage__legend-rings .ring--knowledge {
+  width: 10px;
+  height: 10px;
+  border-color: rgba(46, 169, 107, 0.9);
+}
+
+.workspace-stage__legend-rings .ring--ability {
+  width: 14px;
+  height: 14px;
+  border-color: rgba(240, 180, 41, 0.85);
+}
+
+.workspace-stage__legend-rings .ring--literacy {
+  width: 18px;
+  height: 18px;
+  border-color: rgba(118, 91, 232, 0.75);
 }
 
 .workspace-stage__pill,

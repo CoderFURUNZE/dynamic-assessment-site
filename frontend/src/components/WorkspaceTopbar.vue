@@ -72,9 +72,9 @@ function handleChange(value: string) {
 .workspace-topbar__badge {
   font-size: 11px;
   text-transform: uppercase;
-  color: #6a7e9a;
+  color: var(--app-ink-soft);
   font-weight: 800;
-  background: #ffffff;
+  background: rgba(79, 140, 255, 0.08);
   padding: 4px 10px;
   border-radius: 999px;
   width: fit-content;
@@ -117,7 +117,7 @@ function handleChange(value: string) {
   align-items: center;
   gap: 8px;
   border-top: 1px solid var(--app-border);
-  background: #ffffff;
+  background: #fbfcfe;
 }
 
 .workspace-topbar__meta::before {

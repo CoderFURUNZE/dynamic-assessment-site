@@ -659,16 +659,17 @@ def get_profile_trend(
     subject: str,
     grade: str,
     limit: int = 8,
+    days: int | None = None,
 ) -> list[LearnerProfileSnapshot]:
+    stmt = select(LearnerProfileSnapshot).where(
+        LearnerProfileSnapshot.user_id == user_id,
+        LearnerProfileSnapshot.subject == subject,
+        LearnerProfileSnapshot.grade == grade,
+    )
+    if days is not None and days > 0:
+        stmt = stmt.where(LearnerProfileSnapshot.updated_at >= datetime.utcnow() - timedelta(days=days))
     rows = session.exec(
-        select(LearnerProfileSnapshot)
-        .where(
-            LearnerProfileSnapshot.user_id == user_id,
-            LearnerProfileSnapshot.subject == subject,
-            LearnerProfileSnapshot.grade == grade,
-        )
-        .order_by(desc(LearnerProfileSnapshot.updated_at), desc(LearnerProfileSnapshot.id))
-        .limit(max(1, limit))
+        stmt.order_by(desc(LearnerProfileSnapshot.updated_at), desc(LearnerProfileSnapshot.id)).limit(max(1, limit))
     ).all()
     return list(rows)
 
@@ -680,16 +681,17 @@ def get_stage_snapshot_trend(
     subject: str,
     grade: str,
     limit: int = 8,
+    days: int | None = None,
 ) -> list[StageEvaluationSnapshot]:
+    stmt = select(StageEvaluationSnapshot).where(
+        StageEvaluationSnapshot.user_id == user_id,
+        StageEvaluationSnapshot.subject == subject,
+        StageEvaluationSnapshot.grade == grade,
+    )
+    if days is not None and days > 0:
+        stmt = stmt.where(StageEvaluationSnapshot.updated_at >= datetime.utcnow() - timedelta(days=days))
     rows = session.exec(
-        select(StageEvaluationSnapshot)
-        .where(
-            StageEvaluationSnapshot.user_id == user_id,
-            StageEvaluationSnapshot.subject == subject,
-            StageEvaluationSnapshot.grade == grade,
-        )
-        .order_by(desc(StageEvaluationSnapshot.stage_order), desc(StageEvaluationSnapshot.updated_at))
-        .limit(max(1, limit))
+        stmt.order_by(desc(StageEvaluationSnapshot.stage_order), desc(StageEvaluationSnapshot.updated_at)).limit(max(1, limit))
     ).all()
     return list(rows)
 
@@ -1291,6 +1293,28 @@ def sync_profile_snapshot_from_stage(
     )
     if focus_dimensions:
         final_reason_summary += f"；主要优势：{'、'.join(focus_dimensions)}"
+    stage_dimension_summary = _json_load(latest.dimension_summary_json, {})
+    dynamic_breakdown = {
+        "learning_frequency": float(stage_dimension_summary.get("activity_frequency", 0.0) or 0.0),
+        "study_duration": float(stage_dimension_summary.get("study_duration", 0.0) or 0.0),
+        "resource_completion": float(stage_dimension_summary.get("completion", 0.0) or 0.0),
+        "streak": float(stage_dimension_summary.get("continuity", 0.0) or 0.0),
+        "practice_accuracy": float(stage_dimension_summary.get("task_completion", 0.0) or 0.0),
+        "quiz_accuracy": float(stage_dimension_summary.get("quiz_score", 0.0) or 0.0),
+        "mastery_growth": float(stage_dimension_summary.get("stage_mastery", 0.0) or 0.0),
+        "unit_time_accuracy": float(latest.efficiency),
+        "task_completion": float(stage_dimension_summary.get("task_completion", 0.0) or 0.0),
+        "overdue_rate": max(0.0, 1.0 - float(stage_dimension_summary.get("on_time_rate", 0.0) or 0.0)),
+        "wrong_streak": max(0.0, 1.0 - float(stage_dimension_summary.get("completion", 0.0) or 0.0)),
+        "abandonment_rate": max(0.0, 1.0 - float(stage_dimension_summary.get("participation", 0.0) or 0.0)),
+        "engagement_score": float(latest.engagement),
+        "achievement_score": float(latest.achievement),
+        "efficiency_score": float(latest.efficiency),
+        "risk_score": float(latest.risk),
+        "dynamic_score": float(latest.dynamic_score),
+        "stability": float(stability),
+        "summary": final_reason_summary,
+    }
 
     snapshot = LearnerProfileSnapshot(
         user_id=user_id,
@@ -1313,6 +1337,7 @@ def sync_profile_snapshot_from_stage(
                 "portrait_indicators": _json_load(latest.indicator_summary_json, {}).get("portrait_indicators", []),
                 "final_portrait_dimensions": final_portrait_dimensions,
                 "final_portrait_indicators": final_portrait_indicators,
+                "dynamic_breakdown": dynamic_breakdown,
                 "term_summary": {
                     **term_summary,
                     "final_reason_summary": final_reason_summary,
@@ -1737,6 +1762,30 @@ def recalculate_profile_snapshot(
         + float(dynamic_weights.get("course_mastery", 0.35)) * course_mastery
         + float(dynamic_weights.get("stability", 0.1)) * stability
     )
+    profile_breakdown = {
+        "learning_frequency": learning_frequency,
+        "study_duration": study_duration,
+        "resource_completion": resource_completion,
+        "streak": streak,
+        "practice_accuracy": practice_accuracy,
+        "quiz_accuracy": quiz_accuracy,
+        "mastery_growth": mastery_growth,
+        "unit_time_accuracy": unit_time_accuracy,
+        "task_completion": task_completion,
+        "overdue_rate": overdue_rate,
+        "wrong_streak": wrong_streak_ratio,
+        "abandonment_rate": abandonment_rate,
+        "engagement_score": engagement,
+        "achievement_score": achievement,
+        "efficiency_score": efficiency,
+        "risk_score": risk,
+        "dynamic_score": dynamic_score,
+        "stability": stability,
+        "summary": (
+            f"投入 {engagement:.2f} / 成效 {achievement:.2f} / 效率 {efficiency:.2f} / "
+            f"风险 {risk:.2f} / 掌握度 {course_mastery:.2f}"
+        ),
+    }
 
     persona_type = _classify_persona(
         engagement=engagement,
@@ -1787,6 +1836,7 @@ def recalculate_profile_snapshot(
         risk_level=_risk_level(dynamic_score),
         override_source=override_source,
         reason_summary=reason_summary,
+        portrait_summary_json=_json_dump({"dynamic_breakdown": profile_breakdown}),
         updated_at=now,
     )
     if persist:

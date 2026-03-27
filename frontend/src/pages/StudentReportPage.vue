@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -25,6 +25,14 @@ async function loadCourses() {
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载课程失败");
   }
+}
+
+function studentQuery(extra: Record<string, string | undefined> = {}) {
+  const preview = String(route.query.preview || "");
+  return {
+    ...(preview === "1" ? { preview: "1" } : {}),
+    ...extra,
+  };
 }
 
 function syncQuery() {
@@ -54,8 +62,8 @@ onMounted(async () => {
       title="学习报告"
       @change="syncQuery"
     >
-      <el-button @click="router.push('/student/overview')">返回学习首页</el-button>
-      <el-button @click="router.push({ path: '/student/questionnaire', query: { subject: subject || undefined } })">
+      <el-button @click="router.push({ path: '/student/overview', query: studentQuery() })">返回学习首页</el-button>
+      <el-button @click="router.push({ path: '/student/questionnaire', query: studentQuery({ subject: subject || undefined }) })">
         去补充问卷
       </el-button>
     </WorkspaceTopbar>
