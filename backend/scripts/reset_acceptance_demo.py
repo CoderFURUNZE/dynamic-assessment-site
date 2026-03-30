@@ -21,6 +21,7 @@ from app.db.models import (  # noqa: E402
     Course,
     CourseApplication,
     CourseEnrollStatus,
+    CourseLifecycleStatus,
     CourseNotification,
     CoursePortraitIndicatorSelection,
     CourseStage,
@@ -114,6 +115,9 @@ def _course(session: Session, *, code: str, title: str, description: str, teache
     row.description = description
     row.teacher_id = teacher_id
     row.active = True
+    row.lifecycle_status = CourseLifecycleStatus.active
+    row.start_at = NOW - timedelta(days=30)
+    row.end_at = NOW + timedelta(days=365)
     row.max_students = max_students
     row.enroll_status = CourseEnrollStatus.open
     row.apply_deadline = NOW + timedelta(days=20)
@@ -250,7 +254,18 @@ def _resource(
     return row
 
 
-def _question(session: Session, *, kp: KnowledgePoint, prompt: str, answer: str, options: list[str], difficulty: float, explanation: str) -> Question:
+def _question(
+    session: Session,
+    *,
+    kp: KnowledgePoint,
+    prompt: str,
+    answer: str,
+    options: list[str],
+    difficulty: float,
+    explanation: str,
+    cognitive_level: str = "understand",
+    ability_subtags: str = "",
+) -> Question:
     row = session.exec(select(Question).where(Question.kp_id == int(kp.id), Question.prompt == prompt)).first()
     if row is None:
         row = Question(subject=kp.subject, grade=kp.grade, kp_id=int(kp.id), type="mcq", prompt=prompt, answer=answer)
@@ -263,6 +278,8 @@ def _question(session: Session, *, kp: KnowledgePoint, prompt: str, answer: str,
     row.difficulty = difficulty
     row.source = "acceptance_demo"
     row.tags = kp.chapter
+    row.cognitive_level = cognitive_level
+    row.ability_subtags = ability_subtags
     session.add(row)
     session.commit()
     session.refresh(row)
@@ -571,6 +588,12 @@ def seed_acceptance_demo() -> None:
 
         for kp in os_kps:
             for idx in range(1, 5):
+                _lvl_tags = [
+                    ("understand", ""),
+                    ("understand", "基础概念"),
+                    ("apply", "逻辑推理"),
+                    ("analyze", "系统分析"),
+                ][idx - 1]
                 question = _question(
                     session,
                     kp=kp,
@@ -584,6 +607,8 @@ def seed_acceptance_demo() -> None:
                     ],
                     difficulty=min(0.35 + idx * 0.08, 0.85),
                     explanation=f"{kp.title} 的这道题用于验收学生是否掌握课堂关键结论。",
+                    cognitive_level=_lvl_tags[0],
+                    ability_subtags=_lvl_tags[1],
                 )
                 _assign_question(session, kp_id=int(kp.id), question_id=int(question.id), order=idx)
             _task(

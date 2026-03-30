@@ -2,6 +2,9 @@ const KEY = "da_token";
 const ROLE_KEY = "da_role";
 const EXPIRES_KEY = "da_expires_at";
 const USERNAME_KEY = "da_username";
+/** 登录成功后若干毫秒内不因 401 清会话（缓解旧请求/竞态误伤） */
+const AUTH_GRACE_KEY = "da_auth_grace_until";
+const AUTH_GRACE_MS = 12000;
 
 // 输入验证函数
 export function validateInput(input: string, type: 'email' | 'password' | 'username'): boolean {
@@ -28,6 +31,10 @@ export function setToken(token: string, rememberDays = 0) {
   if (rememberDays > 0) {
     localStorage.setItem(KEY, token);
     localStorage.setItem(EXPIRES_KEY, String(Date.now() + rememberDays * 24 * 60 * 60 * 1000));
+  } else {
+    // 关闭「记住我」时，必须清理旧的本地 token/过期时间，避免 getToken 被历史过期时间误判后直接 clearToken
+    localStorage.removeItem(KEY);
+    localStorage.removeItem(EXPIRES_KEY);
   }
   
   // 从 token 中提取并存储角色和用户名
@@ -35,6 +42,22 @@ export function setToken(token: string, rememberDays = 0) {
   const username = decodeUsernameFromToken(token);
   if (role) setRole(role);
   if (username) setUsername(username);
+
+  try {
+    sessionStorage.setItem(AUTH_GRACE_KEY, String(Date.now() + AUTH_GRACE_MS));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 登录后宽限期内：全局 401 拦截器可跳过清 token / 跳转登录 */
+export function isWithinAuthGracePeriod(): boolean {
+  try {
+    const t = Number(sessionStorage.getItem(AUTH_GRACE_KEY) || "0");
+    return Number.isFinite(t) && Date.now() < t;
+  } catch {
+    return false;
+  }
 }
 
 // 安全的 token 获取
@@ -48,7 +71,7 @@ export function getToken(): string | null {
     return null;
   }
   
-  // 检查 token 是否过期
+  // 检查「记住我」本地过期时间（仍以服务端校验为准；不在此根据 JWT exp 强清，避免本机时钟/解析差异导致误登出）
   const expires = localStorage.getItem(EXPIRES_KEY);
   if (expires) {
     const ts = Number(expires);
@@ -57,7 +80,7 @@ export function getToken(): string | null {
       return null;
     }
   }
-  
+
   return token;
 }
 
@@ -121,12 +144,13 @@ export function setRole(role: string) {
 // 获取角色
 export function getRole(): string | null {
   const token = getToken();
-  if (token) {
-    const roleFromToken = decodeRoleFromToken(token);
-    if (roleFromToken) {
-      setRole(roleFromToken);
-      return roleFromToken;
-    }
+  if (!token) {
+    return null;
+  }
+  const roleFromToken = decodeRoleFromToken(token);
+  if (roleFromToken) {
+    setRole(roleFromToken);
+    return roleFromToken;
   }
   return sessionStorage.getItem(ROLE_KEY) || localStorage.getItem(ROLE_KEY);
 }
@@ -145,12 +169,13 @@ export function setUsername(username: string) {
 // 获取用户名
 export function getUsername(): string | null {
   const token = getToken();
-  if (token) {
-    const usernameFromToken = decodeUsernameFromToken(token);
-    if (usernameFromToken) {
-      setUsername(usernameFromToken);
-      return usernameFromToken;
-    }
+  if (!token) {
+    return null;
+  }
+  const usernameFromToken = decodeUsernameFromToken(token);
+  if (usernameFromToken) {
+    setUsername(usernameFromToken);
+    return usernameFromToken;
   }
   return sessionStorage.getItem(USERNAME_KEY) || localStorage.getItem(USERNAME_KEY);
 }
@@ -165,6 +190,7 @@ export function clearToken() {
   localStorage.removeItem(ROLE_KEY);
   localStorage.removeItem(USERNAME_KEY);
   localStorage.removeItem(EXPIRES_KEY);
+  sessionStorage.removeItem(AUTH_GRACE_KEY);
   // 清除 last route 数据
   if (username) {
     localStorage.removeItem(`da_last_route_${username}`);

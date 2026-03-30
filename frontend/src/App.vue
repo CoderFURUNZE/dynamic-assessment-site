@@ -68,6 +68,15 @@ function isNavActive(path: string) {
 
 function navigateTo(path: string) {
   const preview = String(route.query.preview || "");
+  const lastStudentSubject = (localStorage.getItem("da_student_last_subject") || "").trim();
+
+  if (routeGroup.value === "student" && path === "/student/graph-workspace") {
+    const q: Record<string, string> = {};
+    if (lastStudentSubject) q.subject = lastStudentSubject;
+    if (preview === "1") q.preview = "1";
+    router.push({ path, query: { ...route.query, ...q } });
+    return;
+  }
   if (routeGroup.value === "student" && preview === "1" && path.startsWith("/student")) {
     router.push({ path, query: { ...route.query, preview: "1" } });
     return;
@@ -172,11 +181,14 @@ function navigateTo(path: string) {
 <style>
 /* 全局布局样式 */
 .app-root {
-  height: 100vh;
-  width: 100vw;
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 100vw;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* 确保根容器不溢出 */
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .global-header {
@@ -188,7 +200,7 @@ function navigateTo(path: string) {
   max-width: 1400px;
   height: 64px;
   z-index: 1000;
-  border-radius: 20px;
+  border-radius: var(--app-radius-lg);
   display: flex;
   align-items: center;
   padding: 0 24px;
@@ -199,6 +211,9 @@ function navigateTo(path: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  row-gap: 10px;
 }
 
 /* Logo 样式 */
@@ -212,8 +227,8 @@ function navigateTo(path: string) {
 .logo-icon {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, #4f8cff 0%, #6366f1 100%);
-  border-radius: 10px;
+  background: var(--app-gradient-primary);
+  border-radius: var(--app-radius-sm);
   box-shadow: 0 4px 10px rgba(79, 140, 255, 0.3);
 }
 
@@ -223,16 +238,16 @@ function navigateTo(path: string) {
 }
 
 .logo-text .name {
-  font-size: 16px;
+  font-size: var(--app-text-md);
   font-weight: 800;
-  color: #0f172a;
+  color: var(--app-text-main);
   line-height: 1.2;
 }
 
 .logo-text .tag {
   font-size: 9px;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--app-text-light);
   letter-spacing: 0.1em;
 }
 
@@ -245,32 +260,34 @@ function navigateTo(path: string) {
 
 .nav-pills {
   display: flex;
-  gap: 4px;
-  background: rgba(15, 23, 42, 0.05);
-  padding: 4px;
+  gap: var(--app-space-1);
+  background: color-mix(in srgb, var(--app-text-main) 5%, transparent);
+  padding: var(--app-space-1);
   border-radius: 14px;
 }
 
 .nav-pill {
-  padding: 8px 18px;
+  padding: var(--app-space-2) 18px;
   border: none;
   background: transparent;
-  color: #64748b;
-  font-size: 14px;
+  color: var(--app-text-soft);
+  font-size: var(--app-text-base);
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: var(--app-radius-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color var(--app-duration) var(--app-ease-out),
+    background var(--app-duration) var(--app-ease-out),
+    box-shadow var(--app-duration) var(--app-ease-out);
 }
 
 .nav-pill:hover {
-  color: #4f8cff;
+  color: var(--app-primary);
 }
 
 .nav-pill.active {
-  background: #fff;
-  color: #4f8cff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  background: var(--app-card);
+  color: var(--app-primary);
+  box-shadow: var(--app-shadow-sm);
 }
 
 /* 右侧用户区域 */
@@ -293,9 +310,9 @@ function navigateTo(path: string) {
   text-transform: uppercase;
 }
 
-.role-tag.admin { background: #fef2f2; color: #ef4444; }
-.role-tag.teacher { background: #f0fdf4; color: #10b981; }
-.role-tag.student { background: #eff6ff; color: #4f8cff; }
+.role-tag.admin { background: color-mix(in srgb, var(--app-error) 12%, white); color: var(--app-error); }
+.role-tag.teacher { background: color-mix(in srgb, var(--app-success) 14%, white); color: var(--app-success); }
+.role-tag.student { background: var(--app-primary-soft); color: var(--app-primary); }
 
 .action-buttons {
   display: flex;
@@ -306,42 +323,43 @@ function navigateTo(path: string) {
   width: 36px;
   height: 36px;
   border: none;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  color: #64748b;
+  background: var(--app-card);
+  border: 1px solid var(--app-border-hover);
+  border-radius: var(--app-radius-sm);
+  color: var(--app-text-soft);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color var(--app-duration) var(--app-ease-out),
+    border-color var(--app-duration) var(--app-ease-out),
+    background var(--app-duration) var(--app-ease-out);
 }
 
 .icon-btn:hover {
-  color: #4f8cff;
-  border-color: #4f8cff;
-  background: #eff6ff;
+  color: var(--app-primary);
+  border-color: var(--app-primary);
+  background: var(--app-primary-soft);
 }
 
 /* 主体区域 */
 .global-main {
-  flex: 1;
+  flex: 1 0 auto;
   width: 100%;
-  height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* 禁止主区域滚动 */
+  overflow: visible;
 }
 
 .global-main.has-header {
   padding-top: 96px; /* 留出 header 空间 + 间距 */
-  padding-bottom: 24px;
+  padding-bottom: var(--app-space-5);
 }
 
-/* 页面内容容器适配一屏 */
+/* 页面内容随高度伸展，由 app-root 统一纵向滚动 */
 .main-content-wrapper {
-  flex: 1;
-  overflow: hidden;
+  flex: 1 0 auto;
+  overflow: visible;
   display: flex;
   flex-direction: column;
 }
@@ -349,7 +367,8 @@ function navigateTo(path: string) {
 /* 过渡动画 */
 .page-fade-enter-active,
 .page-fade-leave-active {
-  transition: opacity 0.3s, transform 0.3s;
+  transition: opacity var(--app-duration-slow) var(--app-ease-out),
+    transform var(--app-duration-slow) var(--app-ease-out);
 }
 
 .page-fade-enter-from {
@@ -367,22 +386,22 @@ function navigateTo(path: string) {
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: rgba(255, 255, 255, 0.8);
+  background: color-mix(in srgb, var(--app-card) 82%, transparent);
   backdrop-filter: blur(4px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  color: #4f8cff;
+  gap: var(--app-space-4);
+  color: var(--app-primary);
   font-weight: 600;
 }
 
 .loading-spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #eff6ff;
-  border-top-color: #4f8cff;
+  border: 3px solid var(--app-primary-tint);
+  border-top-color: var(--app-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -395,9 +414,24 @@ function navigateTo(path: string) {
   .global-header {
     width: calc(100% - 24px);
     top: 12px;
+    height: auto;
+    min-height: 64px;
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
   .header-center {
-    display: none; /* 移动端隐藏中间导航 */
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 2px;
+  }
+  .nav-pills {
+    flex-wrap: nowrap;
+    width: max-content;
+    max-width: 100%;
   }
 }
 </style>

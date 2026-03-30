@@ -299,13 +299,53 @@ def main() -> int:
     )
     _expect_status(results, name="学生可学习课程列表 /api/graph/available-courses", code=code)
 
+    # 与前端一致：图谱 subject 使用课程 title，与 KnowledgePoint.subject 对齐；年级默认「通用」
     subject = ""
-    grade = ""
-    if isinstance(admin_courses, list) and admin_courses:
+    grade = "通用"
+    if isinstance(student_courses, list) and student_courses:
+        subject = str(student_courses[0].get("title", "")).strip()
+    if not subject and isinstance(admin_courses, list) and admin_courses:
         subject = str(admin_courses[0].get("title", "")).strip()
-        grade = str(admin_courses[0].get("grade", "通用")).strip() or "通用"
+
+    teacher_subject = ""
+    if isinstance(teacher_courses, list) and teacher_courses:
+        teacher_subject = str(teacher_courses[0].get("title", "")).strip()
+    if teacher_subject:
+        code, analytics = _request_json(
+            method="GET",
+            base_url=args.base_url,
+            path="/api/admin/analytics/overview",
+            token=teacher_token,
+            params={"subject": teacher_subject, "grade": grade},
+            timeout=args.timeout,
+        )
+        _expect_status(results, name="教师课程分析 /api/admin/analytics/overview", code=code)
+        cohort_ok = isinstance(analytics, dict) and "ability_practice_cohort" in analytics
+        _add(
+            results,
+            name="教师分析含班级练习认知汇总字段",
+            ok=cohort_ok,
+            detail="ability_practice_cohort present" if cohort_ok else f"payload keys={list(analytics.keys()) if isinstance(analytics, dict) else analytics}",
+        )
 
     if subject:
+        code, prof = _request_json(
+            method="GET",
+            base_url=args.base_url,
+            path="/api/eval/profile",
+            token=student_token,
+            params={"subject": subject, "grade": grade},
+            timeout=args.timeout,
+        )
+        _expect_status(results, name="学生画像 /api/eval/profile", code=code)
+        has_ability = isinstance(prof, dict) and "ability_practice_stats" in prof
+        _add(
+            results,
+            name="学生画像含 ability_practice_stats",
+            ok=has_ability,
+            detail="ok" if has_ability else f"keys={list(prof.keys()) if isinstance(prof, dict) else prof}",
+        )
+
         code, data = _request_json(
             method="GET",
             base_url=args.base_url,
@@ -330,10 +370,26 @@ def main() -> int:
                 timeout=args.timeout,
             )
             _expect_status(results, name="学生节点详情 /api/graph/node/{kp_id}", code=code)
+            code, next_data = _request_json(
+                method="GET",
+                base_url=args.base_url,
+                path="/api/practice/next",
+                token=student_token,
+                params={"kp_id": int(kp_id)},
+                timeout=args.timeout,
+            )
+            _expect_status(results, name="练习下一题 /api/practice/next", code=code)
+            pq_ok = isinstance(next_data, dict) and ("done" in next_data)
+            _add(
+                results,
+                name="练习 next 响应结构",
+                ok=pq_ok,
+                detail="ok" if pq_ok else str(next_data)[:200],
+            )
         else:
             _add(results, name="学生节点详情检查", ok=True, detail="已跳过：当前课程无知识点")
     else:
-        _add(results, name="学生图谱地图检查", ok=True, detail="已跳过：系统无课程数据")
+        _add(results, name="学生图谱与画像扩展检查", ok=True, detail="已跳过：系统无课程数据")
 
     passed = sum(1 for item in results if item.ok)
     total = len(results)

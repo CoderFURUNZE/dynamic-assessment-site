@@ -8,6 +8,8 @@ class PracticeQuestionOut(BaseModel):
     prompt: str
     options: list[str]
     difficulty: float
+    cognitive_level: str = "understand"
+    ability_subtags: str = ""
 
 
 class PracticeSubmitIn(BaseModel):

@@ -35,6 +35,8 @@ const progressById = ref<Record<number, { watched_seconds: number; duration_seco
 
 const currentResource = computed(() => resources.value.find((r) => r.id === currentResourceId.value) ?? null);
 const learningResources = computed(() => resources.value.filter((r) => !["book", "recommend_book"].includes(r.type)));
+const resourceTab = ref("all");
+
 const learningResourceGroups = computed(() => {
   const groups = [
     { key: "video", title: "视频", description: "录播视频、讲解视频", items: [] as Resource[] },
@@ -50,6 +52,10 @@ const learningResourceGroups = computed(() => {
   }
   return groups.filter((group) => group.items.length > 0);
 });
+
+const allLearningSorted = computed(() =>
+  [...learningResources.value].sort((a, b) => a.title.localeCompare(b.title, "zh-Hans-CN")),
+);
 const videoResources = computed(() => learningResources.value.filter((r) => r.preview_type === "video_inline"));
 const isBilibiliEmbed = computed(() => {
   const url = currentResource.value?.url ?? "";
@@ -335,14 +341,36 @@ onBeforeUnmount(() => {
     </div>
     <div v-else>
       <div v-if="learningResources.length > 0" class="resource-pane">
-        <section class="resource-pane__groups">
-          <div v-for="group in learningResourceGroups" :key="group.key" class="resource-pane__group">
-            <div class="resource-pane__group-head">
+        <el-tabs v-model="resourceTab" class="resource-pane__tabs">
+          <el-tab-pane :label="`全部 (${learningResources.length})`" name="all">
+            <div class="resource-pane__group-list resource-pane__group-list--flat">
+              <button
+                v-for="resource in allLearningSorted"
+                :key="resource.id"
+                class="resource-pane__resource"
+                :class="{ active: resource.id === currentResourceId }"
+                @click="currentResourceId = resource.id"
+              >
+                <div class="resource-pane__resource-meta">
+                  <span>{{ resourceTypeLabel(resource) }}</span>
+                  <small>{{ previewStatusLabel(resource) }}</small>
+                </div>
+                <strong>{{ resource.title }}</strong>
+                <p>{{ resource.description || "打开后可查看该资源的预览、下载和学习进度。" }}</p>
+              </button>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane
+            v-for="group in learningResourceGroups"
+            :key="group.key"
+            :label="`${group.title} (${group.items.length})`"
+            :name="group.key"
+          >
+            <div class="resource-pane__group-head resource-pane__group-head--tab">
               <div>
                 <strong>{{ group.title }}</strong>
                 <span>{{ group.description }}</span>
               </div>
-              <small>{{ group.items.length }} 个</small>
             </div>
             <div class="resource-pane__group-list">
               <button
@@ -360,8 +388,8 @@ onBeforeUnmount(() => {
                 <p>{{ resource.description || "打开后可查看该资源的预览、下载和学习进度。" }}</p>
               </button>
             </div>
-          </div>
-        </section>
+          </el-tab-pane>
+        </el-tabs>
 
         <div v-if="currentResource" class="resource-pane__preview">
           <el-alert
@@ -455,6 +483,23 @@ onBeforeUnmount(() => {
 .resource-pane {
   display: grid;
   gap: 16px;
+}
+
+.resource-pane__tabs {
+  margin-bottom: 4px;
+}
+
+.resource-pane__tabs :deep(.el-tabs__header) {
+  margin-bottom: 12px;
+}
+
+.resource-pane__group-list--flat {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.resource-pane__group-head--tab {
+  margin-bottom: 10px;
 }
 
 .resource-pane__groups {

@@ -49,7 +49,11 @@ type RelationNode = {
 
 type NodeDetail = {
   kp: KpInfo;
-  overlay?: { blocked_reason?: string | null };
+  overlay?: {
+    blocked_reason?: string | null;
+    mastery?: number;
+    status?: string;
+  } | null;
   resource_list: ResourceItem[];
   task_list: TaskItem[];
   practice_list: Array<{ id: number; kp_id: number; type: string; prompt: string; difficulty: number }>;
@@ -123,6 +127,22 @@ const stats = computed(() => ({
   recommend: recommendedResources.value.length + (detail.value?.task_list?.length ?? 0),
 }));
 const navigation = computed(() => detail.value?.navigation ?? null);
+
+const masterySummary = computed(() => {
+  const o = detail.value?.overlay;
+  if (!o || o.mastery == null) return "";
+  const pct = Math.round(Number(o.mastery) * 100);
+  const raw = String(o.status || "").toLowerCase();
+  const map: Record<string, string> = {
+    mastered: "已掌握",
+    learning: "学习中",
+    in_progress: "学习中",
+    not_started: "未学习",
+    risk: "待巩固",
+  };
+  const label = map[raw] || o.status || "";
+  return label ? `掌握度 ${pct}% · ${label}` : `掌握度 ${pct}%`;
+});
 
 function goBack() {
   router.push({
@@ -265,13 +285,17 @@ watch(kpId, async () => {
         <button class="student-content-page__back" @click="goBack">返回图谱</button>
         <div>
           <h1 class="student-content-page__title">知识点学习内容</h1>
-          <p class="student-content-page__subtitle">把资源、练习和推荐内容集中在一个页面学习。</p>
+          <p class="student-content-page__subtitle">把资源、练习和推荐内容集中在一个页面学习；随时通过上方返回图谱或章节内上一/下一知识点切换。</p>
+          <el-alert class="student-kp-meta-hint" type="info" show-icon :closable="false" title="关于本页「练习题」">
+            此处为<strong>题库练习</strong>（逐题作答），会更新知识点掌握度并参与学习报告中的动态评价与练习分析。知识图谱节点上挂载的<strong>小测</strong>为另一套成套测验入口，请与本题库练习区分。
+          </el-alert>
         </div>
       </div>
       <div class="student-content-page__chips" v-if="detail?.kp">
         <span>{{ detail.kp.code }}</span>
         <strong>{{ detail.kp.title }}</strong>
         <small>{{ detail.kp.chapter || "未分章" }}</small>
+        <el-tag v-if="masterySummary" size="small" type="info" effect="plain">{{ masterySummary }}</el-tag>
       </div>
     </div>
 
@@ -474,6 +498,11 @@ watch(kpId, async () => {
   font-size: 24px;
   font-weight: 800;
   color: #243449;
+}
+
+.student-kp-meta-hint {
+  margin-top: 12px;
+  max-width: 720px;
 }
 
 .student-content-page__subtitle {

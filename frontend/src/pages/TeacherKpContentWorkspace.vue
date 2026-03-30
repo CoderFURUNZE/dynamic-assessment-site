@@ -62,6 +62,8 @@ type QuestionRow = {
   answer: string;
   explanation: string;
   difficulty: number;
+  cognitive_level?: string;
+  ability_subtags?: string;
 };
 
 type AssignedPracticeRow = {
@@ -105,6 +107,15 @@ const clientUploadMeta = ref<ClientUploadMeta | null>(null);
 
 const questionDialogOpen = ref(false);
 const questionEditingId = ref<number | null>(null);
+const COGNITIVE_OPTIONS = [
+  { value: "remember", label: "记忆 remember" },
+  { value: "understand", label: "理解 understand" },
+  { value: "apply", label: "应用 apply（高阶）" },
+  { value: "analyze", label: "分析 analyze（高阶）" },
+  { value: "evaluate", label: "评价 evaluate（高阶）" },
+  { value: "create", label: "创造 create（高阶）" },
+] as const;
+
 const questionForm = reactive({
   type: "mcq",
   prompt: "",
@@ -112,6 +123,8 @@ const questionForm = reactive({
   answer: "",
   explanation: "",
   difficulty: 0.5,
+  cognitive_level: "understand",
+  ability_subtags: "",
 });
 
 const kpId = computed(() => {
@@ -131,6 +144,10 @@ const recommendResources = computed(() =>
 );
 const groupedLearningResources = computed(() => groupResources(learningResources.value));
 const groupedRecommendResources = computed(() => groupResources(recommendResources.value));
+const teacherResourceView = ref<"all" | "grouped">("all");
+const allLearningResourcesSorted = computed(() =>
+  [...learningResources.value].sort((a, b) => a.title.localeCompare(b.title, "zh-Hans-CN")),
+);
 const resourceTagPreview = computed(() =>
   resourceForm.tags
     .split(/[,，]/)
@@ -242,6 +259,11 @@ function groupResources(items: ResourceItem[]) {
 
 function questionTypeLabel(type: string) {
   return type === "blank" ? "填空题" : "选择题";
+}
+
+function cognitiveLabel(code?: string) {
+  const row = COGNITIVE_OPTIONS.find((item) => item.value === (code || "").toLowerCase());
+  return row?.label ?? (code || "—");
 }
 
 async function loadData() {
@@ -551,6 +573,8 @@ function openQuestionCreate() {
   questionForm.answer = "";
   questionForm.explanation = "";
   questionForm.difficulty = 0.5;
+  questionForm.cognitive_level = "understand";
+  questionForm.ability_subtags = "";
   questionDialogOpen.value = true;
 }
 
@@ -562,6 +586,8 @@ function openQuestionEdit(item: QuestionRow) {
   questionForm.answer = item.answer;
   questionForm.explanation = item.explanation;
   questionForm.difficulty = item.difficulty ?? 0.5;
+  questionForm.cognitive_level = item.cognitive_level || "understand";
+  questionForm.ability_subtags = item.ability_subtags || "";
   questionDialogOpen.value = true;
 }
 
@@ -576,6 +602,8 @@ async function saveQuestion() {
     answer: questionForm.answer,
     explanation: questionForm.explanation,
     difficulty: questionForm.difficulty,
+    cognitive_level: questionForm.cognitive_level,
+    ability_subtags: questionForm.ability_subtags.trim(),
   };
   try {
     if (questionEditingId.value) {
@@ -684,19 +712,15 @@ onMounted(async () => {
               <div class="content-card__head">
                 <div>
                   <h3>学习内容</h3>
-                  <p>先配学生要看的视频、文档、课件或外部链接。</p>
+                  <p>先配学生要看的视频、文档、课件或外部链接。可用「全部一览」并排查看本知识点全部资源。</p>
                 </div>
                 <el-button type="primary" @click="openResourceCreate('learning')">新增学习资源</el-button>
               </div>
               <div v-if="learningResources.length === 0" class="content-empty">还没有学习资源</div>
-              <div v-else class="content-group-list">
-                <section v-for="group in groupedLearningResources" :key="group.key" class="content-group">
-                  <div class="content-group__head">
-                    <strong>{{ group.title }}</strong>
-                    <span>{{ group.items.length }} 个</span>
-                  </div>
-                  <div class="content-list">
-                    <div v-for="item in group.items" :key="item.id" class="content-item">
+              <el-tabs v-else v-model="teacherResourceView" class="teacher-resource-tabs">
+                <el-tab-pane label="全部资源一览" name="all">
+                  <div class="content-list content-list--scroll">
+                    <div v-for="item in allLearningResourcesSorted" :key="item.id" class="content-item">
                       <div class="content-item__body">
                         <div class="content-item__meta">
                           <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
@@ -721,8 +745,44 @@ onMounted(async () => {
                       </div>
                     </div>
                   </div>
-                </section>
-              </div>
+                </el-tab-pane>
+                <el-tab-pane label="按类型分组" name="grouped">
+                  <div class="content-group-list">
+                    <section v-for="group in groupedLearningResources" :key="group.key" class="content-group">
+                      <div class="content-group__head">
+                        <strong>{{ group.title }}</strong>
+                        <span>{{ group.items.length }} 个</span>
+                      </div>
+                      <div class="content-list">
+                        <div v-for="item in group.items" :key="item.id" class="content-item">
+                          <div class="content-item__body">
+                            <div class="content-item__meta">
+                              <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
+                              <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">
+                                {{ previewStatusLabel(item.preview_status) }}
+                              </div>
+                            </div>
+                            <strong>{{ item.title }}</strong>
+                            <span>
+                              原始格式：{{ (item.file_extension || "").replace('.', '').toUpperCase() || resourceTypeLabel(item.type) }}
+                              · 预览方式：{{ previewLabel(item) }}
+                            </span>
+                            <span v-if="item.original_file_name">{{ item.original_file_name }}</span>
+                            <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
+                          </div>
+                          <div class="content-item__actions">
+                            <el-button size="small" :disabled="item.preview_status === 'processing'" @click="openPreview(item)">预览</el-button>
+                            <el-button size="small" @click="openOriginal(item)">下载原文件</el-button>
+                            <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
+                            <el-button size="small" @click="openResourceEdit(item, 'learning')">编辑</el-button>
+                            <el-button size="small" type="danger" @click="removeResource(item)">删除</el-button>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
             </section>
           </template>
 
@@ -731,7 +791,7 @@ onMounted(async () => {
               <div class="content-card__head">
                 <div>
                   <h3>练习题库</h3>
-                  <p>先维护题目，再决定哪些题加入该知识点的练习任务。</p>
+                  <p>先维护题目并标注<strong>认知层级</strong>与<strong>能力二级标签</strong>，系统会按标签汇总学生在<strong>高阶题</strong>上的练习正确率。</p>
                 </div>
                 <el-button type="primary" @click="openQuestionCreate">新增题目</el-button>
               </div>
@@ -742,7 +802,11 @@ onMounted(async () => {
                   <div class="content-item__body">
                     <div class="content-badge">{{ questionTypeLabel(item.type) }}</div>
                     <strong>{{ item.prompt }}</strong>
-                    <span>难度 {{ Math.round((item.difficulty || 0) * 100) }}% · {{ assignedQuestionIds.has(item.id) ? "已加入练习" : "未加入练习" }}</span>
+                    <span>
+                      难度 {{ Math.round((item.difficulty || 0) * 100) }}% · 认知：{{ cognitiveLabel(item.cognitive_level) }}
+                      <template v-if="item.ability_subtags"> · 能力标签：{{ item.ability_subtags }}</template>
+                      · {{ assignedQuestionIds.has(item.id) ? "已加入练习" : "未加入练习" }}
+                    </span>
                   </div>
                   <div class="content-item__actions">
                     <el-button size="small" @click="openQuestionEdit(item)">编辑</el-button>
@@ -906,6 +970,14 @@ onMounted(async () => {
                   />
                 </label>
               </div>
+              <el-alert class="resource-upload-limits" type="info" :closable="false" show-icon>
+                <template #title>上传限制与视频建议（与后端校验一致）</template>
+                <ul class="resource-upload-limits__ul">
+                  <li>PDF≤25MB；Word≤25MB；PPT/PPTX≤60MB；图片≤10MB；视频≤300MB。</li>
+                  <li>教学视频建议 MP4 / WebM，画面优先 <strong>16:9 横屏</strong>（如 1920×1080）；竖屏或过窄画面在教室大屏体验较差。</li>
+                  <li>大文件请保持网络稳定；失败时可重新选择同一文件重试，避免一次批量过多超大文件。</li>
+                </ul>
+              </el-alert>
               <div v-if="resourceUploadFile || detectedUpload?.original_file_name" class="resource-selected-file">
                 <div class="resource-selected-file__name">
                   {{ resourceUploadFile?.name || detectedUpload?.original_file_name }}
@@ -984,6 +1056,20 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item label="难度">
           <el-input-number v-model="questionForm.difficulty" :min="0" :max="1" :step="0.05" />
+        </el-form-item>
+        <el-form-item label="认知层级（布鲁姆）">
+          <el-select v-model="questionForm.cognitive_level" style="width: 100%" placeholder="选择层级">
+            <el-option v-for="opt in COGNITIVE_OPTIONS" :key="opt.value" :label="opt.label" :value="opt.value" />
+          </el-select>
+          <div class="resource-form__counter" style="text-align: left; margin-top: 6px">
+            高阶题为「应用」及以上；报告里会单独统计高阶题正确率。
+          </div>
+        </el-form-item>
+        <el-form-item label="能力二级标签">
+          <el-input
+            v-model="questionForm.ability_subtags"
+            placeholder="与知识点能力维度一致，逗号分隔，如：逻辑推理,问题分解"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1201,6 +1287,16 @@ onMounted(async () => {
   gap: 10px;
 }
 
+.content-list--scroll {
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.teacher-resource-tabs :deep(.el-tabs__header) {
+  margin-bottom: 14px;
+}
+
 .content-group-list {
   display: grid;
   gap: 14px;
@@ -1415,6 +1511,20 @@ onMounted(async () => {
   inset: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+.resource-upload-limits {
+  margin-top: 14px;
+}
+.resource-upload-limits :deep(.el-alert__description) {
+  margin: 0;
+}
+.resource-upload-limits__ul {
+  margin: 0;
+  padding-left: 1.2em;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #4b5f78;
 }
 
 .resource-upload-dropzone {

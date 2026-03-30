@@ -115,8 +115,8 @@ function openGuide() {
 .starter-guide__reopen {
   border-radius: var(--app-radius);
   border: 1px solid var(--app-border);
-  background: #ffffff;
-  box-shadow: none;
+  background: var(--app-card);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .starter-guide__card {
@@ -161,11 +161,13 @@ function openGuide() {
 .starter-guide__action {
   border: 1px solid var(--app-border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--app-card);
   color: var(--app-ink);
   cursor: pointer;
   font-weight: 700;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition: background var(--app-duration) var(--app-ease-out),
+    border-color var(--app-duration) var(--app-ease-out),
+    color var(--app-duration) var(--app-ease-out);
 }
 
 .starter-guide__close,
@@ -196,20 +198,19 @@ function openGuide() {
   grid-template-columns: 34px 1fr;
   gap: 10px;
   align-items: start;
-  padding: 12px;
-  border-radius: 12px;
-  background: #ffffff;
+  padding: var(--app-space-3);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-card);
   border: 1px solid var(--app-border);
 }
 
 .starter-guide__step strong {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: var(--app-radius-sm);
   display: grid;
   place-items: center;
-  background: #eef4ff;
-  color: #fff;
+  background: var(--app-primary-tint);
   font-size: 15px;
   color: var(--app-green-dark);
 }
@@ -234,9 +235,9 @@ function openGuide() {
 
 .starter-guide__tips,
 .starter-guide__actions {
-  padding: 12px;
-  border-radius: 12px;
-  background: #ffffff;
+  padding: var(--app-space-3);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-card);
   border: 1px solid var(--app-border);
 }
 
@@ -289,12 +290,12 @@ function openGuide() {
 .starter-guide__action--primary {
   background: var(--app-green);
   border-color: var(--app-green);
-  color: #fff;
+  color: var(--app-card);
 }
 
 .starter-guide__action--primary:hover {
-  background: #489862;
-  border-color: #489862;
+  background: var(--app-green-dark);
+  border-color: var(--app-green-dark);
 }
 
 .starter-guide__reopen {

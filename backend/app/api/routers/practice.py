@@ -46,6 +46,8 @@ def list_questions(
             prompt=q.prompt,
             options=json.loads(q.options_json),
             difficulty=q.difficulty,
+            cognitive_level=q.cognitive_level or "understand",
+            ability_subtags=q.ability_subtags or "",
         )
         for q in ordered
     ]
@@ -399,6 +401,8 @@ def next_question(
             prompt=picked.prompt,
             options=json.loads(picked.options_json),
             difficulty=picked.difficulty,
+            cognitive_level=picked.cognitive_level or "understand",
+            ability_subtags=picked.ability_subtags or "",
         ),
         model_used=model_used,
         predicted_correct=predicted_correct,
@@ -731,6 +735,8 @@ def get_question_detail(
         prompt=q.prompt,
         options=json.loads(q.options_json),
         difficulty=q.difficulty,
+        cognitive_level=q.cognitive_level or "understand",
+        ability_subtags=q.ability_subtags or "",
     )
 
 

@@ -32,11 +32,27 @@ const data = ref({
   risk_students: [] as Array<Record<string, any>>,
   weak_kps: [] as Array<Record<string, any>>,
   progress_ranking: [] as Array<Record<string, any>>,
+  ability_practice_cohort: {} as Record<string, any>,
 });
 
 const stageCount = computed(() => data.value.stage_summary.length);
 const latestStageScore = computed(() => Math.round(((data.value.latest_stage?.avg_dynamic_score ?? 0) * 100)));
 const latestStageMastery = computed(() => Math.round(((data.value.latest_stage?.avg_course_mastery ?? 0) * 100)));
+
+const cohortAbility = computed(() => data.value.ability_practice_cohort ?? {});
+const cohortHasPractice = computed(() => (cohortAbility.value?.overall?.attempts ?? 0) > 0);
+
+function bloomLabel(level: string) {
+  const map: Record<string, string> = {
+    remember: "记忆",
+    understand: "理解",
+    apply: "应用",
+    analyze: "分析",
+    evaluate: "评价",
+    create: "创造",
+  };
+  return map[level] || level;
+}
 
 async function load() {
   if (!props.subject) return;
@@ -126,6 +142,51 @@ watch(
         <el-empty v-else description="当前还没有阶段评价数据" />
       </el-card>
 
+      <el-card v-if="cohortHasPractice" class="panel-card" shadow="never">
+        <template #header>班级练习 · 认知与能力（全课知识点汇总）</template>
+        <p class="analytics-cohort-hint">
+          统计当前课程下已选课学生的<strong>练习题</strong>作答（非图谱「小测」）。高阶题为应用、分析、评价、创造层级。
+        </p>
+        <div class="cohort-practice-metrics">
+          <div>
+            <span>全部尝试</span>
+            <strong
+              >{{ cohortAbility.overall?.correct ?? 0 }}/{{ cohortAbility.overall?.attempts ?? 0 }}（{{
+                Math.round((cohortAbility.overall?.accuracy ?? 0) * 100)
+              }}%）</strong
+            >
+          </div>
+          <div>
+            <span>高阶题尝试</span>
+            <strong
+              >{{ cohortAbility.high_order_overall?.correct ?? 0 }}/{{ cohortAbility.high_order_overall?.attempts ?? 0 }}（{{
+                Math.round((cohortAbility.high_order_overall?.accuracy ?? 0) * 100)
+              }}%）</strong
+            >
+          </div>
+        </div>
+        <div v-if="(cohortAbility.by_ability_tag?.length ?? 0) > 0" class="cohort-tag-list">
+          <div v-for="row in cohortAbility.by_ability_tag" :key="`cab-${row.label}`" class="cohort-tag-row">
+            <span>{{ row.label }}</span>
+            <span
+              >高阶 {{ row.high_order_correct }}/{{ row.high_order_attempts }}（{{
+                Math.round((row.high_order_accuracy || 0) * 100)
+              }}%）</span
+            >
+          </div>
+        </div>
+        <div v-if="(cohortAbility.by_cognitive_level?.length ?? 0) > 0" class="cohort-level-list">
+          <el-tag
+            v-for="lv in cohortAbility.by_cognitive_level"
+            :key="`ccl-${lv.level}`"
+            size="small"
+            :type="lv.is_high_order ? 'warning' : 'info'"
+            effect="plain"
+            >{{ bloomLabel(lv.level) }} {{ lv.correct }}/{{ lv.attempts }}</el-tag
+          >
+        </div>
+      </el-card>
+
       <el-card class="panel-card" shadow="never">
         <template #header>薄弱知识点 Top10</template>
         <el-table :data="data.weak_kps" size="small">
@@ -187,6 +248,53 @@ watch(
 </template>
 
 <style scoped>
+.analytics-cohort-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.cohort-practice-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.cohort-practice-metrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cohort-practice-metrics span:first-child {
+  color: #64748b;
+}
+
+.cohort-tag-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.cohort-tag-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.cohort-level-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .analytics-shell {
   display: grid;
   gap: 16px;

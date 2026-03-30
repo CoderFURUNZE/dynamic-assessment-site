@@ -50,7 +50,7 @@ defineProps<{
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #6b84aa;
+  color: var(--app-eyebrow);
 }
 
 .page-section-card__title {

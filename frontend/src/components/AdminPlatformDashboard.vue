@@ -115,16 +115,17 @@ onMounted(load);
   display: flex;
   gap: 16px;
   padding: 16px;
-  background: var(--edu-bg);
+  background: var(--app-surface-muted);
   border-radius: 16px;
   align-items: center;
+  border: 1px solid color-mix(in srgb, var(--app-border) 75%, #ffffff);
 }
 
 .todo-index {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: var(--edu-primary);
+  background: var(--app-gradient-primary);
   color: #fff;
   display: grid;
   place-items: center;
@@ -139,12 +140,12 @@ onMounted(load);
 
 .todo-text strong {
   font-size: 15px;
-  color: var(--edu-text-main);
+  color: var(--app-text-main);
 }
 
 .todo-text span {
   font-size: 13px;
-  color: var(--edu-text-soft);
+  color: var(--app-text-soft);
 }
 </style>
 

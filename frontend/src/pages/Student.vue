@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api, getWithCache } from "../api";
@@ -41,12 +41,28 @@ type RecoData = {
   unlock?: { can_unlock_next: boolean; next_candidates: number[] };
 };
 
+type PersonaSignal = { key: string; label: string; detail: string; level: string };
+type DynamicBreakdown = {
+  engagement_score?: number;
+  achievement_score?: number;
+  efficiency_score?: number;
+  risk_score?: number;
+  stability?: number;
+  learning_frequency?: number;
+  study_duration?: number;
+  practice_accuracy?: number;
+  quiz_accuracy?: number;
+  summary?: string;
+};
 type ProfileSummary = {
   persona_label?: string;
+  persona_intro?: string;
+  persona_signals?: PersonaSignal[];
   dynamic_score?: number;
   risk_level?: string;
   course_mastery?: number;
   reason_summary?: string;
+  dynamic_breakdown?: DynamicBreakdown | null;
   kp_dimension_summary?: {
     summary?: {
       knowledge_total?: number;
@@ -77,6 +93,16 @@ const profile = ref<ProfileSummary | null>(null);
 const reco = ref<RecoData | null>(null);
 const reportReloadKey = ref(0);
 const isStudent = computed(() => getRole() === "student");
+
+watch(
+  [subject, isStudent],
+  () => {
+    if (isStudent.value && subject.value) {
+      localStorage.setItem("da_student_last_subject", subject.value);
+    }
+  },
+  { immediate: true }
+);
 const route = useRoute();
 const router = useRouter();
 const selectedCourseId = computed<number | null>(() => {
@@ -98,6 +124,25 @@ const masteryStageLabel = computed(() => {
   return "未开始";
 });
 const tripleSummary = computed(() => profile.value?.kp_dimension_summary?.summary ?? null);
+const topAbilityRows = computed(() => tripleSummary.value?.top_abilities ?? []);
+const topLiteracyRows = computed(() => tripleSummary.value?.top_literacies ?? []);
+const personaSignals = computed(() => profile.value?.persona_signals ?? []);
+const profileBreakdown = computed(() => profile.value?.dynamic_breakdown ?? null);
+const breakdownMini = computed(() => {
+  const b = profileBreakdown.value;
+  if (!b) return [];
+  return [
+    { label: "投入指数", value: Number(b.engagement_score ?? 0) },
+    { label: "成效指数", value: Number(b.achievement_score ?? 0) },
+    { label: "效率指数", value: Number(b.efficiency_score ?? 0) },
+    { label: "风险指数", value: Number(b.risk_score ?? 0) },
+  ];
+});
+function signalLevelType(level: string): "success" | "warning" | "info" | "danger" {
+  if (level === "positive") return "success";
+  if (level === "attention") return "warning";
+  return "info";
+}
 
 function kpStorageKey() {
   const username = getUsername() || localStorage.getItem("da_last_user") || "guest";
@@ -123,6 +168,7 @@ async function loadCourses() {
     }));
     if (!subject.value && courses.value.length) subject.value = courses.value[0].title;
   } catch (e: any) {
+    if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "加载课程失败");
   }
 }
@@ -153,6 +199,7 @@ async function loadKps() {
     }
     if (!currentKpId.value && kps.value.length) currentKpId.value = kps.value[0].id;
   } catch (e: any) {
+    if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "加载知识点失败");
   }
 }
@@ -163,6 +210,7 @@ async function refreshMastery() {
     const res = await api.get(`/eval/mastery?kp_id=${currentKpId.value}`);
     mastery.value = Number(res.data.value ?? 0);
   } catch (e: any) {
+    if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "刷新掌握度失败");
   }
 }
@@ -173,6 +221,7 @@ async function getReco() {
     const res = await api.get(`/reco?kp_id=${currentKpId.value}`);
     reco.value = res.data;
   } catch (e: any) {
+    if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "获取推荐失败");
   }
 }
@@ -203,6 +252,7 @@ async function loadProfile() {
     );
     profile.value = res.data ?? null;
   } catch (e: any) {
+    if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "加载画像失败");
   }
 }
@@ -224,6 +274,10 @@ async function onKpChange() {
 
 function openGraphWorkspace() {
   const preview = String(route.query.preview || "");
+  if (!currentKpId.value && kps.value.length) {
+    currentKpId.value = kps.value[0].id;
+    localStorage.setItem(kpStorageKey(), String(currentKpId.value));
+  }
   router.push({
     path: "/student/graph-workspace",
     query: {
@@ -267,6 +321,7 @@ onMounted(async () => {
     await refreshMastery();
     await loadProfile();
   } catch (e: any) {
+    if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "加载失败（请先在管理端准备课程与知识点数据）");
   }
 });
@@ -296,6 +351,10 @@ onMounted(async () => {
           <strong class="edu-stat-card__value">{{ Math.round((profile?.dynamic_score || 0) * 100) }}%</strong>
         </div>
         <div class="edu-stat-card">
+          <span class="edu-stat-card__label">风险等级</span>
+          <strong class="edu-stat-card__value stat-risk">{{ profile?.risk_level || "—" }}</strong>
+        </div>
+        <div class="edu-stat-card">
           <span class="edu-stat-card__label">知识达成</span>
           <strong class="edu-stat-card__value">
             {{ tripleSummary ? `${tripleSummary.knowledge_achieved ?? 0}/${tripleSummary.knowledge_total ?? 0}` : "—" }}
@@ -315,59 +374,110 @@ onMounted(async () => {
         </div>
       </section>
 
+      <section v-if="topAbilityRows.length || topLiteracyRows.length" class="student-ability-strip">
+        <div class="student-ability-strip__head">
+          <strong>能力从何体现</strong>
+          <span class="student-ability-strip__hint">教师在知识点上打能力标签；您完成学习、练习与小测后，系统按证据累计达成（与图谱黄环、报告一致）。</span>
+        </div>
+        <div v-if="topAbilityRows.length" class="student-ability-strip__row">
+          <span class="student-ability-strip__label">相对突出的能力</span>
+          <div class="student-ability-strip__tags">
+            <el-tag v-for="item in topAbilityRows.slice(0, 8)" :key="`ab-${item.label}`" type="warning" effect="plain" round>
+              {{ item.label }} · {{ item.achieved_count }}/{{ item.target_count }}
+            </el-tag>
+          </div>
+        </div>
+        <div v-if="topLiteracyRows.length" class="student-ability-strip__row">
+          <span class="student-ability-strip__label">素养维度</span>
+          <div class="student-ability-strip__tags">
+            <el-tag v-for="item in topLiteracyRows.slice(0, 8)" :key="`lit-${item.label}`" type="primary" effect="plain" round>
+              {{ item.label }} · {{ item.achieved_count }}/{{ item.target_count }}
+            </el-tag>
+          </div>
+        </div>
+      </section>
+
+      <div v-if="profile?.persona_intro || personaSignals.length" class="student-persona-card">
+        <div class="student-persona-card__head">
+          <span class="student-persona-card__title">画像说明</span>
+          <el-tag v-if="profile?.persona_label" type="primary" effect="plain" round>{{ profile.persona_label }}</el-tag>
+        </div>
+        <p v-if="profile?.persona_intro" class="student-persona-card__intro">{{ profile.persona_intro }}</p>
+        <p v-if="profile?.reason_summary" class="student-persona-card__reason">{{ profile.reason_summary }}</p>
+        <div v-if="breakdownMini.length" class="student-breakdown-mini">
+          <div v-for="row in breakdownMini" :key="row.label" class="student-breakdown-mini__item">
+            <span>{{ row.label }}</span>
+            <el-progress :percentage="Math.min(100, Math.round(row.value * 100))" :stroke-width="6" :show-text="false" />
+            <strong>{{ Math.round(row.value * 100) }}%</strong>
+          </div>
+        </div>
+        <el-collapse v-if="personaSignals.length" class="student-persona-collapse">
+          <el-collapse-item title="展开：各维度如何理解您的画像" name="signals">
+            <div class="student-signal-list">
+              <div v-for="sig in personaSignals" :key="sig.key" class="student-signal-row">
+                <el-tag size="small" :type="signalLevelType(sig.level)">{{ sig.label }}</el-tag>
+                <span>{{ sig.detail }}</span>
+              </div>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+
       <div class="main-layout-content">
-        <div class="edu-grid-3">
-          <section class="edu-panel student-main-panel">
-            <header class="edu-panel__header">
-              <h2 class="edu-panel__title">快速开始</h2>
-            </header>
-            <div class="quick-actions">
-              <button class="action-card primary" @click="openGraphWorkspace" :disabled="!currentKpId">
-                <div class="action-icon">🗺️</div>
-                <div class="action-text">
-                  <strong>打开图谱</strong>
-                  <span>查看知识关联，开始探索</span>
-                </div>
-              </button>
-              <button class="action-card" @click="router.push({ path: '/student/report', query: studentQuery({ subject: subject || undefined }) })">
-                <div class="action-icon">📊</div>
-                <div class="action-text">
-                  <strong>学习报告</strong>
-                  <span>查看进度与能力画像</span>
-                </div>
-              </button>
-              <button class="action-card" @click="router.push({ path: '/student/questionnaire', query: studentQuery({ subject: subject || undefined }) })">
-                <div class="action-icon">📝</div>
-                <div class="action-text">
-                  <strong>填写问卷</strong>
-                  <span>提供反馈，优化推荐</span>
-                </div>
-              </button>
-            </div>
-          </section>
-
-          <section class="edu-panel student-kp-panel">
-            <header class="edu-panel__header">
-              <h2 class="edu-panel__title">当前知识点</h2>
-            </header>
-            <div v-if="currentKp" class="kp-content">
-              <div class="kp-header">
-                <span class="kp-code">{{ currentKp.code }}</span>
-                <h3 class="kp-title">{{ currentKp.title }}</h3>
+        <div class="student-top-grid">
+          <div class="student-top-grid__left">
+            <section class="edu-panel student-main-panel">
+              <header class="edu-panel__header">
+                <h2 class="edu-panel__title">快速开始</h2>
+              </header>
+              <div class="quick-actions">
+                <button class="action-card primary" @click="openGraphWorkspace" :disabled="!kps.length">
+                  <div class="action-icon">🗺️</div>
+                  <div class="action-text">
+                    <strong>打开图谱</strong>
+                    <span>知识关联与动态评价入口</span>
+                  </div>
+                </button>
+                <button class="action-card" @click="router.push({ path: '/student/report', query: studentQuery({ subject: subject || undefined }) })">
+                  <div class="action-icon">📊</div>
+                  <div class="action-text">
+                    <strong>学习报告</strong>
+                    <span>进度与能力画像</span>
+                  </div>
+                </button>
+                <button class="action-card" @click="router.push({ path: '/student/questionnaire', query: studentQuery({ subject: subject || undefined }) })">
+                  <div class="action-icon">📝</div>
+                  <div class="action-text">
+                    <strong>填写问卷</strong>
+                    <span>反馈用于优化推荐</span>
+                  </div>
+                </button>
               </div>
-              <p class="kp-desc">{{ currentKp.description || '暂无详细描述' }}</p>
-              <div class="kp-progress-box">
-                <div class="progress-label">当前掌握度</div>
-                <el-progress :percentage="Math.round(mastery * 100)" :stroke-width="12" />
-              </div>
-              <el-select v-model="currentKpId" @change="onKpChange" placeholder="切换知识点" class="kp-selector">
-                <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
-              </el-select>
-            </div>
-            <el-empty v-else description="请先选择一个知识点" />
-          </section>
+            </section>
 
-          <section class="edu-panel student-reco-panel">
+            <section class="edu-panel student-kp-panel">
+              <header class="edu-panel__header">
+                <h2 class="edu-panel__title">当前知识点</h2>
+              </header>
+              <div v-if="currentKp" class="kp-content">
+                <div class="kp-header">
+                  <span class="kp-code">{{ currentKp.code }}</span>
+                  <h3 class="kp-title">{{ currentKp.title }}</h3>
+                </div>
+                <p class="kp-desc">{{ currentKp.description || "暂无详细描述" }}</p>
+                <div class="kp-progress-box">
+                  <div class="progress-label">当前掌握度</div>
+                  <el-progress :percentage="Math.round(mastery * 100)" :stroke-width="12" />
+                </div>
+                <el-select v-model="currentKpId" @change="onKpChange" placeholder="切换知识点" class="kp-selector">
+                  <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
+                </el-select>
+              </div>
+              <el-empty v-else description="请先选择一个知识点" />
+            </section>
+          </div>
+
+          <section class="edu-panel student-reco-panel student-top-grid__right">
             <header class="edu-panel__header">
               <h2 class="edu-panel__title">智能建议</h2>
               <el-button link type="primary" @click="getReco" :disabled="!currentKpId">刷新</el-button>
@@ -379,11 +489,11 @@ onMounted(async () => {
                 <p class="reco-reason">{{ reco.reason_summary }}</p>
               </div>
               <div class="reco-footer">
-                <el-button type="primary" style="width: 100%" @click="goToRecommended">去学习</el-button>
+                <el-button type="primary" class="reco-cta" @click="goToRecommended">去学习</el-button>
               </div>
             </div>
             <div v-else class="reco-empty">
-              <p>点击“刷新”获取智能推荐</p>
+              <p>点击「刷新」基于当前知识点获取推荐</p>
             </div>
           </section>
         </div>
@@ -418,10 +528,12 @@ onMounted(async () => {
 
 <style scoped>
 .one-screen {
-  height: 100%;
+  flex: 1 0 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .edu-header.compact {
@@ -431,7 +543,132 @@ onMounted(async () => {
 
 .edu-stats-grid.compact {
   margin-bottom: 16px;
-  gap: 16px;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.stat-risk {
+  font-size: 22px !important;
+  line-height: 1.1;
+}
+
+.student-ability-strip {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  background: #fffbf5;
+  box-shadow: var(--app-shadow-soft);
+}
+.student-ability-strip__head {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.student-ability-strip__head strong {
+  font-size: 14px;
+  color: var(--app-ink);
+}
+.student-ability-strip__hint {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--app-ink-soft);
+}
+.student-ability-strip__row {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.student-ability-strip__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #5b7797;
+}
+.student-ability-strip__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.student-persona-card {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  background: color-mix(in srgb, var(--app-primary-soft) 40%, var(--app-card));
+  box-shadow: var(--app-shadow-soft);
+}
+.student-persona-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.student-persona-card__title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-eyebrow);
+}
+.student-persona-card__intro,
+.student-persona-card__reason {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--app-ink-soft);
+  margin: 0 0 8px;
+}
+.student-persona-card__reason {
+  padding: 10px 12px;
+  border-radius: var(--app-radius-sm);
+  background: var(--app-card);
+  border: 1px solid var(--app-border);
+  color: var(--app-ink);
+}
+.student-breakdown-mini {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.student-breakdown-mini__item {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--app-ink-soft);
+}
+.student-breakdown-mini__item strong {
+  font-size: 13px;
+  color: var(--app-ink);
+}
+.student-persona-collapse {
+  border: none;
+  --el-collapse-header-bg-color: transparent;
+}
+.student-persona-collapse :deep(.el-collapse-item__header) {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--app-primary-deep);
+  padding-left: 0;
+}
+.student-persona-collapse :deep(.el-collapse-item__wrap) {
+  border: none;
+}
+.student-signal-list {
+  display: grid;
+  gap: 8px;
+}
+.student-signal-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--app-ink-soft);
 }
 
 .edu-stat-card {
@@ -443,18 +680,28 @@ onMounted(async () => {
 }
 
 .main-layout-content {
-  flex: 1;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-height: 0;
 }
 
-.edu-grid-3 {
+.student-top-grid {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
   gap: 16px;
+  align-items: stretch;
+}
+.student-top-grid__left {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.student-top-grid__right {
+  min-height: 220px;
 }
 
 .edu-panel {
@@ -482,14 +729,17 @@ onMounted(async () => {
 .action-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 12px;
+  gap: var(--app-space-3);
+  padding: var(--app-space-3);
+  border-radius: var(--app-radius-sm);
   border: 1px solid var(--app-border);
-  background: #fff;
+  background: var(--app-card);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color var(--app-duration) var(--app-ease-out),
+    background var(--app-duration) var(--app-ease-out),
+    transform var(--app-duration) var(--app-ease-out);
   text-align: left;
+  box-shadow: var(--app-shadow-soft);
 }
 
 .action-card:hover:not(:disabled) {
@@ -499,8 +749,8 @@ onMounted(async () => {
 }
 
 .action-card.primary {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border-color: #bfdbfe;
+  background: linear-gradient(135deg, var(--app-primary-soft) 0%, color-mix(in srgb, var(--app-primary) 14%, white) 100%);
+  border-color: color-mix(in srgb, var(--app-primary) 35%, var(--app-border-hover));
 }
 
 .action-icon {
@@ -546,22 +796,66 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
+}
+
+.reco-footer {
+  margin-top: auto;
+}
+
+.reco-cta {
+  width: 100%;
+  height: 44px;
+  font-weight: 700;
+  border-radius: var(--app-radius-sm);
 }
 
 .reco-highlight {
   padding: 16px;
+  border-radius: var(--app-radius-sm);
+  border: 1px solid var(--app-border);
+  background: var(--app-bg);
+  flex: 1;
+}
+
+.reco-tag {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--app-primary-deep);
+  text-transform: uppercase;
+  margin-bottom: 6px;
 }
 
 .reco-title {
   font-size: 16px;
+  margin: 0 0 8px;
+  color: var(--app-ink);
 }
 
 .reco-reason {
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--app-ink-soft);
+  margin: 0;
 }
 
 .reco-empty {
-  height: 140px;
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--app-text-soft);
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .student-top-grid {
+    grid-template-columns: 1fr;
+  }
+  .student-top-grid__right {
+    min-height: auto;
+  }
 }
 
 @media (max-height: 800px) {
@@ -570,5 +864,6 @@ onMounted(async () => {
   .edu-stat-card__value { font-size: 22px; }
   .action-card { padding: 8px; }
   .kp-desc { display: none; }
+  .student-persona-card { padding: 12px; }
 }
 </style>

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from statistics import mean
 from typing import Any
@@ -24,6 +24,7 @@ from app.db.models import (
     PortraitDimension,
     PortraitIndicator,
     PracticeAttempt,
+    Question,
     QuestionnairePortraitIndicatorInput,
     QuizAttempt,
     ReviewSchedule,
@@ -582,6 +583,195 @@ def build_kp_dimension_summary(
         },
         "by_kp": by_kp,
     }
+
+
+ALLOWED_COGNITIVE_LEVELS = frozenset({"remember", "understand", "apply", "analyze", "evaluate", "create"})
+HIGH_ORDER_COGNITIVE_LEVELS = frozenset({"apply", "analyze", "evaluate", "create"})
+COGNITIVE_LEVEL_ORDER = ("remember", "understand", "apply", "analyze", "evaluate", "create")
+
+
+def normalize_question_cognitive_level(raw: str | None, *, strict: bool = False) -> str:
+    s = (str(raw or "").strip().lower() or "understand")
+    if s in ALLOWED_COGNITIVE_LEVELS:
+        return s
+    if strict:
+        raise ValueError(
+            "cognitive_level 必须是 remember / understand / apply / analyze / evaluate / create 之一"
+        )
+    return "understand"
+
+
+def parse_question_ability_subtags(raw: str | None) -> list[str]:
+    parts = [
+        item.strip()
+        for item in (
+            str(raw or "")
+            .replace("，", ",")
+            .replace("\n", ",")
+            .split(",")
+        )
+    ]
+    out: list[str] = []
+    for p in parts:
+        if p and p not in out:
+            out.append(p)
+    return out
+
+
+def canonical_ability_subtags_str(raw: str | None) -> str:
+    return ",".join(parse_question_ability_subtags(raw))
+
+
+def _aggregate_ability_practice_rows(rows: list[tuple[PracticeAttempt, Question]]) -> dict[str, Any]:
+    """将练习作答与题目元数据聚合成统计结构（单人或班级共用）。"""
+    empty = {
+        "high_order_note": "高阶题为认知层级 apply / analyze / evaluate / create 的练习",
+        "high_order_levels": sorted(HIGH_ORDER_COGNITIVE_LEVELS),
+        "overall": {"attempts": 0, "correct": 0, "accuracy": 0.0},
+        "high_order_overall": {"attempts": 0, "correct": 0, "accuracy": 0.0},
+        "by_ability_tag": [],
+        "by_cognitive_level": [],
+    }
+    if not rows:
+        return empty
+
+    o_attempts = 0
+    o_correct = 0
+    ho_attempts = 0
+    ho_correct = 0
+    tag_stats: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"all_a": 0, "all_c": 0, "ho_a": 0, "ho_c": 0},
+    )
+    level_stats: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"attempts": 0, "correct": 0},
+    )
+
+    for attempt, question in rows:
+        correct = bool(attempt.correct)
+        level = normalize_question_cognitive_level(getattr(question, "cognitive_level", None))
+        is_high = level in HIGH_ORDER_COGNITIVE_LEVELS
+        tags = parse_question_ability_subtags(getattr(question, "ability_subtags", None))
+
+        o_attempts += 1
+        if correct:
+            o_correct += 1
+        ls = level_stats[level]
+        ls["attempts"] += 1
+        if correct:
+            ls["correct"] += 1
+
+        if is_high:
+            ho_attempts += 1
+            if correct:
+                ho_correct += 1
+
+        if tags:
+            for t in tags:
+                st = tag_stats[t]
+                st["all_a"] += 1
+                if correct:
+                    st["all_c"] += 1
+                if is_high:
+                    st["ho_a"] += 1
+                    if correct:
+                        st["ho_c"] += 1
+
+    def acc(num: int, den: int) -> float:
+        return round(float(num) / float(den), 4) if den else 0.0
+
+    by_tag: list[dict[str, Any]] = []
+    for label, st in sorted(
+        tag_stats.items(),
+        key=lambda x: (-x[1]["ho_a"], -x[1]["all_a"], x[0]),
+    ):
+        by_tag.append(
+            {
+                "label": label,
+                "high_order_attempts": int(st["ho_a"]),
+                "high_order_correct": int(st["ho_c"]),
+                "high_order_accuracy": acc(int(st["ho_c"]), int(st["ho_a"])),
+                "all_attempts": int(st["all_a"]),
+                "all_correct": int(st["all_c"]),
+                "all_accuracy": acc(int(st["all_c"]), int(st["all_a"])),
+            }
+        )
+
+    by_level: list[dict[str, Any]] = []
+    for lvl in COGNITIVE_LEVEL_ORDER:
+        st = level_stats.get(lvl)
+        if not st or st["attempts"] == 0:
+            continue
+        by_level.append(
+            {
+                "level": lvl,
+                "attempts": int(st["attempts"]),
+                "correct": int(st["correct"]),
+                "accuracy": acc(int(st["correct"]), int(st["attempts"])),
+                "is_high_order": lvl in HIGH_ORDER_COGNITIVE_LEVELS,
+            }
+        )
+
+    return {
+        "high_order_note": "高阶题为认知层级 apply / analyze / evaluate / create 的练习",
+        "high_order_levels": sorted(HIGH_ORDER_COGNITIVE_LEVELS),
+        "overall": {
+            "attempts": o_attempts,
+            "correct": o_correct,
+            "accuracy": acc(o_correct, o_attempts),
+        },
+        "high_order_overall": {
+            "attempts": ho_attempts,
+            "correct": ho_correct,
+            "accuracy": acc(ho_correct, ho_attempts),
+        },
+        "by_ability_tag": by_tag,
+        "by_cognitive_level": by_level,
+    }
+
+
+def build_ability_practice_cognitive_summary(
+    session: Session,
+    *,
+    user_id: int,
+    kp_ids: list[int],
+) -> dict[str, Any]:
+    """按题目认知层级与能力二级标签汇总练习作答（高阶=apply 及以上）。"""
+    empty = _aggregate_ability_practice_rows([])
+    if not kp_ids:
+        return empty
+
+    rows = session.exec(
+        select(PracticeAttempt, Question).join(
+            Question,
+            PracticeAttempt.question_id == Question.id,
+        ).where(
+            PracticeAttempt.user_id == user_id,
+            PracticeAttempt.kp_id.in_(kp_ids),
+        )
+    ).all()
+    return _aggregate_ability_practice_rows(rows)
+
+
+def build_cohort_ability_practice_summary(
+    session: Session,
+    *,
+    kp_ids: list[int],
+    user_ids: list[int],
+) -> dict[str, Any]:
+    """班级（多学生）在若干知识点上的练习认知/能力汇总，用于教师分析。"""
+    empty = _aggregate_ability_practice_rows([])
+    if not kp_ids or not user_ids:
+        return empty
+    rows = session.exec(
+        select(PracticeAttempt, Question).join(
+            Question,
+            PracticeAttempt.question_id == Question.id,
+        ).where(
+            PracticeAttempt.user_id.in_(user_ids),
+            PracticeAttempt.kp_id.in_(kp_ids),
+        )
+    ).all()
+    return _aggregate_ability_practice_rows(rows)
 
 
 def _safe_ratio(value: float, base: float) -> float:
@@ -1636,13 +1826,15 @@ def recalculate_profile_snapshot(
             .order_by(desc(ReviewSchedule.updated_at))
         ).all()
 
+    behavior_where = [
+        LearningBehaviorEvent.user_id == user_id,
+        LearningBehaviorEvent.created_at >= since_30d,
+    ]
+    if kp_ids:
+        behavior_where.append(LearningBehaviorEvent.kp_id.in_(kp_ids))
     behavior_rows = session.exec(
         select(LearningBehaviorEvent)
-        .where(
-            LearningBehaviorEvent.user_id == user_id,
-            LearningBehaviorEvent.created_at >= since_30d,
-            LearningBehaviorEvent.kp_id.in_(kp_ids) if kp_ids else True,
-        )
+        .where(*behavior_where)
         .order_by(desc(LearningBehaviorEvent.created_at))
     ).all()
 

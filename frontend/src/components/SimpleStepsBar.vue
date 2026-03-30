@@ -24,24 +24,24 @@ defineProps<{
   padding: 16px 18px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--app-space-3);
   border-radius: calc(var(--app-radius) - 2px);
-  background: #ffffff;
+  background: var(--app-card);
   border: 1px solid var(--app-border);
   color: var(--app-ink);
   min-height: 64px;
-  box-shadow: none;
+  box-shadow: var(--app-shadow-soft);
 }
 
 .simple-steps-bar__item strong {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: var(--app-radius-sm);
   display: inline-grid;
   place-items: center;
-  background: #eef4ff;
+  background: var(--app-primary-tint);
   color: var(--app-green-dark);
-  font-size: 14px;
+  font-size: var(--app-text-base);
   flex-shrink: 0;
 }
 

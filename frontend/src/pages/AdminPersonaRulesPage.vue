@@ -1,15 +1,33 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { useRouter } from "vue-router";
 import AdminPersonaManager from "../components/AdminPersonaManager.vue";
-import PageSectionCard from "../components/PageSectionCard.vue";
 
 const personaSubject = ref("计算机网络");
 const personaGrade = ref("通用");
+const router = useRouter();
 </script>
 
 <template>
-  <div class="admin-page">
-    <PageSectionCard eyebrow="Persona Rules" title="画像规则管理" description="先确定规则上下文，再单独维护画像规则，避免后台页面信息过载。">
+  <div class="edu-page admin-shell-page">
+    <header class="edu-header admin-shell-header">
+      <div class="edu-header__left">
+        <h1 class="edu-header__title">画像规则管理</h1>
+        <p class="edu-header__desc">按课程上下文维护画像阈值、权重和策略，确保评估规则统一。</p>
+      </div>
+      <div class="edu-header__actions admin-shell-actions">
+        <el-button-group>
+          <el-button @click="router.push('/admin')">概览</el-button>
+          <el-button @click="router.push('/admin/courses')">课程</el-button>
+          <el-button @click="router.push('/admin/users')">用户</el-button>
+          <el-button @click="router.push('/admin/teachers')">老师</el-button>
+          <el-button @click="router.push('/admin/dimensions')">指标池</el-button>
+          <el-button type="primary" @click="router.push('/admin/persona')">画像规则</el-button>
+        </el-button-group>
+      </div>
+    </header>
+
+    <section class="edu-panel admin-shell-panel">
       <el-card class="panel-card" shadow="never">
         <template #header>规则上下文</template>
         <div class="admin-context">
@@ -18,12 +36,15 @@ const personaGrade = ref("通用");
         </div>
       </el-card>
       <AdminPersonaManager :subject="personaSubject" :grade="personaGrade" />
-    </PageSectionCard>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.admin-page { display:grid; gap:20px; }
+.admin-shell-panel {
+  display: grid;
+  gap: 16px;
+}
 .admin-context { display:grid; gap:12px; grid-template-columns:1fr 1fr; }
 @media (max-width: 900px) { .admin-context { grid-template-columns:1fr; } }
 </style>

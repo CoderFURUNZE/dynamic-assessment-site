@@ -194,7 +194,7 @@ async function submitLogin() {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background-color: #f8fafc;
+  background-color: var(--app-bg);
 }
 
 /* 现代网格背景动效 */
@@ -205,10 +205,10 @@ async function submitLogin() {
   width: 100%;
   height: 100%;
   background: 
-    radial-gradient(at 0% 0%, rgba(79, 140, 255, 0.15) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(245, 158, 11, 0.1) 0px, transparent 50%);
+    radial-gradient(at 0% 0%, color-mix(in srgb, var(--app-primary) 15%, transparent) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, color-mix(in srgb, var(--app-info) 15%, transparent) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, color-mix(in srgb, var(--app-success) 10%, transparent) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, color-mix(in srgb, var(--app-warning) 10%, transparent) 0px, transparent 50%);
   filter: blur(80px);
   z-index: 0;
 }
@@ -241,33 +241,34 @@ async function submitLogin() {
 .brand-badge {
   display: inline-block;
   padding: 6px 16px;
-  background: rgba(79, 140, 255, 0.1);
-  color: #4f8cff;
+  background: var(--app-primary-soft);
+  color: var(--app-primary);
   border-radius: 999px;
-  font-size: 14px;
+  font-size: var(--app-text-base);
   font-weight: 700;
-  margin-bottom: 24px;
+  margin-bottom: var(--app-space-5);
 }
 
 .brand-title {
   font-size: 56px;
   line-height: 1.1;
   font-weight: 900;
-  color: #0f172a;
-  margin-bottom: 24px;
+  color: var(--app-text-main);
+  margin-bottom: var(--app-space-5);
   letter-spacing: -0.04em;
 }
 
 .text-gradient {
-  background: linear-gradient(135deg, #4f8cff 0%, #6366f1 100%);
+  background: var(--app-gradient-primary);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .brand-description {
-  font-size: 18px;
-  color: #64748b;
-  margin-bottom: 48px;
+  font-size: var(--app-text-md);
+  color: var(--app-text-soft);
+  margin-bottom: var(--app-space-8);
   max-width: 480px;
 }
 
@@ -285,25 +286,25 @@ async function submitLogin() {
 .feature-icon {
   width: 48px;
   height: 48px;
-  background: #fff;
-  border-radius: 12px;
+  background: var(--app-card);
+  border-radius: var(--app-radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--app-shadow);
 }
 
 .feature-text h3 {
-  font-size: 16px;
+  font-size: var(--app-text-md);
   font-weight: 700;
-  color: #0f172a;
-  margin-bottom: 4px;
+  color: var(--app-text-main);
+  margin-bottom: var(--app-space-1);
 }
 
 .feature-text p {
-  font-size: 14px;
-  color: #64748b;
+  font-size: var(--app-text-base);
+  color: var(--app-text-soft);
 }
 
 /* 右侧样式 */
@@ -322,50 +323,52 @@ async function submitLogin() {
   width: 100%;
   max-width: 440px;
   padding: 40px;
-  border-radius: 24px;
+  border-radius: var(--app-radius-lg);
 }
 
 .card-header {
-  margin-bottom: 32px;
+  margin-bottom: var(--app-space-6);
   text-align: center;
 }
 
 .card-header h2 {
   font-size: 28px;
   font-weight: 800;
-  color: #0f172a;
-  margin-bottom: 8px;
+  color: var(--app-text-main);
+  margin-bottom: var(--app-space-2);
 }
 
 .card-header p {
-  color: #64748b;
-  font-size: 15px;
+  color: var(--app-text-soft);
+  font-size: var(--app-text-sm);
 }
 
 .role-selector {
   display: flex;
-  background: #f1f5f9;
-  padding: 4px;
-  border-radius: 12px;
-  margin-bottom: 32px;
+  background: var(--app-bg-alt);
+  padding: var(--app-space-1);
+  border-radius: var(--app-radius-sm);
+  margin-bottom: var(--app-space-6);
 }
 
 .role-tab {
   flex: 1;
   text-align: center;
   padding: 10px;
-  font-size: 14px;
+  font-size: var(--app-text-base);
   font-weight: 600;
-  color: #64748b;
+  color: var(--app-text-soft);
   cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s;
+  border-radius: var(--app-radius-sm);
+  transition: background var(--app-duration) var(--app-ease-out),
+    color var(--app-duration) var(--app-ease-out),
+    box-shadow var(--app-duration) var(--app-ease-out);
 }
 
 .role-tab.active {
-  background: #fff;
-  color: #4f8cff;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  background: var(--app-card);
+  color: var(--app-primary);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .login-form {
@@ -379,9 +382,9 @@ async function submitLogin() {
 }
 
 .form-group label {
-  font-size: 14px;
+  font-size: var(--app-text-base);
   font-weight: 600;
-  color: #475569;
+  color: var(--app-text-soft);
 }
 
 .form-footer {
@@ -391,38 +394,38 @@ async function submitLogin() {
 }
 
 .forgot-pwd {
-  font-size: 14px;
-  color: #4f8cff;
+  font-size: var(--app-text-base);
+  color: var(--app-primary);
   font-weight: 600;
 }
 
 .login-btn {
   height: 52px;
-  font-size: 16px;
+  font-size: var(--app-text-md);
   font-weight: 700;
-  border-radius: 12px;
-  margin-top: 8px;
+  border-radius: var(--app-radius-sm);
+  margin-top: var(--app-space-2);
 }
 
 .card-footer {
-  margin-top: 32px;
+  margin-top: var(--app-space-6);
   text-align: center;
-  padding-top: 24px;
-  border-top: 1px solid #f1f5f9;
+  padding-top: var(--app-space-5);
+  border-top: 1px solid var(--app-bg-alt);
 }
 
 .card-footer p {
-  font-size: 13px;
-  color: #94a3b8;
-  margin-bottom: 8px;
+  font-size: var(--app-text-sm);
+  color: var(--app-text-light);
+  margin-bottom: var(--app-space-2);
 }
 
 .demo-account {
-  font-size: 12px;
-  color: #64748b;
-  background: #f8fafc;
-  padding: 6px 12px;
-  border-radius: 6px;
+  font-size: var(--app-text-xs);
+  color: var(--app-text-soft);
+  background: var(--app-bg);
+  padding: 6px var(--app-space-3);
+  border-radius: var(--app-radius-sm);
   display: inline-block;
 }
 

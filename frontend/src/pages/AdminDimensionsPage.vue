@@ -1,14 +1,32 @@
 <template>
-  <div class="admin-page">
-    <PageSectionCard eyebrow="Dimensions" title="指标池管理" description="指标池和子指标集中在一页维护，避免和老师、规则页面来回切换。">
+  <div class="edu-page admin-shell-page">
+    <header class="edu-header admin-shell-header">
+      <div class="edu-header__left">
+        <h1 class="edu-header__title">指标池管理</h1>
+        <p class="edu-header__desc">统一维护一级维度与二级指标，为画像评估提供稳定口径。</p>
+      </div>
+      <div class="edu-header__actions admin-shell-actions">
+        <el-button-group>
+          <el-button @click="router.push('/admin')">概览</el-button>
+          <el-button @click="router.push('/admin/courses')">课程</el-button>
+          <el-button @click="router.push('/admin/users')">用户</el-button>
+          <el-button @click="router.push('/admin/teachers')">老师</el-button>
+          <el-button type="primary" @click="router.push('/admin/dimensions')">指标池</el-button>
+          <el-button @click="router.push('/admin/persona')">画像规则</el-button>
+        </el-button-group>
+      </div>
+    </header>
+    <section class="edu-panel admin-shell-panel">
       <AdminDimensionManager />
-    </PageSectionCard>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useRouter } from "vue-router";
 import AdminDimensionManager from "../components/AdminDimensionManager.vue";
-import PageSectionCard from "../components/PageSectionCard.vue";
+
+const router = useRouter();
 </script>
 
-<style scoped>.admin-page { display:grid; gap:20px; }</style>
+<style scoped></style>

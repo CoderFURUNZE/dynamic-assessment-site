@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class KnowledgePointOut(BaseModel):
@@ -77,6 +77,7 @@ class GraphBaseOut(BaseModel):
     course: dict | None = None
     kps: list[KnowledgePointOut]
     edges: list[KnowledgeEdgeOut]
+    chapter_layout: dict[str, dict[str, float]] = Field(default_factory=dict)
 
 
 class GraphMapOut(BaseModel):

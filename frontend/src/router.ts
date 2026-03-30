@@ -169,11 +169,6 @@ router.addRoute({
   path: "/student/practice",
   redirect: (to) => ({ path: "/student/graph", query: to.query }),
 });
-router.addRoute({
-  path: "/student/:pathMatch(.*)*",
-  redirect: (to) => ({ path: "/student/overview", query: to.query }),
-});
-
 router.addRoute({ path: "/admin", redirect: "/admin/dashboard" });
 router.addRoute({ path: "/admin/:pathMatch(.*)*", redirect: "/admin/dashboard" });
 
