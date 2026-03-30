@@ -49,8 +49,8 @@ function handleChange(value: string) {
 .workspace-topbar {
   border-radius: var(--app-radius);
   border: 1px solid var(--app-border);
-  box-shadow: none;
-  background: #ffffff;
+  box-shadow: var(--app-shadow-soft);
+  background: var(--app-card);
   overflow: hidden;
 }
 
@@ -74,7 +74,7 @@ function handleChange(value: string) {
   text-transform: uppercase;
   color: var(--app-ink-soft);
   font-weight: 800;
-  background: rgba(79, 140, 255, 0.08);
+  background: color-mix(in srgb, var(--app-primary) 8%, transparent);
   padding: 4px 10px;
   border-radius: 999px;
   width: fit-content;
@@ -111,13 +111,13 @@ function handleChange(value: string) {
 .workspace-topbar__meta {
   margin-top: 0;
   color: var(--app-ink-soft);
-  font-size: 12px;
+  font-size: var(--app-text-xs);
   padding: 10px 18px 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--app-space-2);
   border-top: 1px solid var(--app-border);
-  background: #fbfcfe;
+  background: color-mix(in srgb, var(--app-primary-tint) 45%, var(--app-card));
 }
 
 .workspace-topbar__meta::before {

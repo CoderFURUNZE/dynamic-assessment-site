@@ -136,6 +136,27 @@ type ProfileData = {
       top_literacies?: Array<{ label: string; achieved_count: number; target_count: number }>;
     };
   };
+  ability_practice_stats?: {
+    high_order_note?: string;
+    overall?: { attempts?: number; correct?: number; accuracy?: number };
+    high_order_overall?: { attempts?: number; correct?: number; accuracy?: number };
+    by_ability_tag?: Array<{
+      label: string;
+      high_order_attempts: number;
+      high_order_correct: number;
+      high_order_accuracy: number;
+      all_attempts: number;
+      all_correct: number;
+      all_accuracy: number;
+    }>;
+    by_cognitive_level?: Array<{
+      level: string;
+      attempts: number;
+      correct: number;
+      accuracy: number;
+      is_high_order: boolean;
+    }>;
+  };
 };
 
 const props = defineProps<{ subject: string; grade: string; reloadKey?: number }>();
@@ -175,6 +196,19 @@ const hasQuestionnaireItems = computed(() => questionnaireIndicators.value.lengt
 const kpDimensionSummary = computed(() => profile.value?.kp_dimension_summary?.summary ?? {});
 const topAbilityRows = computed(() => kpDimensionSummary.value.top_abilities ?? []);
 const topLiteracyRows = computed(() => kpDimensionSummary.value.top_literacies ?? []);
+const abilityPracticeStats = computed(() => profile.value?.ability_practice_stats ?? null);
+
+function bloomLevelLabel(level: string) {
+  const map: Record<string, string> = {
+    remember: "记忆",
+    understand: "理解",
+    apply: "应用",
+    analyze: "分析",
+    evaluate: "评价",
+    create: "创造",
+  };
+  return map[level] || level;
+}
 const mentorDimensionOrder = [
   "潜能与特质倾向",
   "情感与社会性发展",
@@ -388,6 +422,35 @@ watch(
         <span>查看提示</span>
         <HoverTip content="先看上面的结果，再看下面的详细内容，不需要一次看完。" />
       </div>
+      <el-collapse class="report-ability-provenance">
+        <el-collapse-item title="学习者的「能力」从哪里体现？" name="ability-source">
+          <div class="report-ability-provenance__body">
+            <p>
+              <strong>配置来源：</strong>教师在知识图谱的每个知识点上可设置能力标签（以及素养标签）。这些标签是把课程目标拆成可观测「能力维度」的锚点。
+            </p>
+            <p>
+              <strong>证据来源：</strong>系统根据您的知识点<strong>掌握度</strong>、<strong>练习作答</strong>与<strong>小测成绩</strong>等学习记录，判断与该知识点绑定的能力是否视为「已达成」。同一能力标签若在多个知识点上出现，会按累计达成比例汇总。
+            </p>
+            <p>
+              <strong>在哪里看：</strong>知识图谱上节点的<strong>中层色环（黄）</strong>表示能力层状态；下方「知识 / 能力 / 素养」进度与「当前较强能力」列表与图谱数据同源。动态评分与阶段画像还会间接反映您在行为与成效上的整体变化。
+            </p>
+          </div>
+        </el-collapse-item>
+        <el-collapse-item title="动态评分与「练习题 / 小测」分别是什么？" name="dynamic-vs-practice">
+          <div class="report-ability-provenance__body">
+            <p>
+              <strong>动态评分：</strong>在画像配置权重下，综合<strong>阶段评价、课程掌握度、学习行为与过程性证据</strong>等得到的总体指数；用于看整体走势，不等同于单次测验分数。
+            </p>
+            <p>
+              <strong>练习题（知识点学习页）：</strong>按题库逐题作答，计入掌握度更新，并可按题目标注的<strong>认知层级与能力标签</strong>汇总（如下方「练习表现」板块）。
+            </p>
+            <p>
+              <strong>小测（图谱节点）：</strong>教师配置的成套测验，证据维度与「练习题」并列；报告中的能力达成会同时参考多类证据，请勿把三者混为一谈。
+            </p>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
+
       <section class="report-hero">
         <div class="hero-label">当前结果</div>
         <div class="hero-title">{{ profile.persona_label }}</div>
@@ -512,6 +575,81 @@ watch(
               </div>
             </div>
             <div v-else class="empty-help__text">当前素养证据还不多，可以多使用老师推荐资源、完成视频与拓展内容。</div>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="abilityPracticeStats" class="dimension-board">
+        <div class="board-title">练习表现 · 认知层级与能力标签</div>
+        <p v-if="abilityPracticeStats.high_order_note" class="empty-help__text" style="text-align: left; margin-bottom: 12px">
+          {{ abilityPracticeStats.high_order_note }}。下方「高阶」指应用、分析、评价、创造四类题目上的答题情况。
+        </p>
+        <div v-if="(abilityPracticeStats.overall?.attempts ?? 0) > 0" class="dimension-list">
+          <div class="dimension-item">
+            <div class="dimension-top">
+              <span>全部练习尝试</span>
+              <strong
+                >{{ abilityPracticeStats.overall?.correct ?? 0 }}/{{ abilityPracticeStats.overall?.attempts ?? 0 }} ·
+                {{ Math.round((abilityPracticeStats.overall?.accuracy ?? 0) * 100) }}%</strong
+              >
+            </div>
+            <div class="dimension-bar">
+              <div
+                class="dimension-bar__value"
+                :style="{
+                  width: `${Math.round((abilityPracticeStats.overall?.accuracy ?? 0) * 100)}%`,
+                  background: '#5b8fd9',
+                }"
+              />
+            </div>
+          </div>
+          <div class="dimension-item">
+            <div class="dimension-top">
+              <span>高阶题尝试</span>
+              <strong
+                >{{ abilityPracticeStats.high_order_overall?.correct ?? 0 }}/{{
+                  abilityPracticeStats.high_order_overall?.attempts ?? 0
+                }}
+                · {{ Math.round((abilityPracticeStats.high_order_overall?.accuracy ?? 0) * 100) }}%</strong
+              >
+            </div>
+            <div class="dimension-bar">
+              <div
+                class="dimension-bar__value"
+                :style="{
+                  width: `${Math.round((abilityPracticeStats.high_order_overall?.accuracy ?? 0) * 100)}%`,
+                  background: '#16a34a',
+                }"
+              />
+            </div>
+          </div>
+        </div>
+        <el-empty
+          v-else
+          description="还没有足够练习记录；请老师为题目标注认知层级与能力标签后多完成练习。"
+          :image-size="72"
+          style="margin: 12px 0"
+        />
+        <div v-if="(abilityPracticeStats.by_ability_tag?.length ?? 0) > 0" style="margin-top: 14px">
+          <div class="kal-card__title" style="margin-bottom: 8px">按能力二级标签 · 高阶题正确率</div>
+          <div class="kal-list">
+            <div v-for="row in abilityPracticeStats.by_ability_tag" :key="`apt-${row.label}`" class="kal-item">
+              <span>{{ row.label }}</span>
+              <strong
+                >高阶 {{ row.high_order_correct }}/{{ row.high_order_attempts }} ({{
+                  Math.round((row.high_order_accuracy || 0) * 100)
+                }}%) · 全题 {{ row.all_correct }}/{{ row.all_attempts }}</strong
+              >
+            </div>
+          </div>
+        </div>
+        <div v-if="(abilityPracticeStats.by_cognitive_level?.length ?? 0) > 0" style="margin-top: 14px">
+          <div class="kal-card__title" style="margin-bottom: 8px">按认知层级</div>
+          <div class="kal-list">
+            <div v-for="row in abilityPracticeStats.by_cognitive_level" :key="`cl-${row.level}`" class="kal-item">
+              <span>{{ bloomLevelLabel(row.level) }}{{ row.is_high_order ? "（高阶）" : "" }}</span>
+              <strong>{{ row.correct }}/{{ row.attempts }}（{{ Math.round((row.accuracy || 0) * 100) }}%）</strong>
+            </div>
           </div>
         </div>
       </section>
@@ -772,6 +910,34 @@ watch(
 <style scoped>
 .report-shell {
   overflow: hidden;
+}
+
+.report-ability-provenance {
+  margin-bottom: 16px;
+  border: 1px solid #e1e8ef;
+  border-radius: 14px;
+  overflow: hidden;
+  --el-collapse-header-bg-color: #f8fbff;
+}
+.report-ability-provenance :deep(.el-collapse-item__header) {
+  font-weight: 700;
+  color: #314661;
+  padding: 12px 16px;
+}
+.report-ability-provenance :deep(.el-collapse-item__wrap) {
+  border-top: 1px solid #e1e8ef;
+}
+.report-ability-provenance__body {
+  padding: 4px 4px 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #41566f;
+}
+.report-ability-provenance__body p {
+  margin: 0 0 10px;
+}
+.report-ability-provenance__body p:last-child {
+  margin-bottom: 0;
 }
 
 .report-header {

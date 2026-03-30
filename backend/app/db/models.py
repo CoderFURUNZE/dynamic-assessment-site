@@ -363,6 +363,10 @@ class Question(SQLModel, table=True):
     source: str = ""
     tags: str = ""
     version: str = "v1"
+    # 布鲁姆认知层级：remember / understand / apply / analyze / evaluate / create
+    cognitive_level: str = Field(default="understand", index=True)
+    # 能力二级标签，逗号分隔，与知识点 ability_tag 语义一致，用于按能力汇总高阶题练习
+    ability_subtags: str = Field(default="")
 
 
 class PracticeAttempt(SQLModel, table=True):
@@ -417,6 +421,7 @@ class EvalConfig(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     subject: str = Field(index=True)
     grade: str = Field(index=True)
+    graph_layout_json: str = Field(default="", description="JSON: chapter anchor positions for knowledge graph UI")
     weights_json: str = (
         '{"quiz_accuracy":0.2,"practice_accuracy":0.65,"video_completion":0.05,"duration_penalty":0.0}'
     )

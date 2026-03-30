@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch, withDefaults } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import {
+  buildDeterministicGraphLayout,
+  mergeChapterLayout,
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  INITIAL_CENTER_X,
+  INITIAL_CENTER_Y,
+} from "../graph/graphLayout";
 import HoverTip from "./HoverTip.vue";
 
 type GraphKp = {
@@ -101,22 +109,43 @@ type StudentWorkspaceViewState = {
   selectedCategory: string | null;
 };
 
-const CANVAS_WIDTH = 60000;
-const CANVAS_HEIGHT = 40000;
-const INITIAL_CENTER_X = 30000;
-const INITIAL_CENTER_Y = 20000;
-const DEFAULT_CANVAS_SCALE = 0.7;
+const DEFAULT_CANVAS_SCALE = 0.58;
 const MIN_CANVAS_SCALE = 0.5;
 const MAX_CANVAS_SCALE = 4;
 const SCALE_STEP = 0.2;
 
-const props = defineProps<{
-  subject: string;
-  grade: string;
-  currentKpId?: number | null;
-  recommendedKpId?: number | null;
-  highlightedKpIds?: number[] | null;
-}>();
+type GraphPathHint = {
+  next_candidate_ids: number[];
+  next_titles: string[];
+  can_unlock_next: boolean;
+  blocked_titles: string[];
+  path_summary: string;
+};
+
+type GraphRecoHint = {
+  reason_summary: string;
+  advice_text?: string;
+  target_kp_id: number;
+  target_code?: string;
+  target_title?: string;
+};
+
+const props = withDefaults(
+  defineProps<{
+    subject: string;
+    grade: string;
+    currentKpId?: number | null;
+    recommendedKpId?: number | null;
+    highlightedKpIds?: number[] | null;
+    /** 与 currentKpId 同步的路径建议（来自 /graph/path） */
+    graphPathHint?: GraphPathHint | null;
+    /** 与 currentKpId 同步的推荐说明（来自 /reco） */
+    graphRecoHint?: GraphRecoHint | null;
+    /** 嵌入学生「图谱工作台」页：隐藏重复标题区并由外层控制高度，避免整页被撑长 */
+    embedded?: boolean;
+  }>(),
+  { embedded: false },
+);
 
 const emit = defineEmits<{
   (e: "select-kp", id: number): void;
@@ -157,11 +186,16 @@ const dragStartX = ref(0);
 const dragStartY = ref(0);
 const dragOriginX = ref(0);
 const dragOriginY = ref(0);
+/** 嵌入页首帧视口宽高可能为 0，适配画布需重试 */
+let fitViewportRetryCount = 0;
+let embeddedResizeObserver: ResizeObserver | null = null;
+let embeddedResizeDebounce: ReturnType<typeof setTimeout> | null = null;
 const kpPositions = ref<Record<number, Point>>({});
 const categoryPositions = ref<Record<string, Point>>({});
 const mutingLayoutPersist = ref(false);
 const layoutRestored = ref(false);
 const useLegacyFallbackLayout = ref(false);
+const hoveredKpId = ref<number | null>(null);
 
 const overlayMap = computed(() => new Map(overlay.value.map((item) => [item.kp_id, item])));
 const effectiveOverlayMap = computed(() => {
@@ -174,6 +208,16 @@ const effectiveOverlayMap = computed(() => {
       status: current?.status ?? "not_started",
       recommended: true,
       blocked_reason: current?.blocked_reason ?? null,
+      knowledge_enabled: current?.knowledge_enabled,
+      ability_enabled: current?.ability_enabled,
+      literacy_enabled: current?.literacy_enabled,
+      knowledge_status: current?.knowledge_status,
+      ability_status: current?.ability_status,
+      literacy_status: current?.literacy_status,
+      knowledge_label: current?.knowledge_label,
+      ability_labels: current?.ability_labels,
+      literacy_labels: current?.literacy_labels,
+      evidence: current?.evidence,
     });
   }
   return map;
@@ -197,14 +241,14 @@ function buildLabelColorMap(labels: string[], palette: string[]) {
 const abilityColorMap = computed(() =>
   buildLabelColorMap(
     Array.from(new Set(overlay.value.flatMap((item) => item.ability_labels ?? []).concat(kps.value.flatMap((kp) => splitLabels(kp.ability_tag))))),
-    ["#f0b429", "#5bb98c", "#4f7fe7", "#e28a49", "#7d72e9", "#39a0a4"],
+    ["#15803d", "#16a34a", "#22c55e", "#4ade80", "#166534", "#14532d"],
   ),
 );
 
 const literacyColorMap = computed(() =>
   buildLabelColorMap(
     Array.from(new Set(overlay.value.flatMap((item) => item.literacy_labels ?? []).concat(kps.value.flatMap((kp) => splitLabels(kp.literacy_tag))))),
-    ["#2f6fed", "#2ea96b", "#e0a128", "#8b7cf6", "#2f9ab6", "#de7465"],
+    ["#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa", "#0369a1", "#0ea5e9"],
   ),
 );
 
@@ -217,7 +261,11 @@ const chapterSummary = computed(() => {
   return Array.from(bucket.entries()).map(([chapter, total]) => ({ chapter, total }));
 });
 
-const categoryNodes = computed<CategoryNode[]>(() => chapterSummary.value.map((item) => ({ key: item.chapter, title: item.chapter, total: item.total })));
+const categoryNodes = computed<CategoryNode[]>(() =>
+  chapterSummary.value
+    .map((item) => ({ key: item.chapter, title: item.chapter, total: item.total }))
+    .sort((a, b) => a.key.localeCompare(b.key, "zh-Hans-CN")),
+);
 
 const filteredKps = computed(() => {
   const kw = search.value.trim().toLowerCase();
@@ -230,13 +278,23 @@ const filteredKps = computed(() => {
 });
 
 const visibleKps = computed(() => {
-  if (showAllKps.value) return filteredKps.value;
-  const activeChapterKey =
-    selectedType.value === "category"
-      ? selectedCategory.value
-      : (selectedKp.value?.chapter || selectedCategory.value || null);
-  if (!activeChapterKey) return [] as GraphKp[];
-  return filteredKps.value.filter((kp) => (kp.chapter || "未分章") === activeChapterKey);
+  let list: GraphKp[];
+  if (showAllKps.value) {
+    list = filteredKps.value;
+  } else {
+    const activeChapterKey =
+      selectedType.value === "category"
+        ? selectedCategory.value
+        : (selectedKp.value?.chapter || selectedCategory.value || null);
+    if (!activeChapterKey) list = [] as GraphKp[];
+    else list = filteredKps.value.filter((kp) => (kp.chapter || "未分章") === activeChapterKey);
+  }
+  // 搜索过滤后当前选中知识点可能不在列表中，画布丢失节点导致无法再次点击；始终保留选中节点
+  if (selectedType.value === "kp" && selectedId.value != null && !list.some((k) => k.id === selectedId.value)) {
+    const pinned = kps.value.find((k) => k.id === selectedId.value);
+    if (pinned) list = [...list, pinned];
+  }
+  return list;
 });
 
 const treeNodes = computed(() => {
@@ -272,52 +330,18 @@ const stageStats = computed(() => {
 
 const hasGraphData = computed(() => kps.value.length > 0);
 
-const defaultCategoryPositions = computed<Record<string, Point>>(() => {
-  const entries: Record<string, Point> = {};
-  const list = categoryNodes.value;
-  const total = Math.max(list.length, 1);
-  const spread = Math.min(480, Math.max(220, (total - 1) * 170));
-  const startX = INITIAL_CENTER_X - spread / 2;
-  const endX = INITIAL_CENTER_X + spread / 2;
-  const step = total === 1 ? 0 : spread / (total - 1);
-  list.forEach((item, index) => {
-    entries[item.key] = {
-      x: startX + step * index,
-      y: INITIAL_CENTER_Y - 360 + (index % 2 === 0 ? 0 : 26),
-    };
-  });
-  return entries;
-});
+/** 与教师端画布顶部统计一致：分类数 / 可见知识点 / 可见边 */
+const canvasStageStats = computed(() => ({
+  categories: categoryNodes.value.length,
+  points: visibleKps.value.length,
+  edges: visibleEdges.value.length,
+}));
 
-const defaultKpPositions = computed<Record<number, Point>>(() => {
-  const entries: Record<number, Point> = {};
-  const groups = new Map<string, GraphKp[]>();
-  for (const kp of visibleKps.value) {
-    const key = kp.chapter || "未分章";
-    const arr = groups.get(key) ?? [];
-    arr.push(kp);
-    groups.set(key, arr);
-  }
-
-  for (const [chapter, items] of groups.entries()) {
-    const anchor = categoryPositions.value[chapter] ?? defaultCategoryPositions.value[chapter] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y - 360 };
-    const ordered = [...items].sort((a, b) => String(a.code || "").localeCompare(String(b.code || ""), "zh-Hans-CN"));
-    const columns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(ordered.length))));
-    const gapX = 220;
-    const gapY = 170;
-    const startX = anchor.x - ((columns - 1) * gapX) / 2;
-    ordered.forEach((kp, index) => {
-      const col = index % columns;
-      const row = Math.floor(index / columns);
-      entries[kp.id] = {
-        x: startX + col * gapX + (row % 2 === 0 ? 0 : 18),
-        y: anchor.y + 250 + row * gapY,
-      };
-    });
-  }
-
-  return entries;
-});
+const deterministicLayout = computed(() =>
+  buildDeterministicGraphLayout(kps.value.map((kp) => ({ id: kp.id, code: kp.code, chapter: kp.chapter }))),
+);
+const defaultCategoryPositions = computed<Record<string, Point>>(() => deterministicLayout.value.categoryPositions);
+const defaultKpPositions = computed<Record<number, Point>>(() => deterministicLayout.value.kpPositions);
 
 function isLegacyCoordinateLayout(rows: GraphKp[]) {
   const withPos = rows.filter((kp) => kp.pos_x != null && kp.pos_y != null);
@@ -428,6 +452,8 @@ const selectedCategoryOverview = computed(() => {
   };
 });
 
+const drawerVisible = computed(() => drawerOpen.value && (selectedKp.value != null || selectedCategoryNode.value != null));
+
 function categoryPoint(key: string) {
   return categoryPositions.value[key] ?? defaultCategoryPositions.value[key] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y - 360 };
 }
@@ -496,11 +522,6 @@ function studentViewStateStorageKey() {
   return `da_student_graph_view_v4_${studentActorKey()}_${props.subject}_${props.grade}`;
 }
 
-function teacherCategoryPositionStorageKey() {
-  if (!props.subject) return "";
-  return `da_teacher_category_pos_v2_${props.subject}_${props.grade}`;
-}
-
 function persistStudentLayout() {
   return;
 }
@@ -529,27 +550,6 @@ function restoreStudentLayout() {
   return false;
 }
 
-function restoreTeacherCategoryPositions() {
-  const key = teacherCategoryPositionStorageKey();
-  if (!key) return;
-  try {
-    const raw = localStorage.getItem(key);
-    const parsed = raw ? JSON.parse(raw) : {};
-    if (!parsed || typeof parsed !== "object") return;
-    const next: Record<string, Point> = {};
-    for (const [key, point] of Object.entries(parsed)) {
-      const x = Number((point as any)?.x);
-      const y = Number((point as any)?.y);
-      if (Number.isFinite(x) && Number.isFinite(y)) {
-        next[key] = { x, y };
-      }
-    }
-    categoryPositions.value = next;
-  } catch {
-    categoryPositions.value = {};
-  }
-}
-
 function restoreStudentViewState() {
   const key = studentViewStateStorageKey();
   if (!key) return false;
@@ -558,12 +558,19 @@ function restoreStudentViewState() {
   try {
     const parsed = JSON.parse(raw) as Partial<StudentWorkspaceViewState>;
     mutingLayoutPersist.value = true;
-    const nextScale = Number(parsed.canvasScale ?? DEFAULT_CANVAS_SCALE);
-    const nextPanX = Number(parsed.panX ?? 0);
-    const nextPanY = Number(parsed.panY ?? 0);
-    canvasScale.value = Math.min(MAX_CANVAS_SCALE, Math.max(MIN_CANVAS_SCALE, nextScale));
-    panX.value = Number.isFinite(nextPanX) ? nextPanX : 0;
-    panY.value = Number.isFinite(nextPanY) ? nextPanY : 0;
+    // 嵌入学生页不恢复平移/缩放：不同容器宽度下旧值会把图画到视野外，表现为「空白画布」
+    if (!props.embedded) {
+      const nextScale = Number(parsed.canvasScale ?? DEFAULT_CANVAS_SCALE);
+      const nextPanX = Number(parsed.panX ?? 0);
+      const nextPanY = Number(parsed.panY ?? 0);
+      canvasScale.value = Math.min(MAX_CANVAS_SCALE, Math.max(MIN_CANVAS_SCALE, nextScale));
+      panX.value = Number.isFinite(nextPanX) ? nextPanX : 0;
+      panY.value = Number.isFinite(nextPanY) ? nextPanY : 0;
+    } else {
+      canvasScale.value = DEFAULT_CANVAS_SCALE;
+      panX.value = 0;
+      panY.value = 0;
+    }
     activeChapter.value = typeof parsed.activeChapter === "string" && parsed.activeChapter ? parsed.activeChapter : "全部";
     search.value = typeof parsed.search === "string" ? parsed.search : "";
     drawerOpen.value = true;
@@ -669,12 +676,19 @@ function isPathEdge(edge: GraphEdge) {
   return highlightedKpSet.value.has(edge.prereq_id) && highlightedKpSet.value.has(edge.next_id);
 }
 
+function edgeTouchesHover(edge: GraphEdge) {
+  const h = hoveredKpId.value;
+  if (h == null) return false;
+  return edge.prereq_id === h || edge.next_id === h;
+}
+
 function edgeStroke(edge: GraphEdge) {
   if (isPathEdge(edge)) return "#5a8ef0";
+  if (edgeTouchesHover(edge)) return "#2563eb";
   if (edge.relation_type === "support") return "#46a57b";
   if (edge.relation_type === "contains") return "#db9d37";
   if (edge.relation_type === "related") return "rgba(74,120,213,0.6)";
-  return "rgba(100,116,139,0.5)";
+  return "rgba(71,85,105,0.78)";
 }
 
 function edgeDasharray(edge: GraphEdge) {
@@ -686,6 +700,7 @@ function edgeDasharray(edge: GraphEdge) {
 
 function edgeWidth(edge: GraphEdge) {
   if (isPathEdge(edge)) return 2.8;
+  if (edgeTouchesHover(edge)) return 3.2;
   if (edge.relation_type === "contains") return 2.2;
   if (edge.relation_type === "support") return 2.1;
   return 1.6;
@@ -693,10 +708,10 @@ function edgeWidth(edge: GraphEdge) {
 
 function edgeMarker(edge: GraphEdge) {
   if (edge.relation_type === "related") return undefined;
-  if (isPathEdge(edge)) return "url(#student-edge-arrow-path)";
-  if (edge.relation_type === "support") return "url(#student-edge-arrow-triangle)";
-  if (edge.relation_type === "contains") return "url(#student-edge-arrow-open)";
-  return "url(#student-edge-arrow)";
+  if (isPathEdge(edge)) return "url(#teacher-edge-arrow-path)";
+  if (edge.relation_type === "support") return "url(#teacher-edge-arrow-triangle)";
+  if (edge.relation_type === "contains") return "url(#teacher-edge-arrow-open)";
+  return "url(#teacher-edge-arrow)";
 }
 
 function chapterEdgeStroke(edge: ChapterEdge) {
@@ -722,9 +737,9 @@ function ringColor(level: "knowledge" | "ability" | "literacy", status?: string,
     if (label && literacyColorMap.value.has(label)) return literacyColorMap.value.get(label) as string;
   }
   const palette = {
-    knowledge: { achieved: "#2ea96b", in_progress: "#86cfa8", not_started: "#d7e7dd" },
-    ability: { achieved: "#f0b429", in_progress: "#f6d67a", not_started: "#efe4bf" },
-    literacy: { achieved: "#2f6fed", in_progress: "#8db0f6", not_started: "#d7e3fb" },
+    knowledge: { achieved: "#4a7bc8", in_progress: "#93b4e8", not_started: "#e3edf9" },
+    ability: { achieved: "#16a34a", in_progress: "#4ade80", not_started: "#d9f5e0" },
+    literacy: { achieved: "#2563eb", in_progress: "#93c5fd", not_started: "#dbeafe" },
   };
   const key = status === "achieved" || status === "in_progress" ? status : "not_started";
   return palette[level][key];
@@ -745,6 +760,39 @@ async function openResource(item: { id: number; kp_id: number; url: string }, ac
 
 function metricPercent(value?: number | null) {
   return Math.round((value ?? 0) * 100);
+}
+
+const learningHintsActive = computed(
+  () =>
+    props.currentKpId != null &&
+    selectedType.value === "kp" &&
+    selectedId.value === props.currentKpId,
+);
+
+function formatEvidenceSummary(ev: Record<string, unknown> | null | undefined): string {
+  if (!ev || typeof ev !== "object") return "";
+  const practiceT = Number(ev.practice_total ?? 0);
+  const practiceC = Number(ev.practice_correct ?? 0);
+  const quizT = Number(ev.quiz_total ?? 0);
+  const quizP = Number(ev.quiz_passed ?? 0);
+  const vidS = Number(ev.video_started ?? 0);
+  const vidC = Number(ev.video_completed ?? 0);
+  const visits = Number(ev.resource_visits ?? 0);
+  const mastery = Number(ev.mastery ?? 0);
+  const parts: string[] = [];
+  if (practiceT > 0) parts.push(`练习答对 ${practiceC}/${practiceT} 次`);
+  if (quizT > 0) parts.push(`小测通过 ${quizP}/${quizT} 次`);
+  if (vidC > 0) parts.push("视频已完播");
+  else if (vidS > 0) parts.push("视频已学习");
+  if (visits > 0) parts.push(`资源访问 ${visits} 次`);
+  parts.push(`掌握度约 ${Math.round(mastery * 100)}%`);
+  return parts.join("；");
+}
+
+function nextStepTitle(index: number): string {
+  const h = props.graphPathHint;
+  if (!h) return "";
+  return h.next_titles[index] || `知识点 #${h.next_candidate_ids[index] ?? ""}`;
 }
 
 function emitState() {
@@ -772,7 +820,12 @@ async function load() {
     const restoredView = restoreStudentViewState();
     layoutRestored.value = restoredView;
     kpPositions.value = normalizedPersisted;
-    restoreTeacherCategoryPositions();
+
+    const det = buildDeterministicGraphLayout(
+      kps.value.map((kp) => ({ id: kp.id, code: kp.code, chapter: kp.chapter })),
+    );
+    const serverChapters = (res.data.base?.chapter_layout ?? {}) as Record<string, { x: number; y: number }>;
+    categoryPositions.value = mergeChapterLayout(det.categoryPositions, serverChapters);
 
     syncCategoryPositions();
     syncKpPositions();
@@ -787,13 +840,24 @@ async function load() {
       layoutRestored.value = false;
     }
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "加载知识图谱失败");
+    if (e?.response?.status !== 401) {
+      ElMessage.error(e?.response?.data?.detail ?? "加载知识图谱失败");
+    }
   } finally {
     loading.value = false;
   }
 }
 
 function applyInitialCenterAfterLoad() {
+  // 嵌入页必须根据当前视口重新适配，不能因「已恢复视图」跳过（否则节点在画布外）
+  if (props.embedded && visibleKps.value.length > 0) {
+    fitViewportRetryCount = 0;
+    nextTick(() => {
+      fitVisibleToViewport();
+      requestAnimationFrame(() => fitVisibleToViewport());
+    });
+    return;
+  }
   if (layoutRestored.value) return;
   if (selectedId.value) {
     centerOnPoint(kpPoint(selectedId.value));
@@ -833,7 +897,9 @@ async function loadNodeDetail(id: number | null) {
     nodeDetail.value = res.data;
   } catch (e: any) {
     nodeDetail.value = null;
-    ElMessage.error(e?.response?.data?.detail ?? "加载节点详情失败");
+    if (e?.response?.status !== 401) {
+      ElMessage.error(e?.response?.data?.detail ?? "加载节点详情失败");
+    }
   }
 }
 
@@ -886,6 +952,44 @@ function zoomOut() {
   canvasScale.value = Math.max(MIN_CANVAS_SCALE, Number((canvasScale.value - SCALE_STEP).toFixed(2)));
 }
 
+function fitVisibleToViewport() {
+  if (!stageRef.value || visibleKps.value.length === 0) return;
+  const sw0 = stageRef.value.clientWidth;
+  const sh0 = stageRef.value.clientHeight;
+  if (sw0 < 48 || sh0 < 48) {
+    if (fitViewportRetryCount < 12) {
+      fitViewportRetryCount += 1;
+      requestAnimationFrame(() => fitVisibleToViewport());
+    }
+    return;
+  }
+  fitViewportRetryCount = 0;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const kp of visibleKps.value) {
+    const p = kpPoint(kp.id);
+    const r = nodeRadius(kp) + 28;
+    minX = Math.min(minX, p.x - r);
+    maxX = Math.max(maxX, p.x + r);
+    minY = Math.min(minY, p.y - r);
+    maxY = Math.max(maxY, p.y + r);
+  }
+  const w = maxX - minX || 1;
+  const h = maxY - minY || 1;
+  const sw = sw0;
+  const sh = sh0;
+  const pad = 100;
+  const scale = Math.min(MAX_CANVAS_SCALE, Math.max(MIN_CANVAS_SCALE, Math.min((sw - pad) / w, (sh - pad) / h)));
+  canvasScale.value = scale;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  panX.value = sw / 2 - cx * scale;
+  panY.value = sh / 2 - cy * scale;
+  persistStudentViewState();
+}
+
 function resetViewport() {
   canvasScale.value = DEFAULT_CANVAS_SCALE;
   activeChapter.value = "全部";
@@ -931,7 +1035,14 @@ function onStageWheel(event: WheelEvent) {
 
 function onStageMouseDown(event: MouseEvent) {
   const target = event.target as HTMLElement | null;
-  if (target?.closest(".workspace-node") || target?.closest(".workspace-category-node")) return;
+  if (
+    target?.closest(".workspace-node") ||
+    target?.closest(".workspace-category-node") ||
+    target?.closest(".teacher-node") ||
+    target?.closest(".teacher-category-node")
+  ) {
+    return;
+  }
   draggingCanvas.value = true;
   dragStartX.value = event.clientX;
   dragStartY.value = event.clientY;
@@ -972,6 +1083,12 @@ watch(visibleKps, () => {
   syncCategoryPositions();
   syncKpPositions();
   normalizeStudentSelectionState();
+  if (props.embedded && visibleKps.value.length > 0) {
+    nextTick(() => {
+      fitViewportRetryCount = 0;
+      fitVisibleToViewport();
+    });
+  }
 });
 
 watch(
@@ -984,51 +1101,118 @@ watch(
 window.addEventListener("mousemove", onWindowMouseMove);
 window.addEventListener("mouseup", stopDragging);
 
+watch(
+  () => [loading.value, props.embedded, stageRef.value] as const,
+  ([ld, emb, el]) => {
+    embeddedResizeObserver?.disconnect();
+    embeddedResizeObserver = null;
+    if (ld || !emb || !el) return;
+    embeddedResizeObserver = new ResizeObserver(() => {
+      if (!props.embedded || visibleKps.value.length === 0) return;
+      if (embeddedResizeDebounce) clearTimeout(embeddedResizeDebounce);
+      embeddedResizeDebounce = setTimeout(() => {
+        embeddedResizeDebounce = null;
+        fitViewportRetryCount = 0;
+        fitVisibleToViewport();
+      }, 100);
+    });
+    embeddedResizeObserver.observe(el);
+  },
+  { flush: "post" },
+);
+
 onBeforeUnmount(() => {
+  embeddedResizeObserver?.disconnect();
+  embeddedResizeObserver = null;
+  if (embeddedResizeDebounce) clearTimeout(embeddedResizeDebounce);
   window.removeEventListener("mousemove", onWindowMouseMove);
   window.removeEventListener("mouseup", stopDragging);
 });
 </script>
 
 <template>
-  <div class="workspace-shell" v-loading="loading">
-    <div class="workspace-header">
+  <div
+    v-loading="loading"
+    class="workspace-shell"
+    :class="{
+      'workspace-shell--embedded': props.embedded,
+      'teacher-workbench teacher-workbench--fullscreen': props.embedded,
+    }"
+  >
+    <div v-if="!props.embedded" class="workspace-header">
       <div class="workspace-heading">
-        <h1 class="workspace-title">知识图谱</h1>
-        <p class="workspace-subtitle">左侧找分类，中间看图谱，右侧看内容。</p>
+        <h1 class="workspace-title">知识图谱工作台（学习视图）</h1>
+        <p class="workspace-subtitle">与教师端同一套图谱数据；左侧章节、中间节点、右侧详情；三色环表示知识/能力/素养达成。</p>
       </div>
       <div class="workspace-controls">
         <el-input v-model="search" placeholder="搜索知识点" clearable class="workspace-search" />
+        <button class="workspace-btn" @click="fitVisibleToViewport">适应画布</button>
         <button class="workspace-btn" @click="resetViewport">重置画布</button>
       </div>
     </div>
 
-    <div class="workspace-guide">
+    <div v-if="!props.embedded" class="workspace-guide">
       <span>图谱说明</span>
       <HoverTip content="先在左边找分类，再点中间节点，最后在右边看资源和前后关系。" />
     </div>
 
-    <div class="workspace-content">
-      <aside class="workspace-sidebar">
-        <div class="workspace-tree">
-          <div v-if="treeNodes.length === 0" class="workspace-tree__empty">
+    <div v-else class="teacher-header">
+      <div class="teacher-heading">
+        <h1 class="teacher-title">知识图谱</h1>
+        <p class="teacher-subtitle">先在左边找分类，再点中间节点，最后在右边查看学习详情与资源。</p>
+      </div>
+      <div class="teacher-controls">
+        <el-input v-model="search" placeholder="搜索知识点" clearable class="teacher-search" />
+        <button type="button" class="teacher-btn" @click="fitVisibleToViewport">适应画布</button>
+        <button type="button" class="teacher-btn" @click="resetViewport">重置画布</button>
+        <button type="button" class="teacher-btn teacher-btn--primary" @click="drawerOpen = !drawerOpen">
+          {{ drawerVisible ? "收起右侧" : "打开右侧" }}
+        </button>
+      </div>
+    </div>
+
+    <div
+      :class="
+        props.embedded
+          ? ['teacher-content', 'teacher-content--fullscreen', { 'teacher-content--drawer-collapsed': !drawerVisible }]
+          : 'workspace-content'
+      "
+    >
+      <aside :class="props.embedded ? 'teacher-sidebar workspace-sidebar' : 'workspace-sidebar'">
+        <div :class="props.embedded ? 'teacher-tree workspace-tree' : 'workspace-tree'">
+          <div v-if="treeNodes.length === 0" :class="props.embedded ? ['teacher-tree__empty', 'workspace-tree__empty'] : 'workspace-tree__empty'">
             <strong>左边现在没有可选内容</strong>
             <span>可以先清空搜索词，或换一门课程再查看。</span>
           </div>
           <div v-for="item in treeNodes" :key="item.key" class="workspace-tree__group">
-            <div class="workspace-tree__summary" :class="{ active: activeChapter === item.key }" @click="selectCategory(item.key)">
+            <div
+              :class="[
+                props.embedded ? 'teacher-tree__summary workspace-tree__summary' : 'workspace-tree__summary',
+                { active: activeChapter === item.key },
+              ]"
+              @click="selectCategory(item.key)"
+            >
               <span>{{ item.title }}</span>
-              <span class="workspace-tree__count">{{ item.children.length }}</span>
+              <span :class="props.embedded ? 'teacher-tree__count workspace-tree__count' : 'workspace-tree__count'">{{
+                item.children.length
+              }}</span>
             </div>
-            <div class="workspace-tree__children" v-if="activeChapter === item.key || activeChapter === '全部'">
+            <div
+              class="workspace-tree__children"
+              :class="props.embedded ? 'teacher-tree__children' : ''"
+              v-if="activeChapter === item.key || activeChapter === '全部'"
+            >
               <button
                 v-for="kp in item.children"
                 :key="kp.id"
-                class="workspace-tree__child"
-                :class="{ active: kp.id === selectedKp?.id }"
+                :class="[
+                  props.embedded ? 'teacher-tree__child workspace-tree__child' : 'workspace-tree__child',
+                  { active: kp.id === selectedKp?.id },
+                ]"
                 @click="selectKp(kp.id)"
               >
-                {{ kp.title }}
+                <span>{{ kp.title }}</span>
+                <small v-if="props.embedded">{{ kp.code }}</small>
               </button>
             </div>
           </div>
@@ -1036,75 +1220,130 @@ onBeforeUnmount(() => {
       </aside>
 
       <section
-        ref="stageRef"
-        class="workspace-stage"
-        :class="{ 'workspace-stage--dragging': draggingCanvas }"
-        @mousedown="onStageMouseDown"
-        @wheel.prevent="onStageWheel"
+        :class="[
+          props.embedded ? 'teacher-stage' : 'workspace-stage',
+          props.embedded
+            ? { 'teacher-stage--dragging': draggingCanvas }
+            : { 'workspace-stage--dragging': draggingCanvas },
+        ]"
       >
-        <div class="workspace-stage__top">
-          <div class="workspace-stage__top-main">
-            <div class="workspace-stage__stats">
-              <span class="workspace-stage__pill">分类 {{ categoryNodes.length }}</span>
-              <span class="workspace-stage__pill">知识点 {{ visibleKps.length }}</span>
-              <span class="workspace-stage__pill">{{ selectedType === "kp" ? "当前知识点" : "当前分类" }}</span>
+        <template v-if="props.embedded">
+          <div class="teacher-stage__top teacher-stage__top--embedded">
+            <div class="teacher-stage__top-row">
+              <div class="teacher-stage__stats">
+                <span class="teacher-stage__pill">分类 {{ canvasStageStats.categories }}</span>
+                <span class="teacher-stage__pill">知识点 {{ canvasStageStats.points }}</span>
+                <span class="teacher-stage__pill">关系 {{ canvasStageStats.edges }}</span>
+              </div>
+              <div class="teacher-stage__actions">
+                <button type="button" class="teacher-stage__button" @click="toggleAllKps">
+                  {{ showAllKps ? "仅看分类" : "显示全部节点" }}
+                </button>
+                <button type="button" class="teacher-stage__button teacher-stage__button--primary" @click.stop="openContentFromSelected">
+                  去学习
+                </button>
+                <button type="button" class="teacher-stage__button" @click="fitVisibleToViewport">适应画布</button>
+                <button type="button" class="teacher-stage__button" @click="resetViewport">重置画布</button>
+              </div>
             </div>
-            <div class="workspace-stage__legend">
-              <span class="workspace-stage__legend-item">
-                <i class="workspace-stage__legend-line workspace-stage__legend-line--solid"></i>
-                实线箭头：前置 / 顺序关系
+            <details class="teacher-stage__legend-details">
+              <summary class="teacher-stage__legend-summary">连线与图例说明（默认收起，点击展开）</summary>
+              <div class="teacher-stage__legend">
+                <span class="teacher-stage__legend-item">
+                  <i class="teacher-stage__legend-line teacher-stage__legend-line--solid"></i>
+                  实线箭头：前置 / 顺序关系
+                </span>
+                <span class="teacher-stage__legend-item">
+                  <i class="teacher-stage__legend-line teacher-stage__legend-line--dashed"></i>
+                  虚线 / 三角箭头：支撑、包含、分类归属
+                </span>
+                <span class="teacher-stage__legend-item">
+                  <i class="teacher-stage__legend-line teacher-stage__legend-line--path"></i>
+                  蓝色虚线：推荐路径；同名能力/素养标签共用同色环
+                </span>
+                <span class="teacher-stage__legend-item">
+                  <i class="teacher-stage__legend-rings">
+                    <span class="tr ring--literacy"></span>
+                    <span class="tr ring--ability"></span>
+                    <span class="tr ring--knowledge"></span>
+                  </i>
+                  三层环（与教师端一致）：知识（内）/ 能力（中）/ 素养（外）；同标签同色
+                </span>
+              </div>
+            </details>
+          </div>
+        </template>
+        <template v-else>
+          <div class="workspace-stage__top">
+            <div class="workspace-stage__top-main">
+              <div class="workspace-stage__stats">
+                <span class="workspace-stage__pill">分类 {{ categoryNodes.length }}</span>
+                <span class="workspace-stage__pill">知识点 {{ visibleKps.length }}</span>
+                <span class="workspace-stage__pill">{{ selectedType === "kp" ? "当前知识点" : "当前分类" }}</span>
+              </div>
+              <div class="workspace-stage__legend">
+                <span class="workspace-stage__legend-item">
+                  <i class="workspace-stage__legend-line workspace-stage__legend-line--solid"></i>
+                  实线箭头：前置 / 顺序关系
+                </span>
+                <span class="workspace-stage__legend-item">
+                  <i class="workspace-stage__legend-line workspace-stage__legend-line--dashed"></i>
+                  虚线 / 三角箭头：支撑、包含、分类归属
+                </span>
+                <span class="workspace-stage__legend-item">
+                  <i class="workspace-stage__legend-line workspace-stage__legend-line--path"></i>
+                  蓝色虚线：推荐路径；同名能力/素养标签共用同色环，便于分组
+                </span>
+                <span class="workspace-stage__legend-item">
+                  <i class="workspace-stage__legend-rings">
+                    <span class="ring ring--literacy"></span>
+                    <span class="ring ring--ability"></span>
+                    <span class="ring ring--knowledge"></span>
+                  </i>
+                  三层环：知识掌握（内·蓝）/ 能力（中·绿）/ 素养（外·蓝）
+                </span>
+              </div>
+            </div>
+            <div class="workspace-stage__focus">
+              <span>
+                {{ selectedType === "kp" ? (selectedKp?.title || "未选择知识点") : (selectedCategoryNode?.title || "未选择分类") }}
               </span>
-              <span class="workspace-stage__legend-item">
-                <i class="workspace-stage__legend-line workspace-stage__legend-line--dashed"></i>
-                虚线 / 三角箭头：支撑、包含、分类归属
-              </span>
-              <span class="workspace-stage__legend-item">
-                <i class="workspace-stage__legend-line workspace-stage__legend-line--path"></i>
-                蓝色虚线：推荐路径，同色环表示同类能力或素养
-              </span>
-              <span class="workspace-stage__legend-item">
-                <i class="workspace-stage__legend-rings">
-                  <span class="ring ring--literacy"></span>
-                  <span class="ring ring--ability"></span>
-                  <span class="ring ring--knowledge"></span>
-                </i>
-                三层环：知识（内）/ 能力（中）/ 素养（外）
-              </span>
+              <button class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
+                {{ showAllKps ? "仅看分类" : "显示全部节点" }}
+              </button>
+              <button v-if="selectedType === 'kp' && selectedKp" class="workspace-stage__learn-btn" @click.stop="openContentFromSelected">
+                去学习
+              </button>
             </div>
           </div>
-          <div class="workspace-stage__focus">
-            <span>
-              {{ selectedType === "kp" ? (selectedKp?.title || "未选择知识点") : (selectedCategoryNode?.title || "未选择分类") }}
-            </span>
-            <button class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
-              {{ showAllKps ? "仅看分类" : "显示全部节点" }}
-            </button>
-            <button v-if="selectedType === 'kp' && selectedKp" class="workspace-stage__learn-btn" @click.stop="openContentFromSelected">
-              去学习
-            </button>
-          </div>
-        </div>
+        </template>
+        <div
+          ref="stageRef"
+          :class="props.embedded ? 'teacher-stage__viewport' : 'workspace-stage__viewport'"
+          @mousedown="onStageMouseDown"
+          @wheel.prevent="onStageWheel"
+        >
         <svg
-          class="workspace-canvas"
+          :class="props.embedded ? 'teacher-canvas' : 'workspace-canvas'"
           :width="CANVAS_WIDTH"
           :height="CANVAS_HEIGHT"
           :style="{ transform: `translate(${panX}px, ${panY}px) scale(${canvasScale})` }"
         >
-          <rect x="0" y="0" :width="CANVAS_WIDTH" :height="CANVAS_HEIGHT" fill="#f8fbff" />
+          <rect x="0" y="0" :width="CANVAS_WIDTH" :height="CANVAS_HEIGHT" fill="var(--graph-canvas-bg)" />
           <defs>
-            <marker id="student-edge-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <marker id="teacher-edge-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(100,116,139,0.55)" />
             </marker>
-            <marker id="student-edge-arrow-path" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <marker id="teacher-edge-arrow-path" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#5a8ef0" />
             </marker>
-            <marker id="student-edge-arrow-triangle" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <marker id="teacher-edge-arrow-triangle" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
               <path d="M 1 1 L 9 5 L 1 9 z" fill="#46a57b" />
             </marker>
-            <marker id="student-edge-arrow-open" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+            <marker id="teacher-edge-arrow-open" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
               <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#db9d37" stroke-width="1.5" />
             </marker>
-            <marker id="student-chapter-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <marker id="teacher-chapter-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(75,94,130,0.55)" />
             </marker>
           </defs>
@@ -1119,7 +1358,7 @@ onBeforeUnmount(() => {
             :stroke="chapterEdgeStroke(edge)"
             stroke-width="2.2"
             stroke-dasharray="6 6"
-            :marker-end="edge.relation_type === 'related' ? undefined : 'url(#student-chapter-arrow)'"
+            :marker-end="edge.relation_type === 'related' ? undefined : 'url(#teacher-chapter-arrow)'"
           />
 
           <line
@@ -1152,23 +1391,37 @@ onBeforeUnmount(() => {
           <g
             v-for="category in categoryNodes"
             :key="category.key"
-            class="workspace-category-node"
+            :class="props.embedded ? 'teacher-category-node workspace-category-node' : 'workspace-category-node'"
             :transform="`translate(${categoryPoint(category.key).x}, ${categoryPoint(category.key).y})`"
             @click="selectCategory(category.key)"
             @mousedown="onNodeMouseDown($event, 'category', category.key)"
           >
             <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#edf4ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#7fb0ff' : '#d7e2f0'" stroke-width="1.8" />
-            <text class="workspace-category-node__title" text-anchor="middle" y="-6">{{ category.title }}</text>
-            <text class="workspace-category-node__meta" text-anchor="middle" y="22">{{ category.total }} 个知识点</text>
+            <text
+              :class="props.embedded ? 'teacher-category-node__title workspace-category-node__title' : 'workspace-category-node__title'"
+              text-anchor="middle"
+              y="-6"
+            >
+              {{ category.title }}
+            </text>
+            <text
+              :class="props.embedded ? 'teacher-category-node__meta workspace-category-node__meta' : 'workspace-category-node__meta'"
+              text-anchor="middle"
+              y="22"
+            >
+              {{ category.total }} 个知识点
+            </text>
           </g>
 
           <g
             v-for="kp in visibleKps"
             :key="kp.id"
-            class="workspace-node"
+            :class="props.embedded ? 'teacher-node workspace-node' : 'workspace-node'"
             :transform="`translate(${kpPoint(kp.id).x}, ${kpPoint(kp.id).y})`"
             @click="selectKp(kp.id)"
             @mousedown="onNodeMouseDown($event, 'kp', kp.id)"
+            @mouseenter="hoveredKpId = kp.id"
+            @mouseleave="hoveredKpId = null"
           >
             <circle :r="nodeRadius(kp) + 18" :fill="'transparent'" :stroke="ringColor('literacy', effectiveOverlayMap.get(kp.id)?.literacy_status, effectiveOverlayMap.get(kp.id)?.literacy_labels || splitLabels(kp.literacy_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.literacy_enabled ? 5 : 0" />
             <circle :r="nodeRadius(kp) + 10" :fill="'transparent'" :stroke="ringColor('ability', effectiveOverlayMap.get(kp.id)?.ability_status, effectiveOverlayMap.get(kp.id)?.ability_labels || splitLabels(kp.ability_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.ability_enabled ? 5 : 0" />
@@ -1180,8 +1433,12 @@ onBeforeUnmount(() => {
               :stroke="kp.id === selectedKp?.id ? '#7ca9f3' : ((isRecommended(kp.id) || isPathNode(kp.id)) ? '#5a8ef0' : '#d7e2f0')"
               :stroke-width="isRecommended(kp.id) ? 2.6 : (isPathNode(kp.id) ? 2.3 : 2)"
             />
-            <text class="workspace-node__code" text-anchor="middle" y="-8">{{ kp.code }}</text>
-            <text class="workspace-node__title" text-anchor="middle" y="16">{{ kp.title.slice(0, 10) }}</text>
+            <text :class="props.embedded ? 'teacher-node__code workspace-node__code' : 'workspace-node__code'" text-anchor="middle" y="-8">
+              {{ kp.code }}
+            </text>
+            <text :class="props.embedded ? 'teacher-node__title workspace-node__title' : 'workspace-node__title'" text-anchor="middle" y="16">
+              {{ kp.title.slice(0, 10) }}
+            </text>
             <g v-if="isRecommended(kp.id)">
               <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#5a8ef0" />
               <text class="workspace-node__badge" text-anchor="middle" y="-36">推荐</text>
@@ -1192,24 +1449,34 @@ onBeforeUnmount(() => {
             </g>
           </g>
         </svg>
+        </div>
 
-        <div class="workspace-bottom">
-          <div class="workspace-zoom">
-            <button @click="zoomOut">-</button>
+        <div :class="props.embedded ? 'teacher-stage__bottom' : 'workspace-bottom'">
+          <div :class="props.embedded ? 'teacher-stage__zoom' : 'workspace-zoom'">
+            <button type="button" @click="zoomOut">-</button>
             <span>缩放 {{ Math.round(canvasScale * 100) }}%</span>
-            <button @click="zoomIn">+</button>
+            <button type="button" @click="zoomIn">+</button>
           </div>
         </div>
 
-        <div v-if="!loading && !hasGraphData" class="workspace-stage__empty">
+        <div v-if="!loading && !hasGraphData" :class="props.embedded ? 'teacher-stage__empty' : 'workspace-stage__empty'">
           <strong>这门课还没有知识图谱</strong>
           <span>请先让老师创建知识点和关系，再回来查看。</span>
         </div>
       </section>
 
-      <aside class="workspace-drawer" v-if="selectedKp || selectedCategoryNode">
-        <div class="workspace-drawer__header">
-          <h3 class="workspace-drawer__title">{{ selectedType === 'kp' ? selectedKp?.title : selectedCategoryNode?.title }}</h3>
+      <aside
+        :class="[
+          props.embedded ? 'teacher-drawer workspace-drawer' : 'workspace-drawer',
+          { open: props.embedded && drawerOpen },
+        ]"
+        v-if="drawerVisible"
+      >
+        <div :class="props.embedded ? 'teacher-drawer__header workspace-drawer__header' : 'workspace-drawer__header'">
+          <h3 :class="props.embedded ? 'teacher-drawer__title workspace-drawer__title' : 'workspace-drawer__title'">
+            {{ selectedType === "kp" ? selectedKp?.title : selectedCategoryNode?.title }}
+          </h3>
+          <button v-if="props.embedded" type="button" class="teacher-drawer__close" @click="drawerOpen = false">×</button>
         </div>
 
         <div class="workspace-drawer__content">
@@ -1225,6 +1492,48 @@ onBeforeUnmount(() => {
             </div>
             <div v-if="activeOverlay?.blocked_reason" class="workspace-drawer__blocked">
               前置阻塞：{{ activeOverlay.blocked_reason }}
+            </div>
+
+            <div v-if="formatEvidenceSummary(nodeDetail?.overlay?.evidence as Record<string, unknown>)" class="workspace-drawer__section">
+              <h4 class="workspace-drawer__section-title">过程证据摘要</h4>
+              <p class="workspace-drawer__evidence-line">
+                {{ formatEvidenceSummary(nodeDetail?.overlay?.evidence as Record<string, unknown>) }}
+              </p>
+              <p class="workspace-drawer__micro-hint">依据您在本知识点的练习、小测、视频与资源访问等记录汇总，与图谱色环判定一致。</p>
+            </div>
+
+            <div v-if="learningHintsActive && graphPathHint" class="workspace-drawer__section">
+              <h4 class="workspace-drawer__section-title">建议下一步</h4>
+              <p class="workspace-drawer__hint-text">{{ graphPathHint.path_summary }}</p>
+              <div v-if="graphPathHint.blocked_titles?.length" class="workspace-drawer__blocked">
+                需先补前置：{{ graphPathHint.blocked_titles.join("、") }}
+              </div>
+              <div v-else-if="graphPathHint.can_unlock_next && (graphPathHint.next_candidate_ids?.length ?? 0) > 0" class="workspace-drawer__next-btns">
+                <button
+                  v-for="(nid, idx) in graphPathHint.next_candidate_ids.slice(0, 5)"
+                  :key="`nx-${nid}`"
+                  type="button"
+                  class="workspace-drawer__next-btn"
+                  @click="selectKp(nid)"
+                >
+                  {{ nextStepTitle(idx) }}
+                </button>
+              </div>
+              <p v-else class="workspace-drawer__hint-text">暂无可点击的后继节点，可在「前置知识」或关联知识点中继续探索。</p>
+            </div>
+
+            <div v-if="learningHintsActive && graphRecoHint" class="workspace-drawer__section">
+              <h4 class="workspace-drawer__section-title">个性化推荐</h4>
+              <p class="workspace-drawer__hint-text">{{ graphRecoHint.reason_summary }}</p>
+              <p v-if="graphRecoHint.advice_text" class="workspace-drawer__hint-text">{{ graphRecoHint.advice_text }}</p>
+              <div
+                v-if="graphRecoHint.target_kp_id && graphRecoHint.target_kp_id !== selectedKp.id"
+                class="workspace-drawer__next-btns"
+              >
+                <button type="button" class="workspace-drawer__next-btn workspace-drawer__next-btn--accent" @click="selectKp(graphRecoHint.target_kp_id)">
+                  前往推荐：{{ graphRecoHint.target_code }} {{ graphRecoHint.target_title }}
+                </button>
+              </div>
             </div>
 
             <div class="workspace-drawer__section">
@@ -1265,6 +1574,9 @@ onBeforeUnmount(() => {
 
             <div class="workspace-drawer__section">
               <h4 class="workspace-drawer__section-title">知识 / 能力 / 素养</h4>
+              <p class="workspace-drawer__ability-hint">
+                「能力」由教师在知识点上标注能力标签（如逻辑推理），系统根据您的掌握度、练习与小测证据自动判定是否达成；图谱<strong>中层绿环</strong>与右侧状态与此一致。
+              </p>
               <div class="workspace-drawer__tags">
                 <span class="workspace-drawer__tag workspace-drawer__tag--knowledge">
                   知识：{{ activeOverlay?.knowledge_label || selectedKp.knowledge_tag || selectedKp.title }}
@@ -1355,11 +1667,38 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .workspace-shell {
-  min-height: calc(100vh - 190px);
-  background: #ffffff;
+  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-surface-muted) 55%, rgba(79, 140, 255, 0.04) 100%);
   overflow: hidden;
-  border-radius: 28px;
-  box-shadow: 0 26px 54px rgba(15, 23, 42, 0.16);
+  border-radius: var(--app-radius-lg);
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-lg);
+}
+
+.workspace-shell--embedded {
+  border-radius: var(--app-radius-lg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  box-shadow: var(--app-shadow-lg);
+  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-surface-muted) 50%, rgba(79, 140, 255, 0.035) 100%);
+}
+
+.workspace-toolbar-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--app-card) 96%, var(--app-primary-soft));
+  border-bottom: 1px solid var(--app-border);
+  flex-shrink: 0;
+}
+
+.workspace-search--grow {
+  flex: 1;
+  min-width: 160px;
+  max-width: 400px;
 }
 
 .workspace-header {
@@ -1368,8 +1707,9 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 16px;
   padding: 18px 22px;
-  border-bottom: 1px solid #e1eaf1;
-  background: #ffffff;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-card);
+  flex-shrink: 0;
 }
 
 .workspace-guide {
@@ -1377,7 +1717,8 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 10px;
   padding: 12px 22px 0;
-  background: #ffffff;
+  background: var(--app-card);
+  flex-shrink: 0;
 }
 
 .workspace-guide span {
@@ -1475,27 +1816,48 @@ onBeforeUnmount(() => {
 }
 
 .workspace-content {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 320px;
+  display: flex;
+  align-items: stretch;
   gap: 16px;
-  height: calc(100vh - 262px);
   padding: 16px;
+  overflow: hidden;
+  height: min(72vh, 820px);
+  max-height: min(72vh, 820px);
+  flex: 1;
+  min-height: 320px;
+}
+
+.workspace-shell--embedded .workspace-content {
+  height: auto;
+  max-height: none;
+  flex: 1;
+  min-height: var(--app-graph-canvas-min-height, clamp(360px, 52dvh, 820px));
+  padding: 14px 16px 16px;
+  gap: 14px;
+}
+
+.workspace-content > * {
+  min-height: 0;
 }
 
 .workspace-content--sidebar-collapsed {
-  grid-template-columns: 88px minmax(0, 1fr) 320px;
+  /* legacy：当前模板未使用；保留占位避免误删引用时报错 */
 }
 
 .workspace-content--drawer-collapsed {
-  grid-template-columns: 260px minmax(0, 1fr);
+  /* legacy */
 }
 
 .workspace-sidebar {
-  padding: 14px;
-  border-radius: 24px;
-  background: #f8fbff;
-  border: 1px solid #dce6f2;
+  width: 260px;
+  flex: 0 0 260px;
+  max-height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
+  padding: 14px;
+  border-radius: var(--app-radius-lg);
+  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-primary-soft) 100%);
+  border: 1px solid var(--app-border);
 }
 
 .workspace-sidebar--collapsed {
@@ -1602,14 +1964,26 @@ onBeforeUnmount(() => {
 }
 
 .workspace-stage {
+  /* 与 .workspace-stage__viewport 的 left/right 内缩一致，用于同心圆角 */
+  --graph-stage-viewport-inset-x: 12px;
   position: relative;
   overflow: hidden;
   cursor: grab;
   user-select: none;
   touch-action: none;
-  border-radius: 28px;
-  background: #f8fbff;
-  border: 1px solid #dce6f2;
+  flex: 1;
+  min-width: 0;
+  min-height: var(--app-graph-canvas-min-height, clamp(360px, 52dvh, 820px));
+  max-height: 100%;
+  height: 100%;
+  border-radius: var(--app-radius-lg);
+  background: linear-gradient(180deg, var(--app-card) 0%, rgba(79, 140, 255, 0.06) 100%);
+  border: 1px solid var(--app-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.workspace-shell--embedded .workspace-stage {
+  min-height: max(340px, min(58dvh, 880px));
 }
 
 .workspace-stage--dragging {
@@ -1696,19 +2070,19 @@ onBeforeUnmount(() => {
 .workspace-stage__legend-rings .ring--knowledge {
   width: 10px;
   height: 10px;
-  border-color: rgba(46, 169, 107, 0.9);
+  border-color: rgba(74, 123, 200, 0.95);
 }
 
 .workspace-stage__legend-rings .ring--ability {
   width: 14px;
   height: 14px;
-  border-color: rgba(240, 180, 41, 0.85);
+  border-color: rgba(22, 163, 74, 0.9);
 }
 
 .workspace-stage__legend-rings .ring--literacy {
   width: 18px;
   height: 18px;
-  border-color: rgba(118, 91, 232, 0.75);
+  border-color: rgba(37, 99, 235, 0.88);
 }
 
 .workspace-stage__pill,
@@ -1770,12 +2144,30 @@ onBeforeUnmount(() => {
   background: #f8fbff;
 }
 
+.workspace-stage__viewport {
+  position: absolute;
+  left: var(--graph-stage-viewport-inset-x);
+  right: var(--graph-stage-viewport-inset-x);
+  top: 96px;
+  bottom: 56px;
+  width: auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: max(0px, calc(var(--app-radius-lg) - var(--graph-stage-viewport-inset-x)));
+  background: var(--graph-canvas-bg);
+  contain: layout style;
+  isolation: isolate;
+  transform: translateZ(0);
+}
+
 .workspace-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
   display: block;
   transform-origin: 0 0;
   transition: transform 0.08s ease;
   cursor: grab;
-  position: relative;
   z-index: 1;
 }
 
@@ -1807,8 +2199,8 @@ onBeforeUnmount(() => {
 
 .workspace-bottom {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
+  bottom: calc(var(--graph-stage-viewport-inset-x) + 10px);
+  right: calc(var(--graph-stage-viewport-inset-x) + 10px);
   z-index: 10;
 }
 
@@ -1878,12 +2270,26 @@ onBeforeUnmount(() => {
 }
 
 .workspace-drawer {
-  padding: 14px;
-  border-radius: 24px;
-  background: #f8fbff;
-  border: 1px solid #dce6f2;
+  width: 320px;
+  flex: 0 0 320px;
+  max-height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
-  color: #475569;
+  padding: 14px;
+  border-radius: var(--app-radius-lg);
+  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-surface-muted) 100%);
+  border: 1px solid var(--app-border);
+  color: var(--app-text-soft);
+}
+
+/* 嵌入学生工作台：与 .teacher-drawer 组合时改由内部区域滚动，见下方 .teacher-drawer.workspace-drawer */
+.workspace-drawer.teacher-drawer {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  background: #ffffff;
 }
 
 .workspace-drawer__header {
@@ -2049,6 +2455,102 @@ onBeforeUnmount(() => {
   margin: 0 0 8px 0;
 }
 
+.workspace-drawer__evidence-line {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fafcff;
+  border: 1px solid #e1eaf1;
+  color: #51657f;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.workspace-drawer__micro-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.55;
+}
+
+.workspace-drawer__hint-text {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #51657f;
+  line-height: 1.65;
+}
+
+.workspace-drawer__hint-text:last-child {
+  margin-bottom: 0;
+}
+
+.workspace-drawer__blocked {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff8f0;
+  border: 1px solid #f5dcc4;
+  color: #8b5a2b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.workspace-drawer__next-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-drawer__next-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #90caf9;
+  background: #ffffff;
+  color: #1565c0;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.workspace-drawer__next-btn:hover {
+  background: #e3f2fd;
+  border-color: #42a5f5;
+}
+
+.workspace-drawer__next-btn--accent {
+  border-color: var(--app-green, #2f6fed);
+  background: linear-gradient(180deg, #5a8ef0 0%, var(--app-green, #2f6fed) 100%);
+  color: #ffffff;
+}
+
+.workspace-drawer__next-btn--accent:hover {
+  filter: brightness(1.03);
+}
+
+.workspace-drawer__recommend {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f1f6ff;
+  border: 1px solid #c5d8f0;
+  color: #2f4f7a;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.workspace-drawer__ability-hint {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fffbf0;
+  border: 1px solid #f5e0b8;
+  color: #6b5b2a;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .workspace-drawer__learn-btn {
   margin-bottom: 8px;
   min-height: 42px;
@@ -2137,18 +2639,14 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1200px) {
-  .workspace-content {
-    grid-template-columns: 200px 1fr;
+  .workspace-sidebar {
+    width: 200px;
+    flex: 0 0 200px;
   }
 
   .workspace-drawer {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
     width: 280px;
-    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
-    z-index: 20;
+    flex: 0 0 280px;
   }
 }
 
@@ -2169,8 +2667,25 @@ onBeforeUnmount(() => {
   }
 
   .workspace-content {
-    grid-template-columns: 1fr;
-    height: calc(100vh - 280px);
+    flex-direction: column;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+  }
+
+  .workspace-stage {
+    min-height: min(420px, 52vh);
+    --graph-stage-viewport-inset-x: 8px;
+  }
+
+  .workspace-stage__viewport {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    height: min(48vh, 420px);
+    margin: 0 var(--graph-stage-viewport-inset-x) 8px;
   }
 
   .workspace-stage__top {
@@ -2187,10 +2702,591 @@ onBeforeUnmount(() => {
   .workspace-sidebar {
     display: none;
   }
+}
 
-  .workspace-content--sidebar-collapsed,
-  .workspace-content--drawer-collapsed {
-    grid-template-columns: 1fr;
-  }
+/* 嵌入学生页时与 TeacherGraphWorkbench（fullscreen）同源布局与控件样式 */
+.teacher-workbench--fullscreen.workspace-shell--embedded {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.teacher-workbench--fullscreen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.teacher-workbench--fullscreen .teacher-header,
+.teacher-workbench--fullscreen .teacher-guide {
+  flex-shrink: 0;
+}
+
+.teacher-workbench--fullscreen .teacher-guide {
+  display: none;
+}
+
+.teacher-workbench--fullscreen .teacher-subtitle {
+  display: none;
+}
+
+.teacher-workbench--fullscreen .teacher-header {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  padding: 6px 12px;
+}
+
+.teacher-workbench--fullscreen .teacher-title {
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.teacher-workbench--fullscreen .teacher-controls {
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.teacher-workbench--fullscreen .teacher-search {
+  width: min(200px, 36vw);
+}
+
+.teacher-workbench--fullscreen .teacher-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.teacher-workbench--fullscreen .teacher-content {
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+  padding: 8px;
+}
+
+.teacher-workbench--fullscreen .teacher-sidebar {
+  flex: 0 0 200px;
+  width: 200px;
+  max-width: 200px;
+  padding: 10px;
+}
+
+.teacher-workbench--fullscreen .teacher-drawer {
+  flex: 0 0 300px;
+  width: 300px;
+  max-width: 300px;
+  padding: 0;
+  min-height: 0;
+}
+
+.teacher-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 22px;
+  gap: 16px;
+  border-bottom: 1px solid #e1eaf1;
+  background: #ffffff;
+}
+
+.teacher-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.teacher-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #243449;
+  margin: 0;
+}
+
+.teacher-subtitle {
+  margin: 0;
+  color: #718097;
+  font-size: 13px;
+}
+
+.teacher-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.teacher-search :deep(.el-input__wrapper) {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #d8e2ef;
+}
+
+.teacher-btn {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid #d8e2ef;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
+  color: #35507f;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--app-shadow-soft);
+}
+
+.teacher-btn--primary {
+  border-color: var(--app-green);
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+}
+
+.teacher-content {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  padding: 16px;
+  min-width: 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.teacher-content--fullscreen {
+  flex: 1;
+  min-height: 0;
+}
+
+.teacher-content--drawer-collapsed .teacher-drawer {
+  display: none;
+}
+
+.teacher-sidebar {
+  width: 280px;
+  flex: 0 0 280px;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 14px;
+  border-radius: var(--app-radius-lg);
+  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-primary-soft) 100%);
+  border: 1px solid var(--app-border);
+}
+
+.teacher-workbench--fullscreen .teacher-content .teacher-sidebar {
+  position: static;
+  width: auto;
+  box-shadow: none;
+}
+
+.teacher-tree__child small {
+  display: block;
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.teacher-stage {
+  --graph-stage-pad: 8px;
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: var(--graph-stage-pad);
+  min-width: 0;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  height: 100%;
+  border-radius: var(--app-radius-lg);
+  background: linear-gradient(180deg, var(--app-card) 0%, rgba(79, 140, 255, 0.06) 100%);
+  border: 1px solid var(--app-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.teacher-stage--dragging {
+  cursor: grabbing;
+}
+
+.teacher-stage__top {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* 学生嵌入：压缩顶栏占用，把垂直空间留给画布；图例默认一行内提示 */
+.teacher-stage__top--embedded {
+  gap: 4px;
+  padding-bottom: 2px;
+}
+
+.teacher-stage__top--embedded .teacher-stage__top-row {
+  gap: 6px 8px;
+}
+
+.teacher-stage__top--embedded .teacher-stage__legend-details {
+  border-radius: 10px;
+}
+
+.teacher-stage__top--embedded .teacher-stage__legend-summary {
+  padding: 5px 10px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.teacher-stage__top--embedded .teacher-stage__legend-details[open] .teacher-stage__legend {
+  padding: 6px 8px 8px;
+}
+
+.teacher-stage__top-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.teacher-stage__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.teacher-stage__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.teacher-stage__legend-details {
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid #e2ebf5;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.teacher-stage__legend-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  user-select: none;
+  line-height: 1.35;
+}
+
+.teacher-stage__legend-summary::-webkit-details-marker {
+  display: none;
+}
+
+.teacher-stage__legend-details[open] .teacher-stage__legend-summary {
+  border-bottom: 1px solid #e8eef5;
+}
+
+.teacher-stage__legend-details .teacher-stage__legend {
+  padding: 8px 10px 10px;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.teacher-stage__legend-line--dashed {
+  border-top-style: dashed;
+  opacity: 0.72;
+}
+
+.teacher-stage__legend-line--path {
+  border-top-color: #5a8ef0;
+  border-top-style: dashed;
+  border-top-width: 3px;
+}
+
+.teacher-stage__legend-line {
+  width: 28px;
+  height: 0;
+  border-top: 2px solid #64748b;
+  flex: 0 0 auto;
+}
+
+.teacher-stage__legend-item {
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #dce6f2;
+  color: #51657f;
+  font-size: 11px;
+  line-height: 1.35;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.teacher-stage__legend-rings {
+  width: 18px;
+  height: 18px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.teacher-stage__legend-rings .tr {
+  position: absolute;
+  border-radius: 999px;
+  border: 2px solid transparent;
+}
+
+.teacher-stage__legend-rings .tr.ring--knowledge {
+  width: 10px;
+  height: 10px;
+  border-color: rgba(74, 123, 200, 0.95);
+}
+
+.teacher-stage__legend-rings .tr.ring--ability {
+  width: 14px;
+  height: 14px;
+  border-color: rgba(22, 163, 74, 0.9);
+}
+
+.teacher-stage__legend-rings .tr.ring--literacy {
+  width: 18px;
+  height: 18px;
+  border-color: rgba(37, 99, 235, 0.88);
+}
+
+.teacher-stage__pill,
+.teacher-stage__button {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #dce6f2;
+  background: #ffffff;
+  color: #35507f;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.teacher-stage__button {
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.teacher-stage__button:hover {
+  background: #eff5ff;
+}
+
+.teacher-stage__button--primary {
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  border-color: var(--app-green);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+}
+
+.teacher-stage__viewport {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 220px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: max(0px, calc(var(--app-radius-lg) - var(--graph-stage-pad)));
+  background: var(--graph-canvas-bg);
+  /* strict 会在部分嵌套 flex 场景下影响子项绘制与命中，改为轻量 containment */
+  contain: layout style;
+  isolation: isolate;
+  transform: translateZ(0);
+}
+
+.teacher-workbench--fullscreen .teacher-stage__viewport {
+  min-height: clamp(280px, 58dvh, 900px);
+}
+
+/* 学生端嵌入页：不要强推最小高度，否则会在外层容器内被裁切（底部缩放区被挡） */
+.teacher-workbench--fullscreen.workspace-shell--embedded .teacher-stage__viewport {
+  min-height: 0;
+  height: 100%;
+}
+
+.teacher-workbench--fullscreen.workspace-shell--embedded .teacher-stage {
+  min-height: 0;
+}
+
+.teacher-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  transform-origin: 0 0;
+  transition: transform 0.08s ease;
+  cursor: grab;
+  z-index: 1;
+}
+
+.teacher-category-node,
+.teacher-node {
+  cursor: pointer;
+}
+
+.teacher-category-node__title,
+.teacher-category-node__meta,
+.teacher-node__code,
+.teacher-node__title {
+  fill: #243449;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.teacher-category-node__title,
+.teacher-node__title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.teacher-category-node__meta,
+.teacher-node__code {
+  font-size: 12px;
+  fill: #718097;
+}
+
+.teacher-stage__bottom {
+  position: absolute;
+  right: calc(var(--graph-stage-pad) + 12px);
+  bottom: calc(var(--graph-stage-pad) + 12px);
+  z-index: 9;
+  pointer-events: none;
+}
+
+.teacher-stage__zoom {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #dce6f2;
+  box-shadow: var(--app-shadow-soft);
+  font-size: 12px;
+  font-weight: 700;
+  color: #35507f;
+}
+
+.teacher-stage__zoom button {
+  border: 0;
+  background: #eff5ff;
+  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.teacher-stage__empty {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100% - 48px));
+  padding: 24px 22px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #dbe5f1;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+  text-align: center;
+  color: #5f738f;
+  z-index: 4;
+}
+
+.teacher-stage__empty strong {
+  color: #243449;
+  font-size: 16px;
+}
+
+.teacher-drawer {
+  width: 320px;
+  flex: 0 0 320px;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--app-radius-lg);
+  background: #ffffff;
+  border: 1px solid var(--app-border);
+}
+
+.teacher-workbench--fullscreen .teacher-content .teacher-drawer {
+  position: static;
+  width: auto;
+  max-height: 100%;
+  min-height: 0;
+}
+
+/* 右侧详情：头部固定，正文区域独立滚动，避免长内容被裁切 */
+.teacher-drawer.workspace-drawer .workspace-drawer__header {
+  flex-shrink: 0;
+}
+
+.teacher-drawer.workspace-drawer .workspace-drawer__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 12px 16px;
+  box-sizing: border-box;
+}
+
+.teacher-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid #e8eef5;
+  flex-shrink: 0;
+}
+
+.teacher-drawer__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #243449;
+  line-height: 1.3;
+}
+
+.teacher-drawer__close {
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 0 4px;
+}
+
+.teacher-drawer__close:hover {
+  color: #475569;
 }
 </style>

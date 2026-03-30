@@ -38,6 +38,7 @@ def init_db() -> None:
     _ensure_profile_snapshot_columns()
     _ensure_enrollment_columns()
     _ensure_final_score_confirmation_columns()
+    _ensure_evalconfig_graph_layout_column()
     _normalize_legacy_status_values()
 
 
@@ -151,7 +152,7 @@ def _ensure_question_meta_columns() -> None:
         cols = {c["name"] for c in inspector.get_columns("question")}
     except Exception:
         return
-    needed = ["source", "tags", "version"]
+    needed = ["source", "tags", "version", "cognitive_level", "ability_subtags"]
     missing = [c for c in needed if c not in cols]
     if not missing:
         return
@@ -340,6 +341,15 @@ def _ensure_enrollment_columns() -> None:
             conn.execute(text("UPDATE enrollment SET status='active' WHERE status IS NULL OR status='enrolled'"))
     except Exception:
         pass
+
+
+def _ensure_evalconfig_graph_layout_column() -> None:
+    _ensure_columns(
+        "evalconfig",
+        {
+            "graph_layout_json": "graph_layout_json TEXT DEFAULT ''",
+        },
+    )
 
 
 def _ensure_final_score_confirmation_columns() -> None:

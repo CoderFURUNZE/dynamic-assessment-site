@@ -10,6 +10,8 @@ type Question = {
   prompt: string;
   options: string[];
   answer?: string;
+  cognitive_level?: string;
+  ability_subtags?: string;
 };
 
 const props = defineProps<{ kpId: number | null; preview?: boolean }>();
@@ -69,6 +71,33 @@ const wrongPractice = ref({
 
 const current = computed(() => currentQuestion.value);
 const recentItems = computed(() => historyItems.value.slice(0, 10).reverse());
+
+const HIGH_ORDER_LEVELS = new Set(["apply", "analyze", "evaluate", "create"]);
+
+function bloomLevelLabel(level: string) {
+  const map: Record<string, string> = {
+    remember: "记忆",
+    understand: "理解",
+    apply: "应用",
+    analyze: "分析",
+    evaluate: "评价",
+    create: "创造",
+  };
+  return map[level] || level;
+}
+
+const practiceQuestionMeta = computed(() => {
+  const q = current.value;
+  if (!q) return null;
+  const level = q.cognitive_level || "understand";
+  const tags = (q.ability_subtags || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const isHigh = HIGH_ORDER_LEVELS.has(level);
+  if (!isHigh && level === "understand" && tags.length === 0) return null;
+  return { levelLabel: bloomLevelLabel(level), tags, isHigh };
+});
 const correctRatio = computed(() => {
   if (!historyStats.value.total) return 0;
   return historyStats.value.correct / historyStats.value.total;
@@ -405,7 +434,9 @@ watch(
           <div class="quiz-card__eyebrow">Practice</div>
           <div class="quiz-card__title">练习题</div>
         </div>
-        <div class="quiz-card__caption">聚焦当前知识点的作答、错题回练与复习节奏。</div>
+        <div class="quiz-card__caption">
+          聚焦当前知识点的作答、错题回练与复习节奏。此为<strong>题库练习</strong>，与图谱节点上的<strong>成套小测</strong>数据来源不同。
+        </div>
       </div>
     </template>
     <div v-if="!kpId" class="empty-state">
@@ -460,6 +491,11 @@ watch(
               <el-button size="small" type="default" @click="stopWrongPractice">退出</el-button>
             </div>
             <div class="question-prompt">{{ current.prompt }}</div>
+            <div v-if="practiceQuestionMeta" class="question-cognitive-meta">
+              <el-tag size="small" type="info">认知：{{ practiceQuestionMeta.levelLabel }}</el-tag>
+              <el-tag v-if="practiceQuestionMeta.isHigh" size="small" type="warning">高阶题</el-tag>
+              <el-tag v-for="t in practiceQuestionMeta.tags" :key="t" size="small" effect="plain">{{ t }}</el-tag>
+            </div>
             <div v-if="current.type === 'mcq'" class="question-options">
               <el-radio-group v-model="selected">
                 <el-radio v-for="(opt, i) in current.options" :key="i" :label="String.fromCharCode(65 + i)" class="option-item">
@@ -740,6 +776,14 @@ watch(
   background: rgba(255, 193, 7, 0.08);
   border-radius: 12px;
   border: 1px solid rgba(255, 193, 7, 0.22);
+}
+
+.question-cognitive-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
 }
 
 .question-prompt {

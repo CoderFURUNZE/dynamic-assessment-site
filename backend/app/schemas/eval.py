@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class MasteryOut(BaseModel):
@@ -31,6 +31,8 @@ class PortraitTimelinePointOut(BaseModel):
 
 
 class DynamicBreakdownOut(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     learning_frequency: float = 0.0
     study_duration: float = 0.0
     resource_completion: float = 0.0
@@ -50,6 +52,15 @@ class DynamicBreakdownOut(BaseModel):
     dynamic_score: float = 0.0
     stability: float = 0.0
     summary: str = ""
+
+
+class PersonaSignalOut(BaseModel):
+    """学生端可解释的画像信号（与 reason_summary 互补，偏结构化展示）。"""
+
+    key: str
+    label: str
+    detail: str
+    level: str = "neutral"  # positive | neutral | attention
 
 
 class StageDimensionConfigOut(BaseModel):
@@ -117,8 +128,11 @@ class ProfileOut(BaseModel):
     final_portrait_indicators: list[dict] = []
     term_summary: dict = {}
     kp_dimension_summary: dict = {}
+    ability_practice_stats: dict = {}
     portrait_timeline: list[PortraitTimelinePointOut] = []
     dynamic_breakdown: DynamicBreakdownOut | None = None
+    persona_signals: list[PersonaSignalOut] = []
+    persona_intro: str = ""
 
 
 class MasteryMapItem(BaseModel):

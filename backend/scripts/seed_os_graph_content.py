@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections import defaultdict
+from pathlib import Path
 
 from sqlalchemy import delete
 from sqlmodel import Session, select
+
+BASE_DIR = Path(__file__).resolve().parents[1]
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 from app.db.models import (
     KpQuestionAssignment,
@@ -1025,6 +1031,40 @@ OS_RESOURCE_BANK: dict[str, dict[str, list[dict[str, str]] | list[dict[str, obje
 }
 
 
+# 与 reset_acceptance_demo 中 OS-1…OS-8 知识点编码对齐，将细粒度小节资源/题目合并灌入各节点
+OS_DEMO_KP_BANK_KEYS: dict[str, list[str]] = {
+    "OS-1": ["1.1", "1.2", "1.3", "1.4", "1.5", "1.6"],
+    "OS-2": ["2.1"],
+    "OS-3": ["2.2"],
+    "OS-4": ["2.3"],
+    "OS-5": ["2.4"],
+    "OS-6": ["3.1"],
+    "OS-7": ["3.2"],
+    "OS-8": ["4.1", "4.2", "5.1", "5.2", "5.3"],
+}
+
+
+def _bank_keys_for_demo_kp(kp: KnowledgePoint) -> list[str]:
+    code = str(kp.code or "").strip()
+    if code in OS_DEMO_KP_BANK_KEYS:
+        return OS_DEMO_KP_BANK_KEYS[code]
+    if code in OS_RESOURCE_BANK:
+        return [code]
+    return []
+
+
+def _merge_bank_bundle(keys: list[str]) -> dict[str, list]:
+    merged: dict[str, list] = {"resources": [], "recommend": [], "questions": []}
+    for k in keys:
+        bundle = OS_RESOURCE_BANK.get(k)
+        if not bundle:
+            continue
+        merged["resources"].extend(bundle.get("resources", []))
+        merged["recommend"].extend(bundle.get("recommend", []))
+        merged["questions"].extend(bundle.get("questions", []))
+    return merged
+
+
 def _kp_key(kp: KnowledgePoint) -> str:
     return str(kp.code or "").strip()
 
@@ -1037,6 +1077,8 @@ def _add_resource(session: Session, *, kp: KnowledgePoint, item: dict[str, str],
     resource_type = _resource_type("recommend_book" if category == "recommend" and item["type"] == "book" else item["type"])
     preview_type = "external_link"
     detected_resource_type = "book" if resource_type in {ResourceType.book, ResourceType.recommend_book} else resource_type.value
+    raw_tags = str(item.get("tags", "") or "").strip()
+    tag_line = f"{raw_tags},os_seed_pack" if raw_tags else "os_seed_pack"
     row = LearningResource(
         subject=kp.subject,
         grade=kp.grade,
@@ -1046,7 +1088,7 @@ def _add_resource(session: Session, *, kp: KnowledgePoint, item: dict[str, str],
         type=resource_type,
         category=category,
         description=item.get("description", ""),
-        tags=item.get("tags", ""),
+        tags=tag_line,
         detected_resource_type=detected_resource_type,
         preview_type=preview_type,
         preview_status="ready",
@@ -1055,6 +1097,17 @@ def _add_resource(session: Session, *, kp: KnowledgePoint, item: dict[str, str],
         converted_preview_url="",
     )
     session.add(row)
+
+
+def _max_assignment_order(session: Session, kp_id: int) -> int:
+    rows = session.exec(select(KpQuestionAssignment).where(KpQuestionAssignment.kp_id == kp_id)).all()
+    best = 0
+    for row in rows:
+        try:
+            best = max(best, int(row.order or 0))
+        except (TypeError, ValueError):
+            continue
+    return best
 
 
 def _add_question(session: Session, *, kp: KnowledgePoint, order: int, item: dict[str, object]) -> None:
@@ -1095,37 +1148,41 @@ def seed() -> None:
         if not kp_ids:
             raise SystemExit("没有找到“操作系统”知识点，未写入任何内容。")
 
-        existing_questions = session.exec(select(Question).where(Question.kp_id.in_(kp_ids))).all()
-        question_ids = [int(q.id) for q in existing_questions if q.id is not None]
+        seeded_questions = session.exec(
+            select(Question).where(Question.kp_id.in_(kp_ids), Question.version == "v2-realistic")
+        ).all()
+        question_ids = [int(q.id) for q in seeded_questions if q.id is not None]
         if question_ids:
             session.exec(delete(PracticeAttempt).where(PracticeAttempt.question_id.in_(question_ids)))
             session.exec(delete(ReviewSchedule).where(ReviewSchedule.question_id.in_(question_ids)))
             assignments = session.exec(select(KpQuestionAssignment).where(KpQuestionAssignment.question_id.in_(question_ids))).all()
             for row in assignments:
                 session.delete(row)
-            for row in existing_questions:
+            for row in seeded_questions:
                 session.delete(row)
 
-        existing_resources = session.exec(select(LearningResource).where(LearningResource.kp_id.in_(kp_ids))).all()
-        for row in existing_resources:
-            session.delete(row)
+        for row in session.exec(select(LearningResource).where(LearningResource.kp_id.in_(kp_ids))).all():
+            if "os_seed_pack" in (row.tags or ""):
+                session.delete(row)
         session.commit()
 
         generated = defaultdict(lambda: {"resources": 0, "questions": 0})
         for kp in kps:
-            key = _kp_key(kp)
-            bundle = OS_RESOURCE_BANK.get(key)
-            if not bundle:
+            code_key = _kp_key(kp)
+            bank_keys = _bank_keys_for_demo_kp(kp)
+            bundle = _merge_bank_bundle(bank_keys) if bank_keys else {}
+            if not bundle.get("resources") and not bundle.get("recommend") and not bundle.get("questions"):
                 continue
             for item in bundle.get("resources", []):
                 _add_resource(session, kp=kp, item=item, category="learning")
-                generated[key]["resources"] += 1
+                generated[code_key]["resources"] += 1
             for item in bundle.get("recommend", []):
                 _add_resource(session, kp=kp, item=item, category="recommend")
-                generated[key]["resources"] += 1
+                generated[code_key]["resources"] += 1
+            start_order = _max_assignment_order(session, int(kp.id))
             for index, item in enumerate(bundle.get("questions", []), start=1):
-                _add_question(session, kp=kp, order=index, item=item)
-                generated[key]["questions"] += 1
+                _add_question(session, kp=kp, order=start_order + index, item=item)
+                generated[code_key]["questions"] += 1
 
         for kp in kps:
             kp.practice_total = max(3, int(generated[_kp_key(kp)]["questions"] or 0))
@@ -1135,8 +1192,10 @@ def seed() -> None:
 
         print("已生成操作系统课程内容：")
         for kp in kps:
-            key = _kp_key(kp)
-            info = generated[key]
+            code_key = _kp_key(kp)
+            info = generated[code_key]
+            if not info["resources"] and not info["questions"]:
+                continue
             print(f"{kp.code} {kp.title}: 资源 {info['resources']} 条，练习题 {info['questions']} 题")
 
 

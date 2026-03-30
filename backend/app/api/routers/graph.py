@@ -9,6 +9,7 @@ from app.db.models import (
     ApplicationStatus,
     Course,
     CourseLifecycleStatus,
+    EvalConfig,
     CourseApplication,
     CourseCompletionRecord,
     CourseEnrollStatus,
@@ -168,8 +169,9 @@ def _is_course_learning_available(course: Course | None) -> bool:
 
 
 def _assert_student_subject_access(session: Session, user_id: int, subject: str) -> None:
+    """学生端按课程名（与知识点 subject 对齐）校验是否有权查看图谱；已选课/同班/审核通过者优先于「是否已开课」。"""
     course = session.exec(select(Course).where(Course.title == subject).order_by(Course.created_at.desc())).first()
-    if course is None or course.id is None or not _is_course_learning_available(course):
+    if course is None or course.id is None:
         raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
     enrollment = session.exec(
         select(Enrollment).where(
@@ -195,8 +197,47 @@ def _assert_student_subject_access(session: Session, user_id: int, subject: str)
         ).all()
         if item.id is not None
     }
-    if enrollment is None or (enrollment.application_id is not None and int(enrollment.application_id) not in app_ids):
-        raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
+    if app_ids:
+        return
+    if not _is_course_learning_available(course):
+        raise HTTPException(status_code=403, detail="课程尚未开课，暂无法学习")
+    raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
+
+
+def _chapter_layout_map(session: Session, subject: str, grade: str) -> dict[str, dict[str, float]]:
+    cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == subject, EvalConfig.grade == grade)).first()
+    if cfg is None or not str(getattr(cfg, "graph_layout_json", "") or "").strip():
+        return {}
+    try:
+        data = json.loads(cfg.graph_layout_json or "{}")
+        raw = data.get("chapters") if isinstance(data, dict) else None
+        if not isinstance(raw, dict):
+            return {}
+        out: dict[str, dict[str, float]] = {}
+        for key, val in raw.items():
+            if not isinstance(val, dict):
+                continue
+            try:
+                x = float(val.get("x"))
+                y = float(val.get("y"))
+            except (TypeError, ValueError):
+                continue
+            out[str(key)] = {"x": x, "y": y}
+        return out
+    except Exception:
+        return {}
+
+
+@router.get("/chapter-layout")
+def get_chapter_layout(
+    subject: str,
+    grade: str,
+    session: Session = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    if user.role == UserRole.student:
+        _assert_student_subject_access(session, int(user.id), subject)
+    return {"chapters": _chapter_layout_map(session, subject, grade)}
 
 
 @router.get("/kps", response_model=list[KnowledgePointOut])
@@ -627,6 +668,7 @@ def graph_map(
                 )
                 for edge in edges
             ],
+            chapter_layout=_chapter_layout_map(session, subject, grade),
         ),
         overlay=overlay,
     )

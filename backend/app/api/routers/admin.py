@@ -2,7 +2,8 @@ import json
 import logging
 import re
 import shutil
-from io import BytesIO
+import csv
+from io import BytesIO, StringIO
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
@@ -83,6 +84,8 @@ from app.schemas.admin import (
 from app.schemas.paging import PageOut
 from app.services.learner_profile import (
     _json_load,
+    build_cohort_ability_practice_summary,
+    canonical_ability_subtags_str,
     clear_persona_override,
     get_or_create_persona_rule,
     get_latest_profile_snapshot,
@@ -96,6 +99,7 @@ from app.services.learner_profile import (
     resolve_persona_thresholds,
     resolve_persona_weights,
     sync_profile_snapshot_from_stage,
+    normalize_question_cognitive_level,
     upsert_persona_override,
     upsert_stage_teacher_feedback,
 )
@@ -1498,6 +1502,42 @@ def update_kp_position(
     return {"ok": True, "kp_id": kp_id, "x": kp.pos_x, "y": kp.pos_y}
 
 
+@router.put("/graph/chapter-layout")
+def save_graph_chapter_layout(
+    payload: dict,
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    """Persist chapter (category) anchor positions so student and teacher share the same graph layout."""
+    subject = payload.get("subject")
+    grade = payload.get("grade")
+    chapters = payload.get("chapters")
+    if not subject or not grade:
+        raise HTTPException(status_code=400, detail="subject and grade required")
+    if not isinstance(chapters, dict):
+        raise HTTPException(status_code=400, detail="chapters must be an object")
+    normalized: dict[str, dict[str, float]] = {}
+    for key, val in chapters.items():
+        if not isinstance(val, dict):
+            continue
+        try:
+            x = float(val.get("x"))
+            y = float(val.get("y"))
+        except (TypeError, ValueError):
+            continue
+        normalized[str(key)] = {"x": x, "y": y}
+    cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == subject, EvalConfig.grade == grade)).first()
+    if cfg is None:
+        cfg = EvalConfig(subject=subject, grade=grade)
+        session.add(cfg)
+        session.commit()
+        session.refresh(cfg)
+    cfg.graph_layout_json = json.dumps({"version": 1, "chapters": normalized}, ensure_ascii=False)
+    session.add(cfg)
+    session.commit()
+    return {"ok": True, "chapters": normalized}
+
+
 @router.put("/kps/{kp_id}/practice_total")
 def update_kp_practice_total(
     kp_id: int,
@@ -1595,6 +1635,198 @@ def delete_kp(
     return {"ok": True}
 
 
+@router.get("/graph/kp-coverage")
+def graph_kp_coverage(
+    subject: str,
+    grade: str,
+    session: Session = Depends(get_session),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    """各知识点挂载资源数、题库题数、任务数、是否配置小测（教师端图谱缺省提示）。"""
+    course = _resolve_course_for_subject(session, subject=subject)
+    _check_teacher_subject_access(admin=admin, course=course)
+    kps = session.exec(
+        select(KnowledgePoint)
+        .where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)
+        .order_by(KnowledgePoint.id)
+    ).all()
+    kp_ids = [int(k.id) for k in kps if k.id is not None]
+    if not kp_ids:
+        return {"items": []}
+    r_rows = session.exec(
+        select(LearningResource.kp_id, func.count())
+        .where(LearningResource.kp_id.in_(kp_ids))
+        .group_by(LearningResource.kp_id)
+    ).all()
+    q_rows = session.exec(
+        select(Question.kp_id, func.count())
+        .where(Question.kp_id.in_(kp_ids))
+        .group_by(Question.kp_id)
+    ).all()
+    t_rows = session.exec(
+        select(KpTask.kp_id, func.count())
+        .where(KpTask.kp_id.in_(kp_ids))
+        .group_by(KpTask.kp_id)
+    ).all()
+    quiz_rows = session.exec(select(Quiz).where(Quiz.kp_id.in_(kp_ids))).all()
+    has_quiz = {int(q.kp_id) for q in quiz_rows if q.kp_id is not None}
+    rmap = {int(r[0]): int(r[1]) for r in r_rows if r[0] is not None}
+    qmap = {int(r[0]): int(r[1]) for r in q_rows if r[0] is not None}
+    tmap = {int(r[0]): int(r[1]) for r in t_rows if r[0] is not None}
+    items = []
+    for kid in kp_ids:
+        items.append(
+            {
+                "kp_id": kid,
+                "resource_count": rmap.get(kid, 0),
+                "question_count": qmap.get(kid, 0),
+                "task_count": tmap.get(kid, 0),
+                "has_quiz": kid in has_quiz,
+            }
+        )
+    return {"items": items}
+
+
+def _export_kp_row(kp: KnowledgePoint) -> dict:
+    return {
+        "id": int(kp.id) if kp.id is not None else None,
+        "code": kp.code,
+        "title": kp.title,
+        "description": kp.description or "",
+        "chapter": kp.chapter or "",
+        "knowledge_tag": kp.knowledge_tag or "",
+        "ability_tag": kp.ability_tag or "",
+        "literacy_tag": kp.literacy_tag or "",
+        "importance": float(kp.importance or 0),
+        "difficulty": float(kp.difficulty or 0),
+        "pos_x": kp.pos_x,
+        "pos_y": kp.pos_y,
+    }
+
+
+@router.get("/graph/export")
+def graph_export(
+    subject: str,
+    grade: str,
+    format: str = "json",
+    session: Session = Depends(get_session),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    """导出当前课程（subject+grade）下的知识点、知识边、章节边。"""
+    course = _resolve_course_for_subject(session, subject=subject)
+    _check_teacher_subject_access(admin=admin, course=course)
+    format = (format or "json").strip().lower()
+    if format not in {"json", "csv"}:
+        raise HTTPException(status_code=400, detail="format 须为 json 或 csv")
+
+    kps = session.exec(
+        select(KnowledgePoint)
+        .where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)
+        .order_by(KnowledgePoint.chapter, KnowledgePoint.id)
+    ).all()
+    edges = session.exec(
+        select(KnowledgeEdge)
+        .where(KnowledgeEdge.subject == subject, KnowledgeEdge.grade == grade)
+        .order_by(KnowledgeEdge.id)
+    ).all()
+    chapter_edges = session.exec(
+        select(ChapterEdge)
+        .where(ChapterEdge.subject == subject, ChapterEdge.grade == grade)
+        .order_by(ChapterEdge.id)
+    ).all()
+
+    kp_payload = [_export_kp_row(kp) for kp in kps]
+    edge_payload = [
+        {
+            "prereq_id": int(e.prereq_id),
+            "next_id": int(e.next_id),
+            "relation_type": _relation_type_value(e.relation_type),
+        }
+        for e in edges
+        if e.prereq_id is not None and e.next_id is not None
+    ]
+    ch_payload = [
+        {
+            "source_chapter": ce.source_chapter,
+            "target_chapter": ce.target_chapter,
+            "relation_type": _relation_type_value(ce.relation_type),
+        }
+        for ce in chapter_edges
+    ]
+
+    # HTTP Content-Disposition 须为 latin-1；课程名可能含中文，此处仅保留 ASCII 文件名
+    raw = re.sub(r"[^A-Za-z0-9_.-]+", "_", (subject or "").strip())[:40]
+    safe_name = re.sub(r"_+", "_", raw).strip("_") or "graph"
+
+    if format == "json":
+        payload = {
+            "subject": subject,
+            "grade": grade,
+            "exported_at": datetime.utcnow().isoformat() + "Z",
+            "knowledge_points": kp_payload,
+            "edges": edge_payload,
+            "chapter_edges": ch_payload,
+        }
+        raw = json.dumps(payload, ensure_ascii=False, indent=2)
+        return Response(
+            content=raw,
+            media_type="application/json; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}-graph.json"'},
+        )
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["# knowledge_points"])
+    writer.writerow(
+        [
+            "id",
+            "code",
+            "title",
+            "chapter",
+            "knowledge_tag",
+            "ability_tag",
+            "literacy_tag",
+            "importance",
+            "difficulty",
+            "pos_x",
+            "pos_y",
+        ],
+    )
+    for row in kp_payload:
+        writer.writerow(
+            [
+                row["id"],
+                row["code"],
+                row["title"],
+                row["chapter"],
+                row["knowledge_tag"],
+                row["ability_tag"],
+                row["literacy_tag"],
+                row["importance"],
+                row["difficulty"],
+                row["pos_x"] if row["pos_x"] is not None else "",
+                row["pos_y"] if row["pos_y"] is not None else "",
+            ]
+        )
+    writer.writerow([])
+    writer.writerow(["# edges"])
+    writer.writerow(["prereq_id", "next_id", "relation_type"])
+    for e in edge_payload:
+        writer.writerow([e["prereq_id"], e["next_id"], e["relation_type"]])
+    writer.writerow([])
+    writer.writerow(["# chapter_edges"])
+    writer.writerow(["source_chapter", "target_chapter", "relation_type"])
+    for c in ch_payload:
+        writer.writerow([c["source_chapter"], c["target_chapter"], c["relation_type"]])
+
+    csv_bytes = "\ufeff" + buf.getvalue()
+    return Response(
+        content=csv_bytes.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}-graph.csv"'},
+    )
+
+
 @router.get("/edges")
 def list_edges_admin(
     subject: str | None = None,
@@ -1605,7 +1837,8 @@ def list_edges_admin(
     _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     page = max(1, page)
-    page_size = max(1, min(100, page_size))
+    # 教师图谱工作台一次拉取较多边（前端 page_size=500），上限过低会导致画布与保存结果不一致
+    page_size = max(1, min(500, page_size))
     q = select(KnowledgeEdge).order_by(KnowledgeEdge.id.desc())
     q_total = select(func.count()).select_from(KnowledgeEdge)
     if subject:
@@ -1639,7 +1872,10 @@ def create_edge(
     try:
         relation_type = RelationType(payload.relation_type or "prerequisite")
     except Exception:
-        raise HTTPException(status_code=400, detail="relation_type must be prerequisite or related")
+        raise HTTPException(
+            status_code=400,
+            detail="relation_type 须为 prerequisite / related / support / contains 之一",
+        )
     exists = session.exec(
         select(KnowledgeEdge).where(KnowledgeEdge.prereq_id == payload.prereq_id, KnowledgeEdge.next_id == payload.next_id)
     ).first()
@@ -1839,6 +2075,8 @@ def list_questions(
             source=r.source,
             tags=r.tags,
             version=r.version,
+            cognitive_level=getattr(r, "cognitive_level", None) or "understand",
+            ability_subtags=getattr(r, "ability_subtags", None) or "",
             attempts=stats_map.get(r.id, {}).get("attempts"),
             correct_rate=stats_map.get(r.id, {}).get("correct_rate"),
         )
@@ -1872,7 +2110,9 @@ def export_questions(
         q = q.where(Question.difficulty <= float(max_difficulty))
 
     rows = session.exec(q).all()
-    lines = ["id,kp_id,type,prompt,options,answer,explanation,difficulty,source,tags,version"]
+    lines = [
+        "id,kp_id,type,prompt,options,answer,explanation,difficulty,source,tags,version,cognitive_level,ability_subtags"
+    ]
     for r in rows:
         prompt = r.prompt.replace('"', "'").replace(",", "，")
         options = r.options_json.replace('"', "'").replace(",", "，")
@@ -1881,8 +2121,10 @@ def export_questions(
         source = (r.source or "").replace('"', "'").replace(",", "，")
         tags = (r.tags or "").replace('"', "'").replace(",", "，")
         version = (r.version or "").replace('"', "'").replace(",", "，")
+        cognitive = (getattr(r, "cognitive_level", None) or "understand").replace('"', "'").replace(",", "，")
+        ability_sub = (getattr(r, "ability_subtags", None) or "").replace('"', "'").replace(",", "，")
         lines.append(
-            f"{r.id},{r.kp_id},{r.type},\"{prompt}\",\"{options}\",\"{answer}\",\"{explanation}\",{r.difficulty},\"{source}\",\"{tags}\",\"{version}\""
+            f"{r.id},{r.kp_id},{r.type},\"{prompt}\",\"{options}\",\"{answer}\",\"{explanation}\",{r.difficulty},\"{source}\",\"{tags}\",\"{version}\",\"{cognitive}\",\"{ability_sub}\""
         )
     csv = "\n".join(lines)
     return Response(content=csv, media_type="text/csv")
@@ -2051,6 +2293,11 @@ def create_question(
     qtype = payload.type.strip()
     if qtype not in {"mcq", "blank"}:
         raise HTTPException(status_code=400, detail="Invalid question type")
+    try:
+        cognitive_level = normalize_question_cognitive_level(payload.cognitive_level, strict=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    ability_subtags = canonical_ability_subtags_str(payload.ability_subtags)
     options = payload.options if qtype == "mcq" else []
     question = Question(
         subject=kp.subject,
@@ -2065,6 +2312,8 @@ def create_question(
         source=payload.source.strip(),
         tags=payload.tags.strip(),
         version=payload.version.strip() or "v1",
+        cognitive_level=cognitive_level,
+        ability_subtags=ability_subtags,
     )
     session.add(question)
     session.commit()
@@ -2081,6 +2330,8 @@ def create_question(
         source=question.source,
         tags=question.tags,
         version=question.version,
+        cognitive_level=question.cognitive_level or cognitive_level,
+        ability_subtags=question.ability_subtags or "",
     )
 
 
@@ -2163,6 +2414,18 @@ def import_questions_docx(
         "难度": "difficulty",
         "DIFFICULTY": "difficulty",
         "选项": "options",
+        "认知层级": "cognitive_level",
+        "认知层次": "cognitive_level",
+        "布鲁姆": "cognitive_level",
+        "布鲁姆层级": "cognitive_level",
+        "cognitive": "cognitive_level",
+        "cognitive_level": "cognitive_level",
+        "COGNITIVE_LEVEL": "cognitive_level",
+        "能力标签": "ability_subtags",
+        "能力二级标签": "ability_subtags",
+        "ability": "ability_subtags",
+        "ability_subtags": "ability_subtags",
+        "ABILITY_SUBTAGS": "ability_subtags",
     }
 
     created = 0
@@ -2235,6 +2498,20 @@ def import_questions_docx(
             difficulty = 0.4
         difficulty = min(1.0, max(0.0, difficulty))
 
+        cog_raw = (data_map.get("cognitive_level") or "").strip()
+        _cog_cn = {
+            "记忆": "remember",
+            "理解": "understand",
+            "应用": "apply",
+            "分析": "analyze",
+            "评价": "evaluate",
+            "创造": "create",
+        }
+        if cog_raw in _cog_cn:
+            cog_raw = _cog_cn[cog_raw]
+        cognitive_level = normalize_question_cognitive_level(cog_raw or None, strict=False)
+        ability_subtags = canonical_ability_subtags_str(data_map.get("ability_subtags"))
+
         key = (kp.id, prompt)
         if key in seen:
             skipped += 1
@@ -2256,6 +2533,8 @@ def import_questions_docx(
             answer=answer,
             explanation=explanation,
             difficulty=difficulty,
+            cognitive_level=cognitive_level,
+            ability_subtags=ability_subtags,
         )
         session.add(q)
         created += 1
@@ -2278,6 +2557,11 @@ def update_question(
     qtype = payload.type.strip()
     if qtype not in {"mcq", "blank"}:
         raise HTTPException(status_code=400, detail="Invalid question type")
+    try:
+        cognitive_level = normalize_question_cognitive_level(payload.cognitive_level, strict=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    ability_subtags = canonical_ability_subtags_str(payload.ability_subtags)
     q.kp_id = payload.kp_id
     kp = session.get(KnowledgePoint, payload.kp_id)
     if kp is None:
@@ -2294,6 +2578,8 @@ def update_question(
     q.source = payload.source.strip()
     q.tags = payload.tags.strip()
     q.version = payload.version.strip() or "v1"
+    q.cognitive_level = cognitive_level
+    q.ability_subtags = ability_subtags
     session.add(q)
     session.commit()
     session.refresh(q)
@@ -2309,6 +2595,8 @@ def update_question(
         source=q.source,
         tags=q.tags,
         version=q.version,
+        cognitive_level=q.cognitive_level or cognitive_level,
+        ability_subtags=q.ability_subtags or "",
     )
 
 
@@ -2675,6 +2963,7 @@ def seed_full_system(
     ]
 
     grade_name = "\u901a\u7528"
+    demo_course_codes = {"DS", "CO", "OS", "CN"}
 
     for username, password, role in [
         ("admin", "admin123", UserRole.admin),
@@ -2688,6 +2977,31 @@ def seed_full_system(
             session.add(User(username=username, password_hash=hash_password(password), role=role))
     session.commit()
     teacher_user = session.exec(select(User).where(User.username == "teacher1")).first()
+    admin_user = session.exec(select(User).where(User.username == "admin")).first()
+    if teacher_user is not None and teacher_user.id is not None:
+        if not str(teacher_user.full_name or "").strip():
+            teacher_user.full_name = "\u5f20\u660e\uff08\u793a\u4f8b\u6559\u5e08\uff09"
+            session.add(teacher_user)
+            session.commit()
+    if admin_user is not None and admin_user.id is not None:
+        if not str(admin_user.full_name or "").strip():
+            admin_user.full_name = "\u7cfb\u7edf\u7ba1\u7406\u5458"
+            session.add(admin_user)
+            session.commit()
+    student_profiles: list[tuple[str, str, str, str]] = [
+        ("student1", "\u674e\u6668", "2026001", "\u8ba1\u79d12301"),
+        ("student2", "\u5468\u60a6", "2026002", "\u8ba1\u79d12301"),
+        ("student3", "\u9648\u660a", "2026003", "\u8ba1\u79d12302"),
+    ]
+    for username, full_name, student_no, class_name in student_profiles:
+        row = session.exec(select(User).where(User.username == username)).first()
+        if row is None or row.id is None:
+            continue
+        row.full_name = full_name
+        row.student_no = student_no
+        row.class_name = class_name
+        session.add(row)
+    session.commit()
 
     def ensure_eval_config(subj: str) -> None:
         cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == subj, EvalConfig.grade == grade_name)).first()
@@ -2695,22 +3009,34 @@ def seed_full_system(
             session.add(EvalConfig(subject=subj, grade=grade_name))
             session.commit()
 
-    def ensure_course(subj: str, code: str) -> None:
+    def ensure_course(subj: str, code: str) -> Course:
+        now = datetime.utcnow()
         exists = session.exec(select(Course).where(Course.code == code)).first()
         if exists is None:
-            session.add(
-                Course(
-                    code=code,
-                    title=subj,
-                    description=f"{subj}课程",
-                    teacher_id=int(teacher_user.id) if teacher_user and teacher_user.id is not None else None,
-                )
+            exists = Course(
+                code=code,
+                title=subj,
+                description=f"{subj}课程",
+                teacher_id=int(teacher_user.id) if teacher_user and teacher_user.id is not None else None,
             )
+            session.add(exists)
             session.commit()
+            session.refresh(exists)
         elif teacher_user and teacher_user.id is not None and exists.teacher_id is None:
             exists.teacher_id = int(teacher_user.id)
             session.add(exists)
             session.commit()
+            session.refresh(exists)
+        if exists.id is not None and code in demo_course_codes:
+            exists.lifecycle_status = CourseLifecycleStatus.active
+            exists.active = True
+            exists.start_at = now - timedelta(days=7)
+            exists.end_at = now + timedelta(days=180)
+            exists.target_class = "\u8ba1\u79d12301"
+            exists.enroll_status = CourseEnrollStatus.open
+            session.add(exists)
+            session.commit()
+        return exists
 
     def ensure_kp(subj: str, code: str, title: str) -> KnowledgePoint:
         kp = session.exec(select(KnowledgePoint).where(KnowledgePoint.code == code)).first()
@@ -2896,8 +3222,49 @@ def seed_full_system(
 
         auto_tag_knowledge_points(session, subject=subj_name, grade=grade_name, overwrite=False)
 
-    _log_action(session, _admin, "seed_full", f"created_kp={created_kp} created_questions={created_questions}")
-    return {"ok": True, "created_kp": created_kp, "created_questions": created_questions}
+    created_enrollments = 0
+    for uname in ("student1", "student2", "student3"):
+        st = session.exec(select(User).where(User.username == uname)).first()
+        if st is None or st.id is None:
+            continue
+        for code in demo_course_codes:
+            c = session.exec(select(Course).where(Course.code == code)).first()
+            if c is None or c.id is None:
+                continue
+            ex = session.exec(
+                select(Enrollment).where(
+                    Enrollment.course_id == int(c.id),
+                    Enrollment.student_id == int(st.id),
+                )
+            ).first()
+            if ex is not None:
+                if ex.status != EnrollmentStatus.active:
+                    ex.status = EnrollmentStatus.active
+                    session.add(ex)
+                    session.commit()
+                continue
+            session.add(
+                Enrollment(
+                    course_id=int(c.id),
+                    student_id=int(st.id),
+                    status=EnrollmentStatus.active,
+                )
+            )
+            session.commit()
+            created_enrollments += 1
+
+    _log_action(
+        session,
+        _admin,
+        "seed_full",
+        f"created_kp={created_kp} created_questions={created_questions} created_enrollments={created_enrollments}",
+    )
+    return {
+        "ok": True,
+        "created_kp": created_kp,
+        "created_questions": created_questions,
+        "created_enrollments": created_enrollments,
+    }
 
 
 @router.get("/audit", response_model=PageOut)
@@ -3441,6 +3808,21 @@ def analytics_overview(
         )
     weak_kps.sort(key=lambda item: item["avg_mastery"])
 
+    cohort_user_ids = student_ids
+    if course is not None and course.id is not None:
+        enr_rows = session.exec(
+            select(Enrollment).where(
+                Enrollment.course_id == int(course.id),
+                Enrollment.status == EnrollmentStatus.active,
+            )
+        ).all()
+        cohort_user_ids = [int(r.student_id) for r in enr_rows if r.student_id is not None]
+    ability_practice_cohort = build_cohort_ability_practice_summary(
+        session,
+        kp_ids=kp_ids,
+        user_ids=cohort_user_ids,
+    )
+
     progress_ranking = [
         {
             "user_id": int(snapshot.user_id),
@@ -3465,6 +3847,7 @@ def analytics_overview(
         risk_students=risk_students,
         weak_kps=weak_kps[:10],
         progress_ranking=progress_ranking,
+        ability_practice_cohort=ability_practice_cohort,
     )
 
 

@@ -389,7 +389,7 @@ Promise.all([loadTeachers(), load()]);
     <el-dialog v-model="dialogOpen" :title="isEdit ? '编辑课程' : '新增课程'" width="560px">
       <el-form label-width="90px">
         <el-form-item label="课程编码">
-          <el-input v-model="form.code" placeholder="如 DS / OS / CN" />
+          <el-input v-model="form.code" placeholder="唯一编码；学生可在「课程加入」页凭此代码自助加入" />
         </el-form-item>
         <el-form-item label="课程名称">
           <el-input v-model="form.title" placeholder="如 数据结构" />

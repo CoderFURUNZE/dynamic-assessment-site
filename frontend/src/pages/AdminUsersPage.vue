@@ -1,21 +1,33 @@
 <template>
-  <div class="edu-page">
-    <header class="edu-header">
+  <div class="edu-page admin-shell-page">
+    <header class="edu-header admin-shell-header">
       <div class="edu-header__left">
         <h1 class="edu-header__title">用户管理</h1>
         <p class="edu-header__desc">统一管理平台用户账号、角色及基础信息。</p>
       </div>
+      <div class="edu-header__actions admin-shell-actions">
+        <el-button-group>
+          <el-button @click="router.push('/admin')">概览</el-button>
+          <el-button @click="router.push('/admin/courses')">课程</el-button>
+          <el-button type="primary" @click="router.push('/admin/users')">用户</el-button>
+          <el-button @click="router.push('/admin/teachers')">老师</el-button>
+          <el-button @click="router.push('/admin/dimensions')">指标池</el-button>
+          <el-button @click="router.push('/admin/persona')">画像规则</el-button>
+        </el-button-group>
+      </div>
     </header>
 
-    <section class="edu-panel">
+    <section class="edu-panel admin-shell-panel">
       <AdminUserManager mode="users" />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useRouter } from "vue-router";
 import AdminUserManager from "../components/AdminUserManager.vue";
-import PageSectionCard from "../components/PageSectionCard.vue";
+
+const router = useRouter();
 </script>
 
-<style scoped>.admin-page { display:grid; gap:20px; }</style>
+<style scoped></style>

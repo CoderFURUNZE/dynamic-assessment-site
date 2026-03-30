@@ -3,6 +3,15 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import {
+  buildDeterministicGraphLayout,
+  mergeChapterLayout,
+  deterministicDraftPosition,
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  INITIAL_CENTER_X,
+  INITIAL_CENTER_Y,
+} from "../graph/graphLayout";
 import HoverTip from "./HoverTip.vue";
 
 type KP = {
@@ -94,7 +103,7 @@ const linkSelectionMode = ref<null | "forward" | "backward" | "related" | "suppo
 const categoryLinkMode = ref<null | "prerequisite" | "related" | "support">(null);
 const drawerOpen = ref(true);
 const detailTab = ref<"overview" | "relations" | "content">("overview");
-const DEFAULT_CANVAS_SCALE = 0.7;
+const DEFAULT_CANVAS_SCALE = 0.58;
 const MIN_CANVAS_SCALE = 0.5;
 const MAX_CANVAS_SCALE = 4;
 const SCALE_STEP = 0.2;
@@ -102,10 +111,6 @@ const canvasScale = ref(DEFAULT_CANVAS_SCALE);
 const panX = ref(0);
 const panY = ref(0);
 const stageRef = ref<HTMLElement | null>(null);
-const CANVAS_WIDTH = 60000;
-const CANVAS_HEIGHT = 40000;
-const INITIAL_CENTER_X = 30000;
-const INITIAL_CENTER_Y = 20000;
 const draggingCanvas = ref(false);
 const draggingNode = ref<DragNode | null>(null);
 const dragStartX = ref(0);
@@ -117,9 +122,14 @@ const categoryPositions = ref<Record<string, Point>>({});
 const kps = ref<KP[]>([]);
 const edges = ref<Edge[]>([]);
 const chapterEdges = ref<ChapterEdge[]>([]);
+const kpCoverageMap = ref<
+  Record<number, { resource_count: number; question_count: number; task_count: number; has_quiz: boolean }>
+>({});
+const showIncompleteOnly = ref(false);
 const mutingViewStatePersist = ref(false);
 const legacyLayoutWarned = ref(false);
 const useLegacyFallbackLayout = ref(false);
+const hoveredKpId = ref<number | null>(null);
 
 const form = reactive({
   id: 0,
@@ -161,18 +171,22 @@ function buildLabelColorMap(labels: string[], palette: string[]) {
 const abilityColorMap = computed(() =>
   buildLabelColorMap(
     Array.from(new Set(kps.value.flatMap((kp) => splitLabels(kp.ability_tag)))),
-    ["#f0b429", "#5bb98c", "#4f7fe7", "#e28a49", "#7d72e9", "#39a0a4"],
+    ["#15803d", "#16a34a", "#22c55e", "#4ade80", "#166534", "#14532d"],
   ),
 );
 
 const literacyColorMap = computed(() =>
   buildLabelColorMap(
     Array.from(new Set(kps.value.flatMap((kp) => splitLabels(kp.literacy_tag)))),
-    ["#2f6fed", "#2ea96b", "#e0a128", "#8b7cf6", "#2f9ab6", "#de7465"],
+    ["#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa", "#0369a1", "#0ea5e9"],
   ),
 );
 
-const categoryNodes = computed<CategoryNode[]>(() => chapterSummary.value.map((item) => ({ key: item.chapter, title: item.chapter, total: item.total })));
+const categoryNodes = computed<CategoryNode[]>(() =>
+  chapterSummary.value
+    .map((item) => ({ key: item.chapter, title: item.chapter, total: item.total }))
+    .sort((a, b) => a.key.localeCompare(b.key, "zh-Hans-CN")),
+);
 
 const filteredKps = computed(() => {
   const kw = search.value.trim().toLowerCase();
@@ -185,13 +199,30 @@ const filteredKps = computed(() => {
 });
 
 const visibleKps = computed(() => {
-  if (showAllKps.value) return filteredKps.value;
-  const activeChapterKey =
-    selectedType.value === "category"
-      ? selectedCategory.value
-      : (selectedKp.value?.chapter || selectedCategory.value || null);
-  if (!activeChapterKey) return [] as KP[];
-  return filteredKps.value.filter((kp) => (kp.chapter || "未分章") === activeChapterKey);
+  let list: KP[];
+  if (showAllKps.value) {
+    list = filteredKps.value;
+  } else {
+    const activeChapterKey =
+      selectedType.value === "category"
+        ? selectedCategory.value
+        : (selectedKp.value?.chapter || selectedCategory.value || null);
+    if (!activeChapterKey) list = [] as KP[];
+    else list = filteredKps.value.filter((kp) => (kp.chapter || "未分章") === activeChapterKey);
+  }
+  if (showIncompleteOnly.value) {
+    list = list.filter((kp) => {
+      const c = kpCoverageMap.value[kp.id];
+      const rc = c?.resource_count ?? 0;
+      const qc = c?.question_count ?? 0;
+      return rc === 0 || qc === 0;
+    });
+  }
+  if (selectedType.value === "kp" && selectedId.value != null && !list.some((k) => k.id === selectedId.value)) {
+    const pinned = kps.value.find((k) => k.id === selectedId.value);
+    if (pinned) list = [...list, pinned];
+  }
+  return list;
 });
 
 const treeNodes = computed(() => {
@@ -415,51 +446,11 @@ function normalizeWorkbenchSelectionState() {
   return changed;
 }
 
-const defaultCategoryPositions = computed<Record<string, Point>>(() => {
-  const entries: Record<string, Point> = {};
-  const list = categoryNodes.value;
-  const total = Math.max(list.length, 1);
-  const spread = Math.min(480, Math.max(220, (total - 1) * 170));
-  const startX = INITIAL_CENTER_X - spread / 2;
-  const endX = INITIAL_CENTER_X + spread / 2;
-  const step = total === 1 ? 0 : spread / (total - 1);
-  list.forEach((item, index) => {
-    entries[item.key] = {
-      x: startX + step * index,
-      y: INITIAL_CENTER_Y - 360 + (index % 2 === 0 ? 0 : 26),
-    };
-  });
-  return entries;
-});
-
-const defaultKpPositions = computed<Record<number, Point>>(() => {
-  const entries: Record<number, Point> = {};
-  const groups = new Map<string, KP[]>();
-  for (const kp of visibleKps.value) {
-    const key = kp.chapter || "未分章";
-    const arr = groups.get(key) ?? [];
-    arr.push(kp);
-    groups.set(key, arr);
-  }
-
-  for (const [chapter, items] of groups.entries()) {
-    const anchor = categoryPositions.value[chapter] ?? defaultCategoryPositions.value[chapter] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y - 360 };
-    const ordered = [...items].sort((a, b) => String(a.code || "").localeCompare(String(b.code || ""), "zh-Hans-CN"));
-    const columns = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(ordered.length))));
-    const gapX = 220;
-    const gapY = 170;
-    const startX = anchor.x - ((columns - 1) * gapX) / 2;
-    ordered.forEach((kp, index) => {
-      const col = index % columns;
-      const row = Math.floor(index / columns);
-      entries[kp.id] = {
-        x: startX + col * gapX + (row % 2 === 0 ? 0 : 18),
-        y: anchor.y + 250 + row * gapY,
-      };
-    });
-  }
-  return entries;
-});
+const deterministicLayout = computed(() =>
+  buildDeterministicGraphLayout(kps.value.map((kp) => ({ id: kp.id, code: kp.code, chapter: kp.chapter }))),
+);
+const defaultCategoryPositions = computed<Record<string, Point>>(() => deterministicLayout.value.categoryPositions);
+const defaultKpPositions = computed<Record<number, Point>>(() => deterministicLayout.value.kpPositions);
 
 function isLegacyCoordinateLayout(rows: KP[]) {
   const withPos = rows.filter((kp) => kp.pos_x != null && kp.pos_y != null);
@@ -616,14 +607,21 @@ function ringStroke(level: "ability" | "literacy", kp: KP) {
   const labels = level === "ability" ? splitLabels(kp.ability_tag) : splitLabels(kp.literacy_tag);
   if (!labels.length) return "transparent";
   const map = level === "ability" ? abilityColorMap.value : literacyColorMap.value;
-  return map.get(labels[0]) || (level === "ability" ? "#f0b429" : "#2f6fed");
+  return map.get(labels[0]) || (level === "ability" ? "#22c55e" : "#2563eb");
+}
+
+function edgeTouchesHover(edge: Edge) {
+  const h = hoveredKpId.value;
+  if (h == null) return false;
+  return edge.prereq_id === h || edge.next_id === h;
 }
 
 function edgeStroke(edge: Edge) {
+  if (edgeTouchesHover(edge)) return "#2563eb";
   if (edge.relation_type === "support") return "#46a57b";
   if (edge.relation_type === "contains") return "#db9d37";
   if (edge.relation_type === "related") return "rgba(74,120,213,0.6)";
-  return "rgba(100,116,139,0.45)";
+  return "rgba(71,85,105,0.78)";
 }
 
 function edgeDasharray(edge: Edge) {
@@ -633,6 +631,7 @@ function edgeDasharray(edge: Edge) {
 }
 
 function edgeWidth(edge: Edge) {
+  if (edgeTouchesHover(edge)) return 3.2;
   if (edge.relation_type === "contains") return 2.2;
   if (edge.relation_type === "support") return 2.1;
   return 1.6;
@@ -810,6 +809,34 @@ function resetViewport() {
   persistViewState();
 }
 
+function fitVisibleToViewport() {
+  if (!stageRef.value || visibleKps.value.length === 0) return;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const kp of visibleKps.value) {
+    const p = kpPoint(kp.id);
+    const r = nodeRadius(kp) + 28;
+    minX = Math.min(minX, p.x - r);
+    maxX = Math.max(maxX, p.x + r);
+    minY = Math.min(minY, p.y - r);
+    maxY = Math.max(maxY, p.y + r);
+  }
+  const w = maxX - minX || 1;
+  const h = maxY - minY || 1;
+  const sw = stageRef.value.clientWidth;
+  const sh = stageRef.value.clientHeight;
+  const pad = 100;
+  const scale = Math.min(MAX_CANVAS_SCALE, Math.max(MIN_CANVAS_SCALE, Math.min((sw - pad) / w, (sh - pad) / h)));
+  canvasScale.value = scale;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  panX.value = sw / 2 - cx * scale;
+  panY.value = sh / 2 - cy * scale;
+  persistViewState();
+}
+
 function clampPan(nextX = panX.value, nextY = panY.value) {
   panX.value = nextX;
   panY.value = nextY;
@@ -914,23 +941,80 @@ async function stopDragging() {
   }
   if (draggingNode.value?.type === "category") {
     localStorage.setItem(chapterPositionStorageKey(), JSON.stringify(categoryPositions.value));
+    if (props.subject) {
+      try {
+        await api.put("/admin/graph/chapter-layout", {
+          subject: props.subject,
+          grade: props.grade,
+          chapters: categoryPositions.value,
+        });
+      } catch {
+        ElMessage.warning("分类位置同步到服务器失败，已保存在本机缓存");
+      }
+    }
   }
   draggingCanvas.value = false;
   draggingNode.value = null;
+}
+
+function kpCoverageWarnLabels(kpId: number): string[] {
+  const c = kpCoverageMap.value[kpId];
+  if (!c) return [];
+  const out: string[] = [];
+  if (!c.resource_count) out.push("缺资源");
+  if (!c.question_count) out.push("缺题");
+  return out;
+}
+
+async function exportGraphStructure(format: "json" | "csv") {
+  if (!props.subject) return;
+  try {
+    const res = await api.get(
+      `/admin/graph/export?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}&format=${format}`,
+      { responseType: "blob" },
+    );
+    const blob = new Blob([res.data], {
+      type: format === "json" ? "application/json" : "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const ext = format === "json" ? "json" : "csv";
+    a.download = `知识图谱-${props.subject}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    ElMessage.success("图谱已导出");
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "导出失败");
+  }
 }
 
 async function load() {
   if (!props.subject) return;
   loading.value = true;
   try {
-    const [kpRes, edgeRes, chapterEdgeRes] = await Promise.all([
+    const [kpRes, edgeRes, chapterEdgeRes, covRes, layoutRes] = await Promise.all([
       api.get(`/graph/kps?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`),
       api.get(`/admin/edges?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}&page=1&page_size=500`),
       api.get(`/admin/chapter-edges?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`),
+      api.get(
+        `/admin/graph/kp-coverage?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`,
+      ),
+      api.get(`/graph/chapter-layout?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`),
     ]);
     kps.value = kpRes.data ?? [];
     edges.value = edgeRes.data.items ?? [];
     chapterEdges.value = chapterEdgeRes.data ?? [];
+    const nextCov: Record<number, { resource_count: number; question_count: number; task_count: number; has_quiz: boolean }> = {};
+    for (const row of covRes.data?.items ?? []) {
+      nextCov[row.kp_id] = {
+        resource_count: Number(row.resource_count ?? 0),
+        question_count: Number(row.question_count ?? 0),
+        task_count: Number(row.task_count ?? 0),
+        has_quiz: Boolean(row.has_quiz),
+      };
+    }
+    kpCoverageMap.value = nextCov;
 
     const normalizedPersisted = normalizePersistedKpPositions(kps.value);
     if (useLegacyFallbackLayout.value) {
@@ -941,23 +1025,31 @@ async function load() {
     }
     kpPositions.value = normalizedPersisted;
 
-    try {
-      const raw = localStorage.getItem(chapterPositionStorageKey());
-      const parsed = raw ? JSON.parse(raw) : {};
-      if (parsed && typeof parsed === "object") {
-        const next: Record<string, Point> = {};
-        for (const [key, point] of Object.entries(parsed)) {
-          const x = Number((point as any)?.x);
-          const y = Number((point as any)?.y);
-          if (Number.isFinite(x) && Number.isFinite(y)) {
-            next[key] = { x, y };
+    const det = buildDeterministicGraphLayout(
+      kps.value.map((kp) => ({ id: kp.id, code: kp.code, chapter: kp.chapter })),
+    );
+    const serverChapters = (layoutRes.data?.chapters ?? {}) as Record<string, { x: number; y: number }>;
+    let mergedCat = mergeChapterLayout(det.categoryPositions, serverChapters);
+    if (Object.keys(serverChapters).length === 0) {
+      try {
+        const raw = localStorage.getItem(chapterPositionStorageKey());
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (parsed && typeof parsed === "object") {
+          const next: Record<string, Point> = {};
+          for (const [key, point] of Object.entries(parsed)) {
+            const x = Number((point as any)?.x);
+            const y = Number((point as any)?.y);
+            if (Number.isFinite(x) && Number.isFinite(y)) {
+              next[key] = { x, y };
+            }
           }
+          mergedCat = mergeChapterLayout(mergedCat, next);
         }
-        categoryPositions.value = { ...categoryPositions.value, ...next };
+      } catch {
+        // ignore invalid local cache
       }
-    } catch {
-      // ignore invalid local cache
     }
+    categoryPositions.value = mergedCat;
     syncCategoryPositions();
     syncKpPositions();
     const normalizedChanged = normalizeWorkbenchSelectionState();
@@ -998,8 +1090,7 @@ async function saveKp() {
       });
       ElMessage.success("知识点已更新");
     } else {
-      const draftX = INITIAL_CENTER_X + Math.random() * 240 - 120;
-      const draftY = INITIAL_CENTER_Y + Math.random() * 240 - 120;
+      const draft = deterministicDraftPosition(`${form.code}|${form.title}`);
       await api.post("/admin/kps", {
         subject: props.subject,
         grade: props.grade,
@@ -1012,8 +1103,8 @@ async function saveKp() {
         literacy_tag: form.literacy_tag,
         importance: form.importance,
         difficulty: form.difficulty,
-        pos_x: draftX,
-        pos_y: draftY,
+        pos_x: draft.x,
+        pos_y: draft.y,
       });
       ElMessage.success("知识点已创建");
     }
@@ -1208,15 +1299,6 @@ watch(
   },
 );
 
-watch(
-  categoryPositions,
-  () => {
-    if (!props.subject) return;
-    localStorage.setItem(chapterPositionStorageKey(), JSON.stringify(categoryPositions.value));
-  },
-  { deep: true },
-);
-
 window.addEventListener("mousemove", onWindowMouseMove);
 window.addEventListener("mouseup", stopDragging);
 
@@ -1241,13 +1323,23 @@ onBeforeUnmount(() => {
       </div>
       <div class="teacher-controls">
         <el-input v-model="search" placeholder="搜索知识点" clearable class="teacher-search" />
+        <el-checkbox v-model="showIncompleteOnly" size="small" border title="仅显示缺资源或缺题的知识点">仅待完善</el-checkbox>
+        <el-dropdown trigger="click">
+          <button type="button" class="teacher-btn">导出 ▾</button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="exportGraphStructure('json')">导出 JSON</el-dropdown-item>
+              <el-dropdown-item @click="exportGraphStructure('csv')">导出 CSV</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <button
           class="teacher-btn teacher-btn--primary"
           @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)"
         >
           新建知识点
         </button>
-        <button class="teacher-btn" @click="resetViewport">重置</button>
+        <button class="teacher-btn" @click="resetViewport">重置视图</button>
         <button class="teacher-btn teacher-btn--primary" @click="drawerOpen = !drawerOpen">
           {{ drawerVisible ? "收起右侧" : "打开右侧" }}
         </button>
@@ -1300,19 +1392,28 @@ onBeforeUnmount(() => {
       </aside>
 
     <section
-      ref="stageRef"
       class="teacher-stage"
       :class="{ 'teacher-stage--dragging': draggingCanvas }"
-      @mousedown="onStageMouseDown"
-      @wheel.prevent="onStageWheel"
     >
       <div class="teacher-stage__top">
-        <div class="teacher-stage__top-main">
+        <div class="teacher-stage__top-row">
           <div class="teacher-stage__stats">
             <span class="teacher-stage__pill">分类 {{ stageStats.categories }}</span>
             <span class="teacher-stage__pill">知识点 {{ stageStats.points }}</span>
             <span class="teacher-stage__pill">关系 {{ stageStats.edges }}</span>
           </div>
+          <div class="teacher-stage__actions">
+            <button class="teacher-stage__button" @click="toggleAllKps">
+              {{ showAllKps ? "仅看分类" : "显示全部节点" }}
+            </button>
+            <button class="teacher-stage__button teacher-stage__button--primary" :disabled="props.readonly" @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)">新建知识点</button>
+            <button class="teacher-stage__button" @click="fitVisibleToViewport">适应画布</button>
+            <button class="teacher-stage__button" @click="resetViewport">重置画布</button>
+            <button class="teacher-stage__button" @click="detailTab = 'relations'; drawerOpen = true">管理关系</button>
+          </div>
+        </div>
+        <details class="teacher-stage__legend-details">
+          <summary class="teacher-stage__legend-summary">连线与图例说明（默认收起，点击展开）</summary>
           <div class="teacher-stage__legend">
             <span class="teacher-stage__legend-item">
               <i class="teacher-stage__legend-line teacher-stage__legend-line--solid"></i>
@@ -1326,25 +1427,32 @@ onBeforeUnmount(() => {
               <i class="teacher-stage__legend-line teacher-stage__legend-line--attach"></i>
               细虚线：分类与知识点归属，同色环表示同类能力/素养
             </span>
+            <span class="teacher-stage__legend-item">
+              <i class="teacher-stage__legend-rings">
+                <span class="tr ring--literacy"></span>
+                <span class="tr ring--ability"></span>
+                <span class="tr ring--knowledge"></span>
+              </i>
+              三层环（与学生端一致）：知识（内）/ 能力（中）/ 素养（外）；同标签同色
+            </span>
           </div>
-        </div>
-        <div class="teacher-stage__actions">
-          <button class="teacher-stage__button" @click="toggleAllKps">
-            {{ showAllKps ? "仅看分类" : "显示全部节点" }}
-          </button>
-          <button class="teacher-stage__button teacher-stage__button--primary" :disabled="props.readonly" @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)">新建知识点</button>
-          <button class="teacher-stage__button" @click="resetViewport">重置画布</button>
-          <button class="teacher-stage__button" @click="detailTab = 'relations'; drawerOpen = true">管理关系</button>
-        </div>
+        </details>
       </div>
 
+      <!-- 视口用 flex 占满剩余高度；ref 挂在视口上，缩放/平移与可见区域一致 -->
+      <div
+        ref="stageRef"
+        class="teacher-stage__viewport"
+        @mousedown="onStageMouseDown"
+        @wheel.prevent="onStageWheel"
+      >
       <svg
         class="teacher-canvas"
         :width="CANVAS_WIDTH"
         :height="CANVAS_HEIGHT"
         :style="{ transform: `translate(${panX}px, ${panY}px) scale(${canvasScale})` }"
       >
-        <rect x="0" y="0" :width="CANVAS_WIDTH" :height="CANVAS_HEIGHT" fill="#f8fbff" />
+        <rect x="0" y="0" :width="CANVAS_WIDTH" :height="CANVAS_HEIGHT" fill="var(--graph-canvas-bg)" />
         <defs>
           <marker id="teacher-edge-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(100,116,139,0.55)" />
@@ -1420,13 +1528,19 @@ onBeforeUnmount(() => {
           :transform="`translate(${kpPoint(kp.id).x}, ${kpPoint(kp.id).y})`"
           @click="selectKp(kp.id)"
           @mousedown="onNodeMouseDown($event, 'kp', kp.id)"
+          @mouseenter="hoveredKpId = kp.id"
+          @mouseleave="hoveredKpId = null"
         >
           <circle :r="nodeRadius(kp) + 18" fill="transparent" :stroke="ringStroke('literacy', kp)" :stroke-width="splitLabels(kp.literacy_tag).length ? 5 : 0" />
           <circle :r="nodeRadius(kp) + 10" fill="transparent" :stroke="ringStroke('ability', kp)" :stroke-width="splitLabels(kp.ability_tag).length ? 5 : 0" />
-          <circle :r="nodeRadius(kp) + 12" fill="rgba(96,139,232,0.14)" />
-          <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#eef5ff' : '#ffffff'" :stroke="kp.id === selectedKp?.id ? '#7ca9f3' : '#d7e2f0'" stroke-width="2" />
+          <circle :r="nodeRadius(kp) + 2" fill="transparent" stroke="#9db7e8" stroke-width="3.5" />
+          <circle :r="nodeRadius(kp) + 22" :fill="kp.id === selectedKp?.id ? 'rgba(70, 122, 235, 0.12)' : 'rgba(96,139,232,0.08)'" />
+          <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#eef5ff' : '#f5f9ff'" :stroke="kp.id === selectedKp?.id ? '#7ca9f3' : '#c5d8f0'" stroke-width="2" />
           <text class="teacher-node__code" text-anchor="middle" y="-8">{{ kp.code }}</text>
           <text class="teacher-node__title" text-anchor="middle" y="16">{{ kp.title.slice(0, 10) }}</text>
+          <g v-if="kpCoverageWarnLabels(kp.id).length" :transform="`translate(0, ${nodeRadius(kp) + 16})`">
+            <text class="teacher-node__warn" text-anchor="middle" y="0">{{ kpCoverageWarnLabels(kp.id).join(" · ") }}</text>
+          </g>
         </g>
       </svg>
 
@@ -1465,6 +1579,31 @@ onBeforeUnmount(() => {
         <button @click="cancelCategoryLinkSelection">取消</button>
       </div>
 
+      <div class="teacher-stage__bottom">
+        <div class="teacher-stage__zoom">
+          <button @click="zoomOut">-</button>
+          <span>缩放 {{ Math.round(canvasScale * 100) }}%</span>
+          <button @click="zoomIn">+</button>
+        </div>
+      </div>
+
+      <div v-if="!loading && !hasGraphData" class="teacher-stage__empty">
+        <strong>这门课还没有知识图谱</strong>
+        <span>请先新建知识点，再把它们连起来。</span>
+        <button
+          class="teacher-stage__empty-btn"
+          @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)"
+        >
+          立即新建知识点
+        </button>
+      </div>
+
+      <div v-else-if="!loading && visibleKps.length === 0" class="teacher-stage__empty">
+        <strong>当前没有可显示的知识点</strong>
+        <span>默认只显示分类节点。点击某个分类，或点击“显示全部节点”。</span>
+      </div>
+      </div>
+
       <section
         v-if="graphEditorOpen"
         class="teacher-editor-float"
@@ -1499,30 +1638,6 @@ onBeforeUnmount(() => {
           <el-button @click="graphEditorOpen = false">收起</el-button>
         </div>
       </section>
-
-      <div class="teacher-stage__bottom">
-        <div class="teacher-stage__zoom">
-          <button @click="zoomOut">-</button>
-          <span>缩放 {{ Math.round(canvasScale * 100) }}%</span>
-          <button @click="zoomIn">+</button>
-        </div>
-      </div>
-
-      <div v-if="!loading && !hasGraphData" class="teacher-stage__empty">
-        <strong>这门课还没有知识图谱</strong>
-        <span>请先新建知识点，再把它们连起来。</span>
-        <button
-          class="teacher-stage__empty-btn"
-          @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)"
-        >
-          立即新建知识点
-        </button>
-      </div>
-
-      <div v-else-if="!loading && visibleKps.length === 0" class="teacher-stage__empty">
-        <strong>当前没有可显示的知识点</strong>
-        <span>默认只显示分类节点。点击某个分类，或点击“显示全部节点”。</span>
-      </div>
     </section>
 
     <aside class="teacher-drawer" :class="{ open: drawerOpen }" v-if="drawerVisible">
@@ -1754,11 +1869,82 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .teacher-workbench {
-  min-height: calc(100vh - 190px);
-  background: #ffffff;
+  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-surface-muted) 50%, rgba(79, 140, 255, 0.04) 100%);
   overflow: hidden;
-  border-radius: 28px;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+  border-radius: var(--app-radius-lg);
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-lg);
+}
+
+.teacher-workbench--fullscreen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.teacher-workbench--fullscreen .teacher-header,
+.teacher-workbench--fullscreen .teacher-guide {
+  flex-shrink: 0;
+}
+
+.teacher-workbench--fullscreen .teacher-guide {
+  display: none;
+}
+
+.teacher-workbench--fullscreen .teacher-subtitle {
+  display: none;
+}
+
+.teacher-workbench--fullscreen .teacher-header {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  padding: 6px 12px;
+}
+
+.teacher-workbench--fullscreen .teacher-title {
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.teacher-workbench--fullscreen .teacher-controls {
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.teacher-workbench--fullscreen .teacher-search {
+  width: min(200px, 36vw);
+}
+
+.teacher-workbench--fullscreen .teacher-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.teacher-workbench--fullscreen .teacher-content {
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+  padding: 8px;
+}
+
+.teacher-workbench--fullscreen .teacher-sidebar {
+  flex: 0 0 232px;
+  width: 232px;
+  max-width: 232px;
+  padding: 10px;
+}
+
+.teacher-workbench--fullscreen .teacher-drawer {
+  flex: 0 0 300px;
+  width: 300px;
+  max-width: 300px;
+  padding: 10px;
 }
 
 .teacher-header {
@@ -1855,30 +2041,39 @@ onBeforeUnmount(() => {
 }
 
 .teacher-content {
-  display: grid;
-  grid-template-columns: minmax(248px, 280px) minmax(0, 1fr) minmax(320px, 340px);
-  height: calc(100vh - 250px);
-  gap: 14px;
-  padding: 14px;
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  padding: 16px;
   min-width: 0;
   overflow: hidden;
+  min-height: 0;
+}
+
+.teacher-content > * {
+  min-height: 0;
 }
 
 .teacher-content--fullscreen {
-  grid-template-columns: minmax(248px, 280px) minmax(0, 1fr) minmax(320px, 340px);
+  flex: 1;
+  min-height: 0;
 }
 
-.teacher-content--drawer-collapsed {
-  grid-template-columns: minmax(248px, 280px) minmax(0, 1fr);
+.teacher-content--drawer-collapsed .teacher-drawer {
+  display: none;
 }
 
 .teacher-sidebar {
-  padding: 14px;
-  border-radius: 24px;
-  background: #f8fbff;
-  border: 1px solid #dce6f2;
+  width: 280px;
+  flex: 0 0 280px;
+  max-height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
-  color: #475569;
+  padding: 14px;
+  border-radius: var(--app-radius-lg);
+  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-primary-soft) 100%);
+  border: 1px solid var(--app-border);
+  color: var(--app-text-soft);
   z-index: 4;
 }
 
@@ -1995,44 +2190,114 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage {
+  --graph-stage-pad: 8px;
   position: relative;
   overflow: hidden;
   cursor: default;
   user-select: none;
-  display: grid;
-  grid-template-rows: 1fr auto;
-  gap: 16px;
-  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: var(--graph-stage-pad);
   min-width: 0;
-  border-radius: 28px;
-  background: #f8fbff;
-  border: 1px solid #dce6f2;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  height: 100%;
+  border-radius: var(--app-radius-lg);
+  background: linear-gradient(180deg, var(--app-card) 0%, rgba(79, 140, 255, 0.06) 100%);
+  border: 1px solid var(--app-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.teacher-workbench--fullscreen .teacher-stage {
+  min-height: 0;
+}
+
+.teacher-stage__viewport {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 220px;
+  width: 100%;
+  overflow: hidden;
+  /* 与外层 .teacher-stage 圆角同心：内半径 = 外半径 − 内边距，避免底角“直角顶到”外框 */
+  border-radius: max(0px, calc(var(--app-radius-lg) - var(--graph-stage-pad)));
+  background: var(--graph-canvas-bg);
+  contain: layout style;
+  isolation: isolate;
+  transform: translateZ(0);
+}
+
+/* 全屏工作台：不要强推最小高度，避免底部缩放区被裁切 */
+.teacher-workbench--fullscreen .teacher-stage__viewport {
+  min-height: 0;
+  height: 100%;
 }
 
 .teacher-stage--dragging {
   cursor: grabbing;
 }
 
-.teacher-stage__top,
-.teacher-stage__bottom {
-  position: relative;
-  z-index: 2;
+.teacher-stage__top {
+  flex-shrink: 0;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
-.teacher-stage__top-main {
-  display: grid;
-  gap: 10px;
+.teacher-stage__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
+}
+
+.teacher-stage__top-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.teacher-stage__legend-details {
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid #e2ebf5;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.teacher-stage__legend-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  user-select: none;
+  line-height: 1.35;
+}
+
+.teacher-stage__legend-summary::-webkit-details-marker {
+  display: none;
+}
+
+.teacher-stage__legend-details[open] .teacher-stage__legend-summary {
+  border-bottom: 1px solid #e8eef5;
+}
+
+.teacher-stage__legend-details .teacher-stage__legend {
+  padding: 8px 10px 10px;
+  margin: 0;
 }
 
 .teacher-stage__bottom {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
+  right: calc(var(--graph-stage-pad) + 12px);
+  bottom: calc(var(--graph-stage-pad) + 12px);
   z-index: 9;
   pointer-events: none;
 }
@@ -2047,20 +2312,23 @@ onBeforeUnmount(() => {
 .teacher-stage__legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 6px 8px;
+  align-items: flex-start;
 }
 
 .teacher-stage__legend-item {
-  min-height: 34px;
-  padding: 7px 12px;
+  min-height: 30px;
+  padding: 5px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid #dce6f2;
   color: #51657f;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.35;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  max-width: 100%;
 }
 
 .teacher-stage__legend-line {
@@ -2081,16 +2349,50 @@ onBeforeUnmount(() => {
   border-top-color: rgba(100, 116, 139, 0.7);
 }
 
+.teacher-stage__legend-rings {
+  width: 18px;
+  height: 18px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.teacher-stage__legend-rings .tr {
+  position: absolute;
+  border-radius: 999px;
+  border: 2px solid transparent;
+}
+
+.teacher-stage__legend-rings .tr.ring--knowledge {
+  width: 10px;
+  height: 10px;
+  border-color: rgba(74, 123, 200, 0.95);
+}
+
+.teacher-stage__legend-rings .tr.ring--ability {
+  width: 14px;
+  height: 14px;
+  border-color: rgba(22, 163, 74, 0.9);
+}
+
+.teacher-stage__legend-rings .tr.ring--literacy {
+  width: 18px;
+  height: 18px;
+  border-color: rgba(37, 99, 235, 0.88);
+}
+
 .teacher-stage__pill,
 .teacher-stage__button {
-  min-height: 40px;
-  padding: 0 14px;
+  min-height: 34px;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid #dce6f2;
   background: #ffffff;
   color: #35507f;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2118,11 +2420,13 @@ onBeforeUnmount(() => {
 }
 
 .teacher-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
   display: block;
   transform-origin: 0 0;
   transition: transform 0.08s ease;
   cursor: grab;
-  position: relative;
   z-index: 1;
 }
 
@@ -2150,6 +2454,13 @@ onBeforeUnmount(() => {
 .teacher-node__code {
   font-size: 12px;
   fill: #718097;
+}
+
+.teacher-node__warn {
+  font-size: 10px;
+  font-weight: 700;
+  fill: #c2410c;
+  pointer-events: none;
 }
 
 .teacher-stage__menu {
@@ -2330,16 +2641,17 @@ onBeforeUnmount(() => {
 
 .teacher-stage__empty {
   position: absolute;
-  inset: 120px 32px 88px;
+  inset: 12px;
   display: grid;
   place-items: center;
   gap: 8px;
   text-align: center;
   border: 1px dashed #dce6f2;
   border-radius: 24px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.96);
   color: #35507f;
   z-index: 3;
+  pointer-events: auto;
 }
 
 .teacher-stage__empty strong {
@@ -2364,18 +2676,21 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer {
-  padding: 14px;
-  border-radius: 24px;
-  background: #f8fbff;
-  border: 1px solid #dce6f2;
+  width: 340px;
+  flex: 0 0 340px;
+  max-height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
-  color: #475569;
+  padding: 14px;
+  border-radius: var(--app-radius-lg);
+  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-surface-muted) 100%);
+  border: 1px solid var(--app-border);
+  color: var(--app-text-soft);
   z-index: 5;
 }
 
 .teacher-content--fullscreen .teacher-drawer {
   position: static;
-  width: auto;
   box-shadow: none;
   z-index: 5;
 }
@@ -2787,20 +3102,18 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1200px) {
-  .teacher-content {
-    grid-template-columns: minmax(200px, 224px) minmax(0, 1fr) minmax(260px, 300px);
-    padding: 10px;
-  }
-
-  .teacher-content--drawer-collapsed {
-    grid-template-columns: minmax(200px, 224px) minmax(0, 1fr);
+  .teacher-sidebar {
+    width: 224px;
+    flex: 0 0 224px;
   }
 
   .teacher-drawer {
-    position: static;
-    width: auto;
-    box-shadow: none;
-    z-index: 5;
+    width: 300px;
+    flex: 0 0 300px;
+  }
+
+  .teacher-content {
+    padding: 10px;
   }
 }
 
@@ -2821,12 +3134,42 @@ onBeforeUnmount(() => {
   }
 
   .teacher-content {
-    grid-template-columns: 1fr;
-    height: calc(100vh - 280px);
+    flex-direction: column;
+    min-height: 0;
     padding: 10px;
+    overflow: auto;
   }
 
-  .teacher-stage__top {
+  .teacher-sidebar {
+    width: 100%;
+    flex: none;
+    max-height: 42vh;
+  }
+
+  .teacher-stage {
+    min-height: min(360px, 50vh);
+    flex: 1 1 auto;
+  }
+
+  .teacher-stage__viewport {
+    min-height: min(280px, 40vh);
+  }
+
+  .teacher-workbench--fullscreen .teacher-stage__viewport {
+    min-height: clamp(240px, 48dvh, 720px);
+  }
+
+  .teacher-stage__legend {
+    flex-wrap: wrap;
+  }
+
+  .teacher-drawer {
+    width: 100%;
+    flex: none;
+    max-height: 50vh;
+  }
+
+  .teacher-stage__top-row {
     flex-direction: column;
     align-items: stretch;
   }

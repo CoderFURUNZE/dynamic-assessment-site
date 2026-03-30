@@ -171,18 +171,18 @@ watch(
 </script>
 
 <template>
-  <el-card>
+  <el-card class="panel-card admin-user-card" shadow="never">
     <template #header>
-      <div style="display: flex; align-items: center; justify-content: space-between">
-        <div>{{ titleText }}</div>
-        <div style="display: flex; gap: 8px">
+      <div class="admin-user-card__header">
+        <div class="admin-user-card__title">{{ titleText }}</div>
+        <div class="admin-user-card__actions">
           <HintButton type="primary" tip="新增一个老师或学生账号。" @click="openCreate">新增{{ props.mode === "teachers" ? "老师" : "用户" }}</HintButton>
           <HintButton tip="刷新用户列表。" @click="load" :loading="loading">刷新</HintButton>
         </div>
       </div>
     </template>
 
-    <el-table :data="users" size="small" v-loading="loading" style="width: 100%">
+    <el-table :data="users" size="small" v-loading="loading" class="admin-user-card__table">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="username" label="用户名" width="140" />
       <el-table-column prop="role" label="角色" width="100" />
@@ -210,7 +210,7 @@ watch(
       </el-table-column>
     </el-table>
 
-    <div style="display: flex; justify-content: flex-end; margin-top: 8px">
+    <div class="admin-user-card__pager">
       <el-pagination
         background
         layout="prev, pager, next"
@@ -296,3 +296,35 @@ watch(
     </el-dialog>
   </el-card>
 </template>
+
+<style scoped>
+.admin-user-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-user-card__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--app-text-main);
+}
+
+.admin-user-card__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-user-card__table {
+  width: 100%;
+}
+
+.admin-user-card__pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+</style>

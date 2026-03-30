@@ -108,8 +108,8 @@ onMounted(async () => {
   <div v-if="isTeacher" class="workspace-page">
     <div class="workspace-page__toolbar">
       <div class="workspace-page__left">
-        <div class="workspace-page__title">教师图谱</div>
-        <div class="workspace-page__subtitle">先选课程，再点知识点，右边直接修改。</div>
+        <div class="workspace-page__title">知识图谱工作台（教学视图）</div>
+        <div class="workspace-page__subtitle">与学生端同源课程数据；节点三色环一致——内绿知识、中黄能力、外紫素养。</div>
       </div>
 
       <div class="workspace-page__right">
@@ -124,7 +124,7 @@ onMounted(async () => {
       <strong>当前状态</strong>
       <span>分类 {{ workbenchState.categoryCount }} 个，已选知识点 {{ workbenchState.selectedKpId ? 1 : 0 }} 个。</span>
       <span v-if="courseStatusText">{{ courseStatusText }}</span>
-      <HoverTip content="先选课程，再点分类和知识点，右边会显示当前节点的编辑内容。" />
+      <HoverTip content="在知识点上配置能力标签与素养标签后，学生端图谱与报告会按掌握度、练习与小测证据汇总能力达成情况。" />
     </section>
 
     <TeacherGraphWorkbench :subject="subject" :grade="grade" :fullscreen="true" :readonly="isReadonlyCourse" @state-change="updateWorkbenchState" />
@@ -133,24 +133,36 @@ onMounted(async () => {
 
 <style scoped>
 .workspace-page {
-  min-height: 100vh;
-  padding: 14px;
+  /* 与学生端一致，减少外层高度扣减，避免内部画布被截断 */
+  height: calc(100dvh - 96px - 4px);
+  max-height: calc(100dvh - 96px - 4px);
+  padding: 6px 10px 8px;
+  box-sizing: border-box;
   background: var(--app-bg);
-  display: grid;
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.workspace-page > :last-child {
+  flex: 1;
+  min-height: 0;
 }
 
 .workspace-page__toolbar {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 20px;
-  padding: 12px 16px;
-  border-radius: 20px;
-  background: #ffffff;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--app-radius);
+  background: var(--app-card);
   border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .workspace-page__left {
@@ -159,13 +171,20 @@ onMounted(async () => {
 }
 
 .workspace-page__title {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 800;
   color: #243449;
+  line-height: 1.25;
 }
 
 .workspace-page__subtitle {
   color: #718097;
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .workspace-page__right {
@@ -191,14 +210,17 @@ onMounted(async () => {
 }
 
 .workspace-simple-note {
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: #ffffff;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: var(--app-radius-sm);
+  background: var(--app-card);
   border: 1px solid var(--app-border);
   color: var(--app-ink-soft);
+  font-size: 12px;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  align-items: center;
   box-shadow: var(--app-shadow-soft);
 }
 

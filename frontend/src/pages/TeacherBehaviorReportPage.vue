@@ -292,6 +292,13 @@ onMounted(async () => {
 
     <PageSectionCard eyebrow="Behavior Report" title="阶段行为画像">
       <div class="behavior-shell" v-loading="loading">
+        <el-alert class="behavior-auto-collect-hint" type="info" show-icon :closable="false">
+          <template #title>自动采集与一键导入</template>
+          <p class="behavior-auto-collect-hint__body">
+            学生端在登录、浏览资源、练习作答、小测提交、视频进度、图谱与推荐等操作中会由系统自动写入行为事件。本页汇总即基于这些已入库记录。选择阶段后点击
+            <strong>一键导入并重算</strong>，将当前阶段的行为信号写入阶段画像指标并触发动态评价重算，便于按阶段对比每位学生的画像变化（无需另外上传原始日志）。
+          </p>
+        </el-alert>
         <div class="behavior-toolbar">
           <div class="behavior-picker">
             <span>阶段</span>
@@ -460,6 +467,16 @@ onMounted(async () => {
 .behavior-shell {
   display: grid;
   gap: 16px;
+}
+
+.behavior-auto-collect-hint :deep(.el-alert__description) {
+  margin: 0;
+}
+.behavior-auto-collect-hint__body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--app-ink-soft);
 }
 
 .behavior-toolbar {

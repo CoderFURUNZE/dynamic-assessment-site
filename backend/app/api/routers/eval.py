@@ -24,6 +24,7 @@ from app.schemas.eval import (
     OverviewPracticeOut,
     OverviewRecentOut,
     OverviewSummaryOut,
+    PersonaSignalOut,
     PortraitTimelinePointOut,
     ProfileOut,
     ProfileTrendPointOut,
@@ -32,6 +33,7 @@ from app.schemas.eval import (
 )
 from app.services.eval import refresh_subject_mastery, upsert_mastery
 from app.services.learner_profile import (
+    build_ability_practice_cognitive_summary,
     build_kp_dimension_summary,
     _json_load,
     get_or_create_persona_rule,
@@ -54,6 +56,102 @@ def _risk_level_label(dynamic_score: float) -> str:
     if dynamic_score >= 0.50:
         return "预警"
     return "风险"
+
+
+def _pct(value: float) -> str:
+    return f"{round(float(value) * 100)}%"
+
+
+def _signal_level(value: float, *, warn_low: float | None = None, warn_high: float | None = None) -> str:
+    if warn_low is not None and value < warn_low:
+        return "attention"
+    if warn_high is not None and value > warn_high:
+        return "attention"
+    if value >= 0.72:
+        return "positive"
+    if value >= 0.45:
+        return "neutral"
+    return "attention"
+
+
+def _build_persona_signals(
+    *,
+    persona_label: str,
+    override_source: str,
+    engagement: float,
+    achievement: float,
+    habit: float,
+    characteristic: float,
+    efficiency: float,
+    risk: float,
+    course_mastery: float,
+    dynamic_score: float,
+    stability: float,
+) -> tuple[str, list[PersonaSignalOut]]:
+    intro = (
+        f"系统结合知识点掌握、练习/测验与（如有）阶段评价数据，将当前学习者归类为「{persona_label}」。"
+        + (" 画像标签含人工覆盖，请以教师说明为准。" if override_source == "manual" else " 以下为据此标签拆解的各维度说明，便于理解动态评价来源。")
+    )
+    signals: list[PersonaSignalOut] = [
+        PersonaSignalOut(
+            key="persona",
+            label="画像类型",
+            detail=(
+                f"标签：{persona_label}。"
+                + ("来源：教师/管理员指定。" if override_source == "manual" else "来源：系统根据投入度、成效与效率等自动判定。")
+            ),
+            level="neutral",
+        ),
+        PersonaSignalOut(
+            key="engagement",
+            label="学习投入",
+            detail=f"投入综合指数约 {_pct(engagement)}，体现学习频次、时长、资源完成与连续性等行为信号。",
+            level=_signal_level(engagement, warn_low=0.38),
+        ),
+        PersonaSignalOut(
+            key="achievement",
+            label="学习成效",
+            detail=f"成效综合指数约 {_pct(achievement)}，主要来自练习/测验表现与掌握度增长。",
+            level=_signal_level(achievement, warn_low=0.48),
+        ),
+        PersonaSignalOut(
+            key="habit",
+            label="学习习惯",
+            detail=f"习惯维度约 {_pct(habit)}（阶段评价中由出勤、任务按时率等构成；无阶段数据时可能为 0）。",
+            level=_signal_level(habit, warn_low=0.35) if habit > 0 else "neutral",
+        ),
+        PersonaSignalOut(
+            key="characteristic",
+            label="学习特征",
+            detail=f"特征维度约 {_pct(characteristic)}，反映问卷或阶段画像中的个性背景类指标汇总。",
+            level=_signal_level(characteristic, warn_low=0.35) if characteristic > 0 else "neutral",
+        ),
+        PersonaSignalOut(
+            key="efficiency",
+            label="学习效率",
+            detail=f"效率指数约 {_pct(efficiency)}，与单位时间正确率、任务完成情况相关。",
+            level=_signal_level(efficiency, warn_low=0.45),
+        ),
+        PersonaSignalOut(
+            key="risk",
+            label="风险信号",
+            detail=f"风险指数约 {_pct(risk)}，数值越高表示逾期、错题连击、学习中断等信号越强。",
+            level="attention" if risk >= 0.48 else "neutral" if risk >= 0.22 else "positive",
+        ),
+        PersonaSignalOut(
+            key="mastery",
+            label="课程掌握度",
+            detail=f"全课知识点掌握均值约 {_pct(course_mastery)}，动态评价中通常占较高权重。",
+            level=_signal_level(course_mastery, warn_low=0.4),
+        ),
+        PersonaSignalOut(
+            key="dynamic",
+            label="动态综合分",
+            detail=f"当前动态评分 {_pct(dynamic_score)}，稳定性约 {_pct(stability)}（分数波动越小稳定性越高）。",
+            level=_signal_level(dynamic_score, warn_low=0.42),
+        ),
+    ]
+    return intro, signals
 
 
 @router.get("/mastery", response_model=MasteryOut)
@@ -177,6 +275,7 @@ def profile(
             for item in stage_rows
         ]
     else:
+        # get_profile_trend 返回 LearnerProfileSnapshot，无 stage_title / trend_label（仅阶段快照 StageEvaluationSnapshot 具备）
         portrait_timeline = [
             PortraitTimelinePointOut(
                 updated_at=item.updated_at.isoformat(),
@@ -184,13 +283,32 @@ def profile(
                 dynamic_score=float(item.dynamic_score),
                 course_mastery=float(item.course_mastery),
                 risk_level=_risk_level_label(float(item.dynamic_score)),
-                stage_title=item.stage_title,
-                trend_label=item.trend_label,
-                reason_summary="",
+                stage_title=None,
+                trend_label=None,
+                reason_summary=item.reason_summary or "",
             )
             for item in reversed(get_profile_trend(session, user_id=user.id, subject=subject, grade=grade, days=days))
         ]
-    breakdown_payload = portrait_summary.get("dynamic_breakdown") or {}
+    _bd_raw = portrait_summary.get("dynamic_breakdown")
+    dynamic_breakdown_parsed: DynamicBreakdownOut | None = None
+    if isinstance(_bd_raw, dict) and _bd_raw:
+        try:
+            dynamic_breakdown_parsed = DynamicBreakdownOut.model_validate(_bd_raw)
+        except Exception:
+            dynamic_breakdown_parsed = None
+    persona_intro, persona_signals = _build_persona_signals(
+        persona_label=persona_label(snapshot.persona_type),
+        override_source=str(snapshot.override_source or "auto"),
+        engagement=float(snapshot.engagement),
+        achievement=float(snapshot.achievement),
+        habit=float(current_stage.habit) if current_stage is not None else 0.0,
+        characteristic=float(current_stage.characteristic) if current_stage is not None else 0.0,
+        efficiency=float(snapshot.efficiency),
+        risk=float(snapshot.risk),
+        course_mastery=float(snapshot.course_mastery),
+        dynamic_score=float(snapshot.dynamic_score),
+        stability=float(snapshot.stability),
+    )
     course = session.exec(
         select(Course)
         .where(Course.title == subject)
@@ -203,6 +321,12 @@ def profile(
         grade=grade,
         kps=kps,
         mastery_map=mastery_row_map,
+    )
+    kp_ids = [int(k.id) for k in kps if k.id is not None]
+    ability_practice_stats = build_ability_practice_cognitive_summary(
+        session,
+        user_id=user.id,
+        kp_ids=kp_ids,
     )
     return ProfileOut(
         user_id=user.id,
@@ -293,8 +417,11 @@ def profile(
         final_portrait_indicators=portrait_summary.get("final_portrait_indicators", []),
         term_summary=portrait_summary.get("term_summary", {}),
         kp_dimension_summary=kp_dimension_summary,
+        ability_practice_stats=ability_practice_stats,
         portrait_timeline=portrait_timeline,
-        dynamic_breakdown=DynamicBreakdownOut(**breakdown_payload) if breakdown_payload else None,
+        dynamic_breakdown=dynamic_breakdown_parsed,
+        persona_intro=persona_intro,
+        persona_signals=persona_signals,
     )
 
 

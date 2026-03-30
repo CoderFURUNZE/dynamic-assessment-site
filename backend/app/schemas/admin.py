@@ -37,6 +37,8 @@ class QuestionOut(BaseModel):
     source: str | None = None
     tags: str | None = None
     version: str | None = None
+    cognitive_level: str = "understand"
+    ability_subtags: str = ""
     attempts: int | None = None
     correct_rate: float | None = None
 
@@ -52,6 +54,8 @@ class QuestionIn(BaseModel):
     source: str = ""
     tags: str = ""
     version: str = "v1"
+    cognitive_level: str = "understand"
+    ability_subtags: str = ""
 
 
 class KnowledgePointIn(BaseModel):
@@ -273,6 +277,8 @@ class AdminAnalyticsOut(BaseModel):
     risk_students: list[dict] = []
     weak_kps: list[dict] = []
     progress_ranking: list[dict] = []
+    # 当前课程选课学生在全课知识点上的练习汇总（认知层级 / 能力标签 / 高阶题）
+    ability_practice_cohort: dict = {}
 
 
 class AdminPracticeReportOut(BaseModel):

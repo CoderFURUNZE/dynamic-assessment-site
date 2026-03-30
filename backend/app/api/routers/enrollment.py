@@ -26,6 +26,24 @@ from app.services.notification import push_course_notification
 router = APIRouter(prefix="/enrollment", tags=["enrollment"])
 
 
+def _course_active_for_student_join(course: Course | None) -> bool:
+    """与图谱学习校验一致：仅开课中且在开课周期内的课程允许加入。"""
+    if course is None or not bool(course.active):
+        return False
+    lifecycle_raw = course.lifecycle_status
+    lifecycle = lifecycle_raw.value if isinstance(lifecycle_raw, CourseLifecycleStatus) else str(lifecycle_raw or "")
+    if lifecycle != CourseLifecycleStatus.active.value:
+        return False
+    now = datetime.utcnow()
+    if course.start_at and now < course.start_at:
+        return False
+    if course.end_at and now > course.end_at:
+        return False
+    if course.enroll_status == CourseEnrollStatus.closed:
+        return False
+    return True
+
+
 def _course_open_status(course: Course, enrolled_count: int) -> str:
     now = datetime.utcnow()
     if course.apply_deadline is not None and now > course.apply_deadline:
@@ -116,6 +134,79 @@ def list_enrollable_courses(
             }
         )
     return {"items": data}
+
+
+@router.post("/courses/join-by-code")
+def join_course_by_code(
+    payload: dict,
+    session: Session = Depends(get_session),
+    user=Depends(require_role(UserRole.student)),
+):
+    """校内场景：学生凭管理员公布的课程代码加入，无需教师逐人审核（与行政导入/班级自动关联并列）。"""
+    raw = str(payload.get("join_code") or payload.get("code") or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="请输入课程代码")
+    course = session.exec(select(Course).where(Course.code == raw)).first()
+    if course is None or course.id is None:
+        raise HTTPException(status_code=404, detail="课程代码不存在")
+    if not bool(course.active):
+        raise HTTPException(status_code=400, detail="该课程未启用")
+    if not _course_active_for_student_join(course):
+        raise HTTPException(status_code=400, detail="课程当前不在加入周期内（未开课、已结课或暂不开放）")
+    cid = int(course.id)
+    enrolled_count = len(
+        session.exec(
+            select(Enrollment.id).where(
+                Enrollment.course_id == cid,
+                Enrollment.status == EnrollmentStatus.active,
+            )
+        ).all()
+    )
+    open_status = _course_open_status(course, enrolled_count)
+    if open_status == CourseEnrollStatus.full.value:
+        raise HTTPException(status_code=400, detail="课程名额已满")
+    existing = session.exec(
+        select(Enrollment).where(
+            Enrollment.student_id == int(user.id),
+            Enrollment.course_id == cid,
+        )
+    ).first()
+    if existing is not None:
+        if existing.status == EnrollmentStatus.active:
+            return {
+                "ok": True,
+                "course_id": cid,
+                "title": course.title,
+                "already_enrolled": True,
+            }
+        existing.status = EnrollmentStatus.active
+        existing.application_id = None
+        session.add(existing)
+        push_course_notification(
+            session,
+            user_id=int(user.id),
+            title=f"已重新加入《{course.title}》",
+            content="选课状态已恢复，可直接学习。",
+        )
+        session.commit()
+        return {"ok": True, "course_id": cid, "title": course.title, "reactivated": True}
+
+    session.add(
+        Enrollment(
+            student_id=int(user.id),
+            course_id=cid,
+            application_id=None,
+            status=EnrollmentStatus.active,
+        )
+    )
+    push_course_notification(
+        session,
+        user_id=int(user.id),
+        title=f"已加入《{course.title}》",
+        content="你已通过课程代码加入该课程，无需等待教师审核。",
+    )
+    session.commit()
+    return {"ok": True, "course_id": cid, "title": course.title}
 
 
 @router.post("/courses/{course_id}/apply")
