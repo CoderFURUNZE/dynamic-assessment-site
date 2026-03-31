@@ -1,24 +1,35 @@
-<script setup lang="ts">
-import { computed } from "vue";
+﻿<script setup lang="ts">
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { clearToken, getRole, getToken } from "./token";
+import { ArrowLeft, Expand, Fold, Monitor, SwitchButton, User } from "@element-plus/icons-vue";
+import { clearToken, getRole } from "./token";
 import { isLoading } from "./loading";
+import { appNavigation, type AppNavItem } from "./layouts/appNavigation";
 import { buildTeacherSubjectQuery, getSavedTeacherSubject } from "./utils/teacherCourse";
-import { Monitor, SwitchButton, User } from "@element-plus/icons-vue";
 
 const route = useRoute();
 const router = useRouter();
 
+const sidebarCollapsed = ref(localStorage.getItem("da_sidebar_collapsed") === "1");
+
+watch(sidebarCollapsed, (value) => {
+  localStorage.setItem("da_sidebar_collapsed", value ? "1" : "0");
+});
+
 const role = computed(() => getRole() || "");
-const isAdmin = computed(() => role.value === "admin");
-const isTeacher = computed(() => role.value === "teacher");
 const routeGroup = computed<"admin" | "teacher" | "student" | "start" | "login">(() => {
   if (route.path.startsWith("/admin")) return "admin";
   if (route.path.startsWith("/teacher")) return "teacher";
   if (route.path.startsWith("/student")) return "student";
   if (route.path === "/start") return "start";
+  if (route.path.startsWith("/login")) return "login";
   return "login";
 });
+
+const isAdmin = computed(() => role.value === "admin");
+const isTeacher = computed(() => role.value === "teacher");
+const isAuthPage = computed(() => routeGroup.value === "login" || routeGroup.value === "start");
+const isStandaloneWorkspace = computed(() => Boolean(route.meta?.standaloneWorkspace));
 const isStudentPreview = computed(
   () =>
     routeGroup.value === "student"
@@ -26,345 +37,529 @@ const isStudentPreview = computed(
     && String(route.query.preview || "") === "1",
 );
 
-const isAuthPage = computed(() => routeGroup.value === "login" || routeGroup.value === "start");
-const navItems = computed(() => {
-  if (routeGroup.value === "student") {
-    return [
-      { label: "首页", path: "/student/overview" },
-      { label: "图谱", path: "/student/graph-workspace" },
-      { label: "报告", path: "/student/report" },
-      { label: "问卷", path: "/student/questionnaire" },
-    ];
-  }
-  if (routeGroup.value === "teacher") {
-    return [
-      { label: "课程", path: "/teacher/courses" },
-      { label: "图谱", path: "/teacher/graph-workspace" },
-      { label: "导入", path: "/teacher/imports" },
-      { label: "学生", path: "/teacher/students" },
-      { label: "评分", path: "/teacher/final-review" },
-    ];
-  }
-  if (routeGroup.value === "admin") {
-    return [
-      { label: "概览", path: "/admin/dashboard" },
-      { label: "课程", path: "/admin/courses" },
-      { label: "用户", path: "/admin/users" },
-      { label: "规则", path: "/admin/persona" },
-      { label: "指标", path: "/admin/dimensions" },
-    ];
+const currentNavTree = computed<AppNavItem[]>(() => {
+  if (routeGroup.value === "student" || routeGroup.value === "teacher" || routeGroup.value === "admin") {
+    return appNavigation[routeGroup.value];
   }
   return [];
 });
 
+function parseTarget(target: string) {
+  const [path, rawQuery] = target.split("?");
+  const query: Record<string, string> = {};
+  if (rawQuery) {
+    rawQuery.split("&").forEach((entry) => {
+      const [key, value] = entry.split("=");
+      if (key) query[key] = value || "";
+    });
+  }
+  return { path, query };
+}
+
+const activeNavKey = computed(() => {
+  if (route.path.startsWith("/student/graph-workspace")) return "student-graph";
+  if (route.path.startsWith("/student/enroll")) return "student-enroll";
+  if (route.path.startsWith("/student/report")) return "student-report";
+  if (route.path.startsWith("/student/questionnaire")) return "student-questionnaire";
+  if (route.path.startsWith("/student/dashboard")) return "student-dashboard";
+
+  if (route.path.startsWith("/teacher/content")) return "teacher-content";
+  if (route.path.startsWith("/teacher/kp-content/")) return "teacher-content";
+  if (route.path.startsWith("/teacher/resources/")) return "teacher-content";
+  if (route.path.startsWith("/teacher/workspace")) return "teacher-workspace";
+  if (route.path.startsWith("/teacher/evaluation")) {
+    const tab = String(route.query.tab || "stages");
+    if (tab === "indicators") return "teacher-evaluation-indicators";
+    if (tab === "imports") return "teacher-evaluation-imports";
+    if (tab === "behavior") return "teacher-evaluation-behavior";
+    return "teacher-evaluation-stages";
+  }
+  if (route.path.startsWith("/teacher/students")) {
+    const tab = String(route.query.tab || "class");
+    if (tab === "detail") return "teacher-students-detail";
+    if (tab === "rules") return "teacher-students-rules";
+    return "teacher-students-class";
+  }
+  if (route.path.startsWith("/teacher/review")) {
+    const tab = String(route.query.tab || "enrollment");
+    if (tab === "final") return "teacher-review-final";
+    return "teacher-review-enrollment";
+  }
+
+  if (route.path.startsWith("/admin/dashboard")) return "admin-dashboard";
+  if (route.path.startsWith("/admin/basic/courses")) return "admin-courses";
+  if (route.path.startsWith("/admin/basic/users")) return "admin-users";
+  if (route.path.startsWith("/admin/basic/teachers")) return "admin-teachers";
+  if (route.path.startsWith("/admin/evaluation/dimensions")) return "admin-dimensions";
+  if (route.path.startsWith("/admin/evaluation/persona")) return "admin-persona";
+  return "";
+});
+
+const currentSection = computed(() => currentNavTree.value.find((item) => item.children?.some((child) => child.key === activeNavKey.value)) ?? null);
+const currentNavItem = computed(() => currentSection.value?.children?.find((item) => item.key === activeNavKey.value) ?? null);
+
+const pageTitle = computed(() => {
+  if (route.path.startsWith("/student/kp-content/")) return "知识点学习";
+  if (route.path.startsWith("/teacher/kp-content/")) return "知识点内容";
+  if (route.path.startsWith("/teacher/resources/")) return "资源详情";
+  return currentNavItem.value?.label || String(route.meta?.title || "当前页面");
+});
+
+const pageSection = computed(() => {
+  if (route.path.startsWith("/student/kp-content/")) return "学习任务";
+  if (route.path.startsWith("/teacher/kp-content/") || route.path.startsWith("/teacher/resources/")) return "课程工作台";
+  return currentSection.value?.label || (routeGroup.value === "student" ? "学生端" : routeGroup.value === "teacher" ? "教师端" : routeGroup.value === "admin" ? "管理端" : "");
+});
+
 function logout() {
   clearToken();
-  router.push("/login");
+  router.push("/login/student");
 }
 
-function isNavActive(path: string) {
-  return route.path === path;
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
 }
 
-function navigateTo(path: string) {
+function openPreview() {
+  router.push({ path: "/student/dashboard", query: { ...route.query, preview: "1" } });
+}
+
+function navigateTo(target: string) {
+  const { path, query } = parseTarget(target);
   const preview = String(route.query.preview || "");
   const lastStudentSubject = (localStorage.getItem("da_student_last_subject") || "").trim();
 
-  if (routeGroup.value === "student" && path === "/student/graph-workspace") {
-    const q: Record<string, string> = {};
-    if (lastStudentSubject) q.subject = lastStudentSubject;
-    if (preview === "1") q.preview = "1";
-    router.push({ path, query: { ...route.query, ...q } });
+  if (routeGroup.value === "student" && path.startsWith("/student")) {
+    const nextQuery: Record<string, string> = { ...query };
+    if (path !== "/student/enroll" && lastStudentSubject && !nextQuery.subject) nextQuery.subject = lastStudentSubject;
+    if (preview === "1") nextQuery.preview = "1";
+    router.push({ path, query: { ...route.query, ...nextQuery } });
     return;
   }
-  if (routeGroup.value === "student" && preview === "1" && path.startsWith("/student")) {
-    router.push({ path, query: { ...route.query, preview: "1" } });
-    return;
-  }
+
   if (routeGroup.value === "teacher" && path.startsWith("/teacher")) {
     const subject = String(route.query.subject || getSavedTeacherSubject() || "");
-    router.push({ path, query: { ...route.query, ...buildTeacherSubjectQuery(subject) } });
+    router.push({ path, query: { ...buildTeacherSubjectQuery(subject), ...query } });
     return;
   }
-  router.push(path);
+
+  router.push({ path, query });
+}
+
+function goBackToMain() {
+  if (routeGroup.value === "student") {
+    router.push({ path: "/student/dashboard", query: { ...route.query } });
+    return;
+  }
+  if (routeGroup.value === "teacher") {
+    router.push({ path: "/teacher/workspace", query: { ...route.query } });
+  }
 }
 </script>
 
 <template>
-  <div class="app-root" :class="{ 'is-auth': isAuthPage }">
-    <!-- 顶部导航 -->
-    <header v-if="!isAuthPage" class="global-header glass-card">
-      <div class="header-content">
-        <!-- Logo -->
-        <div class="header-left">
-          <div class="logo-wrapper" @click="router.push('/')">
-            <div class="logo-icon"></div>
-            <div class="logo-text">
-              <span class="name">动态评价系统</span>
-              <span class="tag">DYNAMIC ASSESSMENT</span>
-            </div>
+  <div
+    class="pro-shell"
+    :class="{
+      'pro-shell--auth': isAuthPage,
+      'pro-shell--standalone': isStandaloneWorkspace,
+      'pro-shell--collapsed': sidebarCollapsed,
+    }"
+  >
+    <template v-if="isStandaloneWorkspace">
+      <main class="pro-standalone">
+        <router-view v-slot="{ Component }">
+          <transition name="page-fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </main>
+    </template>
+
+    <template v-else-if="isAuthPage">
+      <main class="pro-auth">
+        <router-view v-slot="{ Component }">
+          <transition name="page-fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </main>
+    </template>
+
+    <template v-else>
+      <aside class="pro-sider">
+        <div class="pro-brand" @click="router.push('/')">
+          <div class="pro-brand__logo">DA</div>
+          <div v-if="!sidebarCollapsed" class="pro-brand__text">
+            <strong>动态评价系统</strong>
+            <span>{{ routeGroup === "student" ? "学生学习后台" : routeGroup === "teacher" ? "教师工作后台" : "平台管理后台" }}</span>
           </div>
         </div>
 
-        <!-- 导航项 -->
-        <nav class="header-center">
-          <div class="nav-pills">
+        <nav class="pro-menu">
+          <section v-for="section in currentNavTree" :key="section.key" class="pro-menu__section">
             <button
-              v-for="item in navItems"
-              :key="item.path"
-              class="nav-pill"
-              :class="{ active: isNavActive(item.path) }"
-              @click="navigateTo(item.path)"
+              class="pro-menu__item pro-menu__item--section"
+              :class="{ active: currentSection?.key === section.key }"
+              @click="navigateTo(section.path)"
             >
-              {{ item.label }}
+              <el-icon v-if="section.icon" class="pro-menu__icon"><component :is="section.icon" /></el-icon>
+              <div v-if="!sidebarCollapsed" class="pro-menu__section-text">
+                <strong>{{ section.label }}</strong>
+                <span>{{ section.children?.length || 0 }} 个功能</span>
+              </div>
             </button>
-          </div>
-        </nav>
 
-        <!-- 用户操作 -->
-        <div class="header-right">
-          <div class="user-profile">
-            <div class="role-tag" :class="routeGroup">
+            <div v-if="section.children && !sidebarCollapsed" class="pro-menu__children">
+              <button
+                v-for="item in section.children"
+                :key="item.key"
+                class="pro-menu__item pro-menu__item--child"
+                :class="{ active: activeNavKey === item.key }"
+                @click="navigateTo(item.path)"
+              >
+                <span>{{ item.label }}</span>
+              </button>
+            </div>
+          </section>
+        </nav>
+      </aside>
+
+      <section class="pro-main">
+        <header class="pro-header">
+          <div class="pro-header__left">
+            <button class="pro-icon-btn" @click="toggleSidebar">
+              <el-icon><component :is="sidebarCollapsed ? Expand : Fold" /></el-icon>
+            </button>
+            <div class="pro-header__title">
+              <span class="pro-header__eyebrow">{{ pageSection }}</span>
+              <strong>{{ pageTitle }}</strong>
+            </div>
+          </div>
+
+          <div class="pro-header__right">
+            <el-tag round size="small" :type="isStudentPreview ? 'warning' : 'info'">
               {{
                 isStudentPreview
-                  ? "预览模式"
+                  ? "学生预览"
                   : routeGroup === "admin"
                     ? "管理员"
                     : routeGroup === "teacher"
                       ? "教师"
                       : "学生"
               }}
-            </div>
-            
-            <div class="action-buttons">
-              <el-tooltip v-if="(routeGroup === 'admin' && isAdmin) || (routeGroup === 'teacher' && isTeacher)" content="预览学生端" placement="bottom">
-                <button class="icon-btn" @click="router.push({ path: '/student/overview', query: { ...route.query, preview: '1' } })">
-                  <el-icon><Monitor /></el-icon>
-                </button>
-              </el-tooltip>
-              
-              <el-dropdown trigger="click">
-                <button class="icon-btn profile-trigger">
-                  <el-icon><User /></el-icon>
-                </button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item @click="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
+            </el-tag>
+
+            <el-tooltip
+              v-if="(routeGroup === 'admin' && isAdmin) || (routeGroup === 'teacher' && isTeacher)"
+              content="预览学生端"
+              placement="bottom"
+            >
+              <button class="pro-icon-btn" @click="openPreview">
+                <el-icon><Monitor /></el-icon>
+              </button>
+            </el-tooltip>
+
+            <el-dropdown trigger="click">
+              <button class="pro-icon-btn">
+                <el-icon><User /></el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
+        </header>
+
+        <div class="pro-content">
+          <router-view v-slot="{ Component }">
+            <transition name="page-fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
         </div>
-      </div>
-    </header>
+      </section>
+    </template>
 
-    <!-- 主体内容 -->
-    <main class="global-main" :class="{ 'has-header': !isAuthPage }">
-      <div class="main-content-wrapper">
-        <router-view v-slot="{ Component }">
-          <transition name="page-fade" mode="out-in">
-            <component :is="Component" />
-          </transition>
-        </router-view>
-      </div>
-    </main>
-
-    <!-- 全局加载状态 -->
     <div v-if="isLoading" class="loading-overlay">
       <div class="loading-spinner"></div>
-      <span>正在处理中...</span>
+      <span>正在处理...</span>
     </div>
+
+    <button v-if="isStandaloneWorkspace" class="pro-standalone-back" @click="goBackToMain">
+      <el-icon><ArrowLeft /></el-icon>
+      <span>返回主工作台</span>
+    </button>
   </div>
 </template>
 
-<style>
-/* 全局布局样式 */
-.app-root {
-  flex: 1 0 auto;
-  width: 100%;
-  max-width: 100vw;
+<style scoped>
+.pro-shell {
   min-height: 100vh;
+  background:
+    radial-gradient(circle at top right, rgba(79, 140, 255, 0.1), transparent 28%),
+    linear-gradient(180deg, #f3f6fb 0%, #f7f9fc 100%);
+}
+
+.pro-shell--standalone {
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.pro-auth,
+.pro-standalone {
+  min-height: 100vh;
+}
+
+.pro-standalone {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.pro-sider {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 248px;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: visible;
+  padding: 18px 14px;
+  background: linear-gradient(180deg, #0d1b2a 0%, #10253c 58%, #12314e 100%);
+  color: #d7e4f5;
+  box-shadow: 18px 0 36px rgba(8, 15, 30, 0.16);
+  z-index: 1100;
+  transition: width 0.22s ease;
 }
 
-.global-header {
-  position: absolute; /* 改为绝对定位以更好控制流 */
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 48px);
-  max-width: 1400px;
-  height: 64px;
-  z-index: 1000;
-  border-radius: var(--app-radius-lg);
+.pro-shell--collapsed .pro-sider {
+  width: 88px;
+}
+
+.pro-brand {
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  gap: 12px;
+  padding: 8px 10px 18px;
+  margin-bottom: 16px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.header-content {
+.pro-brand__logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #1677ff 0%, #46c2ff 100%);
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 16px 28px rgba(22, 119, 255, 0.28);
+}
+
+.pro-brand__text {
+  display: grid;
+  gap: 2px;
+}
+
+.pro-brand__text strong {
+  font-size: 16px;
+  color: #fff;
+}
+
+.pro-brand__text span {
+  font-size: 12px;
+  color: rgba(215, 228, 245, 0.72);
+}
+
+.pro-menu {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.pro-menu__section {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.pro-menu__children {
+  display: grid;
+  gap: 6px;
+  padding-left: 14px;
+  position: relative;
+}
+
+.pro-menu__children::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.pro-menu__item {
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(215, 228, 245, 0.82);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pro-menu__item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.pro-menu__item.active {
+  background: linear-gradient(90deg, rgba(22, 119, 255, 0.24) 0%, rgba(70, 194, 255, 0.16) 100%);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(120, 186, 255, 0.18);
+}
+
+.pro-menu__item--section {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.pro-menu__section-text {
+  display: grid;
+  gap: 2px;
+}
+
+.pro-menu__section-text strong {
+  font-size: 14px;
+  color: inherit;
+}
+
+.pro-menu__section-text span {
+  font-size: 11px;
+  color: rgba(215, 228, 245, 0.64);
+}
+
+.pro-menu__item--child {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  border-radius: 10px;
+}
+
+.pro-menu__icon {
+  font-size: 16px;
+}
+
+.pro-main {
+  min-height: 100vh;
+  margin-left: 248px;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.22s ease;
+}
+
+.pro-shell--collapsed .pro-main {
+  margin-left: 88px;
+}
+
+.pro-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  height: 72px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  row-gap: 10px;
+  padding: 0 24px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #e6edf5;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.04);
 }
 
-/* Logo 样式 */
-.logo-wrapper {
+.pro-header__left,
+.pro-header__right {
   display: flex;
   align-items: center;
   gap: 12px;
-  cursor: pointer;
 }
 
-.logo-icon {
-  width: 32px;
-  height: 32px;
-  background: var(--app-gradient-primary);
-  border-radius: var(--app-radius-sm);
-  box-shadow: 0 4px 10px rgba(79, 140, 255, 0.3);
+.pro-header__title {
+  display: grid;
+  gap: 2px;
 }
 
-.logo-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.logo-text .name {
-  font-size: var(--app-text-md);
-  font-weight: 800;
-  color: var(--app-text-main);
+.pro-header__title strong {
+  font-size: 20px;
   line-height: 1.2;
+  color: #1f2d3d;
 }
 
-.logo-text .tag {
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--app-text-light);
-  letter-spacing: 0.1em;
-}
-
-/* 导航药丸样式 */
-.header-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-}
-
-.nav-pills {
-  display: flex;
-  gap: var(--app-space-1);
-  background: color-mix(in srgb, var(--app-text-main) 5%, transparent);
-  padding: var(--app-space-1);
-  border-radius: 14px;
-}
-
-.nav-pill {
-  padding: var(--app-space-2) 18px;
-  border: none;
-  background: transparent;
-  color: var(--app-text-soft);
-  font-size: var(--app-text-base);
-  font-weight: 600;
-  border-radius: var(--app-radius-sm);
-  cursor: pointer;
-  transition: color var(--app-duration) var(--app-ease-out),
-    background var(--app-duration) var(--app-ease-out),
-    box-shadow var(--app-duration) var(--app-ease-out);
-}
-
-.nav-pill:hover {
-  color: var(--app-primary);
-}
-
-.nav-pill.active {
-  background: var(--app-card);
-  color: var(--app-primary);
-  box-shadow: var(--app-shadow-sm);
-}
-
-/* 右侧用户区域 */
-.header-right {
-  display: flex;
-  align-items: center;
-}
-
-.user-profile {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.role-tag {
-  padding: 4px 12px;
-  border-radius: 999px;
+.pro-header__eyebrow {
   font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  color: #7d8da1;
 }
 
-.role-tag.admin { background: color-mix(in srgb, var(--app-error) 12%, white); color: var(--app-error); }
-.role-tag.teacher { background: color-mix(in srgb, var(--app-success) 14%, white); color: var(--app-success); }
-.role-tag.student { background: var(--app-primary-soft); color: var(--app-primary); }
-
-.action-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.icon-btn {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: var(--app-card);
-  border: 1px solid var(--app-border-hover);
-  border-radius: var(--app-radius-sm);
-  color: var(--app-text-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.pro-icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #dce6f2;
+  background: #fff;
+  color: #526274;
+  display: grid;
+  place-items: center;
   cursor: pointer;
-  transition: color var(--app-duration) var(--app-ease-out),
-    border-color var(--app-duration) var(--app-ease-out),
-    background var(--app-duration) var(--app-ease-out);
+  transition: all 0.2s ease;
 }
 
-.icon-btn:hover {
-  color: var(--app-primary);
-  border-color: var(--app-primary);
-  background: var(--app-primary-soft);
+.pro-icon-btn:hover {
+  border-color: #c9d7e7;
+  background: #f8fbff;
+  color: #2f4d73;
 }
 
-/* 主体区域 */
-.global-main {
-  flex: 1 0 auto;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: visible;
+.pro-content {
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+  overflow: auto;
+  background: transparent;
 }
 
-.global-main.has-header {
-  padding-top: 96px; /* 留出 header 空间 + 间距 */
-  padding-bottom: var(--app-space-5);
+.pro-standalone-back {
+  position: fixed;
+  left: 20px;
+  top: 16px;
+  z-index: 1400;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #dce6f2;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #31455f;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
 }
 
-/* 页面内容随高度伸展，由 app-root 统一纵向滚动 */
-.main-content-wrapper {
-  flex: 1 0 auto;
-  overflow: visible;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 过渡动画 */
 .page-fade-enter-active,
 .page-fade-leave-active {
   transition: opacity var(--app-duration-slow) var(--app-ease-out),
@@ -381,7 +576,6 @@ function navigateTo(path: string) {
   transform: translateY(-10px);
 }
 
-/* 加载遮罩 */
 .loading-overlay {
   position: fixed;
   inset: 0;
@@ -407,31 +601,38 @@ function navigateTo(path: string) {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-@media (max-width: 1024px) {
-  .global-header {
-    width: calc(100% - 24px);
-    top: 12px;
+@media (max-width: 1100px) {
+  .pro-sider {
+    width: 88px;
+  }
+
+  .pro-main {
+    margin-left: 88px;
+  }
+
+  .pro-brand__text,
+  .pro-menu__children,
+  .pro-menu__section-text {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .pro-header {
     height: auto;
-    min-height: 64px;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    min-height: 72px;
+    padding: 14px 16px;
+    align-items: flex-start;
+    flex-direction: column;
   }
-  .header-center {
-    order: 3;
-    flex: 1 1 100%;
-    justify-content: flex-start;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    padding-bottom: 2px;
-  }
-  .nav-pills {
-    flex-wrap: nowrap;
-    width: max-content;
-    max-width: 100%;
+
+  .pro-content {
+    padding: 16px;
   }
 }
 </style>

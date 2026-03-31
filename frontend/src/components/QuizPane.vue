@@ -14,8 +14,21 @@ type Question = {
   ability_subtags?: string;
 };
 
-const props = defineProps<{ kpId: number | null; preview?: boolean }>();
-const emit = defineEmits<{ (e: "mastery-updated"): void }>();
+type QuizTab = "practice" | "records" | "wrong" | "review";
+
+const props = defineProps<{
+  kpId: number | null;
+  preview?: boolean;
+  /**
+   * 若外层使用子路由，则通过此字段驱动当前标签页。
+   * 不传/为 null 时保持组件内部默认行为。
+   */
+  routeView?: QuizTab | null;
+}>();
+const emit = defineEmits<{
+  (e: "mastery-updated"): void;
+  (e: "view-change", view: QuizTab): void;
+}>();
 
 const loading = ref(false);
 const questions = ref<Question[]>([]);
@@ -32,7 +45,7 @@ const blankAnswer = ref<string>("");
 const selfReport = ref<"guess" | "sure" | "unknown">("unknown");
 const startedAt = ref<number>(0);
 const lastResult = ref<{ correct: boolean; explanation: string } | null>(null);
-const viewTab = ref<"practice" | "history">("practice");
+const viewTab = ref<QuizTab>("practice");
 const historyLoading = ref(false);
 const historyItems = ref<any[]>([]);
 const historyStats = ref<{ total: number; correct: number; incorrect: number; accuracy: number }>({
@@ -67,6 +80,21 @@ const wrongPractice = ref({
   active: false,
   queue: [] as any[],
   index: 0,
+});
+
+watch(
+  () => props.routeView,
+  (v) => {
+    if (!v) return;
+    viewTab.value = v;
+  },
+  { immediate: true },
+);
+
+watch(viewTab, (v) => {
+  // 若外层已经按同一路由驱动了当前视图，就不需要反向再 push。
+  if (props.routeView && v === props.routeView) return;
+  emit("view-change", v);
 });
 
 const current = computed(() => currentQuestion.value);
@@ -466,6 +494,10 @@ watch(
     <div v-else>
       <el-tabs v-model="viewTab" type="border-card">
         <el-tab-pane label="作答" name="practice">
+          <el-alert type="info" :closable="false" show-icon class="quiz-view-help">
+            <template #title>功能范围与操作说明</template>
+            <div>功能范围：仅处理当前题的作答与提交反馈。操作顺序：先答题并选择「蒙的/确定」→ 点击「提交」→ 查看解析后进入下一题或继续错题。</div>
+          </el-alert>
           <div v-if="done">
             <el-result icon="success" title="已完成本知识点练习" sub-title="可点击“推荐下一步”查看建议" />
             <div class="action-row">
@@ -532,7 +564,11 @@ watch(
             </div>
           </div>
         </el-tab-pane>
-        <el-tab-pane label="记录" name="history">
+        <el-tab-pane label="记录概览" name="records">
+          <el-alert type="info" :closable="false" show-icon class="quiz-view-help">
+            <template #title>功能范围与操作说明</template>
+            <div>功能范围：查看总题数、正确率与趋势统计，并支持导出。操作顺序：先看统计卡片与趋势，再按需「刷新」或「导出 CSV」。</div>
+          </el-alert>
           <div v-if="historyLoading">
             <el-skeleton :rows="4" animated />
           </div>
@@ -581,75 +617,94 @@ watch(
                 />
               </el-table>
             </div>
+          </div>
+        </el-tab-pane>
 
-            <div class="wrong-container section-card">
-              <div class="section-header">
-                <div class="section-title">错题</div>
-              </div>
-              <div class="filter-controls">
-                <el-select v-model="wrongDays" size="small" style="width: 120px" @change="loadWrong">
-                  <el-option label="全部时间" :value="0" />
-                  <el-option label="近7天" :value="7" />
-                  <el-option label="近14天" :value="14" />
-                  <el-option label="近30天" :value="30" />
-                </el-select>
-                <el-select v-model="wrongType" size="small" style="width: 100px">
-                  <el-option label="全部类型" value="" />
-                  <el-option label="选择题" value="mcq" />
-                  <el-option label="填空题" value="blank" />
-                </el-select>
-                <el-button size="small" type="primary" @click="startWrongPractice">重练错题</el-button>
-              </div>
-              <el-table :data="wrongItems" size="small" style="width: 100%" max-height="240" v-loading="wrongLoading" empty-text="暂无错题">
-                <el-table-column prop="created_at" label="时间" width="160" />
-                <el-table-column prop="prompt" label="题干" />
-                <el-table-column prop="difficulty" label="难度" width="80" />
-                <el-table-column prop="type" label="类型" width="80" />
-                <el-table-column width="100" label="操作">
-                  <template #default="{ row }">
-                    <el-button size="small" type="primary" @click="redoWrong(row)">重做</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-              <div class="pagination-container">
-                <el-pagination
-                  background
-                  layout="prev, pager, next"
-                  :page-size="wrongPageSize"
-                  :total="wrongTotal"
-                  v-model:current-page="wrongPage"
-                  @current-change="loadWrong"
-                />
-              </div>
+        <el-tab-pane label="错题" name="wrong">
+          <el-alert type="info" :closable="false" show-icon class="quiz-view-help">
+            <template #title>功能范围与操作说明</template>
+            <div>功能范围：筛选错题并发起重练。操作顺序：先设置时间/题型筛选，再点击「重练错题」或对单题点「重做」。</div>
+          </el-alert>
+          <div class="wrong-container section-card">
+            <div class="section-header">
+              <div class="section-title">错题</div>
             </div>
+            <div class="filter-controls">
+              <el-select v-model="wrongDays" size="small" style="width: 120px" @change="loadWrong">
+                <el-option label="全部时间" :value="0" />
+                <el-option label="近7天" :value="7" />
+                <el-option label="近14天" :value="14" />
+                <el-option label="近30天" :value="30" />
+              </el-select>
+              <el-select v-model="wrongType" size="small" style="width: 100px">
+                <el-option label="全部类型" value="" />
+                <el-option label="选择题" value="mcq" />
+                <el-option label="填空题" value="blank" />
+              </el-select>
+              <el-button size="small" type="primary" @click="startWrongPractice">重练错题</el-button>
+            </div>
+            <el-table
+              :data="wrongItems"
+              size="small"
+              style="width: 100%"
+              max-height="240"
+              v-loading="wrongLoading"
+              empty-text="暂无错题"
+            >
+              <el-table-column prop="created_at" label="时间" width="160" />
+              <el-table-column prop="prompt" label="题干" />
+              <el-table-column prop="difficulty" label="难度" width="80" />
+              <el-table-column prop="type" label="类型" width="80" />
+              <el-table-column width="100" label="操作">
+                <template #default="{ row }">
+                  <el-button size="small" type="primary" @click="redoWrong(row)">重做</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div class="pagination-container">
+              <el-pagination
+                background
+                layout="prev, pager, next"
+                :page-size="wrongPageSize"
+                :total="wrongTotal"
+                v-model:current-page="wrongPage"
+                @current-change="loadWrong"
+              />
+            </div>
+          </div>
+        </el-tab-pane>
 
-            <div class="review-container section-card">
-              <div class="section-header">
-                <div class="section-title">复习</div>
-                <el-text type="info">待复习 {{ reviewTotal }}，已到期 {{ reviewDue }}</el-text>
-                <el-button size="small" @click="loadReview" :loading="reviewLoading">刷新</el-button>
-              </div>
-              <el-table
-                :data="reviewItems"
-                size="small"
-                style="width: 100%"
-                max-height="220"
-                v-loading="reviewLoading"
-                empty-text="暂无复习任务"
-              >
-                <el-table-column prop="due_at" label="到期时间" width="180" />
-                <el-table-column prop="prompt" label="题干" />
-                <el-table-column prop="difficulty" label="难度" width="80" />
-                <el-table-column prop="interval_days" label="间隔" width="80" />
-                <el-table-column label="状态" width="80">
-                  <template #default="{ row }">
-                    <el-tag size="small" :type="row.overdue ? 'danger' : 'info'">
-                      {{ row.overdue ? "已到期" : "待复习" }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-              </el-table>
+        <el-tab-pane label="复习" name="review">
+          <el-alert type="info" :closable="false" show-icon class="quiz-view-help">
+            <template #title>功能范围与操作说明</template>
+            <div>功能范围：查看复习队列与到期状态。操作顺序：优先处理「已到期」题目，必要时点击「刷新」同步最新复习安排。</div>
+          </el-alert>
+          <div class="review-container section-card">
+            <div class="section-header">
+              <div class="section-title">复习</div>
+              <el-text type="info">待复习 {{ reviewTotal }}，已到期 {{ reviewDue }}</el-text>
+              <el-button size="small" @click="loadReview" :loading="reviewLoading">刷新</el-button>
             </div>
+            <el-table
+              :data="reviewItems"
+              size="small"
+              style="width: 100%"
+              max-height="220"
+              v-loading="reviewLoading"
+              empty-text="暂无复习任务"
+            >
+              <el-table-column prop="due_at" label="到期时间" width="180" />
+              <el-table-column prop="prompt" label="题干" />
+              <el-table-column prop="difficulty" label="难度" width="80" />
+              <el-table-column prop="interval_days" label="间隔" width="80" />
+              <el-table-column label="状态" width="80">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="row.overdue ? 'danger' : 'info'">
+                    {{ row.overdue ? "已到期" : "待复习" }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -876,6 +931,10 @@ watch(
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+}
+
+.quiz-view-help {
+  margin-bottom: 14px;
 }
 
 .stats-grid {

@@ -4,6 +4,9 @@ import { ElMessage } from "element-plus";
 import { api } from "../api";
 import HoverTip from "./HoverTip.vue";
 import PortraitRadarChart from "./PortraitRadarChart.vue";
+import TeacherStudentHeaderBar from "./TeacherStudentHeaderBar.vue";
+import TeacherStudentHeroCard from "./TeacherStudentHeroCard.vue";
+import TeacherStudentStageList from "./TeacherStudentStageList.vue";
 
 type StudentRow = {
   user_id: number;
@@ -77,6 +80,7 @@ const savingFeedback = ref(false);
 const teacherIndicatorLoading = ref(false);
 const savingTeacherIndicators = ref(false);
 const detailTab = ref("summary");
+const recordTab = ref("overview");
 const emptyDetailMessage = ref("当前课程下还没有可展示的学生详情数据");
 const students = ref<StudentRow[]>([]);
 const selectedUserId = ref<number | null>(null);
@@ -126,6 +130,8 @@ const selectedStage = computed<StageHistoryItem | null>(() => {
   if (!selectedStageId.value) return stageHistory.value[stageHistory.value.length - 1] ?? null;
   return stageHistory.value.find((item) => item.stage_id === selectedStageId.value) ?? stageHistory.value[stageHistory.value.length - 1] ?? null;
 });
+
+const learningBehaviorOverview = computed(() => detail.value?.learning_behavior_overview ?? null);
 
 async function loadStudents() {
   if (!props.subject) return;
@@ -357,83 +363,13 @@ watch(
   <div class="student-detail-shell">
     <el-card class="panel-card" shadow="never" v-loading="loading">
       <template #header>
-        <div class="detail-header">
-          <div>
-            <div class="detail-title">学生详情</div>
-            <div class="detail-subtitle">这里看学生当前情况、阶段变化、老师填写内容和学习记录。</div>
-          </div>
-          <div class="detail-actions">
-            <el-select v-model="selectedUserId" placeholder="选择学生" style="width: 260px">
-              <el-option
-                v-for="student in students"
-                :key="student.user_id"
-                :label="`${student.username} ${student.full_name || ''}`"
-                :value="student.user_id"
-              />
-            </el-select>
-          </div>
-        </div>
+        <TeacherStudentHeaderBar :students="students" :selected-user-id="selectedUserId" @update:selected-user-id="selectedUserId = $event" />
       </template>
 
       <div v-if="detail" class="detail-grid" v-loading="detailLoading">
-        <section class="hero-card">
-          <div class="hero-label">当前情况</div>
-          <div class="hero-name">{{ detail.student.full_name || detail.student.username }}</div>
-          <div class="hero-meta">
-            {{ detail.profile.persona_label }} · {{ detail.profile.risk_level }}
-            <span v-if="detail.profile.current_stage_title">· {{ detail.profile.current_stage_title }}</span>
-            <span v-if="detail.profile.current_stage_trend">· {{ detail.profile.current_stage_trend }}</span>
-          </div>
-          <div class="hero-text">{{ selectedStage?.reason_summary || detail.profile.reason_summary }}</div>
-          <div class="hero-stats">
-            <div class="hero-stat">
-              <span>动态评分</span>
-              <strong>{{ Math.round((detail.profile.dynamic_score || 0) * 100) }}%</strong>
-            </div>
-            <div class="hero-stat">
-              <span>课程掌握度</span>
-              <strong>{{ Math.round((detail.profile.course_mastery || 0) * 100) }}%</strong>
-            </div>
-            <div class="hero-stat">
-              <span>学习投入</span>
-              <strong>{{ Math.round(((selectedStage?.engagement ?? detail.profile.engagement) || 0) * 100) }}%</strong>
-            </div>
-            <div class="hero-stat">
-              <span>学习成效</span>
-              <strong>{{ Math.round(((selectedStage?.achievement ?? detail.profile.achievement) || 0) * 100) }}%</strong>
-            </div>
-          </div>
-        </section>
+        <TeacherStudentHeroCard :detail="detail" :selected-stage="selectedStage" />
 
-        <section class="panel-card soft-card">
-          <div class="soft-title">阶段变化</div>
-          <div v-if="stageHistory.length" class="stage-list">
-            <button
-              v-for="item in stageHistory"
-              :key="item.stage_id"
-              type="button"
-              class="stage-item"
-              :class="{ 'stage-item--active': item.stage_id === selectedStageId }"
-              @click="selectedStageId = item.stage_id"
-            >
-              <div class="stage-item__top">
-                <span>阶段 {{ item.stage_order }}</span>
-                <el-tag size="small" :type="item.trend_label === '进步' ? 'success' : item.trend_label === '退步' ? 'danger' : 'info'">
-                  {{ item.trend_label }}
-                </el-tag>
-              </div>
-              <div class="stage-item__title">{{ item.stage_title }}</div>
-              <div class="stage-item__meta">
-                <span>{{ item.persona_label }}</span>
-                <span>{{ Math.round((item.dynamic_score || 0) * 100) }}%</span>
-              </div>
-            </button>
-          </div>
-          <div v-else class="empty-help">
-            <el-empty description="当前还没有阶段评价数据" />
-            <div class="empty-help__text">请先在教师端创建阶段，并为这门课导入阶段数据，系统才会生成这里的结果。</div>
-          </div>
-        </section>
+        <TeacherStudentStageList :stage-history="stageHistory" :selected-stage-id="selectedStageId" @select="selectedStageId = $event" />
         <section class="detail-tabs">
           <el-tabs v-model="detailTab">
             <el-tab-pane label="学生情况" name="summary">
@@ -650,111 +586,215 @@ watch(
 
             <el-tab-pane label="学习记录" name="records">
               <div class="tab-grid">
-                <section class="panel-card soft-card">
-                  <div class="soft-title">薄弱知识点</div>
-                  <div class="weak-list">
-                    <div v-for="item in weakPoints" :key="item.kp_id" class="weak-item">
-                      <div>
-                        <div class="weak-code">{{ item.code }}</div>
-                        <div class="weak-title">{{ item.title }}</div>
+                <section class="panel-card soft-card record-shell">
+                  <div class="soft-title">学习行为与记录（拆分视图）</div>
+                  <div class="teacher-sync-inline" style="margin-bottom: 10px">
+                    <span>操作说明</span>
+                    <HoverTip content="先看“总览”快速判断学习情况，再分别到“视频/练习/时间线/推荐/知识点”查看证据。所有原有功能都保留，只是重新归位，减少拥挤。" />
+                  </div>
+                  <el-tabs v-model="recordTab" class="record-tabs">
+                    <el-tab-pane label="总览" name="overview">
+                      <div class="record-overview-grid">
+                        <el-card shadow="never" class="record-metric-card">
+                          <div class="record-metric-card__label">登录（30天）</div>
+                          <div class="record-metric-card__value">
+                            {{ learningBehaviorOverview?.login_count_30d ?? 0 }}
+                          </div>
+                          <div class="record-metric-card__hint">覆盖天数 {{ learningBehaviorOverview?.login_days_30d ?? 0 }}</div>
+                        </el-card>
+                        <el-card shadow="never" class="record-metric-card">
+                          <div class="record-metric-card__label">活跃天数（14天）</div>
+                          <div class="record-metric-card__value">
+                            {{ learningBehaviorOverview?.active_days_14d ?? 0 }}
+                          </div>
+                          <div class="record-metric-card__hint">连续 {{ learningBehaviorOverview?.consecutive_days_14d ?? 0 }} 天</div>
+                        </el-card>
+                        <el-card shadow="never" class="record-metric-card">
+                          <div class="record-metric-card__label">学习时长（14天）</div>
+                          <div class="record-metric-card__value">
+                            {{ Math.round((learningBehaviorOverview?.study_duration_minutes_14d ?? 0) as number) }} 分钟
+                          </div>
+                          <div class="record-metric-card__hint">视频+练习+小测时长合计</div>
+                        </el-card>
+                        <el-card shadow="never" class="record-metric-card">
+                          <div class="record-metric-card__label">视频完成率（30天）</div>
+                          <div class="record-metric-card__value">
+                            {{ Math.round(((learningBehaviorOverview?.avg_video_completion_30d ?? 0) as number) * 100) }}%
+                          </div>
+                          <div class="record-metric-card__hint">
+                            开始 {{ learningBehaviorOverview?.video_started_30d ?? 0 }} · 完成 {{ learningBehaviorOverview?.video_completed_30d ?? 0 }}
+                          </div>
+                        </el-card>
+                        <el-card shadow="never" class="record-metric-card">
+                          <div class="record-metric-card__label">练习正确率（30天）</div>
+                          <div class="record-metric-card__value">
+                            {{ Math.round(((learningBehaviorOverview?.practice_accuracy_30d ?? 0) as number) * 100) }}%
+                          </div>
+                          <div class="record-metric-card__hint">练习次数 {{ learningBehaviorOverview?.practice_attempts_30d ?? 0 }}</div>
+                        </el-card>
+                        <el-card shadow="never" class="record-metric-card record-metric-card--wide">
+                          <div class="record-metric-card__label">最近行为类型（30天 Top10）</div>
+                          <div v-if="(learningBehaviorOverview?.top_event_types_30d?.length ?? 0) > 0" class="record-chips">
+                            <span v-for="row in learningBehaviorOverview.top_event_types_30d" :key="row.event_type">
+                              {{ row.event_type }} {{ row.count }}
+                            </span>
+                          </div>
+                          <div v-else class="record-metric-card__hint">暂无可汇总的行为类型</div>
+                        </el-card>
                       </div>
-                      <el-tag type="warning">{{ Math.round((item.mastery || 0) * 100) }}%</el-tag>
-                    </div>
-                  </div>
-                </section>
+                    </el-tab-pane>
 
-                <section class="panel-card soft-card">
-                  <div class="soft-title">知识点情况</div>
-                  <el-table :data="detail.mastery_map" size="small" max-height="320">
-                    <el-table-column prop="code" label="编码" width="120" />
-                    <el-table-column prop="title" label="知识点" min-width="180" />
-                    <el-table-column prop="status" label="状态" width="100" />
-                    <el-table-column prop="mastery" label="掌握度" width="100">
-                      <template #default="{ row }">
-                        {{ Math.round((row.mastery || 0) * 100) }}%
-                      </template>
-                    </el-table-column>
-                    <el-table-column prop="reason_summary" label="依据" min-width="220" />
-                  </el-table>
-                </section>
+                    <el-tab-pane label="视频学习" name="video">
+                      <div class="teacher-sync-inline">
+                        <span>功能范围</span>
+                        <HoverTip content="查看最近视频进度、是否完成、更新时间；用于判断是否只打开不学习、是否卡在同一知识点视频。" />
+                      </div>
+                      <el-table :data="detail.recent_video" size="small" max-height="420">
+                        <el-table-column prop="kp_id" label="知识点ID" width="110" />
+                        <el-table-column label="观看进度" min-width="180">
+                          <template #default="{ row }">
+                            <div class="progress-cell">
+                              <el-progress
+                                :percentage="
+                                  Math.round(
+                                    Math.min(
+                                      100,
+                                      Number(row.duration_seconds || 0) > 0
+                                        ? (Number(row.watched_seconds || 0) / Number(row.duration_seconds || 1)) * 100
+                                        : 0
+                                    )
+                                  )
+                                "
+                                :stroke-width="8"
+                              />
+                            </div>
+                          </template>
+                        </el-table-column>
+                        <el-table-column prop="completed" label="完成" width="90">
+                          <template #default="{ row }">
+                            <el-tag :type="row.completed ? 'success' : 'info'">{{ row.completed ? "已完成" : "进行中" }}</el-tag>
+                          </template>
+                        </el-table-column>
+                        <el-table-column prop="updated_at" label="更新时间" min-width="180">
+                          <template #default="{ row }">
+                            {{ new Date(row.updated_at).toLocaleString() }}
+                          </template>
+                        </el-table-column>
+                      </el-table>
+                    </el-tab-pane>
 
-                <section class="panel-card soft-card">
-                  <div class="soft-title">学习行为记录</div>
-                  <div class="timeline-list">
-                    <div v-for="item in detail.behavior_timeline" :key="item.id" class="timeline-item">
-                      <div class="timeline-type">{{ item.event_type }}</div>
-                      <div class="timeline-time">{{ new Date(item.created_at).toLocaleString() }}</div>
-                      <div class="timeline-json">{{ item.value_json }}</div>
-                    </div>
-                  </div>
-                </section>
+                    <el-tab-pane label="练习与小测" name="practice">
+                      <div class="teacher-sync-inline">
+                        <span>功能范围</span>
+                        <HoverTip content="查看最近练习作答、小测记录与耗时；用于判断练习量、正确率与耗时是否异常。" />
+                      </div>
+                      <div class="record-split-grid">
+                        <el-card class="panel-card soft-card" shadow="never">
+                          <div class="soft-title">最近练习记录</div>
+                          <el-table :data="detail.recent_practice" size="small" max-height="360">
+                            <el-table-column prop="kp_id" label="知识点ID" width="110" />
+                            <el-table-column prop="question_id" label="题目ID" width="100" />
+                            <el-table-column prop="correct" label="结果" width="90">
+                              <template #default="{ row }">
+                                <el-tag :type="row.correct ? 'success' : 'danger'">{{ row.correct ? "正确" : "错误" }}</el-tag>
+                              </template>
+                            </el-table-column>
+                            <el-table-column prop="duration_ms" label="耗时(ms)" width="110" />
+                            <el-table-column prop="created_at" label="提交时间" min-width="180">
+                              <template #default="{ row }">
+                                {{ new Date(row.created_at).toLocaleString() }}
+                              </template>
+                            </el-table-column>
+                          </el-table>
+                        </el-card>
 
-                <section class="panel-card soft-card">
-                  <div class="soft-title">最近推荐</div>
-                  <div class="timeline-list">
-                    <div v-for="item in detail.recommendations" :key="item.id" class="timeline-item">
-                      <div class="timeline-type">推荐到知识点 {{ item.target_kp_id }}</div>
-                      <div class="timeline-time">{{ new Date(item.created_at).toLocaleString() }}</div>
-                      <div class="timeline-json">{{ item.reason_summary }}</div>
-                    </div>
-                  </div>
-                </section>
+                        <el-card class="panel-card soft-card" shadow="never">
+                          <div class="soft-title">最近小测记录</div>
+                          <el-table :data="detail.recent_quiz" size="small" max-height="360">
+                            <el-table-column prop="kp_id" label="知识点ID" width="110" />
+                            <el-table-column prop="score" label="得分" width="90">
+                              <template #default="{ row }">{{ Math.round((row.score || 0) * 100) }}%</template>
+                            </el-table-column>
+                            <el-table-column prop="passed" label="通过" width="90">
+                              <template #default="{ row }">
+                                <el-tag :type="row.passed ? 'success' : 'info'">{{ row.passed ? "通过" : "未通过" }}</el-tag>
+                              </template>
+                            </el-table-column>
+                            <el-table-column prop="duration_ms" label="耗时(ms)" width="110" />
+                            <el-table-column prop="created_at" label="提交时间" min-width="180">
+                              <template #default="{ row }">
+                                {{ new Date(row.created_at).toLocaleString() }}
+                              </template>
+                            </el-table-column>
+                          </el-table>
+                        </el-card>
+                      </div>
+                    </el-tab-pane>
 
-                <section class="activity-grid">
-                  <el-card class="panel-card soft-card" shadow="never">
-                    <div class="soft-title">最近练习记录</div>
-                    <el-table :data="detail.recent_practice" size="small" max-height="260">
-              <el-table-column prop="kp_id" label="知识点ID" width="110" />
-              <el-table-column prop="question_id" label="题目ID" width="100" />
-              <el-table-column prop="correct" label="结果" width="90">
-                <template #default="{ row }">
-                  <el-tag :type="row.correct ? 'success' : 'danger'">{{ row.correct ? "正确" : "错误" }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="duration_ms" label="耗时(ms)" width="110" />
-              <el-table-column prop="created_at" label="提交时间" min-width="180">
-                <template #default="{ row }">
-                  {{ new Date(row.created_at).toLocaleString() }}
-                </template>
-              </el-table-column>
-                    </el-table>
-                  </el-card>
+                    <el-tab-pane label="行为时间线" name="timeline">
+                      <div class="teacher-sync-inline">
+                        <span>功能范围</span>
+                        <HoverTip content="查看系统自动写入的行为事件原始记录（最多30条）。用于核对：登录、资源访问、练习提交、视频进度、图谱查看、推荐点击等是否真实发生。" />
+                      </div>
+                      <div class="timeline-list">
+                        <div v-for="item in detail.behavior_timeline" :key="item.id" class="timeline-item">
+                          <div class="timeline-type">{{ item.event_type }}</div>
+                          <div class="timeline-time">{{ new Date(item.created_at).toLocaleString() }}</div>
+                          <div class="timeline-json">{{ item.value_json }}</div>
+                        </div>
+                      </div>
+                    </el-tab-pane>
 
-                  <el-card class="panel-card soft-card" shadow="never">
-                    <div class="soft-title">最近视频学习</div>
-                    <el-table :data="detail.recent_video" size="small" max-height="260">
-              <el-table-column prop="kp_id" label="知识点ID" width="110" />
-              <el-table-column label="观看进度" min-width="180">
-                <template #default="{ row }">
-                  <div class="progress-cell">
-                    <el-progress
-                      :percentage="
-                        Math.round(
-                          Math.min(
-                            100,
-                            Number(row.duration_seconds || 0) > 0
-                              ? (Number(row.watched_seconds || 0) / Number(row.duration_seconds || 1)) * 100
-                              : 0
-                          )
-                        )
-                      "
-                      :stroke-width="8"
-                    />
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column prop="completed" label="完成" width="90">
-                <template #default="{ row }">
-                  <el-tag :type="row.completed ? 'success' : 'info'">{{ row.completed ? "已完成" : "进行中" }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="updated_at" label="更新时间" min-width="180">
-                <template #default="{ row }">
-                  {{ new Date(row.updated_at).toLocaleString() }}
-                </template>
-              </el-table-column>
-                    </el-table>
-                  </el-card>
+                    <el-tab-pane label="推荐记录" name="reco">
+                      <div class="teacher-sync-inline">
+                        <span>功能范围</span>
+                        <HoverTip content="查看系统推荐到哪些知识点、推荐理由与发生时间；用于核对推荐链路是否推动学习。" />
+                      </div>
+                      <div class="timeline-list">
+                        <div v-for="item in detail.recommendations" :key="item.id" class="timeline-item">
+                          <div class="timeline-type">推荐到知识点 {{ item.target_kp_id }}</div>
+                          <div class="timeline-time">{{ new Date(item.created_at).toLocaleString() }}</div>
+                          <div class="timeline-json">{{ item.reason_summary }}</div>
+                        </div>
+                      </div>
+                    </el-tab-pane>
+
+                    <el-tab-pane label="知识点" name="kps">
+                      <div class="teacher-sync-inline">
+                        <span>功能范围</span>
+                        <HoverTip content="查看知识点掌握度、薄弱点与系统依据；用于定位学生卡在哪些知识点。" />
+                      </div>
+                      <div class="record-split-grid">
+                        <section class="panel-card soft-card">
+                          <div class="soft-title">薄弱知识点</div>
+                          <div class="weak-list">
+                            <div v-for="item in weakPoints" :key="item.kp_id" class="weak-item">
+                              <div>
+                                <div class="weak-code">{{ item.code }}</div>
+                                <div class="weak-title">{{ item.title }}</div>
+                              </div>
+                              <el-tag type="warning">{{ Math.round((item.mastery || 0) * 100) }}%</el-tag>
+                            </div>
+                          </div>
+                        </section>
+
+                        <section class="panel-card soft-card">
+                          <div class="soft-title">知识点情况</div>
+                          <el-table :data="detail.mastery_map" size="small" max-height="420">
+                            <el-table-column prop="code" label="编码" width="120" />
+                            <el-table-column prop="title" label="知识点" min-width="180" />
+                            <el-table-column prop="status" label="状态" width="100" />
+                            <el-table-column prop="mastery" label="掌握度" width="100">
+                              <template #default="{ row }">
+                                {{ Math.round((row.mastery || 0) * 100) }}%
+                              </template>
+                            </el-table-column>
+                            <el-table-column prop="reason_summary" label="依据" min-width="220" />
+                          </el-table>
+                        </section>
+                      </div>
+                    </el-tab-pane>
+                  </el-tabs>
                 </section>
               </div>
             </el-tab-pane>
@@ -777,26 +817,6 @@ watch(
 .student-detail-shell {
   display: grid;
   gap: 16px;
-}
-
-.detail-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-
-.detail-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--app-ink);
-}
-
-.detail-subtitle {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--app-ink-soft);
 }
 
 .detail-grid {
@@ -849,68 +869,66 @@ watch(
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.hero-card {
-  padding: 22px;
-  border-radius: 20px;
-  background: #ffffff;
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-soft);
-  color: var(--app-ink);
+.record-shell :deep(.el-tabs__header) {
+  margin-bottom: 12px;
+}
+
+.record-overview-grid {
   display: grid;
-  gap: 10px;
-}
-
-.hero-label {
-  font-size: 12px;
-  color: #5c7da8;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-weight: 700;
-}
-
-.hero-name {
-  font-size: 28px;
-  font-weight: 800;
-  color: #22395b;
-}
-
-.hero-meta {
-  font-size: 14px;
-  font-weight: 700;
-  color: #35577f;
-}
-
-.hero-text {
-  font-size: 14px;
-  line-height: 1.7;
-  color: #587596;
-}
-
-.hero-stats {
-  display: grid;
-  gap: 10px;
+  gap: 12px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.hero-stat {
-  padding: 12px;
+.record-metric-card {
   border-radius: 16px;
-  background: #ffffff;
   border: 1px solid var(--app-border);
   box-shadow: none;
-  display: grid;
-  gap: 4px;
 }
 
-.hero-stat span {
+.record-metric-card--wide {
+  grid-column: 1 / -1;
+}
+
+.record-metric-card__label {
   font-size: 12px;
-  color: #6f86a3;
+  color: var(--app-ink-soft);
 }
 
-.hero-stat strong {
-  font-size: 20px;
+.record-metric-card__value {
+  margin-top: 6px;
+  font-size: 22px;
   font-weight: 800;
-  color: #2a4d78;
+  color: var(--app-ink);
+}
+
+.record-metric-card__hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--app-ink-soft);
+}
+
+.record-chips {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.record-chips span {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #dbe6f2;
+  background: #f6faff;
+  color: #46658b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.record-split-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .soft-card {
@@ -922,55 +940,6 @@ watch(
   font-weight: 700;
   color: var(--app-ink);
   margin-bottom: 12px;
-}
-
-.stage-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-}
-
-.stage-item {
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid var(--app-border);
-  background: #fcfdff;
-  display: grid;
-  gap: 8px;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.stage-item:hover,
-.stage-item--active {
-  border-color: #bfd3ea;
-  box-shadow: var(--app-shadow-soft);
-  transform: translateY(-1px);
-}
-
-.stage-item__top,
-.stage-item__meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-}
-
-.stage-item__top {
-  font-size: 12px;
-  color: #567290;
-}
-
-.stage-item__title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--app-ink);
-}
-
-.stage-item__meta {
-  font-size: 12px;
-  color: #66809a;
 }
 
 .stage-focus-grid {
@@ -1091,6 +1060,53 @@ watch(
   gap: 8px;
 }
 
+.detail-grid :deep(.el-form-item__label) {
+  font-weight: 700;
+  color: #48627f;
+}
+
+.detail-grid :deep(.el-textarea__inner),
+.detail-grid :deep(.el-input__wrapper),
+.detail-grid :deep(.el-input-number),
+.detail-grid :deep(.el-select__wrapper) {
+  border-radius: 14px;
+}
+
+.detail-grid :deep(.el-textarea__inner) {
+  min-height: 112px;
+  line-height: 1.7;
+}
+
+.detail-grid :deep(.el-button + .el-button) {
+  margin-left: 10px;
+}
+
+.detail-grid :deep(.el-table) {
+  --el-table-border-color: #e1eaf2;
+  --el-table-header-bg-color: #f7faff;
+  --el-table-row-hover-bg-color: #f5f9ff;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.detail-grid :deep(.el-table th.el-table__cell) {
+  font-weight: 700;
+  color: #4f6883;
+}
+
+.detail-grid :deep(.el-table td.el-table__cell) {
+  color: var(--app-ink);
+}
+
+.detail-grid :deep(.el-tabs__item) {
+  height: 38px;
+  font-weight: 700;
+}
+
+.detail-grid :deep(.el-tabs__item.is-active) {
+  color: var(--app-primary);
+}
+
 .teacher-sync-inline {
   display: inline-flex;
   align-items: center;
@@ -1190,16 +1206,26 @@ watch(
 
 @media (max-width: 1100px) {
   .activity-grid,
-  .stage-focus-grid,
-  .hero-stats {
+  .stage-focus-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .record-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .record-split-grid {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 760px) {
   .activity-grid,
-  .stage-focus-grid,
-  .hero-stats {
+  .stage-focus-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .record-overview-grid {
     grid-template-columns: 1fr;
   }
 }

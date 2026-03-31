@@ -29,9 +29,31 @@ const courses = ref<CourseItem[]>([]);
 const loading = ref(false);
 const processingId = ref<number | null>(null);
 const rows = ref<ReviewRow[]>([]);
+const activeStatus = ref<"pending" | "approved" | "rejected" | "all">("pending");
 
 const selectedCourseId = computed<number | null>(() => courses.value.find((item) => item.title === subject.value)?.id ?? null);
-const pendingRows = computed(() => rows.value.filter((item) => item.status === "pending"));
+
+const activeStatusLabel = computed(() => {
+  if (activeStatus.value === "pending") return "待审核";
+  if (activeStatus.value === "approved") return "已通过";
+  if (activeStatus.value === "rejected") return "已拒绝";
+  return "全部";
+});
+
+const metaText = computed(() => `当前课程：${subject.value || "未选择"}，${activeStatusLabel.value} ${rows.value.length} 条`);
+
+const activeHelp = computed(() => {
+  if (activeStatus.value === "pending") {
+    return { title: "功能范围", text: "查看当前课程所有待审核报名申请，并对每条执行“通过/拒绝”。通过将创建 `Enrollment` 并推送通知；拒绝需要输入拒绝原因并推送通知。", action: "优先从列表顶部处理待审核项。" };
+  }
+  if (activeStatus.value === "approved") {
+    return { title: "功能范围", text: "查看已通过的报名申请记录（只做审核结果回顾）。", action: "如需继续处理期末收口，请使用顶部按钮前往最终评分确认。" };
+  }
+  if (activeStatus.value === "rejected") {
+    return { title: "功能范围", text: "查看已拒绝的报名申请记录（只做审核结果回顾）。", action: "如果学生后续再次申请，需要重新提交报名理由并等待本页审核。" };
+  }
+  return { title: "功能范围", text: "查看该课程报名申请的全量记录（包含待审核/已通过/已拒绝），用于复盘与排查。", action: "通过状态筛选可以更快定位需要处理的记录。" };
+});
 function statusLabel(status: string) {
   if (status === "pending") return "待审核";
   if (status === "approved") return "已通过";
@@ -51,7 +73,7 @@ async function loadCourses() {
 
 function syncQuery() {
   saveTeacherSubject(subject.value);
-  router.replace({ path: "/teacher/enrollments", query: buildTeacherSubjectQuery(subject.value) });
+  router.replace({ path: "/teacher/review", query: { ...buildTeacherSubjectQuery(subject.value), tab: "enrollment" } });
 }
 
 async function loadRows() {
@@ -59,9 +81,10 @@ async function loadRows() {
     rows.value = [];
     return;
   }
+  const statusPart = activeStatus.value && activeStatus.value !== "all" ? `&status=${encodeURIComponent(activeStatus.value)}` : "";
   loading.value = true;
   try {
-    const res = await api.get(`/enrollment/teacher/applications?course_id=${selectedCourseId.value}`);
+    const res = await api.get(`/enrollment/teacher/applications?course_id=${selectedCourseId.value}${statusPart}`);
     rows.value = res.data?.items ?? [];
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载报名审核列表失败");
@@ -108,9 +131,8 @@ async function reject(row: ReviewRow) {
   }
 }
 
-watch(selectedCourseId, () => {
-  loadRows();
-});
+watch(selectedCourseId, () => loadRows());
+watch(activeStatus, () => loadRows());
 watch(subject, () => syncQuery());
 watch(() => route.query.subject, (value) => {
   const next = String(value || "").trim();
@@ -131,10 +153,10 @@ onMounted(async () => {
       badge="Teacher Review"
       title="老师报名审核独立页"
       subtitle="这里单独处理课程报名，不再挤在课程管理弹窗里。"
-      :meta-text="`当前课程：${subject || '未选择'}，待审核 ${pendingRows.length} 条`"
+      :meta-text="metaText"
     >
-      <el-button @click="router.push({ path: '/teacher/courses', query: buildTeacherSubjectQuery(subject) })">返回教师首页</el-button>
-      <HintButton tip="切到最终评分确认页，完成学期末收口。" @click="router.push({ path: '/teacher/final-review', query: buildTeacherSubjectQuery(subject) })">
+      <el-button @click="router.push({ path: '/teacher/workspace', query: buildTeacherSubjectQuery(subject) })">返回课程工作台</el-button>
+      <HintButton tip="切到最终评分确认页，完成学期末收口。" @click="router.push({ path: '/teacher/review', query: { ...buildTeacherSubjectQuery(subject), tab: 'final' } })">
         去最终评分确认
       </HintButton>
       <el-button type="primary" @click="loadRows">刷新</el-button>
@@ -147,6 +169,21 @@ onMounted(async () => {
             <div class="review-head__eyebrow">Enrollment Queue</div>
             <div class="review-head__title">报名申请列表</div>
           </div>
+        </div>
+
+        <div class="review-tabs-wrap">
+          <el-tabs v-model="activeStatus" class="review-tabs">
+            <el-tab-pane label="待审核" name="pending" />
+            <el-tab-pane label="已通过" name="approved" />
+            <el-tab-pane label="已拒绝" name="rejected" />
+            <el-tab-pane label="全部" name="all" />
+          </el-tabs>
+        </div>
+
+        <div class="review-help">
+          <div class="review-help__title">{{ activeHelp.title }}</div>
+          <div class="review-help__text">{{ activeHelp.text }}</div>
+          <div class="review-help__action">{{ activeHelp.action }}</div>
         </div>
       </template>
 
@@ -188,7 +225,7 @@ onMounted(async () => {
               >
                 拒绝
               </el-button>
-              <el-button size="small" @click="router.push({ path: '/teacher/students', query: buildTeacherSubjectQuery(subject, { user_id: String(row.student_id) }) })">
+              <el-button size="small" @click="router.push({ path: '/teacher/students', query: buildTeacherSubjectQuery(subject, { tab: 'detail', user_id: String(row.student_id) }) })">
                 看学生详情
               </el-button>
             </div>
@@ -234,5 +271,41 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.review-tabs-wrap {
+  margin-top: 10px;
+}
+
+.review-tabs :deep(.el-tabs__nav) {
+  margin: 0;
+}
+
+.review-help {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  background: #fafbfd;
+  display: grid;
+  gap: 6px;
+}
+
+.review-help__title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #24374f;
+}
+
+.review-help__text {
+  font-size: 13px;
+  color: #5a6f86;
+  line-height: 1.6;
+}
+
+.review-help__action {
+  font-size: 13px;
+  color: #6a82a0;
+  font-weight: 700;
 }
 </style>

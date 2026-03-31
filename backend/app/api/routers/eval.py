@@ -1,16 +1,18 @@
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.api.deps import get_current_user
+from app.api.deps import assert_student_kp_access, assert_student_subject_access, get_current_user
 from app.db.models import (
     Course,
     KnowledgePoint,
+    LearningBehaviorEvent,
     Mastery,
     PracticeAttempt,
     QuizAttempt,
+    RecommendationLog,
     ReviewSchedule,
     VideoProgress,
 )
@@ -160,7 +162,12 @@ def mastery(
     session: Session = Depends(get_session),
     user=Depends(get_current_user),
 ):
-    kp = session.get(KnowledgePoint, kp_id)
+    if getattr(user, "role", None) == "student":
+        kp = assert_student_kp_access(session, int(user.id), kp_id)
+    else:
+        kp = session.get(KnowledgePoint, kp_id)
+    if kp is None:
+        raise HTTPException(status_code=404, detail="知识点不存在")
     m = session.exec(select(Mastery).where(Mastery.user_id == user.id, Mastery.kp_id == kp_id)).first()
     if m is None:
         m = upsert_mastery(session, user_id=user.id, kp_id=kp_id, subject=kp.subject, grade=kp.grade)
@@ -183,6 +190,8 @@ def profile(
     session: Session = Depends(get_session),
     user=Depends(get_current_user),
 ):
+    if getattr(user, "role", None) == "student":
+        assert_student_subject_access(session, int(user.id), subject)
     refresh_subject_mastery(session, user_id=user.id, subject=subject, grade=grade)
     snapshot = recalculate_profile_snapshot(
         session,
@@ -328,6 +337,118 @@ def profile(
         user_id=user.id,
         kp_ids=kp_ids,
     )
+    now = datetime.utcnow()
+    since_30d = now - timedelta(days=30)
+    since_14d = now - timedelta(days=14)
+    course_id = int(course.id) if course and course.id is not None else None
+
+    behavior_scope_stmt = select(LearningBehaviorEvent).where(
+        LearningBehaviorEvent.user_id == user.id,
+        LearningBehaviorEvent.created_at >= since_30d,
+    )
+    if course_id is not None:
+        behavior_scope_stmt = behavior_scope_stmt.where(
+            LearningBehaviorEvent.course_id == course_id
+        )
+    if kp_ids:
+        behavior_scope_stmt = behavior_scope_stmt.where(
+            LearningBehaviorEvent.kp_id.in_(kp_ids)
+        )
+    behavior_rows_30d = session.exec(
+        behavior_scope_stmt.order_by(LearningBehaviorEvent.created_at.desc()).limit(800)
+    ).all()
+    behavior_rows_14d = [row for row in behavior_rows_30d if row.created_at and row.created_at >= since_14d]
+
+    practice_rows_30d = session.exec(
+        select(PracticeAttempt)
+        .where(
+            PracticeAttempt.user_id == user.id,
+            PracticeAttempt.kp_id.in_(kp_ids) if kp_ids else True,
+            PracticeAttempt.created_at >= since_30d,
+        )
+        .order_by(PracticeAttempt.created_at.desc())
+        .limit(100)
+    ).all()
+    quiz_rows_30d = session.exec(
+        select(QuizAttempt)
+        .where(
+            QuizAttempt.user_id == user.id,
+            QuizAttempt.kp_id.in_(kp_ids) if kp_ids else True,
+            QuizAttempt.created_at >= since_30d,
+        )
+        .order_by(QuizAttempt.created_at.desc())
+        .limit(80)
+    ).all()
+    video_rows_30d = session.exec(
+        select(VideoProgress)
+        .where(
+            VideoProgress.user_id == user.id,
+            VideoProgress.kp_id.in_(kp_ids) if kp_ids else True,
+            VideoProgress.updated_at >= since_30d,
+        )
+        .order_by(VideoProgress.updated_at.desc())
+        .limit(80)
+    ).all()
+    recommendation_rows_30d = session.exec(
+        select(RecommendationLog)
+        .where(
+            RecommendationLog.user_id == user.id,
+            RecommendationLog.subject == subject,
+            RecommendationLog.grade == grade,
+            RecommendationLog.created_at >= since_30d,
+        )
+        .order_by(RecommendationLog.created_at.desc())
+        .limit(30)
+    ).all()
+
+    login_rows_30d = [row for row in behavior_rows_30d if (row.event_type or "").strip().lower() == "login"]
+    login_days_30d = {row.created_at.date() for row in login_rows_30d if row.created_at}
+    practice_14d = [row for row in practice_rows_30d if row.created_at and row.created_at >= since_14d]
+    quiz_14d = [row for row in quiz_rows_30d if row.created_at and row.created_at >= since_14d]
+    video_14d = [row for row in video_rows_30d if row.updated_at and row.updated_at >= since_14d]
+    active_days_14d = (
+        {row.created_at.date() for row in behavior_rows_14d if row.created_at}
+        | {row.created_at.date() for row in practice_14d if row.created_at}
+        | {row.created_at.date() for row in quiz_14d if row.created_at}
+        | {row.updated_at.date() for row in video_14d if row.updated_at}
+    )
+    consecutive_days_14d = 0
+    if active_days_14d:
+        ordered = sorted(active_days_14d, reverse=True)
+        consecutive_days_14d = 1
+        for idx in range(1, len(ordered)):
+            if (ordered[idx - 1] - ordered[idx]).days == 1:
+                consecutive_days_14d += 1
+                continue
+            break
+    study_seconds_14d = (
+        sum(max(0, int(row.duration_ms or 0)) for row in practice_14d) / 1000.0
+        + sum(max(0, int(row.duration_ms or 0)) for row in quiz_14d) / 1000.0
+        + sum(max(0.0, float(row.watched_seconds or 0.0)) for row in video_14d)
+    )
+    practice_accuracy_30d = (
+        len([row for row in practice_rows_30d if bool(row.correct)]) / len(practice_rows_30d)
+        if practice_rows_30d
+        else 0.0
+    )
+    video_completion_values_30d = [
+        min(1.0, max(0.0, float(row.watched_seconds or 0.0) / float(row.duration_seconds)))
+        for row in video_rows_30d
+        if float(row.duration_seconds or 0.0) > 0
+    ]
+    avg_video_completion_30d = (
+        sum(video_completion_values_30d) / len(video_completion_values_30d)
+        if video_completion_values_30d
+        else 0.0
+    )
+    event_counter = {}
+    for row in behavior_rows_30d:
+        key = (row.event_type or "").strip() or "unknown"
+        event_counter[key] = int(event_counter.get(key, 0)) + 1
+    top_event_types_30d = [
+        {"event_type": key, "count": count}
+        for key, count in sorted(event_counter.items(), key=lambda item: item[1], reverse=True)[:10]
+    ]
     return ProfileOut(
         user_id=user.id,
         course_id=int(current_stage.course_id) if current_stage is not None else int(course.id) if course and course.id is not None else None,
@@ -422,6 +543,70 @@ def profile(
         dynamic_breakdown=dynamic_breakdown_parsed,
         persona_intro=persona_intro,
         persona_signals=persona_signals,
+        learning_behavior_overview={
+            "window_days": {"recent": 14, "history": 30},
+            "login_count_30d": len(login_rows_30d),
+            "login_days_30d": len(login_days_30d),
+            "active_days_14d": len(active_days_14d),
+            "consecutive_days_14d": int(consecutive_days_14d),
+            "study_duration_seconds_14d": round(float(study_seconds_14d), 2),
+            "study_duration_minutes_14d": round(float(study_seconds_14d) / 60.0, 2),
+            "video_started_30d": len([row for row in video_rows_30d if float(row.watched_seconds or 0.0) > 0]),
+            "video_completed_30d": len([row for row in video_rows_30d if bool(row.completed)]),
+            "avg_video_completion_30d": round(float(avg_video_completion_30d), 4),
+            "practice_attempts_30d": len(practice_rows_30d),
+            "practice_accuracy_30d": round(float(practice_accuracy_30d), 4),
+            "recommendation_count_30d": len(recommendation_rows_30d),
+            "top_event_types_30d": top_event_types_30d,
+        },
+        behavior_timeline=[
+            {
+                "id": int(row.id),
+                "event_type": row.event_type,
+                "kp_id": row.kp_id,
+                "value_json": row.value_json,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in behavior_rows_30d[:60]
+            if row.id is not None
+        ],
+        recent_practice_records=[
+            {
+                "id": int(row.id),
+                "kp_id": row.kp_id,
+                "question_id": row.question_id,
+                "correct": bool(row.correct),
+                "duration_ms": row.duration_ms,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in practice_rows_30d[:40]
+            if row.id is not None
+        ],
+        recent_quiz_records=[
+            {
+                "id": int(row.id),
+                "kp_id": row.kp_id,
+                "score": float(row.score),
+                "passed": bool(row.passed),
+                "duration_ms": row.duration_ms,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in quiz_rows_30d[:30]
+            if row.id is not None
+        ],
+        recent_video_records=[
+            {
+                "id": int(row.id),
+                "kp_id": row.kp_id,
+                "resource_id": row.resource_id,
+                "watched_seconds": float(row.watched_seconds),
+                "duration_seconds": float(row.duration_seconds),
+                "completed": bool(row.completed),
+                "updated_at": row.updated_at.isoformat(),
+            }
+            for row in video_rows_30d[:30]
+            if row.id is not None
+        ],
     )
 
 

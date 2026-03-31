@@ -76,10 +76,13 @@ async function loadCourses() {
 function syncQuery() {
   saveTeacherSubject(subject.value);
   router.replace({
-    path: "/teacher/final-review",
-    query: buildTeacherSubjectQuery(subject.value, {
-      user_id: selectedUserId.value ? String(selectedUserId.value) : undefined,
-    }),
+    path: "/teacher/review",
+    query: {
+      ...buildTeacherSubjectQuery(subject.value, {
+        user_id: selectedUserId.value ? String(selectedUserId.value) : undefined,
+      }),
+      tab: "final",
+    },
   });
 }
 
@@ -187,8 +190,8 @@ onMounted(async () => {
       subtitle="按学期阶段趋势、期末雷达图和推荐收口情况，给出老师最终确认分。"
       :meta-text="`当前课程：${subject || '未选择'}，已确认 ${students.filter((item) => item.confirmed_score != null).length}/${students.length}`"
     >
-      <el-button @click="router.push({ path: '/teacher/courses', query: buildTeacherSubjectQuery(subject) })">返回教师首页</el-button>
-      <HintButton tip="单独处理课程报名审核。" @click="router.push({ path: '/teacher/enrollments', query: buildTeacherSubjectQuery(subject) })">
+      <el-button @click="router.push({ path: '/teacher/workspace', query: buildTeacherSubjectQuery(subject) })">返回课程工作台</el-button>
+      <HintButton tip="单独处理课程报名审核。" @click="router.push({ path: '/teacher/review', query: { ...buildTeacherSubjectQuery(subject), tab: 'enrollment' } })">
         去报名审核页
       </HintButton>
       <el-button type="primary" @click="loadDetail">刷新详情</el-button>
@@ -263,7 +266,7 @@ onMounted(async () => {
                 </div>
                 <div class="confirm-form__actions">
                   <el-button type="primary" :loading="saving" @click="saveConfirmation">确认并归档</el-button>
-                  <el-button @click="router.push({ path: '/teacher/students', query: { user_id: String(selectedUserId || '') } })">
+                  <el-button @click="router.push({ path: '/teacher/students', query: buildTeacherSubjectQuery(subject, { tab: 'detail', user_id: String(selectedUserId || '') || undefined }) })">
                     打开学生详情
                   </el-button>
                 </div>

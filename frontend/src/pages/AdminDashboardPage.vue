@@ -1,67 +1,67 @@
-<script setup lang="ts">
-import { useRouter } from "vue-router";
+﻿<script setup lang="ts">
 import AdminPlatformDashboard from "../components/AdminPlatformDashboard.vue";
-
-const router = useRouter();
 </script>
 
 <template>
-  <div class="edu-page one-screen admin-shell-page">
-    <header class="edu-header compact admin-shell-header">
-      <div class="edu-header__left">
-        <h1 class="edu-header__title">管理后台</h1>
-        <p class="edu-header__desc">概览系统整体运行情况，高效管理用户、老师与画像规则。</p>
+  <div class="admin-dashboard-page">
+    <section class="admin-dashboard-page__hero">
+      <div>
+        <p class="admin-dashboard-page__eyebrow">平台概览</p>
+        <h1 class="admin-dashboard-page__title">后台总览</h1>
+        <p class="admin-dashboard-page__desc">首页只保留关键指标和平台状态，课程、用户、评价配置通过左侧导航进入各自页面处理。</p>
       </div>
-      <div class="edu-header__actions admin-shell-actions">
-        <el-button-group>
-          <el-button type="primary" @click="router.push('/admin')">概览</el-button>
-          <el-button @click="router.push('/admin/courses')">课程</el-button>
-          <el-button @click="router.push('/admin/users')">用户</el-button>
-          <el-button @click="router.push('/admin/teachers')">老师</el-button>
-          <el-button @click="router.push('/admin/dimensions')">指标池</el-button>
-          <el-button @click="router.push('/admin/persona')">画像规则</el-button>
-        </el-button-group>
-      </div>
-    </header>
+    </section>
 
-    <section class="edu-panel main-layout-content admin-shell-panel">
-      <header class="edu-panel__header">
-        <h2 class="edu-panel__title">平台运行概览</h2>
-      </header>
-      <div class="scroll-area-internal">
-        <AdminPlatformDashboard />
-      </div>
+    <section class="admin-dashboard-page__panel">
+      <AdminPlatformDashboard />
     </section>
   </div>
 </template>
 
 <style scoped>
-.one-screen {
-  flex: 1 0 auto;
-  display: flex;
-  flex-direction: column;
-  overflow: visible;
+.admin-dashboard-page {
+  display: grid;
+  gap: 20px;
 }
 
-.edu-header.compact {
-  margin-bottom: 16px;
-  padding: 12px 0;
+.admin-dashboard-page__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, #ffffff 0%, #f4f8ff 100%);
+  border: 1px solid #e3ebf5;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.05);
 }
 
-.main-layout-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+.admin-dashboard-page__eyebrow {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #6b7d91;
+  text-transform: uppercase;
+}
+
+.admin-dashboard-page__title {
+  margin: 0;
+  font-size: 28px;
+  color: #1f2d3d;
+}
+
+.admin-dashboard-page__desc {
+  margin: 10px 0 0;
+  max-width: 720px;
+  color: #62748a;
+  line-height: 1.7;
+}
+
+.admin-dashboard-page__panel {
   padding: 24px;
-}
-
-.scroll-area-internal {
-  flex: 1 0 auto;
-  overflow: visible;
-}
-
-@media (max-height: 800px) {
-  .edu-header__desc { display: none; }
+  border-radius: 24px;
+  background: #fff;
+  border: 1px solid #e3ebf5;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.05);
 }
 </style>

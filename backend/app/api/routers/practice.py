@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlmodel import Session, select
 from sqlalchemy import delete, func
 
-from app.api.deps import get_current_user
+from app.api.deps import assert_student_kp_access, get_current_user
 from app.db.models import EvalConfig, KnowledgePoint, LearningBehaviorEvent, PracticeAttempt, Question, ReviewSchedule
 from app.db.session import get_session
 from app.schemas.practice import (
@@ -34,8 +34,10 @@ logger = logging.getLogger("app.practice")
 def list_questions(
     kp_id: int,
     session: Session = Depends(get_session),
-    _user=Depends(get_current_user),
+    user=Depends(get_current_user),
 ):
+    if getattr(user, "role", None) == "student":
+        assert_student_kp_access(session, int(user.id), kp_id)
     ordered = session.exec(select(Question).where(Question.kp_id == kp_id).order_by(Question.id)).all()
 
     return [
@@ -82,6 +84,8 @@ def submit(
     q = session.get(Question, payload.question_id)
     if q is None or q.kp_id != payload.kp_id:
         raise HTTPException(status_code=400, detail="Invalid question")
+    if getattr(user, "role", None) == "student":
+        assert_student_kp_access(session, int(user.id), payload.kp_id)
     answer = payload.answer.strip()
     is_correct = answer.upper() == q.answer.strip().upper()
     self_report = (payload.self_report or "unknown").strip().lower()
@@ -193,6 +197,8 @@ def next_question(
     kp = session.get(KnowledgePoint, kp_id)
     if kp is None:
         raise HTTPException(status_code=404, detail="Knowledge point not found")
+    if getattr(user, "role", None) == "student":
+        assert_student_kp_access(session, int(user.id), kp_id)
 
     cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == kp.subject, EvalConfig.grade == kp.grade)).first()
     window = json.loads(cfg.window_json) if cfg else {}

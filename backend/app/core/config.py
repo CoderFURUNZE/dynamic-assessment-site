@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_backend_env, extra="ignore")
 
     app_name: str = "dynamic-assessment"
+    app_env: str = "development"
     api_prefix: str = "/api"
     database_url: str = "sqlite:///./app.db"
     secret_key: str = "CHANGE_ME"

@@ -4,6 +4,8 @@ import { ElMessage } from "element-plus";
 import { api } from "../api";
 import HoverTip from "./HoverTip.vue";
 import PortraitRadarChart from "./PortraitRadarChart.vue";
+import LearnerReportHeader from "./LearnerReportHeader.vue";
+import LearnerReportHero from "./LearnerReportHero.vue";
 
 const QUESTIONNAIRE_SCORE_OPTIONS = [
   { label: "很少", value: 0.2 },
@@ -166,6 +168,7 @@ const profile = ref<ProfileData | null>(null);
 const questionnaireLoading = ref(false);
 const savingQuestionnaire = ref(false);
 const reportTab = ref("summary");
+const behaviorSubTab = ref("overview");
 const questionnaireIndicators = ref<Array<{ dimension_id: number; dimension_title: string; indicator_id: number; indicator_title: string; indicator_code: string; weight: number; score: number | null; note: string }>>([]);
 
 function sourceTypeLabel(sourceType: string) {
@@ -197,6 +200,11 @@ const kpDimensionSummary = computed(() => profile.value?.kp_dimension_summary?.s
 const topAbilityRows = computed(() => kpDimensionSummary.value.top_abilities ?? []);
 const topLiteracyRows = computed(() => kpDimensionSummary.value.top_literacies ?? []);
 const abilityPracticeStats = computed(() => profile.value?.ability_practice_stats ?? null);
+const learningBehaviorOverview = computed(() => (profile.value as any)?.learning_behavior_overview ?? null);
+const behaviorTimeline = computed(() => ((profile.value as any)?.behavior_timeline ?? []) as Array<any>);
+const recentPracticeRecords = computed(() => ((profile.value as any)?.recent_practice_records ?? []) as Array<any>);
+const recentQuizRecords = computed(() => ((profile.value as any)?.recent_quiz_records ?? []) as Array<any>);
+const recentVideoRecords = computed(() => ((profile.value as any)?.recent_video_records ?? []) as Array<any>);
 
 function bloomLevelLabel(level: string) {
   const map: Record<string, string> = {
@@ -407,14 +415,7 @@ watch(
 <template>
   <el-card class="panel-card report-shell" shadow="never" v-loading="loading">
     <template #header>
-      <div class="report-header">
-        <div class="report-header__main">
-          <div class="report-header__eyebrow">Learning Report</div>
-          <div class="report-title">我的学习情况</div>
-          <div class="report-subtitle">这里会告诉你现在学得怎么样、哪里学得好、下一步该做什么。</div>
-        </div>
-        <el-button size="small" @click="load" :loading="loading">刷新</el-button>
-      </div>
+      <LearnerReportHeader :loading="loading" @refresh="load" />
     </template>
 
     <div v-if="profile" class="report-grid">
@@ -451,33 +452,7 @@ watch(
         </el-collapse-item>
       </el-collapse>
 
-      <section class="report-hero">
-        <div class="hero-label">当前结果</div>
-        <div class="hero-title">{{ profile.persona_label }}</div>
-        <div class="hero-stage">
-          <span>{{ currentStage?.stage_title || "尚未形成阶段评价" }}</span>
-          <el-tag v-if="currentStage" size="small" effect="dark">{{ currentStage.trend_label }}</el-tag>
-        </div>
-        <div class="hero-text">{{ currentStage?.reason_summary || profile.reason_summary }}</div>
-        <div class="hero-metrics">
-          <div class="hero-metric">
-            <span>课程掌握度</span>
-            <strong>{{ Math.round(profile.course_mastery * 100) }}%</strong>
-          </div>
-          <div class="hero-metric">
-            <span>动态评分</span>
-            <strong>{{ Math.round(profile.dynamic_score * 100) }}%</strong>
-          </div>
-          <div class="hero-metric">
-            <span>{{ hasStageModel ? "阶段等级" : "稳定性" }}</span>
-            <strong>{{ hasStageModel ? currentStage?.risk_level || profile.risk_level : `${Math.round(profile.stability * 100)}%` }}</strong>
-          </div>
-          <div class="hero-metric">
-            <span>当前状态</span>
-            <strong>{{ profile.risk_level }}</strong>
-          </div>
-        </div>
-      </section>
+      <LearnerReportHero :profile="profile" :current-stage="currentStage" :has-stage-model="hasStageModel" />
 
       <section class="dimension-board">
         <div class="board-title">核心维度</div>
@@ -883,6 +858,205 @@ watch(
             </section>
           </el-tab-pane>
 
+          <el-tab-pane label="学习行为记录" name="behavior">
+            <section class="config-board">
+              <div class="board-title">学习行为记录（多视图）</div>
+              <div class="mi-intro">先看总览，再按“登录/时长/视频/答题/时间线”逐步查看，操作更清晰。</div>
+              <el-tabs v-model="behaviorSubTab">
+                <el-tab-pane label="总览" name="overview">
+                  <div class="behavior-overview-grid">
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">登录频率（30天）</div>
+                      <div class="config-item__meta">
+                        <span>登录次数 {{ learningBehaviorOverview?.login_count_30d ?? 0 }}</span>
+                        <strong>登录天数 {{ learningBehaviorOverview?.login_days_30d ?? 0 }}</strong>
+                      </div>
+                    </div>
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">学习活跃（14天）</div>
+                      <div class="config-item__meta">
+                        <span>活跃天数 {{ learningBehaviorOverview?.active_days_14d ?? 0 }}</span>
+                        <strong>连续 {{ learningBehaviorOverview?.consecutive_days_14d ?? 0 }} 天</strong>
+                      </div>
+                    </div>
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">学习时长（14天）</div>
+                      <div class="config-item__meta">
+                        <span>视频+练习+小测合计</span>
+                        <strong>{{ Math.round(Number(learningBehaviorOverview?.study_duration_minutes_14d ?? 0)) }} 分钟</strong>
+                      </div>
+                    </div>
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">视频进度（30天）</div>
+                      <div class="config-item__meta">
+                        <span>开始 {{ learningBehaviorOverview?.video_started_30d ?? 0 }} · 完成 {{ learningBehaviorOverview?.video_completed_30d ?? 0 }}</span>
+                        <strong>{{ Math.round(Number(learningBehaviorOverview?.avg_video_completion_30d ?? 0) * 100) }}%</strong>
+                      </div>
+                    </div>
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">答题行为（30天）</div>
+                      <div class="config-item__meta">
+                        <span>尝试 {{ learningBehaviorOverview?.practice_attempts_30d ?? 0 }} 次</span>
+                        <strong>{{ Math.round(Number(learningBehaviorOverview?.practice_accuracy_30d ?? 0) * 100) }}%</strong>
+                      </div>
+                    </div>
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">常见行为类型</div>
+                      <div class="config-item__chips">
+                        <span v-for="row in learningBehaviorOverview?.top_event_types_30d ?? []" :key="row.event_type">
+                          {{ row.event_type }} {{ row.count }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </el-tab-pane>
+
+                <el-tab-pane label="登录与活跃" name="login">
+                  <div class="mi-intro">功能范围：查看登录频率、活跃天数与连续学习状态；操作说明：先看 30 天登录，再看 14 天活跃与连续天数。</div>
+                  <div class="behavior-overview-grid">
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">登录次数（30天）</div>
+                      <div class="config-item__meta">
+                        <span>累计登录</span>
+                        <strong>{{ learningBehaviorOverview?.login_count_30d ?? 0 }} 次</strong>
+                      </div>
+                    </div>
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">登录天数（30天）</div>
+                      <div class="config-item__meta">
+                        <span>发生过登录的日期</span>
+                        <strong>{{ learningBehaviorOverview?.login_days_30d ?? 0 }} 天</strong>
+                      </div>
+                    </div>
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">活跃天数（14天）</div>
+                      <div class="config-item__meta">
+                        <span>有学习行为发生</span>
+                        <strong>{{ learningBehaviorOverview?.active_days_14d ?? 0 }} 天</strong>
+                      </div>
+                    </div>
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">连续学习（14天）</div>
+                      <div class="config-item__meta">
+                        <span>最近连续活跃</span>
+                        <strong>{{ learningBehaviorOverview?.consecutive_days_14d ?? 0 }} 天</strong>
+                      </div>
+                    </div>
+                  </div>
+                </el-tab-pane>
+
+                <el-tab-pane label="学习时长" name="duration">
+                  <div class="mi-intro">功能范围：查看学习时长汇总；操作说明：先看总分钟，再看各来源（练习/小测/视频）对时长的共同贡献。</div>
+                  <div class="behavior-overview-grid">
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">总学习时长（14天）</div>
+                      <div class="config-item__meta">
+                        <span>视频 + 练习 + 小测</span>
+                        <strong>{{ Math.round(Number(learningBehaviorOverview?.study_duration_minutes_14d ?? 0)) }} 分钟</strong>
+                      </div>
+                      <div class="config-item__hint">
+                        该时长用于反映近期投入强度，建议与“答题正确率/视频完成率”一起看，避免只看时长不看效果。
+                      </div>
+                    </div>
+                    <div class="config-item config-item--stack">
+                      <div class="config-item__title">推荐参与（30天）</div>
+                      <div class="config-item__meta">
+                        <span>系统推荐链路触发</span>
+                        <strong>{{ learningBehaviorOverview?.recommendation_count_30d ?? 0 }} 次</strong>
+                      </div>
+                      <div class="config-item__hint">若时长高但推荐参与低，通常表示学习路径较固定，可尝试增加薄弱点推荐学习。</div>
+                    </div>
+                  </div>
+                </el-tab-pane>
+
+                <el-tab-pane label="视频学习" name="video">
+                  <div class="mi-intro">功能范围：查看最近视频学习进度、是否完成与更新时间。</div>
+                  <el-table :data="recentVideoRecords" size="small" max-height="340">
+                    <el-table-column prop="kp_id" label="知识点ID" width="110" />
+                    <el-table-column label="观看进度" min-width="180">
+                      <template #default="{ row }">
+                        <el-progress
+                          :percentage="
+                            Math.round(
+                              Math.min(
+                                100,
+                                Number(row.duration_seconds || 0) > 0
+                                  ? (Number(row.watched_seconds || 0) / Number(row.duration_seconds || 1)) * 100
+                                  : 0
+                              )
+                            )
+                          "
+                          :stroke-width="8"
+                        />
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="completed" label="完成" width="90">
+                      <template #default="{ row }">
+                        <el-tag :type="row.completed ? 'success' : 'info'">{{ row.completed ? "已完成" : "进行中" }}</el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="updated_at" label="更新时间" min-width="180">
+                      <template #default="{ row }">{{ new Date(row.updated_at).toLocaleString() }}</template>
+                    </el-table-column>
+                  </el-table>
+                </el-tab-pane>
+
+                <el-tab-pane label="答题行为" name="practice">
+                  <div class="mi-intro">功能范围：查看练习与小测作答记录、正确率、耗时。</div>
+                  <div class="detail-grid">
+                    <section class="config-board">
+                      <div class="board-title">最近练习</div>
+                      <el-table :data="recentPracticeRecords" size="small" max-height="300">
+                        <el-table-column prop="kp_id" label="知识点ID" width="110" />
+                        <el-table-column prop="question_id" label="题目ID" width="100" />
+                        <el-table-column prop="correct" label="结果" width="90">
+                          <template #default="{ row }">
+                            <el-tag :type="row.correct ? 'success' : 'danger'">{{ row.correct ? "正确" : "错误" }}</el-tag>
+                          </template>
+                        </el-table-column>
+                        <el-table-column prop="duration_ms" label="耗时(ms)" width="110" />
+                        <el-table-column prop="created_at" label="提交时间" min-width="180">
+                          <template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template>
+                        </el-table-column>
+                      </el-table>
+                    </section>
+                    <section class="config-board">
+                      <div class="board-title">最近小测</div>
+                      <el-table :data="recentQuizRecords" size="small" max-height="300">
+                        <el-table-column prop="kp_id" label="知识点ID" width="110" />
+                        <el-table-column prop="score" label="得分" width="90">
+                          <template #default="{ row }">{{ Math.round((row.score || 0) * 100) }}%</template>
+                        </el-table-column>
+                        <el-table-column prop="passed" label="通过" width="90">
+                          <template #default="{ row }">
+                            <el-tag :type="row.passed ? 'success' : 'info'">{{ row.passed ? "通过" : "未通过" }}</el-tag>
+                          </template>
+                        </el-table-column>
+                        <el-table-column prop="duration_ms" label="耗时(ms)" width="110" />
+                        <el-table-column prop="created_at" label="提交时间" min-width="180">
+                          <template #default="{ row }">{{ new Date(row.created_at).toLocaleString() }}</template>
+                        </el-table-column>
+                      </el-table>
+                    </section>
+                  </div>
+                </el-tab-pane>
+
+                <el-tab-pane label="行为时间线" name="timeline">
+                  <div class="mi-intro">功能范围：查看系统自动采集的行为事件原始记录，用于核对学习过程。</div>
+                  <div class="config-list">
+                    <div v-for="item in behaviorTimeline" :key="item.id" class="config-item config-item--stack">
+                      <div class="config-item__meta">
+                        <span>{{ item.event_type }}</span>
+                        <strong>{{ new Date(item.created_at).toLocaleString() }}</strong>
+                      </div>
+                      <div class="config-item__hint">{{ item.value_json }}</div>
+                    </div>
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+            </section>
+          </el-tab-pane>
+
           <el-tab-pane label="怎么看" name="explain">
             <section class="config-board">
               <div class="board-title">这页怎么看</div>
@@ -938,42 +1112,6 @@ watch(
 }
 .report-ability-provenance__body p:last-child {
   margin-bottom: 0;
-}
-
-.report-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-
-.report-header__main {
-  display: grid;
-  gap: 6px;
-}
-
-.report-header__eyebrow {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6c86ab;
-}
-
-.report-title {
-  font-size: 24px;
-  line-height: 1.2;
-  font-weight: 800;
-  color: #22395b;
-}
-
-.report-subtitle {
-  max-width: 720px;
-  margin-top: 2px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #667d9b;
 }
 
 .report-grid {
@@ -1038,70 +1176,6 @@ watch(
   line-height: 1.7;
   color: var(--app-ink-soft);
   text-align: center;
-}
-
-.report-hero {
-  padding: 24px;
-  border-radius: 20px;
-  background: #ffffff;
-  color: var(--app-ink);
-  display: grid;
-  gap: 12px;
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-soft);
-}
-
-.hero-label {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: #6f85a3;
-  text-transform: uppercase;
-}
-
-.hero-title {
-  font-size: 30px;
-  font-weight: 800;
-}
-
-.hero-stage {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  color: #5e7697;
-}
-
-.hero-text {
-  line-height: 1.7;
-  font-size: 13px;
-  color: var(--app-ink-soft);
-}
-
-.hero-metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.hero-metric {
-  padding: 14px;
-  border-radius: 16px;
-  background: #fcfdff;
-  display: grid;
-  gap: 4px;
-  border: 1px solid var(--app-border);
-}
-
-.hero-metric span {
-  font-size: 12px;
-  color: #6b809c;
-}
-
-.hero-metric strong {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--app-ink);
 }
 
 .dimension-board,
@@ -1430,13 +1504,15 @@ watch(
   background: #6d92cf;
 }
 
+.behavior-overview-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
 @media (max-width: 960px) {
   .report-grid {
     grid-template-columns: 1fr;
-  }
-
-  .report-header {
-    align-items: flex-start;
   }
 
   .kal-grid {

@@ -5,6 +5,8 @@ import { ElMessage } from "element-plus";
 import { api } from "../api";
 import ResourcePane from "../components/ResourcePane.vue";
 import QuizPane from "../components/QuizPane.vue";
+import StudentKpHeader from "../components/StudentKpHeader.vue";
+import StudentKpStepTabs from "../components/StudentKpStepTabs.vue";
 
 type KpInfo = {
   id: number;
@@ -82,7 +84,18 @@ const route = useRoute();
 const router = useRouter();
 
 const loading = ref(false);
-const activeMenu = ref<"resource" | "practice" | "recommend">("resource");
+type WorkspaceView = "overview" | "resource" | "practice" | "review" | "next";
+const activeView = ref<WorkspaceView>("overview");
+const workflowSteps: WorkspaceView[] = ["overview", "resource", "practice", "review", "next"];
+type QuizSubView = "practice" | "records" | "wrong" | "review";
+const quizSubViewFromPath = computed<QuizSubView | null>(() => {
+  const p = String(route.path || "");
+  if (p.endsWith(`/practice`)) return "practice";
+  if (p.endsWith(`/records`)) return "records";
+  if (p.endsWith(`/wrong`)) return "wrong";
+  if (p.endsWith(`/review`)) return "review";
+  return null;
+});
 const detail = ref<NodeDetail | null>(null);
 const reco = ref<RecoData | null>(null);
 const lastRecommendedTargetId = ref<number | null>(null);
@@ -100,6 +113,10 @@ const kpId = computed(() => {
 const subject = computed(() => String(route.query.subject || ""));
 const grade = computed(() => String(route.query.grade || "通用"));
 const isPreview = computed(() => String(route.query.preview || "") === "1");
+const graphView = computed(() => {
+  const v = String(route.query.view || "");
+  return v === "path" || v === "reco" || v === "map" ? v : "map";
+});
 
 const learningResources = computed(() =>
   (detail.value?.resource_list ?? []).filter((item) => (item.category || "learning") !== "recommend"),
@@ -128,6 +145,89 @@ const stats = computed(() => ({
 }));
 const navigation = computed(() => detail.value?.navigation ?? null);
 
+watch(
+  () => quizSubViewFromPath.value,
+  (v: QuizSubView | null) => {
+    // 当进入题库子路由时，自动聚焦对应工作流视图
+    if (!v) return;
+    activeView.value = v === "practice" ? "practice" : "review";
+  },
+  { immediate: true },
+);
+
+const quizRouteView = computed<QuizSubView | null>(() => {
+  if (activeView.value === "practice") return "practice";
+  if (activeView.value === "review") {
+    return quizSubViewFromPath.value && quizSubViewFromPath.value !== "practice" ? quizSubViewFromPath.value : "wrong";
+  }
+  return null;
+});
+
+function switchView(view: WorkspaceView) {
+  activeView.value = view;
+  if (view === "practice") {
+    goQuizSubView("practice");
+    return;
+  }
+  if (view === "review") {
+    const fallback = quizSubViewFromPath.value && quizSubViewFromPath.value !== "practice" ? quizSubViewFromPath.value : "wrong";
+    goQuizSubView(fallback);
+  }
+}
+
+const canEnterNextStep = computed(() => closureReady.value);
+const stepLabelMap: Record<WorkspaceView, string> = {
+  overview: "学习总览",
+  resource: "资源学习",
+  practice: "练习作答",
+  review: "错题复盘",
+  next: "下一步建议",
+};
+const nextStepDisabledReason = computed(() => {
+  if (canEnterNextStep.value) return "";
+  const todos: string[] = [];
+  if (!closureState.resourceDone) todos.push("完成资源学习");
+  if (!closureState.practiceDone) todos.push("完成练习提交");
+  return `进入“下一步建议”前，请先${todos.join("、")}。`;
+});
+
+function getStepDisabled(view: WorkspaceView) {
+  return view === "next" ? !canEnterNextStep.value : false;
+}
+
+function goPrevView() {
+  const idx = workflowSteps.indexOf(activeView.value);
+  if (idx <= 0) return;
+  switchView(workflowSteps[idx - 1]);
+}
+
+function goNextView() {
+  const idx = workflowSteps.indexOf(activeView.value);
+  if (idx < 0 || idx >= workflowSteps.length - 1) return;
+  const next = workflowSteps[idx + 1];
+  if (getStepDisabled(next)) {
+    if (nextStepDisabledReason.value) ElMessage.warning(nextStepDisabledReason.value);
+    return;
+  }
+  switchView(next);
+}
+
+const nextView = computed<WorkspaceView | null>(() => {
+  const idx = workflowSteps.indexOf(activeView.value);
+  if (idx < 0 || idx >= workflowSteps.length - 1) return null;
+  return workflowSteps[idx + 1];
+});
+
+const nextButtonText = computed(() => {
+  if (!nextView.value) return "下一步";
+  return `下一步：${stepLabelMap[nextView.value]}`;
+});
+
+function handleQuizViewChange(v: QuizSubView) {
+  activeView.value = v === "practice" ? "practice" : "review";
+  goQuizSubView(v);
+}
+
 const masterySummary = computed(() => {
   const o = detail.value?.overlay;
   if (!o || o.mastery == null) return "";
@@ -151,6 +251,7 @@ function goBack() {
       subject: subject.value || undefined,
       grade: grade.value || undefined,
       kp: kpId.value ? String(kpId.value) : undefined,
+      view: graphView.value !== "map" ? graphView.value : undefined,
       preview: isPreview.value ? "1" : undefined,
     },
   });
@@ -171,7 +272,7 @@ function goToRecommendedTarget() {
   const targetId = reco.value?.target_kp?.id;
   if (!targetId) return;
   if (targetId === kpId.value) {
-    activeMenu.value = "resource";
+    activeView.value = "resource";
     return;
   }
   goToKp(targetId);
@@ -186,6 +287,23 @@ function goToReport() {
       preview: isPreview.value ? "1" : undefined,
     },
   });
+}
+
+function goQuizSubView(view: QuizSubView) {
+  if (!kpId.value) return;
+  const targetPath = `/student/kp-content/${kpId.value}/${view === "practice" ? "practice" : view}`;
+  const currentPath = String(router.currentRoute.value?.path || "");
+  if (currentPath === targetPath) return;
+  router
+    .push({
+      path: targetPath,
+      query: {
+        subject: subject.value || undefined,
+        grade: grade.value || undefined,
+        preview: isPreview.value ? "1" : undefined,
+      },
+    })
+    .catch(() => {});
 }
 
 async function loadDetail() {
@@ -280,24 +398,16 @@ watch(kpId, async () => {
 
 <template>
   <div class="student-content-page" v-loading="loading">
-    <div class="student-content-page__toolbar">
-      <div class="student-content-page__left">
-        <button class="student-content-page__back" @click="goBack">返回图谱</button>
-        <div>
-          <h1 class="student-content-page__title">知识点学习内容</h1>
-          <p class="student-content-page__subtitle">把资源、练习和推荐内容集中在一个页面学习；随时通过上方返回图谱或章节内上一/下一知识点切换。</p>
-          <el-alert class="student-kp-meta-hint" type="info" show-icon :closable="false" title="关于本页「练习题」">
-            此处为<strong>题库练习</strong>（逐题作答），会更新知识点掌握度并参与学习报告中的动态评价与练习分析。知识图谱节点上挂载的<strong>小测</strong>为另一套成套测验入口，请与本题库练习区分。
-          </el-alert>
-        </div>
-      </div>
-      <div class="student-content-page__chips" v-if="detail?.kp">
-        <span>{{ detail.kp.code }}</span>
-        <strong>{{ detail.kp.title }}</strong>
-        <small>{{ detail.kp.chapter || "未分章" }}</small>
-        <el-tag v-if="masterySummary" size="small" type="info" effect="plain">{{ masterySummary }}</el-tag>
-      </div>
-    </div>
+    <StudentKpHeader
+      title="知识点学习"
+      subtitle="按顺序完成资源学习、练习作答和错题复盘，最后再看下一步建议。"
+      hint="这里的“练习题”是题库逐题作答，会直接影响掌握度和学习报告。"
+      :code="detail?.kp?.code"
+      :kp-title="detail?.kp?.title"
+      :chapter="detail?.kp?.chapter"
+      :mastery-summary="masterySummary"
+      @back="goBack"
+    />
 
     <section v-if="navigation" class="student-content-nav-card">
       <div class="student-content-nav-card__head">
@@ -342,54 +452,48 @@ watch(kpId, async () => {
       </div>
     </section>
 
-    <section v-if="recommendationContext" class="student-content-reco">
-      <div class="student-content-reco__main">
-        <div class="student-content-reco__eyebrow">知识图谱推荐</div>
-        <div class="student-content-reco__title">
-          {{ recommendationContext.label }}
-          <span v-if="recommendationContext.isCurrentTarget"> · 当前正在学习推荐点</span>
-        </div>
-        <p class="student-content-reco__text">{{ recommendationContext.reason }}</p>
-        <p class="student-content-reco__text">{{ recommendationContext.advice }}</p>
-      </div>
-      <button class="student-content-reco__btn" @click="goToRecommendedTarget">
-        {{ recommendationContext.isCurrentTarget ? "继续学习当前推荐点" : "跳到系统推荐点" }}
-      </button>
-    </section>
+    <StudentKpStepTabs
+      :active-view="activeView"
+      :next-disabled="getStepDisabled('next')"
+      :next-disabled-reason="nextStepDisabledReason"
+      @switch="switchView"
+    />
 
-    <section v-if="recommendationContext" class="student-content-closure">
-      <div class="student-content-closure__main">
-        <div class="student-content-closure__eyebrow">推荐链路最后收口</div>
-        <div class="student-content-closure__title">
-          已完成 {{ closureDoneCount }}/3 项
-          <span v-if="closureReady"> · 可以收口并进入下一步</span>
-        </div>
-        <div class="student-content-closure__checks">
-          <span :class="{ done: closureState.resourceDone }">资源学习</span>
-          <span :class="{ done: closureState.practiceDone }">练习提交</span>
-        </div>
-      </div>
-      <div class="student-content-closure__actions">
-        <button class="student-content-page__back" @click="goToRecommendedTarget">前往下一推荐</button>
-        <button class="student-content-reco__btn" @click="goToReport">回到学习报告</button>
-      </div>
-    </section>
+    <main class="student-content-main">
+      <template v-if="activeView === 'overview'">
+        <section v-if="recommendationContext" class="student-content-reco">
+          <div class="student-content-reco__main">
+            <div class="student-content-reco__eyebrow">知识图谱推荐</div>
+            <div class="student-content-reco__title">
+              {{ recommendationContext.label }}
+              <span v-if="recommendationContext.isCurrentTarget"> · 当前正在学习推荐点</span>
+            </div>
+            <p class="student-content-reco__text">{{ recommendationContext.reason }}</p>
+            <p class="student-content-reco__text">{{ recommendationContext.advice }}</p>
+          </div>
+          <button class="student-content-reco__btn" @click="switchView('resource')">进入资源学习</button>
+        </section>
 
-    <div class="student-content-layout">
-      <aside class="student-content-menu">
-        <button class="student-content-menu__item" :class="{ active: activeMenu === 'resource' }" @click="activeMenu = 'resource'">
-          学习资源
-        </button>
-        <button class="student-content-menu__item" :class="{ active: activeMenu === 'practice' }" @click="activeMenu = 'practice'">
-          练习题
-        </button>
-        <button class="student-content-menu__item" :class="{ active: activeMenu === 'recommend' }" @click="activeMenu = 'recommend'">
-          推荐资源
-        </button>
-      </aside>
+        <section class="student-content-closure">
+          <div class="student-content-closure__main">
+            <div class="student-content-closure__eyebrow">学习进度</div>
+            <div class="student-content-closure__title">
+              已完成 {{ closureDoneCount }}/2 项
+              <span v-if="closureReady"> · 可进入下一步建议</span>
+            </div>
+            <div class="student-content-closure__checks">
+              <span :class="{ done: closureState.resourceDone }">资源学习</span>
+              <span :class="{ done: closureState.practiceDone }">练习提交</span>
+            </div>
+          </div>
+          <div class="student-content-closure__actions">
+            <button class="student-content-page__back" @click="switchView('resource')">先学资源</button>
+            <button class="student-content-reco__btn" @click="switchView('practice')">去做练习</button>
+          </div>
+        </section>
+      </template>
 
-      <main class="student-content-main">
-        <template v-if="activeMenu === 'resource'">
+      <template v-else-if="activeView === 'resource'">
           <el-card v-if="isPreview" shadow="never" class="student-content-card">
             <template #header>学习资源（预览模式）</template>
             <div v-if="learningResources.length === 0" class="student-content-empty">当前知识点还没有学习资源</div>
@@ -398,17 +502,34 @@ watch(kpId, async () => {
             </div>
           </el-card>
           <ResourcePane v-else :kp-id="kpId" @progress-updated="handleResourceUpdated" />
-        </template>
+      </template>
 
-        <QuizPane
-          v-else-if="activeMenu === 'practice'"
+      <QuizPane
+          v-else-if="activeView === 'practice' || activeView === 'review'"
           :kp-id="kpId"
           :preview="isPreview"
+          :route-view="quizRouteView"
           @mastery-updated="handlePracticeUpdated"
+          @view-change="(v) => handleQuizViewChange(v)"
         />
 
         <el-card v-else shadow="never" class="student-content-card">
           <template #header>推荐资源与拓展</template>
+          <section v-if="recommendationContext" class="student-content-reco student-content-reco--inner">
+            <div class="student-content-reco__main">
+              <div class="student-content-reco__eyebrow">推荐说明</div>
+              <div class="student-content-reco__title">
+                {{ recommendationContext.label }}
+                <span v-if="recommendationContext.isCurrentTarget"> · 当前点位即推荐目标</span>
+              </div>
+              <p class="student-content-reco__text">{{ recommendationContext.reason }}</p>
+              <p class="student-content-reco__text">{{ recommendationContext.advice }}</p>
+            </div>
+            <button class="student-content-reco__btn" @click="goToRecommendedTarget">
+              {{ recommendationContext.isCurrentTarget ? "继续学习当前推荐点" : "跳到系统推荐点" }}
+            </button>
+          </section>
+
           <div class="student-content-section">
             <h3>推荐资源</h3>
             <div v-if="recommendedResources.length === 0" class="student-content-empty">暂无推荐资源</div>
@@ -443,9 +564,46 @@ watch(kpId, async () => {
               </button>
             </div>
           </div>
+
+          <section class="student-content-closure student-content-closure--inner">
+            <div class="student-content-closure__main">
+              <div class="student-content-closure__eyebrow">学习收口</div>
+              <div class="student-content-closure__title">
+                已完成 {{ closureDoneCount }}/2 项
+                <span v-if="closureReady"> · 建议进入下一推荐知识点</span>
+              </div>
+              <div class="student-content-closure__checks">
+                <span :class="{ done: closureState.resourceDone }">资源学习</span>
+                <span :class="{ done: closureState.practiceDone }">练习提交</span>
+              </div>
+            </div>
+            <div class="student-content-closure__actions">
+              <button class="student-content-page__back" @click="goToRecommendedTarget">前往下一推荐</button>
+              <button class="student-content-reco__btn" @click="goToReport">回到学习报告</button>
+            </div>
+          </section>
         </el-card>
-      </main>
-    </div>
+
+      <section class="student-content-step-nav">
+        <button class="student-content-page__back" :disabled="activeView === 'overview'" @click="goPrevView">
+          上一步
+        </button>
+        <div class="student-content-step-nav__hint">
+          <span v-if="activeView === 'next'">已到最后一步，可选择前往推荐知识点或回学习报告。</span>
+          <span v-else-if="nextView === 'next' && !canEnterNextStep">
+            {{ nextStepDisabledReason }}
+          </span>
+          <span v-else>按流程推进可减少操作分散：总览 → 资源 → 练习 → 复盘 → 下一步。</span>
+        </div>
+        <button
+          class="student-content-reco__btn"
+          :disabled="activeView === 'next' || (nextView === 'next' && !canEnterNextStep)"
+          @click="goNextView"
+        >
+          {{ nextButtonText }}
+        </button>
+      </section>
+    </main>
   </div>
 </template>
 
@@ -456,87 +614,6 @@ watch(kpId, async () => {
   background: var(--app-bg);
   display: grid;
   gap: 16px;
-}
-
-.student-content-page__toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 18px;
-  padding: 18px 20px;
-  border-radius: 20px;
-  border: 1px solid var(--app-border);
-  background: #ffffff;
-  box-shadow: var(--app-shadow-soft);
-}
-
-.student-content-page__left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.student-content-page__back {
-  border: 0;
-  border-radius: 999px;
-  background: #f4f7fb;
-  color: #39506d;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  border: 1px solid var(--app-border);
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.student-content-page__title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 800;
-  color: #243449;
-}
-
-.student-kp-meta-hint {
-  margin-top: 12px;
-  max-width: 720px;
-}
-
-.student-content-page__subtitle {
-  margin: 4px 0 0;
-  color: #6e8097;
-  font-size: 13px;
-}
-
-.student-content-page__chips {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 12px 16px;
-  border-radius: 999px;
-  background: #fafbfd;
-  border: 1px solid var(--app-border);
-  color: #314661;
-}
-
-.student-content-page__chips span {
-  font-size: 12px;
-  color: #6782a7;
-  font-weight: 700;
-}
-
-.student-content-page__chips strong {
-  font-size: 16px;
-  color: #1f3249;
-}
-
-.student-content-page__chips small {
-  font-size: 12px;
-  color: #718097;
 }
 
 .student-content-overview {
@@ -623,12 +700,6 @@ watch(kpId, async () => {
 .student-content-overview__item strong {
   font-size: 22px;
   color: #29415f;
-}
-
-.student-content-layout {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: 16px;
 }
 
 .student-content-reco {
@@ -757,32 +828,118 @@ watch(kpId, async () => {
 
 .student-content-menu__item {
   border: 1px solid #dce6f2;
-  border-radius: 10px;
+  border-radius: 14px;
   background: #ffffff;
   color: #3c587d;
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: 58px;
+  padding: 12px;
   text-align: left;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 900;
   cursor: pointer;
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
   align-items: center;
+  gap: 10px;
   line-height: 1.2;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .student-content-menu__item.active {
   border-color: #a8c5f8;
-  background: #f4f7fb;
+  background: linear-gradient(165deg, #f5f9ff 0%, #eef4fc 100%);
   color: #22549b;
+  box-shadow: 0 10px 24px rgba(47, 111, 237, 0.08);
+}
+
+.student-content-menu__item:hover {
+  border-color: #c8d7e7;
+  background: #ffffff;
+}
+
+.student-content-menu__hint {
+  margin: 0 6px -2px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a5b8;
+}
+
+.student-content-menu__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  display: grid;
+  place-items: center;
+  color: #5c7cb2;
+}
+
+.student-content-menu__text {
+  font-size: 15px;
+}
+
+.student-content-menu__count {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-primary) 30%, var(--app-border));
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.student-content-menu__done {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 6px;
+  color: #2f7a47;
+  font-weight: 900;
+  font-size: 12px;
 }
 
 .student-content-main {
   min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.student-content-step-nav {
+  position: sticky;
+  bottom: 12px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(3px);
+  box-shadow: var(--app-shadow-soft);
+  padding: 10px 12px;
+}
+
+.student-content-step-nav__hint {
+  color: #6b809d;
+  font-size: 12px;
 }
 
 .student-content-card {
   border-radius: 16px;
+}
+
+.student-content-reco--inner {
+  margin-bottom: 12px;
+}
+
+.student-content-closure--inner {
+  margin-top: 12px;
 }
 
 .student-content-empty {
@@ -867,10 +1024,6 @@ watch(kpId, async () => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .student-content-layout {
-    grid-template-columns: 1fr;
-  }
-
   .student-content-reco {
     grid-template-columns: 1fr;
     align-items: start;
@@ -883,8 +1036,10 @@ watch(kpId, async () => {
     display: grid;
   }
 
-  .student-content-menu {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .student-content-step-nav {
+    position: static;
+    grid-template-columns: 1fr;
   }
+
 }
 </style>

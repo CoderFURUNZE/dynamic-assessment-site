@@ -284,6 +284,7 @@ function openGraphWorkspace() {
       subject: subject.value,
       kp: currentKpId.value ? String(currentKpId.value) : undefined,
       preview: preview || undefined,
+      from: "student-overview",
     },
   });
 }
@@ -432,10 +433,10 @@ onMounted(async () => {
               </header>
               <div class="quick-actions">
                 <button class="action-card primary" @click="openGraphWorkspace" :disabled="!kps.length">
-                  <div class="action-icon">🗺️</div>
+                  <div class="action-icon">🧭</div>
                   <div class="action-text">
-                    <strong>打开图谱</strong>
-                    <span>知识关联与动态评价入口</span>
+                    <strong>进入知识图谱学习页</strong>
+                    <span>跳转新页面，查看图谱关系、掌握度与学习入口</span>
                   </div>
                 </button>
                 <button class="action-card" @click="router.push({ path: '/student/report', query: studentQuery({ subject: subject || undefined }) })">

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import assert_student_kp_access, get_current_user
 from app.db.models import KnowledgePoint
 from app.db.session import get_session
 from app.schemas.reco import RecommendationOut
@@ -17,7 +17,10 @@ def _handle_reco(
     session: Session,
     user,
 ):
-    kp = session.get(KnowledgePoint, kp_id)
+    if getattr(user, "role", None) == "student":
+        kp = assert_student_kp_access(session, int(user.id), kp_id)
+    else:
+        kp = session.get(KnowledgePoint, kp_id)
     if kp is None:
         from fastapi import HTTPException
 

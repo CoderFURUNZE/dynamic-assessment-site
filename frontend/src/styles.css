@@ -1,5 +1,5 @@
-:root {
-  /* 核心色彩系统 - 现代教育风 */
+﻿:root {
+  /* 鏍稿績鑹插僵绯荤粺 - 鐜颁唬鏁欒偛椋?*/
   --app-primary: #4f8cff;
   --app-primary-soft: rgba(79, 140, 255, 0.1);
   --app-primary-deep: #3b71db;
@@ -18,7 +18,7 @@
   --app-border: rgba(226, 232, 240, 0.8);
   --app-border-hover: rgba(203, 213, 225, 1);
 
-  /* 语义别名（历史组件与 class 统一用 ink） */
+  /* 璇箟鍒悕锛堝巻鍙茬粍浠朵笌 class 缁熶竴鐢?ink锛?*/
   --app-ink: var(--app-text-main);
   --app-ink-soft: var(--app-text-soft);
   --app-ink-light: var(--app-text-light);
@@ -31,7 +31,7 @@
   --app-primary-tint: #eef4ff;
   --app-eyebrow: #5b7aa8;
 
-  /* 轻阴影（列表卡片默认） */
+  /* 杞婚槾褰憋紙鍒楄〃鍗＄墖榛樿锛?*/
   --app-shadow-soft: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
 
   --app-gradient-primary: linear-gradient(135deg, var(--app-primary) 0%, var(--app-info) 100%);
@@ -58,37 +58,44 @@
   --app-duration: 0.2s;
   --app-duration-slow: 0.3s;
   
-  /* 阴影系统 */
+  /* 闃村奖绯荤粺 */
   --app-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --app-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --app-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --app-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   
-  /* 布局与圆角 */
+  /* 甯冨眬涓庡渾瑙?*/
   --app-radius: 16px;
   --app-radius-lg: 24px;
   --app-radius-sm: 8px;
 
-  /* 全局面板：与 App.vue 中带导航页的主区域留白一致（悬浮顶栏 + 底边距） */
+  /* 鍏ㄥ眬闈㈡澘锛氫笌 App.vue 涓甫瀵艰埅椤电殑涓诲尯鍩熺暀鐧戒竴鑷达紙鎮诞椤舵爮 + 搴曡竟璺濓級 */
   --app-layout-header-offset: 96px;
   --app-layout-main-padding-bottom: 24px;
   --app-workspace-available-height: calc(100dvh - var(--app-layout-header-offset) - var(--app-layout-main-padding-bottom));
   --app-graph-canvas-min-height: clamp(360px, 52dvh, 820px);
 
-  /* 知识图谱画布（师生端共用，对齐 ui-modern-minimal） */
+  /* 鐭ヨ瘑鍥捐氨鐢诲竷锛堝笀鐢熺鍏辩敤锛屽榻?ui-modern-minimal锛?*/
   --graph-canvas-bg: #f8fafc;
   --graph-canvas-border: color-mix(in srgb, var(--app-border) 75%, transparent);
   --graph-chrome-surface: var(--app-card);
   --graph-pill-bg: var(--app-surface-muted);
   --graph-control-radius: 12px;
+  --graph-shell-radius: 26px;
+  --graph-sidebar-width: 240px;
+  --graph-drawer-width: 320px;
+  --graph-toolbar-height: 76px;
+  --graph-stage-gap: 14px;
+  --graph-stage-pad: 10px;
+  --graph-floating-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
 
-  /* Element Plus 覆盖 */
+  /* Element Plus 瑕嗙洊 */
   --el-color-primary: var(--app-primary);
   --el-border-radius-base: var(--app-radius-sm);
   --el-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* 全局重置与基础样式 */
+/* 鍏ㄥ眬閲嶇疆涓庡熀纭€鏍峰紡 */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -125,7 +132,7 @@ body {
   flex-direction: column;
 }
 
-/* 现代滚动条 */
+/* 鐜颁唬婊氬姩鏉?*/
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -144,7 +151,7 @@ body {
   background: var(--app-text-soft);
 }
 
-/* 玻璃拟态卡片 */
+/* 鐜荤拑鎷熸€佸崱鐗?*/
 .glass-card {
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(12px);
@@ -152,11 +159,11 @@ body {
   box-shadow: var(--app-shadow-lg);
 }
 
-/* 页面标准容器 */
+/* 椤甸潰鏍囧噯瀹瑰櫒 */
 .edu-page {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 0 24px; /* 移除上下 padding，由 global-main 控制 */
+  padding: 0 24px; /* 绉婚櫎涓婁笅 padding锛岀敱 global-main 鎺у埗 */
   flex: 1 0 auto;
   min-height: 0;
   display: flex;
@@ -171,7 +178,7 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 统一的面板样式 */
+/* 缁熶竴鐨勯潰鏉挎牱寮?*/
 .edu-panel {
   background: var(--app-card);
   border-radius: var(--app-radius);
@@ -186,7 +193,7 @@ body {
   border-color: var(--app-border-hover);
 }
 
-/* 标题样式增强 */
+/* 鏍囬鏍峰紡澧炲己 */
 .edu-header {
   margin-bottom: 32px;
 }
@@ -204,7 +211,7 @@ body {
   color: var(--app-text-soft);
 }
 
-/* 统计卡片网格升级 */
+/* 缁熻鍗＄墖缃戞牸鍗囩骇 */
 .edu-stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -251,7 +258,7 @@ body {
   line-height: 1;
 }
 
-/* 按钮样式微调 */
+/* 鎸夐挳鏍峰紡寰皟 */
 .el-button {
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -267,7 +274,7 @@ body {
   box-shadow: 0 6px 20px 0 rgba(79, 140, 255, 0.4);
 }
 
-/* 表单控件升级 */
+/* 琛ㄥ崟鎺т欢鍗囩骇 */
 .el-input__wrapper {
   background-color: var(--app-bg) !important;
   box-shadow: 0 0 0 1px var(--app-border-hover) inset !important;
@@ -280,7 +287,7 @@ body {
   box-shadow: 0 0 0 2px var(--app-primary-soft) inset, 0 0 0 1px var(--app-primary) inset !important;
 }
 
-/* 标签样式 */
+/* 鏍囩鏍峰紡 */
 .el-tag {
   border: none;
   font-weight: 600;
@@ -288,12 +295,16 @@ body {
   height: auto;
 }
 
-/* 统一业务面板：section / div + Element Card */
+/* 缁熶竴涓氬姟闈㈡澘锛歴ection / div + Element Card */
 .panel-card {
   background: var(--app-card);
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius);
   box-shadow: var(--app-shadow-soft);
+}
+
+.panel-card:hover {
+  border-color: color-mix(in srgb, var(--app-primary) 12%, var(--app-border));
 }
 
 .el-card.panel-card {
@@ -303,7 +314,7 @@ body {
   box-shadow: var(--app-shadow-soft);
 }
 
-/* 管理端统一页面外壳 */
+/* 绠＄悊绔粺涓€椤甸潰澶栧３ */
 .admin-shell-page {
   gap: 18px;
 }
@@ -350,12 +361,24 @@ body {
   border-radius: 18px;
 }
 
+.dashboard-hero,
+.workspace-hero,
+.review-hero,
+.review-focus,
+.hub-page__header,
+.courses-workspace__hero,
+.student-dashboard__hero {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid color-mix(in srgb, var(--app-border) 92%, #ffffff);
+  box-shadow: var(--app-shadow-soft);
+}
+
 /* =============================================================================
-   知识图谱工作台 · 现代简约（与 .trae/specs/ui-modern-minimal 一致）
-   覆盖 TeacherGraphWorkbench / KnowledgeGraphWorkspace 中 teacher-*、workspace-* 视觉
+   鐭ヨ瘑鍥捐氨宸ヤ綔鍙?路 鐜颁唬绠€绾︼紙涓?.trae/specs/ui-modern-minimal 涓€鑷达級
+   瑕嗙洊 TeacherGraphWorkbench / KnowledgeGraphWorkspace 涓?teacher-*銆亀orkspace-* 瑙嗚
    ============================================================================= */
 
-/* 独立全页图谱壳（非嵌入）：白底卡片化，弱化渐变条块 */
+/* 鐙珛鍏ㄩ〉鍥捐氨澹筹紙闈炲祵鍏ワ級锛氱櫧搴曞崱鐗囧寲锛屽急鍖栨笎鍙樻潯鍧?*/
 .workspace-shell:not(.workspace-shell--embedded) {
   background: var(--graph-chrome-surface);
   border: 1px solid color-mix(in srgb, var(--app-border) 90%, transparent);
@@ -408,7 +431,7 @@ body {
   background: var(--graph-canvas-bg);
   border: 1px solid var(--graph-canvas-border);
   contain: layout style;
-  /* 与组件内 --graph-stage-pad / --graph-stage-viewport-inset-x 同心；无变量时回退 */
+  /* 涓庣粍浠跺唴 --graph-stage-pad / --graph-stage-viewport-inset-x 鍚屽績锛涙棤鍙橀噺鏃跺洖閫€ */
   border-radius: max(
     0px,
     calc(var(--app-radius-lg) - var(--graph-stage-pad, var(--graph-stage-viewport-inset-x, 8px)))
@@ -531,9 +554,132 @@ body {
   fill: var(--app-text-soft);
 }
 
-/* 响应式适配微调 */
+/* 鍝嶅簲寮忛€傞厤寰皟 */
 @media (max-width: 768px) {
   .edu-page { padding: 24px 16px; }
   .edu-header__title { font-size: 24px; }
   .edu-panel { padding: 20px; }
+}
+/* stage 5: graph workspace visual unification */
+.workspace-shell:not(.workspace-shell--embedded),
+.teacher-workbench.teacher-workbench--fullscreen {
+  border-radius: var(--graph-shell-radius);
+  overflow: hidden;
+}
+.teacher-workbench .teacher-header,
+.workspace-shell .workspace-header {
+  min-height: var(--graph-toolbar-height);
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+.teacher-workbench .teacher-sidebar,
+.workspace-shell .workspace-sidebar {
+  width: var(--graph-sidebar-width);
+  flex: 0 0 var(--graph-sidebar-width);
+  border-radius: calc(var(--graph-shell-radius) - 6px);
+}
+.teacher-workbench .teacher-drawer,
+.workspace-shell .workspace-drawer {
+  width: var(--graph-drawer-width);
+  flex: 0 0 var(--graph-drawer-width);
+  border-radius: calc(var(--graph-shell-radius) - 6px);
+}
+.teacher-workbench .teacher-content,
+.workspace-shell .workspace-content {
+  gap: var(--graph-stage-gap);
+  padding: var(--graph-stage-gap);
+}
+.teacher-workbench .teacher-stage,
+.workspace-shell .workspace-stage {
+  padding: var(--graph-stage-pad);
+  border-radius: calc(var(--graph-shell-radius) - 6px);
+}
+.teacher-workbench .teacher-stage__viewport,
+.workspace-shell .teacher-stage__viewport,
+.workspace-shell .workspace-stage__viewport {
+  border-radius: max(0px, calc(var(--graph-shell-radius) - var(--graph-stage-pad, var(--graph-stage-viewport-inset-x, 8px)) - 6px));
+}
+.teacher-workbench .teacher-stage__top,
+.workspace-shell .workspace-stage__top {
+  gap: 10px;
+}
+.teacher-workbench .teacher-stage__focus,
+.workspace-shell .workspace-stage__focus {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(244, 248, 255, 0.9) 100%);
+  border: 1px solid color-mix(in srgb, var(--app-primary) 10%, var(--app-border));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+.teacher-workbench .teacher-stage__focus span,
+.workspace-shell .workspace-stage__focus span {
+  font-weight: 800;
+  color: var(--app-ink);
+}
+.teacher-workbench .teacher-stage__menu,
+.workspace-shell .teacher-stage__menu,
+.teacher-workbench .teacher-stage__hint,
+.workspace-shell .teacher-stage__hint,
+.teacher-workbench .teacher-stage__zoom,
+.workspace-shell .teacher-stage__zoom,
+.workspace-shell .workspace-zoom {
+  box-shadow: var(--graph-floating-shadow);
+}
+.teacher-workbench .teacher-stage__hint,
+.workspace-shell .teacher-stage__hint {
+  border-radius: 16px;
+}
+.teacher-workbench .teacher-stage__zoom,
+.workspace-shell .teacher-stage__zoom,
+.workspace-shell .workspace-zoom {
+  border: 1px solid var(--app-border);
+  background: rgba(255, 255, 255, 0.94);
+}
+.teacher-workbench .teacher-stage__empty,
+.workspace-shell .workspace-stage__empty {
+  border: 1px dashed color-mix(in srgb, var(--app-primary) 18%, var(--app-border));
+}
+.teacher-workbench .teacher-drawer__header,
+.workspace-shell .workspace-drawer__header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  backdrop-filter: blur(8px);
+}
+.teacher-workbench .teacher-drawer__guide,
+.workspace-shell .workspace-drawer__guide,
+.teacher-workbench .teacher-drawer__desc,
+.workspace-shell .workspace-drawer__desc,
+.teacher-workbench .teacher-drawer__detail-item,
+.workspace-shell .workspace-drawer__detail-item,
+.teacher-workbench .teacher-drawer__metric,
+.workspace-shell .workspace-drawer__metric {
+  border-radius: 16px;
+}
+.teacher-workbench .teacher-drawer__primary,
+.workspace-shell .workspace-drawer__learn-btn,
+.workspace-shell .workspace-drawer__next-btn--accent {
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+}
+.teacher-workbench .teacher-drawer__secondary,
+.workspace-shell .workspace-drawer__next-btn,
+.workspace-shell .workspace-drawer__tag,
+.teacher-workbench .teacher-drawer__tag,
+.teacher-workbench .teacher-drawer__list-item,
+.teacher-workbench .teacher-drawer__relation-item {
+  border-radius: 16px;
+}
+.teacher-workbench .teacher-drawer__tag,
+.workspace-shell .workspace-drawer__tag,
+.workspace-shell .workspace-drawer__next-btn,
+.teacher-workbench .teacher-drawer__list-item,
+.teacher-workbench .teacher-drawer__relation-item {
+  transition: all var(--app-duration) var(--app-ease-out);
+}
+.teacher-workbench .teacher-drawer__list-item:hover,
+.teacher-workbench .teacher-drawer__relation-item:hover,
+.workspace-shell .workspace-drawer__tag:hover,
+.workspace-shell .workspace-drawer__next-btn:hover {
+  transform: translateY(-1px);
 }

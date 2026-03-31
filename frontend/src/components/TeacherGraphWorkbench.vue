@@ -247,7 +247,12 @@ const selectedKp = computed(() => (selectedType.value === "kp" ? kps.value.find(
 const selectedCategoryNode = computed(() =>
   selectedType.value === "category" ? categoryNodes.value.find((item) => item.key === selectedCategory.value) ?? null : null,
 );
-const drawerVisible = computed(() => drawerOpen.value && (selectedKp.value != null || selectedCategoryNode.value != null));
+const drawerVisible = computed(() => drawerOpen.value && (graphEditorOpen.value || selectedKp.value != null || selectedCategoryNode.value != null));
+const drawerTitle = computed(() => {
+  if (graphEditorOpen.value) return form.id ? "编辑知识点" : "新建知识点";
+  if (selectedType.value === "kp") return selectedKp.value?.title || "知识点详情";
+  return selectedCategoryNode.value?.title || "分类详情";
+});
 
 const selectedConnections = computed(() => {
   if (!selectedKp.value) return { incoming: [], outgoing: [], related: [] as KP[], support: [] as KP[], contains: [] as KP[] };
@@ -669,6 +674,7 @@ function resetCreateForm(chapter = "") {
   selectedId.value = null;
   selectedCategory.value = null;
   graphEditorOpen.value = true;
+  drawerOpen.value = true;
   Object.assign(form, {
     id: 0,
     code: "",
@@ -730,6 +736,7 @@ function openGraphEditorForSelected() {
   if (!selectedKp.value) return;
   syncFormFromSelected();
   graphEditorOpen.value = true;
+  drawerOpen.value = true;
 }
 
 function openContentWorkspace() {
@@ -1318,8 +1325,8 @@ onBeforeUnmount(() => {
   >
     <div class="teacher-header">
       <div class="teacher-heading">
-        <h1 class="teacher-title">知识图谱</h1>
-        <p class="teacher-subtitle">先在左边找分类，再点中间节点，最后在右边维护内容。</p>
+        <h1 class="teacher-title">知识图谱建设</h1>
+        <p class="teacher-subtitle">先找分类，再选知识点，然后补信息、连关系、进内容页。</p>
       </div>
       <div class="teacher-controls">
         <el-input v-model="search" placeholder="搜索知识点" clearable class="teacher-search" />
@@ -1347,7 +1354,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="teacher-guide">
-      <span>编辑说明</span>
+      <span>查看提示</span>
       <HoverTip content="先找分类，再点节点，最后改内容或连关系。" />
     </div>
 
@@ -1360,15 +1367,19 @@ onBeforeUnmount(() => {
     >
       <aside class="teacher-sidebar">
         <div class="teacher-tree">
+          <div class="teacher-tree__intro">
+            <strong>先选分类或知识点</strong>
+            <span>左边负责定位，中间负责看结构，右边负责改内容。</span>
+          </div>
           <button
             class="teacher-tree__create"
             @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)"
           >
-            + 新建知识点
+            新建知识点
           </button>
           <div v-if="treeNodes.length === 0" class="teacher-tree__empty">
             <strong>左边现在没有可选内容</strong>
-            <span>可以先清空搜索词，或先新建知识点。</span>
+            <span>可以先清空搜索词，或先新建一个知识点。</span>
           </div>
           <div v-for="item in treeNodes" :key="item.key" class="teacher-tree__group">
             <div class="teacher-tree__summary" :class="{ active: activeChapter === item.key }" @click="selectCategory(item.key)">
@@ -1406,11 +1417,24 @@ onBeforeUnmount(() => {
             <button class="teacher-stage__button" @click="toggleAllKps">
               {{ showAllKps ? "仅看分类" : "显示全部节点" }}
             </button>
-            <button class="teacher-stage__button teacher-stage__button--primary" :disabled="props.readonly" @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)">新建知识点</button>
+            <button class="teacher-stage__button teacher-stage__button--primary" :disabled="props.readonly" @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)">新增知识点</button>
             <button class="teacher-stage__button" @click="fitVisibleToViewport">适应画布</button>
             <button class="teacher-stage__button" @click="resetViewport">重置画布</button>
-            <button class="teacher-stage__button" @click="detailTab = 'relations'; drawerOpen = true">管理关系</button>
+            <button class="teacher-stage__button" @click="detailTab = 'relations'; drawerOpen = true">管理当前关系</button>
           </div>
+        </div>
+        <div class="teacher-stage__focus">
+          <span>{{ selectedType === "kp" ? (selectedKp?.title || "未选择知识点") : (selectedCategoryNode?.title || "未选择分类") }}</span>
+          <button class="teacher-stage__focus-btn" @click="toggleAllKps">
+            {{ showAllKps ? "只看分类" : "展开全部节点" }}
+          </button>
+          <button
+            v-if="selectedType === 'kp' && selectedKp"
+            class="teacher-stage__focus-btn teacher-stage__focus-btn--primary"
+            @click.stop="openContentFromSelected"
+          >
+            进入知识点内容
+          </button>
         </div>
         <details class="teacher-stage__legend-details">
           <summary class="teacher-stage__legend-summary">连线与图例说明（默认收起，点击展开）</summary>
@@ -1550,8 +1574,8 @@ onBeforeUnmount(() => {
         :class="{ 'teacher-stage__menu--below': selectedMenuBelow }"
         :style="selectedMenuStyle"
       >
-        <button :disabled="props.readonly" @click="openGraphEditorForSelected">编辑节点</button>
-        <button :disabled="props.readonly" @click="detailTab = 'relations'; drawerOpen = true">连关系</button>
+        <button :disabled="props.readonly" @click="openGraphEditorForSelected">改信息</button>
+        <button :disabled="props.readonly" @click="detailTab = 'relations'; drawerOpen = true">管关系</button>
         <button class="danger" :disabled="props.readonly" @click="removeKp">删除</button>
       </div>
 
@@ -1559,14 +1583,14 @@ onBeforeUnmount(() => {
         <span>
           {{
             linkSelectionMode === 'forward'
-              ? '连线模式：请选择后继知识点'
+              ? '正在添加后续知识点，请再点一个节点。'
               : linkSelectionMode === 'backward'
-                ? '连线模式：请选择前置知识点'
+                ? '正在添加前置知识点，请再点一个节点。'
                 : linkSelectionMode === 'support'
-                  ? '连线模式：请选择能力支撑知识点'
+                  ? '正在添加支撑关系，请再点一个节点。'
                   : linkSelectionMode === 'contains'
-                    ? '连线模式：请选择包含或归属知识点'
-                    : '连线模式：请选择关联知识点'
+                    ? '正在添加包含关系，请再点一个节点。'
+                    : '正在添加关联关系，请再点一个节点。'
           }}
         </span>
         <button @click="cancelLinkSelection">取消</button>
@@ -1574,7 +1598,7 @@ onBeforeUnmount(() => {
 
       <div v-if="categoryLinkMode" class="teacher-stage__hint teacher-stage__hint--chapter">
         <span>
-          {{ categoryLinkMode === 'prerequisite' ? '分类连线模式：请选择后续分类节点' : categoryLinkMode === 'support' ? '分类连线模式：请选择支撑分类节点' : '分类连线模式：请选择关联分类节点' }}
+          {{ categoryLinkMode === 'prerequisite' ? '正在给分类添加前后顺序，请再点一个分类。' : categoryLinkMode === 'support' ? '正在给分类添加支撑关系，请再点一个分类。' : '正在给分类添加关联关系，请再点一个分类。' }}
         </span>
         <button @click="cancelCategoryLinkSelection">取消</button>
       </div>
@@ -1604,53 +1628,50 @@ onBeforeUnmount(() => {
       </div>
       </div>
 
-      <section
-        v-if="graphEditorOpen"
-        class="teacher-editor-float"
-        @wheel.stop
-        @mousedown.stop
-        @touchmove.stop
-      >
-        <div class="teacher-editor-float__title">{{ form.id ? '编辑知识点' : '新建知识点' }}</div>
-        <div class="teacher-editor-float__body">
+    </section>
+
+    <aside class="teacher-drawer" :class="{ open: drawerOpen }" v-if="drawerVisible">
+      <div class="teacher-drawer__header">
+        <h3 class="teacher-drawer__title">{{ drawerTitle }}</h3>
+        <button class="teacher-drawer__close" @click="drawerOpen = false">×</button>
+      </div>
+
+      <div class="teacher-drawer__content">
+        <template v-if="graphEditorOpen">
+          <div class="teacher-drawer__guide">
+            先把最关键的信息填好并保存，后续再补关系、资源和练习。
+          </div>
           <el-form label-position="top" size="small">
             <div class="teacher-form-grid">
-              <el-form-item label="编码"><el-input v-model="form.code" /></el-form-item>
-              <el-form-item label="标题"><el-input v-model="form.title" /></el-form-item>
+              <el-form-item label="编码"><el-input v-model="form.code" placeholder="例如 OS-01" /></el-form-item>
+              <el-form-item label="标题"><el-input v-model="form.title" placeholder="直接写学生能看懂的知识点名" /></el-form-item>
             </div>
             <div class="teacher-form-grid">
-              <el-form-item label="章节"><el-input v-model="form.chapter" /></el-form-item>
+              <el-form-item label="章节"><el-input v-model="form.chapter" placeholder="例如 进程管理" /></el-form-item>
               <el-form-item label="知识目标"><el-input v-model="form.knowledge_tag" placeholder="例如 同步与互斥、页式存储" /></el-form-item>
             </div>
             <div class="teacher-form-grid">
               <el-form-item label="能力目标"><el-input v-model="form.ability_tag" placeholder="例如 逻辑推理、系统分析，可用逗号分隔" /></el-form-item>
               <el-form-item label="素养目标"><el-input v-model="form.literacy_tag" placeholder="例如 主动学习、规范意识，可用逗号分隔" /></el-form-item>
             </div>
-            <el-form-item label="描述"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>
+            <el-form-item label="描述"><el-input v-model="form.description" type="textarea" :rows="3" placeholder="用一句话说明这个知识点学什么、为什么重要" /></el-form-item>
             <div class="teacher-form-grid">
               <el-form-item label="学习重点"><el-input-number v-model="form.importance" :min="0" :max="1" :step="0.05" /></el-form-item>
               <el-form-item label="理解难度"><el-input-number v-model="form.difficulty" :min="0" :max="1" :step="0.05" /></el-form-item>
             </div>
+            <div class="teacher-drawer__actions">
+              <button class="teacher-drawer__primary" type="button" :disabled="saving" @click="saveKp">
+                {{ saving ? "保存中..." : "保存知识点" }}
+              </button>
+              <button class="teacher-drawer__secondary" type="button" @click="graphEditorOpen = false">取消编辑</button>
+            </div>
           </el-form>
-        </div>
-        <div class="teacher-editor-float__actions">
-          <el-button type="primary" :loading="saving" @click="saveKp">保存</el-button>
-          <el-button @click="graphEditorOpen = false">收起</el-button>
-        </div>
-      </section>
-    </section>
+        </template>
 
-    <aside class="teacher-drawer" :class="{ open: drawerOpen }" v-if="drawerVisible">
-      <div class="teacher-drawer__header">
-        <h3 class="teacher-drawer__title">{{ selectedType === 'kp' ? selectedKp?.title : selectedCategoryNode?.title }}</h3>
-        <button class="teacher-drawer__close" @click="drawerOpen = false">×</button>
-      </div>
-
-      <div class="teacher-drawer__content">
-        <template v-if="selectedType === 'category' && selectedCategoryNode && categoryOverview">
+        <template v-else-if="selectedType === 'category' && selectedCategoryNode && categoryOverview">
           <div class="teacher-drawer__meta">共 {{ categoryOverview.total }} 个知识点</div>
           <div class="teacher-drawer__guide-inline">
-            <span>分类说明</span>
+            <span>查看提示</span>
             <HoverTip content="这里显示这个分类的整体情况。先看分类里有多少知识点，再点下面的知识点进入具体编辑。" />
           </div>
 
@@ -1670,7 +1691,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="teacher-drawer__section">
-            <h4 class="teacher-drawer__section-title">这个分类主要培养</h4>
+            <h4 class="teacher-drawer__section-title">这个分类重点培养什么</h4>
             <div v-if="categoryOverview.abilityTags.length === 0" class="teacher-drawer__empty">还没设置</div>
             <div v-else class="teacher-drawer__tags">
               <span v-for="item in categoryOverview.abilityTags" :key="item" class="teacher-drawer__tag">{{ item }}</span>
@@ -1678,7 +1699,7 @@ onBeforeUnmount(() => {
           </div>
 
             <div class="teacher-drawer__section">
-              <h4 class="teacher-drawer__section-title">分类下知识点</h4>
+              <h4 class="teacher-drawer__section-title">分类下有哪些知识点</h4>
             <div class="teacher-drawer__tags">
               <button v-for="kp in categoryOverview.items" :key="kp.id" class="teacher-drawer__tag" @click="selectKp(kp.id)">
                 {{ kp.title }}
@@ -1687,11 +1708,11 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="teacher-drawer__actions">
-            <button class="teacher-drawer__primary" @click="resetCreateForm(selectedCategoryNode.key)">在该分类下新增知识点</button>
+            <button class="teacher-drawer__primary" @click="resetCreateForm(selectedCategoryNode.key)">在这个分类下新建知识点</button>
           </div>
 
           <div class="teacher-drawer__section">
-            <h4 class="teacher-drawer__section-title">分类关系</h4>
+            <h4 class="teacher-drawer__section-title">分类之间的关系</h4>
             <div class="teacher-drawer__actions teacher-drawer__actions--compact">
               <button class="teacher-drawer__secondary" @click="startCategoryLinkSelection('prerequisite')">新增后续分类</button>
               <button class="teacher-drawer__secondary" @click="startCategoryLinkSelection('support')">新增支撑分类</button>
@@ -1716,20 +1737,20 @@ onBeforeUnmount(() => {
 
         <template v-else-if="selectedKp">
           <div class="teacher-drawer__tabs">
-            <button :class="{ active: detailTab === 'overview' }" @click="detailTab = 'overview'">基本信息</button>
-            <button :class="{ active: detailTab === 'relations' }" @click="detailTab = 'relations'">知识关系</button>
-            <button :class="{ active: detailTab === 'content' }" @click="detailTab = 'content'">资源内容</button>
+            <button :class="{ active: detailTab === 'overview' }" @click="detailTab = 'overview'">看信息</button>
+            <button :class="{ active: detailTab === 'relations' }" @click="detailTab = 'relations'">管关系</button>
+            <button :class="{ active: detailTab === 'content' }" @click="detailTab = 'content'">去内容</button>
           </div>
           <div class="teacher-drawer__meta">{{ selectedKp.code }} · {{ selectedKp.chapter || '未分章' }}</div>
           <div class="teacher-drawer__guide-inline">
-            <span>当前区域说明</span>
+            <span>查看提示</span>
             <HoverTip
               :content="
                 detailTab === 'overview'
-                  ? '这里只处理当前知识点的基本信息。'
+                  ? '这里先看当前知识点的基本信息。'
                   : detailTab === 'relations'
-                    ? '这里只处理前置、后续和关联关系。'
-                    : '资源内容单独进入一个页面处理，不和其他功能混在一起。'
+                    ? '这里专门处理前置、后续和关联关系。'
+                    : '资源、练习和任务放在单独页面里维护。'
               "
             />
           </div>
@@ -1747,14 +1768,14 @@ onBeforeUnmount(() => {
 
           <div v-if="detailTab === 'overview'">
             <div class="teacher-drawer__section">
-              <h4 class="teacher-drawer__section-title">基本信息编辑</h4>
+              <h4 class="teacher-drawer__section-title">先改基础信息</h4>
               <div class="teacher-drawer__actions">
-                <button class="teacher-drawer__primary" @click="openGraphEditorForSelected">进入基本信息编辑</button>
+                <button class="teacher-drawer__primary" @click="openGraphEditorForSelected">打开编辑表单</button>
               </div>
             </div>
 
             <div class="teacher-drawer__section">
-              <h4 class="teacher-drawer__section-title">知识点详细内容</h4>
+              <h4 class="teacher-drawer__section-title">当前知识点信息</h4>
               <div class="teacher-drawer__detail-grid">
                 <div class="teacher-drawer__detail-item">
                   <span>章节</span>
@@ -1788,7 +1809,7 @@ onBeforeUnmount(() => {
 
           <div v-else-if="detailTab === 'relations'">
             <div class="teacher-drawer__section">
-              <h4 class="teacher-drawer__section-title">当前关系</h4>
+              <h4 class="teacher-drawer__section-title">先选你要补的关系</h4>
               <div class="teacher-drawer__actions teacher-drawer__actions--compact">
               <button class="teacher-drawer__secondary" @click="startLinkSelection('forward')">新增后继</button>
               <button class="teacher-drawer__secondary" @click="startLinkSelection('backward')">新增前置</button>
@@ -1829,9 +1850,9 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="teacher-drawer__section">
-              <h4 class="teacher-drawer__section-title">关系删除</h4>
+              <h4 class="teacher-drawer__section-title">删除已有关系</h4>
               <div class="teacher-drawer__guide-inline">
-                <span>删除说明</span>
+                <span>查看提示</span>
                 <HoverTip content="这里只显示当前节点的直接关系，不能跨层删除更上级或更下级的关系。" />
               </div>
               <div class="teacher-drawer__list" v-if="deletableEdges.length">
@@ -1850,13 +1871,13 @@ onBeforeUnmount(() => {
 
           <div v-else>
             <div class="teacher-drawer__section">
-              <h4 class="teacher-drawer__section-title">资源内容入口</h4>
+              <h4 class="teacher-drawer__section-title">进入知识点内容页</h4>
               <div class="teacher-drawer__guide-inline">
-                <span>资源说明</span>
+                <span>查看提示</span>
                 <HoverTip content="点击下面按钮，进入独立的资源内容页面，单独维护视频、练习和推荐资源。" />
               </div>
               <div class="teacher-drawer__actions">
-                <button class="teacher-drawer__primary" @click="openContentWorkspace">进入资源内容页</button>
+                <button class="teacher-drawer__primary" @click="openContentWorkspace">打开知识点内容页</button>
               </div>
             </div>
           </div>
@@ -1869,11 +1890,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .teacher-workbench {
-  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-surface-muted) 50%, rgba(79, 140, 255, 0.04) 100%);
+  background: transparent;
   overflow: hidden;
-  border-radius: var(--app-radius-lg);
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-lg);
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
 }
 
 .teacher-workbench--fullscreen {
@@ -1902,7 +1923,7 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, auto) minmax(0, 1fr);
   align-items: center;
   gap: 8px 12px;
-  padding: 6px 12px;
+  padding: 8px 12px;
 }
 
 .teacher-workbench--fullscreen .teacher-title {
@@ -1934,27 +1955,29 @@ onBeforeUnmount(() => {
 }
 
 .teacher-workbench--fullscreen .teacher-sidebar {
-  flex: 0 0 232px;
-  width: 232px;
-  max-width: 232px;
-  padding: 10px;
+  flex: 0 0 260px;
+  width: 260px;
+  max-width: 260px;
+  padding: 12px;
 }
 
 .teacher-workbench--fullscreen .teacher-drawer {
-  flex: 0 0 300px;
-  width: 300px;
-  max-width: 300px;
-  padding: 10px;
+  flex: 0 0 320px;
+  width: 320px;
+  max-width: 320px;
+  padding: 0;
 }
 
 .teacher-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 22px;
+  padding: 10px 12px;
   gap: 16px;
-  border-bottom: 1px solid #e1eaf1;
-  background: #ffffff;
+  border-radius: var(--app-radius);
+  background: var(--app-card);
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .teacher-heading {
@@ -1963,24 +1986,26 @@ onBeforeUnmount(() => {
 }
 
 .teacher-title {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 800;
   color: #243449;
   margin: 0;
+  line-height: 1.25;
 }
 
 .teacher-subtitle {
   margin: 0;
   color: #718097;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .teacher-guide {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 12px 22px 0;
-  background: #ffffff;
+  padding: 0;
+  background: transparent;
 }
 
 .teacher-guide span {
@@ -2000,6 +2025,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .teacher-search {
@@ -2008,7 +2034,9 @@ onBeforeUnmount(() => {
 
 .teacher-search :deep(.el-input__wrapper) {
   background: #ffffff;
-  box-shadow: inset 0 0 0 1px #d8e2ef;
+  box-shadow: none;
+  border: 1px solid #dce6f2;
+  border-radius: 14px;
 }
 
 .teacher-search :deep(.el-input__inner) {
@@ -2016,13 +2044,13 @@ onBeforeUnmount(() => {
 }
 
 .teacher-btn {
-  min-height: 42px;
-  padding: 0 16px;
-  border: 1px solid #d8e2ef;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--app-border);
   border-radius: 999px;
   background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
-  color: #35507f;
-  font-size: 13px;
+  color: #39506d;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease;
@@ -2043,8 +2071,8 @@ onBeforeUnmount(() => {
 .teacher-content {
   display: flex;
   align-items: stretch;
-  gap: 16px;
-  padding: 16px;
+  gap: 12px;
+  padding: 0;
   min-width: 0;
   overflow: hidden;
   min-height: 0;
@@ -2064,8 +2092,8 @@ onBeforeUnmount(() => {
 }
 
 .teacher-sidebar {
-  width: 280px;
-  flex: 0 0 280px;
+  width: 260px;
+  flex: 0 0 260px;
   max-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
@@ -2086,6 +2114,26 @@ onBeforeUnmount(() => {
 .teacher-tree {
   display: grid;
   gap: 12px;
+}
+
+.teacher-tree__intro {
+  padding: 12px 12px 10px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
+  border: 1px solid #d9e6f7;
+  display: grid;
+  gap: 4px;
+}
+
+.teacher-tree__intro strong {
+  font-size: 13px;
+  color: #274161;
+}
+
+.teacher-tree__intro span {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #637d9b;
 }
 
 .teacher-tree__create {
@@ -2197,7 +2245,7 @@ onBeforeUnmount(() => {
   user-select: none;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 8px;
   padding: var(--graph-stage-pad);
   min-width: 0;
   flex: 1;
@@ -2242,7 +2290,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -2265,7 +2313,7 @@ onBeforeUnmount(() => {
 
 .teacher-stage__legend-details {
   min-width: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid #e2ebf5;
   background: rgba(255, 255, 255, 0.88);
 }
@@ -2317,14 +2365,14 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__legend-item {
-  min-height: 30px;
-  padding: 5px 10px;
+  min-height: 34px;
+  padding: 7px 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid #dce6f2;
   color: #51657f;
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1.4;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2385,14 +2433,14 @@ onBeforeUnmount(() => {
 
 .teacher-stage__pill,
 .teacher-stage__button {
-  min-height: 34px;
+  min-height: 36px;
   padding: 0 12px;
   border-radius: 999px;
   border: 1px solid #dce6f2;
   background: #ffffff;
   color: #35507f;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2417,6 +2465,42 @@ onBeforeUnmount(() => {
 
 .teacher-stage__actions {
   justify-content: flex-end;
+}
+
+.teacher-stage__focus {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(202, 218, 242, 0.95);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.teacher-stage__focus span {
+  font-size: 13px;
+  font-weight: 700;
+  color: #314661;
+}
+
+.teacher-stage__focus-btn {
+  border: 1px solid #d7e2f0;
+  background: #ffffff;
+  color: #39506d;
+  border-radius: 999px;
+  padding: 0 14px;
+  min-height: 34px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.teacher-stage__focus-btn--primary {
+  border-color: #4f86f6;
+  background: linear-gradient(180deg, #4a7df2 0%, #2cb67d 100%);
+  color: #ffffff;
 }
 
 .teacher-canvas {
@@ -2470,7 +2554,7 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 8px;
   padding: 8px;
-  border-radius: 16px;
+  border-radius: 18px;
   background: #ffffff;
   border: 1px solid #dce6f2;
   box-shadow: 0 20px 38px rgba(15, 23, 42, 0.12);
@@ -2493,10 +2577,10 @@ onBeforeUnmount(() => {
 .teacher-stage__menu button {
   padding: 0 12px;
   border-radius: 999px;
-  background: #eff5ff;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
   color: #35507f;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
   transition: background 0.2s ease;
   min-height: 34px;
   display: inline-flex;
@@ -2524,7 +2608,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   padding: 8px 14px;
-  border-radius: 16px;
+  border-radius: 18px;
   background: #ffffff;
   border: 1px solid #dce6f2;
   color: #475569;
@@ -2555,10 +2639,10 @@ onBeforeUnmount(() => {
   top: 94px;
   right: 28px;
   z-index: 6;
-  width: 360px;
+  width: 380px;
   max-height: calc(100% - 128px);
   padding: 16px;
-  border-radius: 24px;
+  border-radius: 20px;
   background: #ffffff;
   border: 1px solid #dce6f2;
   box-shadow: 0 22px 40px rgba(15, 23, 42, 0.12);
@@ -2569,10 +2653,18 @@ onBeforeUnmount(() => {
 }
 
 .teacher-editor-float__title {
-  margin-bottom: 12px;
+  margin-bottom: 4px;
   color: #243449;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.teacher-editor-float__intro {
+  margin: -4px 0 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #6a809d;
   flex-shrink: 0;
 }
 
@@ -2608,9 +2700,9 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 4px;
   border-radius: 999px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid #dce6f2;
-  box-shadow: none;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
   pointer-events: auto;
 }
 
@@ -2676,14 +2768,14 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer {
-  width: 340px;
-  flex: 0 0 340px;
+  width: 320px;
+  flex: 0 0 320px;
   max-height: 100%;
   overflow-x: hidden;
-  overflow-y: auto;
-  padding: 14px;
+  overflow-y: hidden;
+  padding: 0;
   border-radius: var(--app-radius-lg);
-  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-surface-muted) 100%);
+  background: #ffffff;
   border: 1px solid var(--app-border);
   color: var(--app-text-soft);
   z-index: 5;
@@ -2693,6 +2785,8 @@ onBeforeUnmount(() => {
   position: static;
   box-shadow: none;
   z-index: 5;
+  display: flex;
+  flex-direction: column;
 }
 
 .teacher-drawer__header {
@@ -2705,7 +2799,7 @@ onBeforeUnmount(() => {
 
 .teacher-drawer__title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   color: #243449;
   margin: 0;
 }
@@ -2737,6 +2831,8 @@ onBeforeUnmount(() => {
 
 .teacher-drawer__content {
   padding: 16px;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .teacher-drawer__guide {
@@ -2765,26 +2861,26 @@ onBeforeUnmount(() => {
 
 .teacher-drawer__tabs button {
   border: 1px solid #dce6f2;
-  min-height: 38px;
+  min-height: 36px;
   padding: 0 12px;
-  border-radius: 999px;
-  background: #f8fafc;
-  color: #475569;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #3c587d;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .teacher-drawer__tabs button:hover {
-  background: #e3f2fd;
+  background: #eff5ff;
   color: #1565c0;
 }
 
 .teacher-drawer__tabs button.active {
-  background: #e3f2fd;
-  border-color: #90caf9;
-  color: #1565c0;
+  border-color: #a8c5f8;
+  background: linear-gradient(165deg, #f5f9ff 0%, #eef4fc 100%);
+  color: #22549b;
 }
 
 .teacher-drawer__metrics {
@@ -2813,9 +2909,9 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer__metric strong {
-  font-size: 16px;
+  font-size: 20px;
   color: #1e293b;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .teacher-drawer__section {
@@ -2860,7 +2956,7 @@ onBeforeUnmount(() => {
 
 .teacher-drawer__section-title {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: #314661;
   margin: 0 0 8px 0;
 }
@@ -2948,7 +3044,7 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
   transition: all 0.2s ease;
   min-height: 40px;
   display: inline-flex;
@@ -3103,17 +3199,13 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1200px) {
   .teacher-sidebar {
-    width: 224px;
-    flex: 0 0 224px;
+    width: 240px;
+    flex: 0 0 240px;
   }
 
   .teacher-drawer {
     width: 300px;
     flex: 0 0 300px;
-  }
-
-  .teacher-content {
-    padding: 10px;
   }
 }
 
@@ -3136,7 +3228,6 @@ onBeforeUnmount(() => {
   .teacher-content {
     flex-direction: column;
     min-height: 0;
-    padding: 10px;
     overflow: auto;
   }
 
@@ -3174,8 +3265,8 @@ onBeforeUnmount(() => {
     align-items: stretch;
   }
 
-  .teacher-sidebar {
-    display: none;
+  .teacher-stage__focus {
+    align-items: flex-start;
   }
 }
 </style>

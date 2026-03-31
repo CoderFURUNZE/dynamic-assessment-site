@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -51,6 +51,8 @@ const notices = ref<Notice[]>([]);
 const applyReasonMap = ref<Record<number, string>>({});
 const joinCodeInput = ref("");
 const joinByCodeLoading = ref(false);
+const activeTab = ref<"join" | "applications" | "notifications">("join");
+const keyword = ref("");
 
 function normalizeStatus(status?: string | null) {
   return String(status || "").trim().toLowerCase();
@@ -72,19 +74,31 @@ function appStatusLabel(status?: string | null) {
   if (value === "approved") return "已通过";
   if (value === "linked") return "已自动关联";
   if (value === "rejected") return "已拒绝";
-  return status;
+  return status || "--";
 }
 
 function autoJoinHint(course: EnrollableCourse) {
-  if (normalizeStatus(course.application_status) === "linked") return "系统已按班级自动关联，你可以直接进入课程学习。";
-  if (normalizeStatus(course.application_status) === "approved") return "已进入课程";
-  if (normalizeStatus(course.application_status) === "pending") return "等待老师确认";
-  if (normalizeStatus(course.lifecycle_status) === "archived") return "课程已归档，当前只保留查看记录。";
-  if (normalizeStatus(course.lifecycle_status) === "draft") return "课程还未正式开课，开课后会自动开放。";
-    if (normalizeStatus(course.enrollment_mode) === "class_auto") return `系统会按班级 ${course.target_class || ""} 自动关联；也可使用课程代码加入。`;
-  if (normalizeStatus(course.enroll_status) !== "open") return "当前不在开放加入时间";
-  return "优先使用课程代码或与班级一致自动关联；「申请加入」仅为无法自动匹配时的备选。";
+  if (normalizeStatus(course.application_status) === "linked") return "系统已自动关联，可直接进入学习。";
+  if (normalizeStatus(course.application_status) === "approved") return "你已加入这门课程。";
+  if (normalizeStatus(course.application_status) === "pending") return "申请已提交，等待老师审核。";
+  if (normalizeStatus(course.lifecycle_status) === "archived") return "课程已归档，仅保留查看记录。";
+  if (normalizeStatus(course.lifecycle_status) === "draft") return "课程未正式开课，开课后可加入。";
+  if (normalizeStatus(course.enrollment_mode) === "class_auto") return `系统会按班级 ${course.target_class || ""} 自动关联，也可使用课程代码加入。`;
+  if (normalizeStatus(course.enroll_status) !== "open") return "当前不在开放报名时间。";
+  return "优先使用课程代码加入；只有无法自动匹配时再提交申请。";
 }
+
+const filteredCourses = computed(() => {
+  const q = keyword.value.trim().toLowerCase();
+  if (!q) return courses.value;
+  return courses.value.filter((course) => [course.title, course.code, course.teacher_name || ""].join(" ").toLowerCase().includes(q));
+});
+
+const stats = computed(() => ({
+  available: courses.value.filter((course) => normalizeStatus(course.enroll_status) === "open").length,
+  pending: applications.value.filter((item) => normalizeStatus(item.status) === "pending").length,
+  unread: notices.value.filter((item) => normalizeStatus(item.status) !== "read").length,
+}));
 
 async function loadAll() {
   loading.value = true;
@@ -107,7 +121,7 @@ async function loadAll() {
 async function joinByCourseCode() {
   const code = joinCodeInput.value.trim();
   if (!code) {
-    ElMessage.warning("请输入管理员或教师公布的课程代码");
+    ElMessage.warning("请先输入课程代码");
     return;
   }
   joinByCodeLoading.value = true;
@@ -115,9 +129,9 @@ async function joinByCourseCode() {
     const res = await api.post("/enrollment/courses/join-by-code", { join_code: code });
     const title = res.data?.title || "";
     if (res.data?.already_enrolled) {
-      ElMessage.success(title ? `你已在课程《${title}》中` : "你已在该课程中");
+      ElMessage.success(title ? `你已在《${title}》中` : "你已加入该课程");
     } else {
-      ElMessage.success(title ? `已加入《${title}》，可直接学习` : "加入成功");
+      ElMessage.success(title ? `已加入《${title}》` : "加入成功");
     }
     joinCodeInput.value = "";
     await loadAll();
@@ -138,7 +152,7 @@ async function applyCourse(course: EnrollableCourse) {
     await api.post(`/enrollment/courses/${course.id}/apply`, {
       apply_reason: applyReasonMap.value[course.id] || "",
     });
-    ElMessage.success("报名已提交，等待老师审核");
+    ElMessage.success("申请已提交，等待老师审核");
     await loadAll();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "报名失败");
@@ -159,7 +173,7 @@ async function markRead(noticeId: number) {
 function goBackStudy() {
   const preview = String(route.query.preview || "");
   router.push({
-    path: "/student/overview",
+    path: "/student/dashboard",
     query: preview ? { preview } : undefined,
   });
 }
@@ -169,150 +183,169 @@ onMounted(loadAll);
 
 <template>
   <div class="enroll-page" v-loading="loading">
-    <header class="enroll-header panel-card">
+    <section class="enroll-page__hero">
       <div>
-        <div class="enroll-kicker">课程关联</div>
-        <h1>课程加入与通知</h1>
-        <p class="enroll-lead">
-          校内教学默认由<strong>管理员导入师生信息</strong>；同班学生可按「目标班级」自动关联课程。也可使用管理员公布的<strong>课程代码</strong>自助加入，无需教师逐人审核。
-        </p>
+        <span class="enroll-page__eyebrow">课程加入</span>
+        <h1>先用课程代码加入，再看申请记录和站内通知</h1>
+        <p>这个页面只处理课程加入、报名记录和通知，不再堆长篇说明。</p>
       </div>
-      <div class="enroll-header__actions">
+      <div class="enroll-page__hero-actions">
         <el-button @click="goBackStudy">返回学习中心</el-button>
         <el-button type="primary" @click="loadAll">刷新</el-button>
       </div>
-    </header>
-
-    <section class="panel-card block join-code-block">
-      <div class="block__head">
-        <h3>通过课程代码加入</h3>
-        <span class="block__hint">代码与管理员在「课程」里设置的课程编码一致；仅限开课中且在周期内的课程。</span>
-      </div>
-      <div class="join-code-row">
-        <el-input v-model="joinCodeInput" placeholder="例如课程编码 CS101-2025" clearable style="max-width: 320px" />
-        <el-button type="primary" :loading="joinByCodeLoading" @click="joinByCourseCode">加入课程</el-button>
-      </div>
     </section>
 
-    <section class="panel-card block">
-      <div class="block__head">
-        <h3>课程关联结果</h3>
-      </div>
-      <div class="enroll-list">
-        <div v-for="course in courses" :key="course.id" class="enroll-item">
-          <div class="enroll-item__main">
-            <strong>{{ course.title }}</strong>
-            <span>{{ course.code }} · {{ course.teacher_name || "未分配老师" }}</span>
-            <span>名额 {{ course.enrolled_count }}/{{ course.max_students }} · {{ statusLabel(course.enroll_status) }}</span>
-            <span v-if="course.apply_deadline">截止：{{ course.apply_deadline.replace("T", " ").slice(0, 16) }}</span>
-            <span>教学状态：{{ course.lifecycle_status === "active" ? "开课中" : course.lifecycle_status === "archived" ? "已归档" : "待开课" }}</span>
-            <span v-if="course.target_class">目标班级：{{ course.target_class }}</span>
-            <span v-if="course.start_at || course.end_at">开课周期：{{ course.start_at ? course.start_at.replace("T", " ").slice(0, 16) : "未设置" }} ~ {{ course.end_at ? course.end_at.replace("T", " ").slice(0, 16) : "未设置" }}</span>
-            <span>当前报名状态：{{ appStatusLabel(course.application_status) }}</span>
-            <span>{{ autoJoinHint(course) }}</span>
+    <section class="enroll-page__stats">
+      <article class="enroll-page__stat-card"><span>可报名课程</span><strong>{{ stats.available }}</strong></article>
+      <article class="enroll-page__stat-card"><span>待审核申请</span><strong>{{ stats.pending }}</strong></article>
+      <article class="enroll-page__stat-card"><span>未读通知</span><strong>{{ stats.unread }}</strong></article>
+    </section>
+
+    <el-tabs v-model="activeTab" class="enroll-tabs">
+      <el-tab-pane name="join" label="加入课程">
+        <section class="enroll-page__toolbar panel-card">
+          <div class="enroll-page__join-box">
+            <el-input v-model="joinCodeInput" placeholder="输入课程代码" clearable style="max-width: 320px" />
+            <el-button type="primary" :loading="joinByCodeLoading" @click="joinByCourseCode">加入课程</el-button>
           </div>
-          <div class="enroll-item__actions">
-            <el-input
-              v-model="applyReasonMap[course.id]"
-              placeholder="可填写报名理由（选填）"
-              style="width: 260px"
-              :disabled="!!course.application_status || normalizeStatus(course.enrollment_mode) === 'class_auto'"
-            />
-            <el-button
-              type="primary"
-              plain
-              :loading="applying === course.id"
-              :disabled="!!course.application_status || normalizeStatus(course.enroll_status) !== 'open' || normalizeStatus(course.enrollment_mode) === 'class_auto'"
-              @click="applyCourse(course)"
-            >
-              {{ normalizeStatus(course.enrollment_mode) === "class_auto" ? "自动关联课程" : "申请加入（备选）" }}
-            </el-button>
-          </div>
-        </div>
-      </div>
-    </section>
+          <el-input v-model="keyword" placeholder="搜索课程名称 / 代码 / 教师" clearable style="max-width: 280px" />
+        </section>
 
-    <section class="panel-card block">
-      <div class="block__head">
-        <h3>我的报名记录</h3>
-      </div>
-      <el-table :data="applications" size="small">
-        <el-table-column prop="course_title" label="课程" min-width="180" />
-        <el-table-column prop="status" label="状态" width="100" />
-        <el-table-column prop="apply_reason" label="报名理由" min-width="180" />
-        <el-table-column prop="review_remark" label="审核备注" min-width="160" />
-        <el-table-column prop="reject_reason" label="拒绝原因" min-width="180" />
-        <el-table-column prop="created_at" label="提交时间" width="170">
-          <template #default="{ row }">{{ row.created_at.replace("T", " ").slice(0, 16) }}</template>
-        </el-table-column>
-      </el-table>
-    </section>
+        <section class="enroll-page__list">
+          <article v-for="course in filteredCourses" :key="course.id" class="enroll-course-card panel-card">
+            <div class="enroll-course-card__main">
+              <div class="enroll-course-card__top">
+                <div>
+                  <strong>{{ course.title }}</strong>
+                  <p>{{ course.code }} · {{ course.teacher_name || '未分配教师' }}</p>
+                </div>
+                <el-tag round>{{ appStatusLabel(course.application_status) }}</el-tag>
+              </div>
+              <div class="enroll-course-card__chips">
+                <span>{{ statusLabel(course.enroll_status) }}</span>
+                <span>名额 {{ course.enrolled_count }}/{{ course.max_students }}</span>
+                <span v-if="course.target_class">班级 {{ course.target_class }}</span>
+              </div>
+              <p class="enroll-course-card__desc">{{ course.description || autoJoinHint(course) }}</p>
+              <p class="enroll-course-card__hint">{{ autoJoinHint(course) }}</p>
+            </div>
+            <div class="enroll-course-card__actions">
+              <el-input
+                v-model="applyReasonMap[course.id]"
+                placeholder="选填：申请理由"
+                :disabled="!!course.application_status || normalizeStatus(course.enrollment_mode) === 'class_auto'"
+              />
+              <el-button
+                type="primary"
+                plain
+                :loading="applying === course.id"
+                :disabled="!!course.application_status || normalizeStatus(course.enroll_status) !== 'open' || normalizeStatus(course.enrollment_mode) === 'class_auto'"
+                @click="applyCourse(course)"
+              >
+                {{ normalizeStatus(course.enrollment_mode) === 'class_auto' ? '自动关联课程' : '申请加入' }}
+              </el-button>
+            </div>
+          </article>
+          <el-empty v-if="filteredCourses.length === 0" description="没有匹配到课程" />
+        </section>
+      </el-tab-pane>
 
-    <section class="panel-card block">
-      <div class="block__head">
-        <h3>站内通知</h3>
-      </div>
-      <div v-if="notices.length === 0" class="empty">暂无通知</div>
-      <div v-else class="notice-list">
-        <div v-for="notice in notices" :key="notice.id" class="notice-item">
-          <div>
-            <strong>{{ notice.title }}</strong>
-            <p>{{ notice.content }}</p>
-            <small>{{ notice.created_at.replace("T", " ").slice(0, 16) }}</small>
+      <el-tab-pane name="applications" label="报名记录">
+        <section class="panel-card enroll-table-card">
+          <header class="enroll-table-card__head">
+            <h3>我的报名记录</h3>
+            <span>共 {{ applications.length }} 条</span>
+          </header>
+          <el-table :data="applications" size="small">
+            <el-table-column prop="course_title" label="课程" min-width="180" />
+            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column prop="apply_reason" label="申请理由" min-width="180" />
+            <el-table-column prop="review_remark" label="审核备注" min-width="160" />
+            <el-table-column prop="reject_reason" label="拒绝原因" min-width="180" />
+            <el-table-column prop="created_at" label="提交时间" width="170">
+              <template #default="{ row }">{{ row.created_at.replace('T', ' ').slice(0, 16) }}</template>
+            </el-table-column>
+          </el-table>
+        </section>
+      </el-tab-pane>
+
+      <el-tab-pane name="notifications" label="站内通知">
+        <section class="panel-card enroll-table-card">
+          <header class="enroll-table-card__head">
+            <h3>站内通知</h3>
+            <span>未读 {{ stats.unread }}</span>
+          </header>
+          <div v-if="notices.length === 0" class="empty">暂无通知</div>
+          <div v-else class="notice-list">
+            <div v-for="notice in notices" :key="notice.id" class="notice-item">
+              <div>
+                <strong>{{ notice.title }}</strong>
+                <p>{{ notice.content }}</p>
+                <small>{{ notice.created_at.replace('T', ' ').slice(0, 16) }}</small>
+              </div>
+              <el-button size="small" :disabled="normalizeStatus(notice.status) === 'read'" @click="markRead(notice.id)">
+                {{ normalizeStatus(notice.status) === 'read' ? '已读' : '标记已读' }}
+              </el-button>
+            </div>
           </div>
-          <el-button size="small" :disabled="normalizeStatus(notice.status) === 'read'" @click="markRead(notice.id)">
-            {{ normalizeStatus(notice.status) === "read" ? "已读" : "标记已读" }}
-          </el-button>
-        </div>
-      </div>
-    </section>
+        </section>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <style scoped>
-.enroll-page { display: grid; gap: 18px; padding: 18px; }
-.panel-card {
-  border-radius: var(--app-radius-lg);
-  padding: 20px;
+.enroll-page { display: grid; gap: 18px; }
+.enroll-page__hero,
+.enroll-page__toolbar,
+.enroll-course-card,
+.enroll-page__stat-card,
+.enroll-table-card {
+  border-radius: 24px;
+  border: 1px solid #e3ebf5;
+  background: #fff;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.05);
 }
-.enroll-header {
+.enroll-page__hero {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
   gap: 16px;
+  padding: 24px 26px;
+  background: linear-gradient(135deg, #eef4ff 0%, #f6fbff 48%, #ffffff 100%);
 }
-.enroll-kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #6d87ab; font-weight: 800; }
-.enroll-header h1 { margin: 8px 0; font-size: 30px; line-height: 1.15; color: #24374f; }
-.enroll-lead { margin: 0; max-width: 720px; font-size: 14px; line-height: 1.65; color: #5a6f86; }
-.join-code-block .block__head {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-}
-.block__hint { font-size: 13px; color: #6f829b; font-weight: 500; }
-.join-code-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.enroll-header__actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.block { display: grid; gap: 14px; }
-.block__head h3 { margin: 0; color: #24374f; font-size: 18px; }
-.enroll-list, .notice-list { display: grid; gap: 12px; }
-.enroll-item, .notice-item {
-  border: 1px solid var(--app-border);
-  border-radius: 16px;
-  padding: 16px;
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: center;
-  background: #fcfdff;
-}
-.enroll-item__main { display: grid; gap: 6px; }
-.enroll-item__main strong { color: #253d58; font-size: 16px; }
-.enroll-item__main span, .notice-item p, .notice-item small { color: #6f829b; margin: 0; line-height: 1.6; }
-.enroll-item__actions { display: flex; gap: 8px; align-items: center; }
-.empty { color: #7c8da2; padding: 4px 0; }
+.enroll-page__eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--app-primary-deep); }
+.enroll-page__hero h1 { margin: 8px 0 0; font-size: 28px; color: var(--app-text-main); }
+.enroll-page__hero p { margin: 10px 0 0; line-height: 1.7; color: var(--app-text-soft); }
+.enroll-page__hero-actions, .enroll-page__join-box, .enroll-course-card__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.enroll-page__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.enroll-page__stat-card { padding: 18px; display: grid; gap: 8px; }
+.enroll-page__stat-card span { font-size: 12px; color: var(--app-text-soft); }
+.enroll-page__stat-card strong { font-size: 26px; color: var(--app-text-main); }
+.enroll-page__toolbar { display: flex; justify-content: space-between; gap: 14px; padding: 18px 20px; margin-bottom: 14px; }
+.enroll-page__list, .notice-list { display: grid; gap: 12px; }
+.enroll-course-card { padding: 18px 20px; display: grid; gap: 14px; }
+.enroll-course-card__top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.enroll-course-card__top strong { font-size: 18px; color: var(--app-text-main); }
+.enroll-course-card__top p, .enroll-course-card__desc, .enroll-course-card__hint, .notice-item p, .notice-item small { margin: 0; color: var(--app-text-soft); line-height: 1.6; }
+.enroll-course-card__chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.enroll-course-card__chips span { padding: 5px 10px; border-radius: 999px; border: 1px solid #dbe6f2; background: #f8fbff; font-size: 12px; color: #58718f; }
+.enroll-course-card__hint { font-size: 13px; }
+.enroll-course-card__actions { align-items: center; }
+.enroll-course-card__actions :deep(.el-input) { flex: 1 1 240px; }
+.enroll-table-card { padding: 18px 20px; }
+.enroll-table-card__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.enroll-table-card__head h3 { margin: 0; font-size: 18px; color: var(--app-text-main); }
+.enroll-table-card__head span { color: var(--app-text-soft); font-size: 13px; }
+.notice-item { border: 1px solid var(--app-border); border-radius: 16px; padding: 16px; display: flex; justify-content: space-between; gap: 14px; align-items: center; background: #fcfdff; }
+.empty { color: #7c8da2; padding: 6px 0; }
 @media (max-width: 980px) {
-  .enroll-header, .enroll-item, .notice-item { flex-direction: column; align-items: flex-start; }
-  .enroll-item__actions { width: 100%; flex-direction: column; align-items: stretch; }
+  .enroll-page__hero,
+  .enroll-page__toolbar,
+  .notice-item,
+  .enroll-course-card__top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .enroll-page__stats { grid-template-columns: 1fr; }
 }
 </style>

@@ -63,7 +63,7 @@ onMounted(async () => {
       title="补充问卷"
       @change="syncQuery"
     >
-      <el-button @click="router.push({ path: '/student/overview', query: studentQuery() })">返回学习首页</el-button>
+      <el-button @click="router.push({ path: '/student/dashboard', query: studentQuery() })">返回学习台</el-button>
       <el-button type="primary" @click="router.push({ path: '/student/report', query: studentQuery({ subject: subject || undefined }) })">
         去看学习报告
       </el-button>

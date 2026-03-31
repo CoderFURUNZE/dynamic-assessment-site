@@ -1,5 +1,6 @@
 from sqlmodel import Session, select
 
+from app.core.config import settings
 from app.core.security import hash_password
 from app.db.models import EvalConfig, PortraitDimension, PortraitIndicator, PortraitIndicatorSourceType, User, UserRole
 from app.db.session import engine
@@ -8,7 +9,8 @@ from app.db.session import engine
 def bootstrap_defaults() -> None:
     with Session(engine) as session:
         any_user = session.exec(select(User.id)).first()
-        if not any_user:
+        allow_default_users = settings.app_env.strip().lower() != "production"
+        if not any_user and allow_default_users:
             session.add(User(username="admin", password_hash=hash_password("admin123"), role=UserRole.admin))
             session.add(User(username="teacher1", password_hash=hash_password("teacher123"), role=UserRole.teacher))
             session.add(User(username="student1", password_hash=hash_password("student123"), role=UserRole.student))

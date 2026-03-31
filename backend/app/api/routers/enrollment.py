@@ -65,8 +65,9 @@ def _assert_student_course_access(session: Session, student_id: int, course_id: 
     ).first()
     if enrollment is None:
         raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
+    # 班级自动关联 / 课程代码加入：Enrollment.application_id 允许为空，视为已加入可直接学习。
     if enrollment.application_id is None:
-        raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
+        return
     application = session.get(CourseApplication, enrollment.application_id)
     if application is None or application.status != ApplicationStatus.approved:
         raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")

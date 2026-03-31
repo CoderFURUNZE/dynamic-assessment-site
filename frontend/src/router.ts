@@ -3,37 +3,31 @@ import { getRole, getToken, getUsername } from "./token";
 
 export const router = createRouter({
   history: createWebHistory(),
-  routes: [
-    // 复用同一个异步组件引用，避免同页签切换时重复创建包装组件导致偶发空白
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
-  ],
+  routes: [],
 });
 
-const StudentPage = () => import("./pages/Student.vue");
+const StudentDashboardPage = () => import("./pages/StudentDashboardPage.vue");
 const StudentQuestionnairePage = () => import("./pages/StudentQuestionnairePage.vue");
 const StudentReportPage = () => import("./pages/StudentReportPage.vue");
 const StudentGraphWorkspacePage = () => import("./pages/StudentGraphWorkspace.vue");
 const StudentKpContentWorkspacePage = () => import("./pages/StudentKpContentWorkspace.vue");
 const StudentEnrollPage = () => import("./pages/StudentEnroll.vue");
+
 const AdminDashboardPage = () => import("./pages/AdminDashboardPage.vue");
 const AdminCoursesPage = () => import("./pages/AdminCoursesPage.vue");
 const AdminUsersPage = () => import("./pages/AdminUsersPage.vue");
 const AdminTeachersPage = () => import("./pages/AdminTeachersPage.vue");
 const AdminDimensionsPage = () => import("./pages/AdminDimensionsPage.vue");
 const AdminPersonaRulesPage = () => import("./pages/AdminPersonaRulesPage.vue");
-const TeacherCoursesPage = () => import("./pages/TeacherCoursesPage.vue");
-const TeacherStagesPage = () => import("./pages/TeacherStagesPage.vue");
-const TeacherImportsPage = () => import("./pages/TeacherImportsPage.vue");
-const TeacherIndicatorsPage = () => import("./pages/TeacherIndicatorsPage.vue");
-const TeacherAnalyticsPage = () => import("./pages/TeacherAnalyticsPage.vue");
-const TeacherProfilesPage = () => import("./pages/TeacherProfilesPage.vue");
-const TeacherStudentsPage = () => import("./pages/TeacherStudentsPage.vue");
-const TeacherBehaviorReportPage = () => import("./pages/TeacherBehaviorReportPage.vue");
+
+const TeacherWorkspacePage = () => import("./pages/TeacherCoursesPage.vue");
 const TeacherGraphWorkspacePage = () => import("./pages/TeacherGraphWorkspace.vue");
+const TeacherEvaluationWorkspacePage = () => import("./pages/TeacherEvaluationWorkspacePage.vue");
+const TeacherStudentsWorkspacePage = () => import("./pages/TeacherStudentsWorkspacePage.vue");
+const TeacherReviewWorkspacePage = () => import("./pages/TeacherReviewWorkspacePage.vue");
 const TeacherKpContentWorkspacePage = () => import("./pages/TeacherKpContentWorkspace.vue");
 const TeacherResourceDetailPage = () => import("./pages/TeacherResourceDetail.vue");
-const TeacherEnrollmentReviewPage = () => import("./pages/TeacherEnrollmentReview.vue");
-const TeacherFinalScoreReviewPage = () => import("./pages/TeacherFinalScoreReview.vue");
+
 const StartPage = () => import("./pages/Start.vue");
 const LoginPage = () => import("./pages/Login.vue");
 
@@ -45,167 +39,225 @@ router.addRoute({
 router.addRoute({
   path: "/start",
   component: StartPage,
+  meta: { title: "开始使用" },
 });
 
 router.addRoute({
   path: "/login",
+  redirect: "/login/student",
+});
+router.addRoute({
+  path: "/login/student",
   component: LoginPage,
+  meta: { title: "学生登录" },
 });
-
-[
-  "/student/overview",
-  "/student/graph",
-  "/student/graph-workspace",
-  "/student/enroll",
-  "/student/kp-content/:kpId",
-  "/student/questionnaire",
-  "/student/report",
-].forEach((path) => {
-  if (path === "/student/graph") {
-    router.addRoute({
-      path,
-      redirect: (to) => ({ path: "/student/graph-workspace", query: to.query }),
-    });
-    return;
-  }
-  if (path === "/student/graph-workspace") {
-    router.addRoute({ path, component: StudentGraphWorkspacePage });
-    return;
-  }
-  if (path === "/student/enroll") {
-    router.addRoute({ path, component: StudentEnrollPage });
-    return;
-  }
-  if (path === "/student/kp-content/:kpId") {
-    router.addRoute({ path, component: StudentKpContentWorkspacePage });
-    return;
-  }
-  if (path === "/student/questionnaire") {
-    router.addRoute({ path, component: StudentQuestionnairePage });
-    return;
-  }
-  if (path === "/student/report") {
-    router.addRoute({ path, component: StudentReportPage });
-    return;
-  }
-  router.addRoute({ path, component: StudentPage });
+router.addRoute({
+  path: "/login/staff",
+  component: LoginPage,
+  meta: { title: "教师与管理员登录" },
 });
-
-[
-  "/admin/dashboard",
-  "/admin/courses",
-  "/admin/users",
-  "/admin/teachers",
-  "/admin/dimensions",
-  "/admin/persona",
-].forEach((path) => {
-  const component = {
-    "/admin/dashboard": AdminDashboardPage,
-    "/admin/courses": AdminCoursesPage,
-    "/admin/users": AdminUsersPage,
-    "/admin/teachers": AdminTeachersPage,
-    "/admin/dimensions": AdminDimensionsPage,
-    "/admin/persona": AdminPersonaRulesPage,
-  }[path] ?? AdminDashboardPage;
-  router.addRoute({ path, component });
-});
-
-[
-  "/teacher/courses",
-  "/teacher/stages",
-  "/teacher/imports",
-  "/teacher/indicators",
-  "/teacher/enrollments",
-  "/teacher/final-review",
-  "/teacher/graph",
-  "/teacher/graph-workspace",
-  "/teacher/analytics",
-  "/teacher/profiles",
-  "/teacher/students",
-  "/teacher/behavior-report",
-].forEach((path) => {
-  if (path === "/teacher/graph") {
-    router.addRoute({
-      path,
-      redirect: (to) => ({ path: "/teacher/graph-workspace", query: to.query }),
-    });
-    return;
-  }
-  const component = {
-    "/teacher/courses": TeacherCoursesPage,
-    "/teacher/stages": TeacherStagesPage,
-    "/teacher/imports": TeacherImportsPage,
-    "/teacher/indicators": TeacherIndicatorsPage,
-    "/teacher/analytics": TeacherAnalyticsPage,
-    "/teacher/profiles": TeacherProfilesPage,
-    "/teacher/students": TeacherStudentsPage,
-    "/teacher/behavior-report": TeacherBehaviorReportPage,
-    "/teacher/graph-workspace": TeacherGraphWorkspacePage,
-    "/teacher/enrollments": TeacherEnrollmentReviewPage,
-    "/teacher/final-review": TeacherFinalScoreReviewPage,
-  }[path] ?? TeacherCoursesPage;
-  router.addRoute({ path, component });
-});
-router.addRoute({ path: "/teacher/resources/:resourceId", component: TeacherResourceDetailPage });
-router.addRoute({ path: "/teacher/kp-content/:kpId", component: TeacherKpContentWorkspacePage });
 
 router.addRoute({
   path: "/student",
-  redirect: (to) => ({ path: "/student/overview", query: to.query }),
+  redirect: (to) => ({ path: "/student/dashboard", query: to.query }),
 });
 router.addRoute({
-  path: "/student/interview",
-  redirect: (to) => ({ path: "/student/overview", query: to.query }),
+  path: "/student/dashboard",
+  component: StudentDashboardPage,
+  meta: { title: "学习台" },
 });
 router.addRoute({
-  path: "/student/resource",
-  redirect: (to) => ({ path: "/student/graph", query: to.query }),
+  path: "/student/overview",
+  redirect: (to) => ({ path: "/student/dashboard", query: to.query }),
 });
 router.addRoute({
-  path: "/student/quiz",
-  redirect: (to) => ({ path: "/student/graph", query: to.query }),
+  path: "/student/graph",
+  redirect: (to) => ({ path: "/student/graph-workspace", query: to.query }),
 });
 router.addRoute({
-  path: "/student/practice",
-  redirect: (to) => ({ path: "/student/graph", query: to.query }),
+  path: "/student/graph-workspace",
+  component: StudentGraphWorkspacePage,
+  meta: { title: "图谱学习", standaloneWorkspace: true },
 });
+router.addRoute({
+  path: "/student/enroll",
+  component: StudentEnrollPage,
+  meta: { title: "课程加入" },
+});
+router.addRoute({
+  path: "/student/questionnaire",
+  component: StudentQuestionnairePage,
+  meta: { title: "补充问卷" },
+});
+router.addRoute({
+  path: "/student/report",
+  component: StudentReportPage,
+  meta: { title: "学习报告" },
+});
+[
+  "/student/kp-content/:kpId",
+  "/student/kp-content/:kpId/practice",
+  "/student/kp-content/:kpId/records",
+  "/student/kp-content/:kpId/wrong",
+  "/student/kp-content/:kpId/review",
+].forEach((path) => {
+  router.addRoute({
+    path,
+    component: StudentKpContentWorkspacePage,
+    meta: { title: "知识点学习" },
+  });
+});
+[
+  "/student/interview",
+  "/student/resource",
+  "/student/quiz",
+  "/student/practice",
+].forEach((path) => {
+  router.addRoute({
+    path,
+    redirect: (to) => ({ path: "/student/dashboard", query: to.query }),
+  });
+});
+
 router.addRoute({ path: "/admin", redirect: "/admin/dashboard" });
+router.addRoute({
+  path: "/admin/dashboard",
+  component: AdminDashboardPage,
+  meta: { title: "平台概览" },
+});
+router.addRoute({
+  path: "/admin/basic/courses",
+  component: AdminCoursesPage,
+  meta: { title: "课程管理" },
+});
+router.addRoute({
+  path: "/admin/basic/users",
+  component: AdminUsersPage,
+  meta: { title: "用户管理" },
+});
+router.addRoute({
+  path: "/admin/basic/teachers",
+  component: AdminTeachersPage,
+  meta: { title: "教师管理" },
+});
+router.addRoute({
+  path: "/admin/evaluation/dimensions",
+  component: AdminDimensionsPage,
+  meta: { title: "维度与指标" },
+});
+router.addRoute({
+  path: "/admin/evaluation/persona",
+  component: AdminPersonaRulesPage,
+  meta: { title: "画像规则" },
+});
+[
+  ["/admin/courses", "/admin/basic/courses"],
+  ["/admin/users", "/admin/basic/users"],
+  ["/admin/teachers", "/admin/basic/teachers"],
+  ["/admin/dimensions", "/admin/evaluation/dimensions"],
+  ["/admin/persona", "/admin/evaluation/persona"],
+].forEach(([from, to]) => {
+  router.addRoute({ path: from, redirect: to });
+});
 router.addRoute({ path: "/admin/:pathMatch(.*)*", redirect: "/admin/dashboard" });
 
 router.addRoute({
   path: "/teacher",
-  redirect: (to) => ({ path: "/teacher/courses", query: to.query }),
+  redirect: (to) => ({ path: "/teacher/workspace", query: to.query }),
+});
+router.addRoute({
+  path: "/teacher/workspace",
+  component: TeacherWorkspacePage,
+  meta: { title: "课程工作台" },
+});
+router.addRoute({
+  path: "/teacher/content",
+  component: TeacherGraphWorkspacePage,
+  meta: { title: "内容建设", standaloneWorkspace: true },
+});
+router.addRoute({
+  path: "/teacher/evaluation",
+  component: TeacherEvaluationWorkspacePage,
+  meta: { title: "阶段评价" },
+});
+router.addRoute({
+  path: "/teacher/students",
+  component: TeacherStudentsWorkspacePage,
+  meta: { title: "学生分析" },
+});
+router.addRoute({
+  path: "/teacher/review",
+  component: TeacherReviewWorkspacePage,
+  meta: { title: "审核与评分" },
+});
+router.addRoute({
+  path: "/teacher/resources/:resourceId",
+  component: TeacherResourceDetailPage,
+  meta: { title: "资源详情" },
+});
+router.addRoute({
+  path: "/teacher/kp-content/:kpId",
+  component: TeacherKpContentWorkspacePage,
+  meta: { title: "知识点内容" },
+});
+[
+  ["/teacher/courses", "/teacher/workspace"],
+  ["/teacher/graph", "/teacher/content"],
+  ["/teacher/graph-workspace", "/teacher/content"],
+  ["/teacher/stages", "/teacher/evaluation?tab=stages"],
+  ["/teacher/imports", "/teacher/evaluation?tab=imports"],
+  ["/teacher/indicators", "/teacher/evaluation?tab=indicators"],
+  ["/teacher/behavior-report", "/teacher/evaluation?tab=behavior"],
+  ["/teacher/analytics", "/teacher/students?tab=class"],
+  ["/teacher/profiles", "/teacher/students?tab=rules"],
+  ["/teacher/enrollments", "/teacher/review?tab=enrollment"],
+  ["/teacher/final-review", "/teacher/review?tab=final"],
+].forEach(([from, to]) => {
+  router.addRoute({
+    path: from,
+    redirect: (route) => {
+      const [path, rawQuery] = to.split("?");
+      const nextQuery = { ...route.query } as Record<string, string | string[]>;
+      if (rawQuery) {
+        rawQuery.split("&").forEach((entry) => {
+          const [key, value] = entry.split("=");
+          nextQuery[key] = value;
+        });
+      }
+      return { path, query: nextQuery };
+    },
+  });
 });
 router.addRoute({
   path: "/teacher/:pathMatch(.*)*",
-  redirect: (to) => ({ path: "/teacher/courses", query: to.query }),
+  redirect: (to) => ({ path: "/teacher/workspace", query: to.query }),
 });
 
 router.addRoute({ path: "/:pathMatch(.*)*", redirect: "/start" });
 
 router.beforeEach((to) => {
-  if (to.path === "/login" || to.path === "/start") return true;
-  if (!getToken()) return "/login";
+  if (to.path === "/start" || to.path.startsWith("/login")) return true;
+  if (!getToken()) return "/login/student";
   const role = getRole();
   if (to.path.startsWith("/admin")) {
-    if (role === "student") return "/student/overview";
-    if (role === "teacher") return "/teacher/courses";
+    if (role === "student") return "/student/dashboard";
+    if (role === "teacher") return "/teacher/workspace";
     if (role === "admin") {
       const allowedAdminPaths = new Set([
         "/admin",
         "/admin/dashboard",
-        "/admin/courses",
-        "/admin/users",
-        "/admin/teachers",
-        "/admin/dimensions",
-        "/admin/persona",
+        "/admin/basic/courses",
+        "/admin/basic/users",
+        "/admin/basic/teachers",
+        "/admin/evaluation/dimensions",
+        "/admin/evaluation/persona",
       ]);
       if (!allowedAdminPaths.has(to.path)) return "/admin/dashboard";
     }
     return true;
   }
   if (to.path.startsWith("/teacher")) {
-    if (role === "student") return "/student/overview";
+    if (role === "student") return "/student/dashboard";
     if (role === "admin") return "/admin/dashboard";
     return true;
   }
@@ -213,7 +265,7 @@ router.beforeEach((to) => {
     const preview = String(to.query.preview || "");
     const previewEnabled = preview === "1";
     if (role === "admin" && !previewEnabled) return "/admin/dashboard";
-    if (role === "teacher" && !previewEnabled) return "/teacher/courses";
+    if (role === "teacher" && !previewEnabled) return "/teacher/workspace";
   }
   const username = getUsername();
   if (username) {

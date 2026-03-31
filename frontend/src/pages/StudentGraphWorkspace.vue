@@ -62,8 +62,20 @@ const workspaceState = ref<WorkspaceState>({
   selectedCategory: null,
 });
 
-/** 路径 / 解锁 / 推荐 默认折叠，避免首页被多段说明撑得过长 */
-const insightsOpen = ref<string[]>([]);
+type TopView = "map" | "path" | "reco";
+const topView = ref<TopView>("map");
+const topViewLabels: Record<TopView, string> = {
+  map: "路线图视图",
+  path: "路径与解锁",
+  reco: "智能推荐",
+};
+const learningFlow = computed(() => [
+  { key: "map" as TopView, label: "1. 在图谱定位知识点", done: !!currentKpId.value },
+  { key: "path" as TopView, label: "2. 确认路径与解锁", done: !!pathInfo.value },
+  { key: "reco" as TopView, label: "3. 查看智能建议", done: !!reco.value },
+]);
+const canStartLearning = computed(() => !!currentKpId.value);
+const hasGraphData = computed(() => kps.value.length > 0);
 
 const currentKp = computed(() => kps.value.find((item) => item.id === currentKpId.value) ?? null);
 const recommendedKp = computed(() => {
@@ -111,6 +123,14 @@ const lockNextTips = computed(() => {
     return pathInfo.value.next_titles.slice(0, 3);
   }
   return pathInfo.value.blocked_titles.slice(0, 3);
+});
+const fromStudentOverview = computed(() => String(route.query.from || "") === "student-overview");
+const isStandaloneWorkspace = computed(() => Boolean(route.meta?.standaloneWorkspace));
+const viewSummary = computed(() => {
+  if (topView.value === "map") return "先选知识点，再进入学习。";
+  if (topView.value === "path") return pathSummary.value;
+  if (reco.value?.reason_summary) return reco.value.reason_summary;
+  return "根据当前知识点查看下一步建议。";
 });
 
 /** 传给图谱抽屉的「路径 / 解锁」摘要（与 currentKpId 同源） */
@@ -168,6 +188,29 @@ async function loadKps() {
   }
 }
 
+async function tryAutoSwitchToCourseWithGraph() {
+  if (hasGraphData.value || courses.value.length <= 1) return;
+  for (const course of courses.value) {
+    if (course.title === subject.value) continue;
+    try {
+      const data = await getWithCache("/graph/kps", { subject: course.title, grade: grade.value });
+      const rows = Array.isArray(data) ? data : [];
+      if (rows.length > 0) {
+        subject.value = course.title;
+        kps.value = rows;
+        currentKpId.value = rows[0]?.id ?? null;
+        await loadRecommendation();
+        await loadPathInfo();
+        syncQuery();
+        ElMessage.info(`当前课程暂无图谱，已自动切换到可学习课程：${course.title}`);
+        return;
+      }
+    } catch {
+      // ignore and continue trying other courses
+    }
+  }
+}
+
 async function loadRecommendation() {
   if (!currentKpId.value) {
     reco.value = null;
@@ -204,6 +247,7 @@ function syncQuery() {
     query: {
       subject: subject.value || undefined,
       kp: currentKpId.value ? String(currentKpId.value) : undefined,
+      view: topView.value !== "map" ? topView.value : undefined,
       preview: preview || undefined,
     },
   });
@@ -222,6 +266,31 @@ async function onCourseChange() {
 function handleSelectKp(id: number) {
   currentKpId.value = id;
   syncQuery();
+}
+
+function switchTopView(view: TopView) {
+  topView.value = view;
+  syncQuery();
+}
+
+function focusKpInMap(id: number) {
+  handleSelectKp(id);
+  topView.value = "map";
+  syncQuery();
+}
+
+function kpTitleById(id: number) {
+  return kps.value.find((item) => item.id === id)?.title || `知识点 #${id}`;
+}
+
+function goNextTopView() {
+  if (topView.value === "map") {
+    switchTopView("path");
+    return;
+  }
+  if (topView.value === "path") {
+    switchTopView("reco");
+  }
 }
 
 async function goKpContent(kpId?: number | null) {
@@ -249,6 +318,8 @@ async function goKpContent(kpId?: number | null) {
     query: {
       subject: subject.value || undefined,
       grade: grade.value || undefined,
+      from: "graph-workspace",
+      view: topView.value,
       preview: preview || undefined,
     },
   });
@@ -271,6 +342,12 @@ watch(
     if (nextKp && kps.value.some((item) => item.id === nextKp)) {
       currentKpId.value = nextKp;
     }
+    const nextView = String(query.view || "");
+    if (nextView === "path" || nextView === "reco" || nextView === "map") {
+      topView.value = nextView;
+    } else {
+      topView.value = "map";
+    }
   }
 );
 
@@ -283,25 +360,23 @@ watch(currentKpId, async (value, oldValue) => {
 onMounted(async () => {
   await loadCourses();
   await loadKps();
+  await tryAutoSwitchToCourseWithGraph();
   await loadRecommendation();
   await loadPathInfo();
 });
 </script>
 
 <template>
-  <div class="workspace-page">
+  <div class="workspace-page" :class="{ 'workspace-page--standalone': isStandaloneWorkspace }">
     <div class="workspace-page__toolbar">
       <div class="workspace-page__left">
-        <button
-          class="workspace-page__back"
-          @click="router.push({ path: '/student/graph', query: route.query })"
-        >
-          返回学习页
+        <button class="workspace-page__back" @click="router.push({ path: '/student/dashboard', query: { preview: route.query.preview } })">
+          {{ fromStudentOverview ? '返回学习台' : '返回学习台' }}
         </button>
         <div>
-          <div class="workspace-page__title">知识图谱工作台（学习视图）</div>
+          <div class="workspace-page__title">知识图谱学习</div>
           <div class="workspace-page__subtitle">
-            与学生端同源课程数据；节点三色环一致——内绿知识、中黄能力、外紫素养。
+            {{ currentKp ? `当前知识点：${currentKp.title}` : '先在图谱里选一个知识点。' }}
           </div>
         </div>
       </div>
@@ -316,90 +391,47 @@ onMounted(async () => {
       </div>
     </div>
 
-    <section class="workspace-simple-note">
-      <strong>当前状态</strong>
-      <span>分类 {{ workspaceState.categoryCount }} 个，已选知识点 {{ workspaceState.selectedKpId ? 1 : 0 }} 个。</span>
-      <HoverTip content="在知识点上完成练习与小测后，图谱色环与右侧证据会同步更新能力/素养达成情况。" />
+    <section class="workspace-context-bar">
+      <div class="workspace-context-bar__item">
+        <span>当前模式</span>
+        <strong>{{ topViewLabels[topView] }}</strong>
+      </div>
+      <div class="workspace-context-bar__item">
+        <span>图谱分类</span>
+        <strong>{{ workspaceState.categoryCount }}</strong>
+      </div>
+      <div class="workspace-context-bar__item">
+        <span>已选知识点</span>
+        <strong>{{ workspaceState.selectedKpId ? 1 : 0 }}</strong>
+      </div>
+      <div class="workspace-context-bar__summary">
+        <span>{{ viewSummary }}</span>
+        <HoverTip content="完成资源学习和练习后，图谱中的知识、能力、素养环会继续更新。" />
+      </div>
     </section>
 
-    <el-collapse v-if="pathInfo || reco" v-model="insightsOpen" class="workspace-insights">
-      <el-collapse-item title="学习路径 · 解锁状态 · 智能推荐（可选展开）" name="insights">
-        <div class="workspace-insights__inner">
-          <section v-if="pathInfo" class="workspace-path workspace-path--compact">
-            <div class="workspace-path__body">
-              <div class="workspace-path__eyebrow">知识路径解释</div>
-              <div class="workspace-path__title">{{ pathInfo.path_summary }}</div>
-              <div class="workspace-path__summary">{{ pathSummary }}</div>
-              <div class="workspace-path__meta">
-                <span>前置链：{{ pathInfo.prereq_chain.length }} 个节点</span>
-                <span>后继候选：{{ pathInfo.next_candidates.length }} 个节点</span>
-                <span>{{ pathInfo.can_unlock_next ? "当前可继续推进" : "仍需补前置" }}</span>
-              </div>
-              <div v-if="pathInfo.blocked_titles.length" class="workspace-path__tips">
-                需先补：{{ pathInfo.blocked_titles.join("、") }}
-              </div>
-              <div v-else-if="pathInfo.next_titles.length" class="workspace-path__tips">
-                可继续：{{ pathInfo.next_titles.slice(0, 3).join("、") }}
-              </div>
-            </div>
-            <div class="workspace-path__actions">
-              <button class="workspace-page__minor-btn" type="button" @click="loadPathInfo">刷新路径</button>
-              <button class="workspace-page__primary-btn" type="button" :disabled="!currentKpId" @click="goKpContent()">进入学习</button>
-            </div>
-          </section>
+    <section v-if="hasGraphData" class="workspace-topviews">
+      <button class="workspace-topviews__tab" :class="{ active: topView === 'map' }" @click="switchTopView('map')">1. 选知识点</button>
+      <button class="workspace-topviews__tab" :class="{ active: topView === 'path' }" @click="switchTopView('path')">2. 看路径</button>
+      <button class="workspace-topviews__tab" :class="{ active: topView === 'reco' }" @click="switchTopView('reco')">3. 看推荐</button>
+      <button class="workspace-topviews__cta" :disabled="topView === 'reco'" @click="goNextTopView">
+        {{ topView === "map" ? "下一步" : topView === "path" ? "去推荐" : "已完成" }}
+      </button>
+      <button class="workspace-page__primary-btn" :disabled="!canStartLearning" @click="goKpContent()">
+        开始学习
+      </button>
+    </section>
 
-          <section
-            v-if="pathInfo"
-            class="workspace-lockbox workspace-lockbox--compact"
-            :class="{ 'workspace-lockbox--open': pathInfo.can_unlock_next }"
-          >
-            <div class="workspace-lockbox__header">
-              <div>
-                <div class="workspace-lockbox__eyebrow">解锁说明</div>
-                <div class="workspace-lockbox__title">{{ pathInfo.can_unlock_next ? "当前已解锁" : "当前暂时锁定" }}</div>
-              </div>
-              <el-tag :type="pathInfo.can_unlock_next ? 'success' : 'warning'">{{
-                pathInfo.can_unlock_next ? "可继续" : "需补前置"
-              }}</el-tag>
-            </div>
-            <div class="workspace-lockbox__summary">{{ lockSummary }}</div>
-            <div v-if="lockNextTips.length" class="workspace-lockbox__tips">
-              <span v-for="item in lockNextTips" :key="item" class="workspace-lockbox__pill">{{ item }}</span>
-            </div>
-            <div class="workspace-lockbox__footer">
-              <span>规则：满足前置掌握后，系统才开放后继知识点。</span>
-              <button class="workspace-page__minor-btn" type="button" @click="loadPathInfo">重新检查</button>
-            </div>
-          </section>
+    <section v-if="!hasGraphData" class="workspace-empty-state">
+      <h3>当前课程暂无知识图谱</h3>
+      <p>请先切换到已配置图谱的课程；若都为空，请在教师端先创建知识点与关系后再回来学习。</p>
+      <div class="workspace-empty-state__actions">
+        <button class="workspace-page__minor-btn" type="button" @click="loadKps">重新加载当前课程</button>
+        <button class="workspace-page__minor-btn" type="button" @click="tryAutoSwitchToCourseWithGraph">自动查找可学习课程</button>
+      </div>
+    </section>
 
-          <section v-if="reco" class="workspace-reco workspace-reco--compact">
-            <div class="workspace-reco__body">
-              <div class="workspace-reco__eyebrow">知识图谱推荐</div>
-              <div class="workspace-reco__title workspace-reco__title--compact">
-                {{ recommendedKp ? `${recommendedKp.code} ${recommendedKp.title}` : `${reco.target_kp.code} ${reco.target_kp.title}` }}
-              </div>
-              <p class="workspace-reco__desc">{{ reco.reason_summary }}</p>
-              <div class="workspace-reco__meta">
-                <span>{{ recommendationStageLabel }}</span>
-                <span>建议先学这个点</span>
-              </div>
-              <div v-if="blockedPrereqTitles.length" class="workspace-reco__tips">需要先补：{{ blockedPrereqTitles.join("、") }}</div>
-              <div v-else-if="reco.unlock?.can_unlock_next" class="workspace-reco__tips">当前知识点已具备进入下一步学习的条件。</div>
-              <div v-if="recommendedPathTitles.length > 1" class="workspace-reco__path">
-                <strong>推荐路径：</strong>
-                <span>{{ recommendedPathTitles.join(" → ") }}</span>
-              </div>
-            </div>
-            <div class="workspace-reco__actions">
-              <button class="workspace-page__minor-btn" type="button" @click="handleSelectKp(reco.target_kp.id)">定位推荐点</button>
-              <button class="workspace-page__primary-btn" type="button" @click="goKpContent(reco.target_kp.id)">去学习</button>
-            </div>
-          </section>
-        </div>
-      </el-collapse-item>
-    </el-collapse>
-
-    <div class="workspace-page__graph-host">
+    <div v-else-if="topView === 'map'" class="workspace-page__graph-host">
       <KnowledgeGraphWorkspace
         embedded
         :subject="subject"
@@ -413,6 +445,96 @@ onMounted(async () => {
         @open-content="goKpContent"
         @state-change="updateWorkspaceState"
       />
+    </div>
+
+    <div v-else-if="topView === 'path'" class="workspace-panel">
+      <template v-if="pathInfo">
+        <section class="workspace-path workspace-path--compact">
+          <div class="workspace-path__body">
+            <div class="workspace-path__eyebrow">知识路径解释</div>
+            <div class="workspace-path__title">{{ pathInfo.path_summary }}</div>
+            <div class="workspace-path__summary">{{ pathSummary }}</div>
+            <div class="workspace-path__meta">
+              <span>前置链：{{ pathInfo.prereq_chain.length }} 个节点</span>
+              <span>后继候选：{{ pathInfo.next_candidates.length }} 个节点</span>
+              <span>{{ pathInfo.can_unlock_next ? "当前可继续推进" : "仍需补前置" }}</span>
+            </div>
+            <div v-if="pathInfo.blocked_titles.length" class="workspace-path__tips">
+              需先补：{{ pathInfo.blocked_titles.join("、") }}
+            </div>
+            <div v-else-if="pathInfo.next_titles.length" class="workspace-path__tips">
+              可继续：{{ pathInfo.next_titles.slice(0, 3).join("、") }}
+            </div>
+          </div>
+          <div class="workspace-path__actions">
+            <button class="workspace-page__minor-btn" type="button" @click="loadPathInfo">刷新路径</button>
+            <button class="workspace-page__minor-btn" type="button" :disabled="!currentKpId" @click="switchTopView('map')">回路线图查看</button>
+            <button class="workspace-page__primary-btn" type="button" :disabled="!currentKpId" @click="goKpContent()">进入学习</button>
+          </div>
+        </section>
+
+        <section
+          class="workspace-lockbox workspace-lockbox--compact"
+          :class="{ 'workspace-lockbox--open': pathInfo.can_unlock_next }"
+        >
+          <div class="workspace-lockbox__header">
+            <div>
+              <div class="workspace-lockbox__eyebrow">解锁说明</div>
+              <div class="workspace-lockbox__title">{{ pathInfo.can_unlock_next ? "当前已解锁" : "当前暂时锁定" }}</div>
+            </div>
+            <el-tag :type="pathInfo.can_unlock_next ? 'success' : 'warning'">{{
+              pathInfo.can_unlock_next ? "可继续" : "需补前置"
+            }}</el-tag>
+          </div>
+          <div class="workspace-lockbox__summary">{{ lockSummary }}</div>
+          <div v-if="lockNextTips.length" class="workspace-lockbox__tips">
+            <span v-for="item in lockNextTips" :key="item" class="workspace-lockbox__pill">{{ item }}</span>
+          </div>
+          <div class="workspace-lockbox__footer">
+            <span>规则：满足前置掌握后，系统才开放后继知识点。</span>
+            <button class="workspace-page__minor-btn" type="button" @click="loadPathInfo">重新检查</button>
+          </div>
+        </section>
+
+        <section v-if="pathInfo.next_candidates.length" class="workspace-next-list">
+          <h4>可继续节点（点击回路线图并定位）</h4>
+          <div class="workspace-next-list__items">
+            <button v-for="id in pathInfo.next_candidates" :key="`next-kp-${id}`" class="workspace-next-list__item" @click="focusKpInMap(id)">
+              {{ kpTitleById(id) }}
+            </button>
+          </div>
+        </section>
+      </template>
+      <el-empty v-else description="暂无路径与解锁数据，可先在路线图选择知识点。" />
+    </div>
+
+    <div v-else class="workspace-panel">
+      <template v-if="reco">
+        <section class="workspace-reco workspace-reco--compact">
+          <div class="workspace-reco__body">
+            <div class="workspace-reco__eyebrow">知识图谱推荐</div>
+            <div class="workspace-reco__title workspace-reco__title--compact">
+              {{ recommendedKp ? `${recommendedKp.code} ${recommendedKp.title}` : `${reco.target_kp.code} ${reco.target_kp.title}` }}
+            </div>
+            <p class="workspace-reco__desc">{{ reco.reason_summary }}</p>
+            <div class="workspace-reco__meta">
+              <span>{{ recommendationStageLabel }}</span>
+              <span>建议先学这个点</span>
+            </div>
+            <div v-if="blockedPrereqTitles.length" class="workspace-reco__tips">需要先补：{{ blockedPrereqTitles.join("、") }}</div>
+            <div v-else-if="reco.unlock?.can_unlock_next" class="workspace-reco__tips">当前知识点已具备进入下一步学习的条件。</div>
+            <div v-if="recommendedPathTitles.length > 1" class="workspace-reco__path">
+              <strong>推荐路径：</strong>
+              <span>{{ recommendedPathTitles.join(" → ") }}</span>
+            </div>
+          </div>
+          <div class="workspace-reco__actions">
+            <button class="workspace-page__minor-btn" type="button" @click="focusKpInMap(reco.target_kp.id)">定位推荐点</button>
+            <button class="workspace-page__primary-btn" type="button" @click="goKpContent(reco.target_kp.id)">去学习</button>
+          </div>
+        </section>
+      </template>
+      <el-empty v-else description="暂无智能推荐数据，可先在路线图选择知识点。" />
     </div>
   </div>
 </template>
@@ -435,6 +557,12 @@ onMounted(async () => {
   max-width: 100%;
 }
 
+.workspace-page--standalone {
+  height: 100dvh;
+  max-height: 100dvh;
+  padding: 10px 12px 12px;
+}
+
 .workspace-page__graph-host {
   flex: 1;
   min-height: 0;
@@ -442,6 +570,106 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.workspace-topviews {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto auto;
+  gap: 10px;
+}
+
+.workspace-topviews__tab {
+  border: 1px solid #dce6f2;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #3c587d;
+  min-height: 42px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workspace-topviews__tab.active {
+  border-color: #a8c5f8;
+  background: linear-gradient(165deg, #f5f9ff 0%, #eef4fc 100%);
+  color: #22549b;
+}
+
+.workspace-panel {
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  background: var(--app-card);
+  box-shadow: var(--app-shadow-soft);
+  padding: 12px;
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.workspace-empty-state {
+  flex: 1;
+  min-height: 240px;
+  border-radius: var(--app-radius);
+  border: 1px solid var(--app-border);
+  background: #ffffff;
+  box-shadow: var(--app-shadow-soft);
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+  align-content: center;
+  justify-items: start;
+}
+
+.workspace-empty-state h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #243449;
+}
+
+.workspace-empty-state p {
+  margin: 0;
+  color: #60758f;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.workspace-empty-state__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.workspace-next-list {
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: #ffffff;
+  padding: 12px;
+}
+
+.workspace-next-list h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: #2b4463;
+}
+
+.workspace-next-list__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-next-list__item {
+  border: 1px solid #cdddf4;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #35507f;
+  background: #eef5ff;
+  cursor: pointer;
 }
 
 .workspace-insights {
@@ -600,6 +828,18 @@ onMounted(async () => {
   line-height: 1;
 }
 
+.workspace-topviews__cta {
+  border: 1px solid var(--app-border);
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
+  color: #39506d;
+  border-radius: 12px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 42px;
+}
+
 .workspace-page__chip {
   min-height: 42px;
   padding: 0 18px;
@@ -612,19 +852,42 @@ onMounted(async () => {
   align-items: center;
 }
 
-.workspace-simple-note {
-  flex-shrink: 0;
-  padding: 6px 10px;
+.workspace-context-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 160px)) 1fr;
+  gap: 10px;
+}
+
+.workspace-context-bar__item,
+.workspace-context-bar__summary {
+  padding: 10px 12px;
   border-radius: var(--app-radius-sm);
   background: var(--app-card);
   border: 1px solid var(--app-border);
-  color: var(--app-ink-soft);
-  font-size: 12px;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
   box-shadow: var(--app-shadow-soft);
+}
+
+.workspace-context-bar__item {
+  display: grid;
+  gap: 6px;
+}
+
+.workspace-context-bar__item span,
+.workspace-context-bar__summary span {
+  font-size: 12px;
+  color: var(--app-ink-soft);
+}
+
+.workspace-context-bar__item strong {
+  font-size: 16px;
+  color: var(--app-ink);
+}
+
+.workspace-context-bar__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .workspace-guide {
@@ -859,6 +1122,14 @@ onMounted(async () => {
 }
 
 @media (max-width: 1180px) {
+  .workspace-topviews {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-context-bar {
+    grid-template-columns: 1fr;
+  }
+
   .workspace-page__toolbar {
     flex-direction: column;
     align-items: flex-start;

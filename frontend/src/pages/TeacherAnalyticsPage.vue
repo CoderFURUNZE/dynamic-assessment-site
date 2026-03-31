@@ -13,7 +13,10 @@ type Course = { id: number; code: string; title: string };
 const route = useRoute(); const router = useRouter();
 const subject = ref(""); const grade = ref("通用"); const courses = ref<Course[]>([]);
 async function loadCourses() { try { const res = await api.get("/graph/courses"); courses.value = res.data ?? []; subject.value = resolveTeacherSubject(String(route.query.subject || ""), subject.value, courses.value); } catch (e:any) { ElMessage.error(e?.response?.data?.detail ?? "加载教师课程失败"); } }
-function syncQuery() { saveTeacherSubject(subject.value); router.replace({ path: "/teacher/analytics", query: buildTeacherSubjectQuery(subject.value) }); }
+function syncQuery() {
+  saveTeacherSubject(subject.value);
+  router.replace({ path: "/teacher/students", query: { ...buildTeacherSubjectQuery(subject.value), tab: "class" } });
+}
 watch(subject, () => syncQuery());
 watch(() => route.query.subject, (value) => { const next = String(value || "").trim(); if (next && next !== subject.value) subject.value = next; });
 onMounted(loadCourses);
@@ -30,8 +33,8 @@ onMounted(loadCourses);
           <el-option v-for="c in courses" :key="c.id" :label="c.title" :value="c.title" />
         </el-select>
         <el-button-group style="margin-left: 12px">
-          <el-button @click="router.push({ path: '/teacher/students', query: { subject: subject || undefined } })">学生详情</el-button>
-          <el-button type="primary" @click="router.push({ path: '/teacher/behavior-report', query: { subject: subject || undefined } })">行为画像</el-button>
+          <el-button @click="router.push({ path: '/teacher/students', query: { subject: subject || undefined, tab: 'detail' } })">学生详情</el-button>
+          <el-button type="primary" @click="router.push({ path: '/teacher/evaluation', query: { subject: subject || undefined, tab: 'behavior' } })">行为画像</el-button>
         </el-button-group>
       </div>
     </header>
@@ -41,7 +44,7 @@ onMounted(loadCourses);
         :subject="subject" 
         :grade="grade" 
         :show-student-detail-action="true" 
-        @view-student="(id:number)=>router.push({ path: '/teacher/students', query: { user_id: String(id), subject: subject || undefined } })" 
+        @view-student="(id:number)=>router.push({ path: '/teacher/students', query: { user_id: String(id), subject: subject || undefined, tab: 'detail' } })" 
       />
     </section>
   </div>

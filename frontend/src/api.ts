@@ -35,6 +35,20 @@ function bearerTokenFromRequestConfig(config: unknown): string {
 const cache: Record<string, { data: any; timestamp: number }> = {};
 const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
 
+function shouldBypassCache(url?: string | null): boolean {
+  const value = String(url || "").trim();
+  if (!value) return false;
+  return (
+    value.startsWith("/graph/kps")
+    || value.startsWith("/graph/map")
+    || value.startsWith("/graph/node/")
+    || value.startsWith("/graph/path/")
+    || value.startsWith("/eval/mastery")
+    || value.startsWith("/eval/profile")
+    || value.startsWith("/reco")
+  );
+}
+
 // 重试机制
 const MAX_RETRIES = 3;
 const defaultApiBaseUrl =
@@ -64,7 +78,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use((response) => {
   endLoading();
   // 缓存 GET 请求的响应
-  if (response.config.method === 'get') {
+  if (response.config.method === 'get' && !shouldBypassCache(response.config.url)) {
     const cacheKey = response.config.url + '?' + new URLSearchParams(response.config.params || {}).toString();
     cache[cacheKey] = {
       data: response.data,
@@ -95,7 +109,7 @@ api.interceptors.response.use((response) => {
         return Promise.reject(error);
       }
       const path = router.currentRoute.value?.path ?? "";
-      if (path !== "/login" && !handlingUnauthorized) {
+      if (!path.startsWith("/login") && !handlingUnauthorized) {
         handlingUnauthorized = true;
         clearToken();
         const detail = error.response?.data?.detail;
@@ -107,7 +121,7 @@ api.interceptors.response.use((response) => {
               : "登录状态无效或已过期，请重新登录";
         ElMessage.warning(friendly);
         router
-          .push({ path: "/login" })
+          .push({ path: "/login/student" })
           .catch(() => {})
           .finally(() => {
             setTimeout(() => {
@@ -134,6 +148,11 @@ api.interceptors.response.use((response) => {
 
 // 带缓存的 GET 请求
 export async function getWithCache<T = any>(url: string, params?: Record<string, any>): Promise<T> {
+  if (shouldBypassCache(url)) {
+    const response = await api.get<T>(url, { params });
+    return response.data;
+  }
+
   const cacheKey = url + '?' + new URLSearchParams(params || {}).toString();
   const cached = cache[cacheKey];
   

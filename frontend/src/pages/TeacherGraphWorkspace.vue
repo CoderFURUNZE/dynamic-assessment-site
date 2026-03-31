@@ -42,6 +42,17 @@ const workbenchState = ref<WorkbenchState>({
   selectedCategory: null,
 });
 const currentCourse = computed(() => courses.value.find((item) => item.title === subject.value) ?? null);
+const isStandaloneWorkspace = computed(() => Boolean(route.meta?.standaloneWorkspace));
+const selectedKpChip = computed(() => {
+  if (!workbenchState.value.selectedKpId) return "未选择知识点";
+  return `已选知识点 #${workbenchState.value.selectedKpId}`;
+});
+const nextActionText = computed(() => {
+  if (!currentCourse.value) return "先选择课程";
+  if (workbenchState.value.kpCount <= 0) return "先创建知识点";
+  if (workbenchState.value.selectedKpId) return "继续编辑当前知识点";
+  return "选择一个知识点开始编辑";
+});
 const isReadonlyCourse = computed(() => {
   const course = currentCourse.value;
   if (!course) return false;
@@ -73,7 +84,7 @@ async function loadCourses() {
 function syncQuery() {
   saveTeacherSubject(subject.value);
   router.replace({
-    path: "/teacher/graph-workspace",
+    path: "/teacher/content",
     query: buildTeacherSubjectQuery(subject.value),
   });
 }
@@ -94,10 +105,30 @@ function updateWorkbenchState(payload: WorkbenchState) {
   workbenchState.value = payload;
 }
 
+function goWorkspaceHome() {
+  router.push("/teacher/workspace");
+}
+
+function goEvaluation() {
+  router.push({ path: "/teacher/evaluation", query: buildTeacherSubjectQuery(subject.value, { tab: "stages" }) });
+}
+
+function goStudents() {
+  router.push({ path: "/teacher/students", query: buildTeacherSubjectQuery(subject.value, { tab: "class" }) });
+}
+
+function goCurrentKpContent() {
+  if (!workbenchState.value.selectedKpId) return;
+  router.push({
+    path: `/teacher/kp-content/${workbenchState.value.selectedKpId}`,
+    query: buildTeacherSubjectQuery(subject.value),
+  });
+}
+
 onMounted(async () => {
   if (!isTeacher.value) {
     ElMessage.warning("仅教师可访问教师图谱工作区");
-    router.push("/login");
+    router.push("/login/student");
     return;
   }
   await loadCourses();
@@ -105,26 +136,46 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="isTeacher" class="workspace-page">
+  <div v-if="isTeacher" class="workspace-page" :class="{ 'workspace-page--standalone': isStandaloneWorkspace }">
     <div class="workspace-page__toolbar">
       <div class="workspace-page__left">
-        <div class="workspace-page__title">知识图谱工作台（教学视图）</div>
-        <div class="workspace-page__subtitle">与学生端同源课程数据；节点三色环一致——内绿知识、中黄能力、外紫素养。</div>
+        <button class="workspace-page__back" @click="goWorkspaceHome">返回课程工作台</button>
+        <div>
+          <div class="workspace-page__eyebrow">课程结构</div>
+          <div class="workspace-page__title">知识图谱建设</div>
+          <div class="workspace-page__subtitle">
+            {{ workbenchState.selectedKpId ? `当前任务：${nextActionText}` : "先选课程，再搭结构或补知识点内容。" }}
+          </div>
+        </div>
       </div>
 
       <div class="workspace-page__right">
-        <el-select v-model="subject" style="width: 240px">
+        <el-select v-model="subject" placeholder="选择课程" style="width: min(280px, 100%)">
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
-        <button class="workspace-page__minor-btn" @click="loadCourses">刷新</button>
+        <button type="button" class="workspace-page__minor-btn" @click="loadCourses">刷新</button>
+        <button type="button" class="workspace-page__minor-btn" @click="goStudents">看学生结果</button>
+        <div class="workspace-page__chip">{{ selectedKpChip }}</div>
       </div>
     </div>
 
-    <section class="workspace-simple-note">
-      <strong>当前状态</strong>
-      <span>分类 {{ workbenchState.categoryCount }} 个，已选知识点 {{ workbenchState.selectedKpId ? 1 : 0 }} 个。</span>
-      <span v-if="courseStatusText">{{ courseStatusText }}</span>
-      <HoverTip content="在知识点上配置能力标签与素养标签后，学生端图谱与报告会按掌握度、练习与小测证据汇总能力达成情况。" />
+    <section class="workspace-context-bar">
+      <div class="workspace-context-bar__item">
+        <span>知识点数</span>
+        <strong>{{ workbenchState.kpCount }}</strong>
+      </div>
+      <div class="workspace-context-bar__item">
+        <span>分类数</span>
+        <strong>{{ workbenchState.categoryCount }}</strong>
+      </div>
+      <div class="workspace-context-bar__item">
+        <span>当前状态</span>
+        <strong>{{ isReadonlyCourse ? "只读" : "可编辑" }}</strong>
+      </div>
+      <div class="workspace-context-bar__summary">
+        <span>{{ nextActionText }}。{{ courseStatusText || "维护知识点、关系和章节布局后，学生端图谱会同步更新。" }}</span>
+        <HoverTip content="在知识点上配置能力和素养标签后，学生端图谱与学习报告会按掌握度、练习和小测证据展示达成情况。" />
+      </div>
     </section>
 
     <TeacherGraphWorkbench :subject="subject" :grade="grade" :fullscreen="true" :readonly="isReadonlyCourse" @state-change="updateWorkbenchState" />
@@ -133,7 +184,6 @@ onMounted(async () => {
 
 <style scoped>
 .workspace-page {
-  /* 与学生端一致，减少外层高度扣减，避免内部画布被截断 */
   height: calc(100dvh - 96px - 4px);
   max-height: calc(100dvh - 96px - 4px);
   padding: 6px 10px 8px;
@@ -145,6 +195,12 @@ onMounted(async () => {
   overflow-x: hidden;
   overflow-y: auto;
   min-height: 0;
+}
+
+.workspace-page--standalone {
+  height: 100dvh;
+  max-height: 100dvh;
+  padding: 10px 12px 12px;
 }
 
 .workspace-page > :last-child {
@@ -166,8 +222,39 @@ onMounted(async () => {
 }
 
 .workspace-page__left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.workspace-page__left > div:last-child {
   display: grid;
   gap: 4px;
+}
+
+.workspace-page__back {
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  padding: 0 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
+  color: #39506d;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-shadow: var(--app-shadow-soft);
+}
+
+.workspace-page__eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6c86ab;
 }
 
 .workspace-page__title {
@@ -191,6 +278,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .workspace-page__minor-btn {
@@ -209,25 +297,88 @@ onMounted(async () => {
   box-shadow: var(--app-shadow-soft);
 }
 
-.workspace-simple-note {
-  flex-shrink: 0;
-  padding: 6px 10px;
+.workspace-page__primary-btn {
+  border: 1px solid var(--app-green);
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.workspace-page__chip {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: #fafbfd;
+  border: 1px solid var(--app-border);
+  color: #314661;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
+
+.workspace-context-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 160px)) 1fr;
+  gap: 10px;
+}
+
+.workspace-context-bar__item,
+.workspace-context-bar__summary,
+.workspace-next-bar__card,
+.workspace-next-bar__actions {
+  padding: 10px 12px;
   border-radius: var(--app-radius-sm);
   background: var(--app-card);
   border: 1px solid var(--app-border);
-  color: var(--app-ink-soft);
-  font-size: 12px;
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
   box-shadow: var(--app-shadow-soft);
 }
 
+.workspace-context-bar__item {
+  display: grid;
+  gap: 6px;
+}
+
+.workspace-context-bar__item span,
+.workspace-context-bar__summary span {
+  font-size: 12px;
+  color: var(--app-ink-soft);
+}
+
+.workspace-context-bar__item strong {
+  font-size: 16px;
+  color: var(--app-ink);
+}
+
+.workspace-context-bar__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 @media (max-width: 900px) {
+  .workspace-context-bar {
+    grid-template-columns: 1fr;
+  }
+
   .workspace-page__toolbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .workspace-page__left {
+    width: 100%;
+    flex-wrap: wrap;
   }
 
   .workspace-page__right {

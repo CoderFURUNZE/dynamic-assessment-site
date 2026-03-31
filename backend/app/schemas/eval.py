@@ -133,6 +133,11 @@ class ProfileOut(BaseModel):
     dynamic_breakdown: DynamicBreakdownOut | None = None
     persona_signals: list[PersonaSignalOut] = []
     persona_intro: str = ""
+    learning_behavior_overview: dict = {}
+    behavior_timeline: list[dict] = []
+    recent_practice_records: list[dict] = []
+    recent_quiz_records: list[dict] = []
+    recent_video_records: list[dict] = []
 
 
 class MasteryMapItem(BaseModel):

@@ -615,6 +615,9 @@ def graph_map(
         else {"by_kp": {}}
     )
     for kp in kps:
+        if kp.id is None:
+            # Defensive: ORM rows should always have id, but keep API stable on legacy/partial data.
+            continue
         blocked_reason = None
         status = "not_started"
         mastery_value = 0.0
@@ -890,9 +893,23 @@ def path(
         next_titles = {int(item.id): item.title for item in next_kps if item.id is not None}
     if user.role == UserRole.student and kp is not None:
         for prereq_id in prereq_ids:
-            mastery = upsert_mastery(session, user_id=user.id, kp_id=prereq_id, subject=kp.subject, grade=kp.grade)
-            if float(mastery.value) < 0.6:
-                blocked_prereqs.append(prereq_id)
+            try:
+                mastery = upsert_mastery(
+                    session,
+                    user_id=user.id,
+                    kp_id=prereq_id,
+                    subject=kp.subject,
+                    grade=kp.grade,
+                )
+                if float(mastery.value) < 0.6:
+                    blocked_prereqs.append(prereq_id)
+            except Exception:
+                # Best-effort: if mastery refresh fails, fall back to existing value.
+                existing = session.exec(
+                    select(Mastery).where(Mastery.user_id == user.id, Mastery.kp_id == prereq_id)
+                ).first()
+                if existing is None or float(existing.value) < 0.6:
+                    blocked_prereqs.append(prereq_id)
     blocked_titles = [prereq_titles.get(pid, str(pid)) for pid in blocked_prereqs]
     next_title_list = [next_titles.get(nid, str(nid)) for nid in next_ids]
     can_unlock_next = bool(next_ids) and len(blocked_prereqs) == 0

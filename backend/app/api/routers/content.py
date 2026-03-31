@@ -3,7 +3,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from app.api.deps import get_current_user
+from app.api.deps import assert_student_kp_access, get_current_user
 from app.db.models import EvalConfig, LearningResource, Quiz, QuizAttempt, QuizItem, VideoProgress
 from app.db.session import get_session
 from app.schemas.content import (
@@ -22,20 +22,38 @@ from app.services.resource_files import build_resource_payload
 router = APIRouter(prefix="/content", tags=["content"])
 
 
+def _safe_json_list(raw: str | None) -> list:
+    if not str(raw or "").strip():
+        return []
+    try:
+        data = json.loads(raw or "[]")
+    except Exception:
+        return []
+    return data if isinstance(data, list) else []
+
+
 def _get_video_complete_ratio(session: Session, *, subject: str, grade: str) -> float:
     cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == subject, EvalConfig.grade == grade)).first()
     if cfg is None:
         return 0.8
-    window = json.loads(cfg.window_json)
-    return float(window.get("video_complete_ratio", 0.8))
+    try:
+        window = json.loads(cfg.window_json or "{}")
+    except Exception:
+        window = {}
+    try:
+        return float((window or {}).get("video_complete_ratio", 0.8))
+    except (TypeError, ValueError):
+        return 0.8
 
 
 @router.get("/resources", response_model=list[ResourceOut])
 def list_resources(
     kp_id: int,
     session: Session = Depends(get_session),
-    _user=Depends(get_current_user),
+    user=Depends(get_current_user),
 ):
+    if getattr(user, "role", None) == "student":
+        assert_student_kp_access(session, int(user.id), kp_id)
     res = session.exec(select(LearningResource).where(LearningResource.kp_id == kp_id)).all()
     return [ResourceOut(**build_resource_payload(r)) for r in res if r.id is not None]
 
@@ -79,6 +97,8 @@ def get_quiz(
     quiz = session.exec(select(Quiz).where(Quiz.kp_id == kp_id)).first()
     if quiz is None:
         raise HTTPException(status_code=404, detail="Quiz not found")
+    if getattr(user, "role", None) == "student":
+        assert_student_kp_access(session, int(user.id), kp_id)
     items = session.exec(select(QuizItem).where(QuizItem.quiz_id == quiz.id)).all()
     include_answer = getattr(user, "role", None) != "student"
     return QuizOut(
@@ -89,7 +109,7 @@ def get_quiz(
                 "id": i.id,
                 "type": i.type,
                 "prompt": i.prompt,
-                "options": json.loads(i.options_json),
+                "options": _safe_json_list(i.options_json),
                 "answer": i.answer if include_answer else None,
                 "explanation": i.explanation if include_answer else None,
             }
@@ -107,6 +127,8 @@ def submit_quiz(
     quiz = session.get(Quiz, payload.quiz_id)
     if quiz is None or quiz.kp_id != payload.kp_id:
         raise HTTPException(status_code=400, detail="Invalid quiz")
+    if getattr(user, "role", None) == "student":
+        assert_student_kp_access(session, int(user.id), payload.kp_id)
     items = session.exec(select(QuizItem).where(QuizItem.quiz_id == quiz.id)).all()
     item_map = {i.id: i for i in items}
 
@@ -236,6 +258,8 @@ def list_video_progress(
     rows = session.exec(
         select(VideoProgress).where(VideoProgress.user_id == user.id, VideoProgress.kp_id == kp_id)
     ).all()
+    if getattr(user, "role", None) == "student":
+        assert_student_kp_access(session, int(user.id), kp_id)
     return [
         VideoProgressOut(
             kp_id=r.kp_id,

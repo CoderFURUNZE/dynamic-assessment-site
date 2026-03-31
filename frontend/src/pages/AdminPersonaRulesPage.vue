@@ -17,12 +17,12 @@ const router = useRouter();
       </div>
       <div class="edu-header__actions admin-shell-actions">
         <el-button-group>
-          <el-button @click="router.push('/admin')">概览</el-button>
-          <el-button @click="router.push('/admin/courses')">课程</el-button>
-          <el-button @click="router.push('/admin/users')">用户</el-button>
-          <el-button @click="router.push('/admin/teachers')">老师</el-button>
-          <el-button @click="router.push('/admin/dimensions')">指标池</el-button>
-          <el-button type="primary" @click="router.push('/admin/persona')">画像规则</el-button>
+          <el-button @click="router.push('/admin/dashboard')">概览</el-button>
+          <el-button @click="router.push('/admin/basic/courses')">课程</el-button>
+          <el-button @click="router.push('/admin/basic/users')">用户</el-button>
+          <el-button @click="router.push('/admin/basic/teachers')">老师</el-button>
+          <el-button @click="router.push('/admin/evaluation/dimensions')">指标池</el-button>
+          <el-button type="primary" @click="router.push('/admin/evaluation/persona')">画像规则</el-button>
         </el-button-group>
       </div>
     </header>

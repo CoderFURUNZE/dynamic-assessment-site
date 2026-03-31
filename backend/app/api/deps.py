@@ -5,7 +5,17 @@ from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.security import ALGORITHM
-from app.db.models import User, UserRole
+from app.db.models import (
+    ApplicationStatus,
+    Course,
+    CourseLifecycleStatus,
+    CourseApplication,
+    Enrollment,
+    EnrollmentStatus,
+    KnowledgePoint,
+    User,
+    UserRole,
+)
 from app.db.session import get_session
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -53,3 +63,62 @@ def require_role(*roles: UserRole):
         return user
 
     return _inner
+
+
+def _course_lifecycle_value(course: Course | None) -> str:
+    if course is None:
+        return CourseLifecycleStatus.draft.value
+    value = getattr(course, "lifecycle_status", CourseLifecycleStatus.draft)
+    return value.value if hasattr(value, "value") else str(value or CourseLifecycleStatus.draft.value)
+
+
+def _is_course_learning_available(course: Course | None) -> bool:
+    if course is None:
+        return False
+    lifecycle = _course_lifecycle_value(course)
+    if not bool(course.active) or lifecycle != CourseLifecycleStatus.active.value:
+        return False
+    return True
+
+
+def assert_student_subject_access(session: Session, user_id: int, subject: str) -> None:
+    course = session.exec(select(Course).where(Course.title == subject).order_by(Course.created_at.desc())).first()
+    if course is None or course.id is None:
+        raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
+
+    enrollment = session.exec(
+        select(Enrollment).where(
+            Enrollment.student_id == user_id,
+            Enrollment.course_id == int(course.id),
+            Enrollment.status == EnrollmentStatus.active,
+        )
+    ).first()
+    if enrollment is not None:
+        return
+
+    student = session.get(User, user_id)
+    if student is not None and str(student.class_name or "").strip() and str(course.target_class or "").strip():
+        if str(student.class_name).strip() == str(course.target_class).strip():
+            return
+
+    approved = session.exec(
+        select(CourseApplication.id).where(
+            CourseApplication.student_id == user_id,
+            CourseApplication.course_id == int(course.id),
+            CourseApplication.status == ApplicationStatus.approved,
+        )
+    ).first()
+    if approved is not None:
+        return
+
+    if not _is_course_learning_available(course):
+        raise HTTPException(status_code=403, detail="课程尚未开课，暂无法学习")
+    raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
+
+
+def assert_student_kp_access(session: Session, user_id: int, kp_id: int) -> KnowledgePoint:
+    kp = session.get(KnowledgePoint, kp_id)
+    if kp is None:
+        raise HTTPException(status_code=404, detail="知识点不存在")
+    assert_student_subject_access(session, user_id, kp.subject)
+    return kp

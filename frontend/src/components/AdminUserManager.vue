@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
@@ -27,7 +27,8 @@ const pageSize = 15;
 const total = ref(0);
 const dialogOpen = ref(false);
 const createDialogOpen = ref(false);
-const editing = ref<UserRow | null>(null);
+const keyword = ref("");
+const statusFilter = ref<"all" | "active" | "inactive">("all");
 
 const form = reactive({
   id: 0,
@@ -52,16 +53,22 @@ const createForm = reactive({
   password: "",
 });
 
-const titleText = computed(() => (props.mode === "teachers" ? "老师管理" : "用户管理"));
+const titleText = computed(() => (props.mode === "teachers" ? "教师管理" : "用户管理"));
 const roleFilter = computed(() => (props.mode === "teachers" ? "teacher" : ""));
+const createLabel = computed(() => (props.mode === "teachers" ? "新增教师" : "新增用户"));
+const filteredUsers = computed(() => {
+  const q = keyword.value.trim().toLowerCase();
+  return users.value.filter((row) => {
+    const matchesKeyword = !q || [row.username, row.full_name, row.student_no, row.class_name, row.phone || ""].join(" ").toLowerCase().includes(q);
+    const matchesStatus = statusFilter.value === "all" || (statusFilter.value === "active" ? row.active : !row.active);
+    return matchesKeyword && matchesStatus;
+  });
+});
 
 async function load() {
   loading.value = true;
   try {
-    const qs = new URLSearchParams({
-      page: String(page.value),
-      page_size: String(pageSize),
-    });
+    const qs = new URLSearchParams({ page: String(page.value), page_size: String(pageSize) });
     if (roleFilter.value) qs.set("role", roleFilter.value);
     const res = await api.get(`/admin/users?${qs.toString()}`);
     users.value = res.data.items ?? [];
@@ -74,7 +81,6 @@ async function load() {
 }
 
 function openEdit(row: UserRow) {
-  editing.value = row;
   form.id = row.id;
   form.username = row.username;
   form.role = row.role;
@@ -160,29 +166,38 @@ async function remove(row: UserRow) {
 }
 
 onMounted(() => load());
-
-watch(
-  () => props.mode,
-  () => {
-    page.value = 1;
-    load();
-  }
-);
+watch(() => props.mode, () => { page.value = 1; load(); });
 </script>
 
 <template>
   <el-card class="panel-card admin-user-card" shadow="never">
     <template #header>
       <div class="admin-user-card__header">
-        <div class="admin-user-card__title">{{ titleText }}</div>
-        <div class="admin-user-card__actions">
-          <HintButton type="primary" tip="新增一个老师或学生账号。" @click="openCreate">新增{{ props.mode === "teachers" ? "老师" : "用户" }}</HintButton>
-          <HintButton tip="刷新用户列表。" @click="load" :loading="loading">刷新</HintButton>
+        <div class="admin-user-card__title-block">
+          <div class="admin-user-card__eyebrow">{{ props.mode === 'teachers' ? 'Teacher Admin' : 'User Admin' }}</div>
+          <div class="admin-user-card__title">{{ titleText }}</div>
+          <div class="admin-user-card__desc">列表、筛选和新增操作都放在一处，减少来回找按钮。</div>
+        </div>
+        <div class="admin-user-card__toolbar">
+          <el-input v-model="keyword" placeholder="搜索用户名 / 姓名 / 学号 / 班级" clearable class="admin-user-card__search" />
+          <el-select v-model="statusFilter" class="admin-user-card__status">
+            <el-option label="全部状态" value="all" />
+            <el-option label="仅启用" value="active" />
+            <el-option label="仅禁用" value="inactive" />
+          </el-select>
+          <HintButton tip="重新加载用户列表" @click="load" :loading="loading">刷新</HintButton>
+          <HintButton type="primary" tip="新建一条账号记录" @click="openCreate">{{ createLabel }}</HintButton>
         </div>
       </div>
     </template>
 
-    <el-table :data="users" size="small" v-loading="loading" class="admin-user-card__table">
+    <div class="admin-user-card__summary">
+      <span>当前页 {{ users.length }} 条</span>
+      <span>筛选后 {{ filteredUsers.length }} 条</span>
+      <span>总计 {{ total }} 条</span>
+    </div>
+
+    <el-table :data="filteredUsers" size="small" v-loading="loading" class="admin-user-card__table">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="username" label="用户名" width="140" />
       <el-table-column prop="role" label="角色" width="100" />
@@ -202,10 +217,12 @@ watch(
       <el-table-column prop="class_name" label="班级" />
       <el-table-column prop="phone" label="手机号" width="140" />
       <el-table-column prop="wechat_openid" label="微信OpenID" width="180" />
-      <el-table-column label="操作" width="160">
+      <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
-          <HintButton size="small" tip="编辑该用户的姓名、班级、手机号和状态。" @click="openEdit(row)">编辑</HintButton>
-          <HintButton size="small" type="danger" tip="删除该用户账号，管理员默认账号不可删。" @click="remove(row)" :disabled="row.username === 'admin'">删除</HintButton>
+          <div class="admin-user-card__row-actions">
+            <HintButton size="small" tip="编辑这条账号信息" @click="openEdit(row)">编辑</HintButton>
+            <HintButton size="small" type="danger" tip="删除这条账号记录" @click="remove(row)" :disabled="row.username === 'admin'">删除</HintButton>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -223,9 +240,7 @@ watch(
 
     <el-dialog v-model="dialogOpen" title="编辑用户" width="520px">
       <el-form label-width="90px">
-        <el-form-item label="用户名">
-          <el-input v-model="form.username" disabled />
-        </el-form-item>
+        <el-form-item label="用户名"><el-input v-model="form.username" disabled /></el-form-item>
         <el-form-item label="角色">
           <el-select v-model="form.role" style="width: 100%" :disabled="props.mode === 'teachers'">
             <el-option label="admin" value="admin" />
@@ -233,36 +248,22 @@ watch(
             <el-option label="student" value="student" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态">
-          <el-switch v-model="form.active" active-text="启用" inactive-text="禁用" />
-        </el-form-item>
-        <el-form-item label="姓名">
-          <el-input v-model="form.full_name" />
-        </el-form-item>
-        <el-form-item label="学号">
-          <el-input v-model="form.student_no" />
-        </el-form-item>
-        <el-form-item label="班级">
-          <el-input v-model="form.class_name" />
-        </el-form-item>
-        <el-form-item label="手机号">
-          <el-input v-model="form.phone" placeholder="留空表示未绑定" />
-        </el-form-item>
-        <el-form-item label="重置密码">
-          <el-input v-model="form.password" placeholder="留空则不修改" show-password />
-        </el-form-item>
+        <el-form-item label="状态"><el-switch v-model="form.active" active-text="启用" inactive-text="禁用" /></el-form-item>
+        <el-form-item label="姓名"><el-input v-model="form.full_name" /></el-form-item>
+        <el-form-item label="学号"><el-input v-model="form.student_no" /></el-form-item>
+        <el-form-item label="班级"><el-input v-model="form.class_name" /></el-form-item>
+        <el-form-item label="手机号"><el-input v-model="form.phone" placeholder="留空表示未绑定" /></el-form-item>
+        <el-form-item label="重置密码"><el-input v-model="form.password" placeholder="留空则不修改" show-password /></el-form-item>
       </el-form>
       <template #footer>
-        <HintButton tip="关闭编辑窗口，不保存当前修改。" @click="dialogOpen = false">取消</HintButton>
-        <HintButton type="primary" tip="保存当前用户信息修改。" @click="save">保存</HintButton>
+        <HintButton @click="dialogOpen = false">取消</HintButton>
+        <HintButton type="primary" @click="save">保存</HintButton>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="createDialogOpen" :title="`新增${props.mode === 'teachers' ? '老师' : '用户'}`" width="520px">
+    <el-dialog v-model="createDialogOpen" :title="createLabel" width="520px">
       <el-form label-width="90px">
-        <el-form-item label="用户名">
-          <el-input v-model="createForm.username" />
-        </el-form-item>
+        <el-form-item label="用户名"><el-input v-model="createForm.username" /></el-form-item>
         <el-form-item label="角色">
           <el-select v-model="createForm.role" style="width: 100%" :disabled="props.mode === 'teachers'">
             <el-option label="teacher" value="teacher" />
@@ -270,28 +271,16 @@ watch(
             <el-option label="admin" value="admin" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态">
-          <el-switch v-model="createForm.active" active-text="启用" inactive-text="禁用" />
-        </el-form-item>
-        <el-form-item label="姓名">
-          <el-input v-model="createForm.full_name" />
-        </el-form-item>
-        <el-form-item label="学号">
-          <el-input v-model="createForm.student_no" />
-        </el-form-item>
-        <el-form-item label="班级">
-          <el-input v-model="createForm.class_name" />
-        </el-form-item>
-        <el-form-item label="手机号">
-          <el-input v-model="createForm.phone" placeholder="留空表示未绑定" />
-        </el-form-item>
-        <el-form-item label="初始密码">
-          <el-input v-model="createForm.password" show-password />
-        </el-form-item>
+        <el-form-item label="状态"><el-switch v-model="createForm.active" active-text="启用" inactive-text="禁用" /></el-form-item>
+        <el-form-item label="姓名"><el-input v-model="createForm.full_name" /></el-form-item>
+        <el-form-item label="学号"><el-input v-model="createForm.student_no" /></el-form-item>
+        <el-form-item label="班级"><el-input v-model="createForm.class_name" /></el-form-item>
+        <el-form-item label="手机号"><el-input v-model="createForm.phone" placeholder="留空表示未绑定" /></el-form-item>
+        <el-form-item label="初始密码"><el-input v-model="createForm.password" show-password /></el-form-item>
       </el-form>
       <template #footer>
-        <HintButton tip="关闭创建窗口，不提交。" @click="createDialogOpen = false">取消</HintButton>
-        <HintButton type="primary" tip="创建这个账号并写入系统。" @click="createUser">创建</HintButton>
+        <HintButton @click="createDialogOpen = false">取消</HintButton>
+        <HintButton type="primary" @click="createUser">创建</HintButton>
       </template>
     </el-dialog>
   </el-card>
@@ -300,31 +289,24 @@ watch(
 <style scoped>
 .admin-user-card__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
 }
-
-.admin-user-card__title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--app-text-main);
-}
-
-.admin-user-card__actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.admin-user-card__table {
-  width: 100%;
-}
-
-.admin-user-card__pager {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 10px;
+.admin-user-card__title-block { display: grid; gap: 6px; }
+.admin-user-card__eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #6c86ab; }
+.admin-user-card__title { font-size: 22px; font-weight: 800; color: var(--app-text-main); }
+.admin-user-card__desc { color: var(--app-text-soft); font-size: 13px; }
+.admin-user-card__toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.admin-user-card__search { width: 260px; }
+.admin-user-card__status { width: 130px; }
+.admin-user-card__summary { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; color: var(--app-text-soft); }
+.admin-user-card__row-actions { display: flex; gap: 6px; }
+.admin-user-card__pager { display: flex; justify-content: flex-end; margin-top: 12px; }
+@media (max-width: 768px) {
+  .admin-user-card__search,
+  .admin-user-card__status { width: 100%; }
+  .admin-user-card__toolbar { width: 100%; }
 }
 </style>

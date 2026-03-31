@@ -108,6 +108,9 @@ const systemMappings = reactive({
   mastery: true,
 });
 
+type ImportView = "import" | "preview" | "history";
+const importView = ref<ImportView>("import");
+
 const metricOptions = [
   { label: "视频学习记录", value: "video" },
   { label: "作业完成记录", value: "assignment" },
@@ -358,8 +361,26 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="import-grid">
-        <section class="import-panel">
+      <el-tabs v-model="importView" class="import-view-tabs" stretch>
+        <el-tab-pane label="导入配置与上传" name="import" />
+        <el-tab-pane label="预览与错误定位" name="preview" />
+        <el-tab-pane label="导入历史" name="history" />
+      </el-tabs>
+      <el-alert v-if="importView === 'import'" type="info" :closable="false" show-icon class="import-view-help">
+        <template #title>功能范围与操作说明</template>
+        <div>功能范围：配置阶段与数据类型、上传文件并触发重算。操作顺序：选阶段 → 选数据类型 → 下载模板 → 上传整班文件 → 一键导入并生成画像。</div>
+      </el-alert>
+      <el-alert v-else-if="importView === 'preview'" type="info" :closable="false" show-icon class="import-view-help">
+        <template #title>功能范围与操作说明</template>
+        <div>功能范围：查看系统预览、导入结果与错误信息。操作顺序：先看失败条数和错误原因，再回到「导入配置与上传」修正后重新导入。</div>
+      </el-alert>
+      <el-alert v-else type="info" :closable="false" show-icon class="import-view-help">
+        <template #title>功能范围与操作说明</template>
+        <div>功能范围：追溯历史批次的导入表现。操作顺序：按时间定位批次 → 查看成功/失败比与错误预览 → 决定是否补导或重导。</div>
+      </el-alert>
+
+      <div class="import-grid" :style="{ gridTemplateColumns: importView === 'import' ? 'minmax(320px, 380px) 1fr' : '1fr' }">
+        <section class="import-panel" v-if="importView === 'import'">
           <div class="import-auto-card">
             <div class="panel-mini-title">系统自动汇总</div>
           <div class="import-auto-card__text">
@@ -473,113 +494,137 @@ onBeforeUnmount(() => {
         </section>
 
         <section class="import-panel import-panel--history">
-          <div v-if="internalSummary" class="guide-panel">
-            <div class="panel-mini-title">系统内阶段数据预览</div>
-            <div class="guide-summary">
-              这部分是系统已经自动采集到的数据，可直接导出给老师核对；线下考勤、课堂参与、口头展示等仍建议老师补充导入。
-            </div>
-            <el-table :data="internalSummary.rows.slice(0, 8)" size="small" style="width: 100%">
-              <el-table-column prop="username" label="账号" width="120" />
-              <el-table-column prop="student_no" label="学号" width="120" />
-              <el-table-column prop="watched_minutes" label="视频分钟" width="110" />
-              <el-table-column label="练习正确率" width="120">
-                <template #default="{ row }">{{ Math.round((row.practice_accuracy || 0) * 100) }}%</template>
-              </el-table-column>
-              <el-table-column prop="practice_attempts" label="练习次数" width="100" />
-              <el-table-column label="掌握度" width="100">
-                <template #default="{ row }">{{ Math.round((row.course_mastery || 0) * 100) }}%</template>
-              </el-table-column>
-              <el-table-column label="动态评分" width="100">
-                <template #default="{ row }">{{ Math.round((row.dynamic_score || 0) * 100) }}%</template>
-              </el-table-column>
-              <el-table-column prop="risk_level" label="风险等级" min-width="120" />
-            </el-table>
-          </div>
+          <el-alert
+            v-if="importView === 'preview'"
+            type="info"
+            show-icon
+            :closable="false"
+            title="预览与错误定位"
+          >
+            <div>查看系统内阶段数据预览、最近一次批量结果与失败原因；对照字段错误后回到「导入配置与上传」重新导入。</div>
+          </el-alert>
+          <el-alert
+            v-else
+            type="info"
+            show-icon
+            :closable="false"
+            title="导入历史"
+          >
+            <div>在导入历史中追溯某次批次的成功/失败情况，并复用错误预览结果定位问题。</div>
+          </el-alert>
 
-          <div v-if="lastResult" class="import-result-card">
-            <div class="panel-mini-title">最近一次批量生成结果</div>
-            <div class="import-result-card__metrics">
-              <div class="import-result-card__metric">
-                <span>总记录</span>
-                <strong>{{ lastResult.total_rows }}</strong>
+          <template v-if="importView === 'preview'">
+            <div v-if="internalSummary" class="guide-panel">
+              <div class="panel-mini-title">系统内阶段数据预览</div>
+              <div class="guide-summary">
+                这部分是系统已经自动采集到的数据，可直接导出给老师核对；线下考勤、课堂参与、口头展示等仍建议老师补充导入。
               </div>
-              <div class="import-result-card__metric">
-                <span>成功导入</span>
-                <strong>{{ lastResult.success_rows }}</strong>
-              </div>
-              <div class="import-result-card__metric">
-                <span>失败记录</span>
-                <strong>{{ lastResult.failed_rows }}</strong>
-              </div>
-              <div class="import-result-card__metric">
-                <span>生成画像学生</span>
-                <strong>{{ lastResult.recalculated_users }}</strong>
-              </div>
+              <el-table :data="internalSummary.rows.slice(0, 8)" size="small" style="width: 100%">
+                <el-table-column prop="username" label="账号" width="120" />
+                <el-table-column prop="student_no" label="学号" width="120" />
+                <el-table-column prop="watched_minutes" label="视频分钟" width="110" />
+                <el-table-column label="练习正确率" width="120">
+                  <template #default="{ row }">{{ Math.round((row.practice_accuracy || 0) * 100) }}%</template>
+                </el-table-column>
+                <el-table-column prop="practice_attempts" label="练习次数" width="100" />
+                <el-table-column label="掌握度" width="100">
+                  <template #default="{ row }">{{ Math.round((row.course_mastery || 0) * 100) }}%</template>
+                </el-table-column>
+                <el-table-column label="动态评分" width="100">
+                  <template #default="{ row }">{{ Math.round((row.dynamic_score || 0) * 100) }}%</template>
+                </el-table-column>
+                <el-table-column prop="risk_level" label="风险等级" min-width="120" />
+              </el-table>
             </div>
-            <div class="import-result-card__next">
-              {{ lastResult.next_action || "导入完成后，可直接进入学生画像页查看这次阶段重算结果。" }}
-            </div>
-            <div class="import-result-card__actions">
-              <HintButton type="primary" tip="跳转到学生画像页查看本次导入结果。" @click="openProfiles">查看学生画像</HintButton>
-            </div>
-            <div v-if="lastResult.errors?.length" class="error-stack">
-              <div v-for="item in lastResult.errors.slice(0, 5)" :key="item">{{ item }}</div>
-            </div>
-          </div>
 
-          <div v-if="selectedGuide" class="guide-panel">
-            <div class="panel-mini-title">当前数据类型说明</div>
-            <div class="guide-summary">{{ selectedGuide.summary }}</div>
-            <div class="guide-block">
-              <div class="guide-label">模板字段</div>
-              <div class="guide-chips">
-                <span v-for="item in selectedGuide.template_fields" :key="item" class="guide-chip">
-                  {{ item }}
-                </span>
-              </div>
-            </div>
-            <div class="guide-block">
-              <div class="guide-label">影响的一级维度</div>
-              <div class="guide-chips">
-                <span v-for="item in selectedGuide.affected_dimensions" :key="item" class="guide-chip guide-chip--blue">
-                  {{ item }}
-                </span>
-              </div>
-            </div>
-            <div class="guide-block">
-              <div class="guide-label">主要影响的二级指标</div>
-              <div class="guide-chips">
-                <span v-for="item in selectedGuide.affected_indicators" :key="item" class="guide-chip guide-chip--soft">
-                  {{ item }}
-                </span>
-              </div>
-            </div>
-            <div class="guide-next">
-              {{ selectedGuide.next_action }}
-            </div>
-          </div>
-          <div class="panel-mini-title">导入历史</div>
-          <el-table :data="batches" size="small" style="width: 100%">
-            <el-table-column prop="created_at" label="时间" width="180">
-              <template #default="{ row }">{{ row.created_at.replace('T', ' ').slice(0, 19) }}</template>
-            </el-table-column>
-            <el-table-column prop="stage_title" label="阶段" min-width="180" />
-            <el-table-column prop="metric_type" label="类型" width="120" />
-            <el-table-column prop="file_name" label="文件" min-width="180" />
-            <el-table-column label="结果" width="140">
-              <template #default="{ row }">
-                <span>{{ row.success_rows }}/{{ row.total_rows }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="错误预览" min-width="240">
-              <template #default="{ row }">
-                <div v-if="row.error_preview.length === 0" class="ok-text">无</div>
-                <div v-else class="error-stack">
-                  <div v-for="item in row.error_preview" :key="item">{{ item }}</div>
+            <div v-if="lastResult" class="import-result-card">
+              <div class="panel-mini-title">最近一次批量生成结果</div>
+              <div class="import-result-card__metrics">
+                <div class="import-result-card__metric">
+                  <span>总记录</span>
+                  <strong>{{ lastResult.total_rows }}</strong>
                 </div>
-              </template>
-            </el-table-column>
-          </el-table>
+                <div class="import-result-card__metric">
+                  <span>成功导入</span>
+                  <strong>{{ lastResult.success_rows }}</strong>
+                </div>
+                <div class="import-result-card__metric">
+                  <span>失败记录</span>
+                  <strong>{{ lastResult.failed_rows }}</strong>
+                </div>
+                <div class="import-result-card__metric">
+                  <span>生成画像学生</span>
+                  <strong>{{ lastResult.recalculated_users }}</strong>
+                </div>
+              </div>
+              <div class="import-result-card__next">
+                {{ lastResult.next_action || "导入完成后，可直接进入学生画像页查看这次阶段重算结果。" }}
+              </div>
+              <div class="import-result-card__actions">
+                <HintButton type="primary" tip="跳转到学生画像页查看本次导入结果。" @click="openProfiles">查看学生画像</HintButton>
+              </div>
+              <div v-if="lastResult.errors?.length" class="error-stack">
+                <div v-for="item in lastResult.errors.slice(0, 5)" :key="item">{{ item }}</div>
+              </div>
+            </div>
+
+            <div v-if="selectedGuide" class="guide-panel">
+              <div class="panel-mini-title">当前数据类型说明</div>
+              <div class="guide-summary">{{ selectedGuide.summary }}</div>
+              <div class="guide-block">
+                <div class="guide-label">模板字段</div>
+                <div class="guide-chips">
+                  <span v-for="item in selectedGuide.template_fields" :key="item" class="guide-chip">
+                    {{ item }}
+                  </span>
+                </div>
+              </div>
+              <div class="guide-block">
+                <div class="guide-label">影响的一级维度</div>
+                <div class="guide-chips">
+                  <span v-for="item in selectedGuide.affected_dimensions" :key="item" class="guide-chip guide-chip--blue">
+                    {{ item }}
+                  </span>
+                </div>
+              </div>
+              <div class="guide-block">
+                <div class="guide-label">主要影响的二级指标</div>
+                <div class="guide-chips">
+                  <span v-for="item in selectedGuide.affected_indicators" :key="item" class="guide-chip guide-chip--soft">
+                    {{ item }}
+                  </span>
+                </div>
+              </div>
+              <div class="guide-next">
+                {{ selectedGuide.next_action }}
+              </div>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="panel-mini-title">导入历史</div>
+            <el-table :data="batches" size="small" style="width: 100%">
+              <el-table-column prop="created_at" label="时间" width="180">
+                <template #default="{ row }">{{ row.created_at.replace('T', ' ').slice(0, 19) }}</template>
+              </el-table-column>
+              <el-table-column prop="stage_title" label="阶段" min-width="180" />
+              <el-table-column prop="metric_type" label="类型" width="120" />
+              <el-table-column prop="file_name" label="文件" min-width="180" />
+              <el-table-column label="结果" width="140">
+                <template #default="{ row }">
+                  <span>{{ row.success_rows }}/{{ row.total_rows }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="错误预览" min-width="240">
+                <template #default="{ row }">
+                  <div v-if="row.error_preview.length === 0" class="ok-text">无</div>
+                  <div v-else class="error-stack">
+                    <div v-for="item in row.error_preview" :key="item">{{ item }}</div>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </template>
         </section>
       </div>
     </template>
@@ -650,6 +695,10 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(320px, 380px) 1fr;
   gap: 16px;
+}
+
+.import-view-help {
+  margin-bottom: 14px;
 }
 
 .import-auto-card {

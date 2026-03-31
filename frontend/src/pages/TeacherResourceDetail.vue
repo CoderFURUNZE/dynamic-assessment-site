@@ -133,7 +133,7 @@ async function removeResource() {
 
 function backToWorkspace() {
   router.push({
-    path: "/teacher/graph-workspace",
+    path: "/teacher/content",
     query: {
       subject: detail.value?.subject || String(route.query.subject || "") || undefined,
       grade: detail.value?.grade || String(route.query.grade || "") || undefined,

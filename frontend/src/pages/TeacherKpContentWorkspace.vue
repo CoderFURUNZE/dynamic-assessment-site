@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import type { Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
+import { Reading, EditPen, Collection, FolderOpened, Share, Upload, ArrowDown } from "@element-plus/icons-vue";
 import { api } from "../api";
 
 type KpInfo = {
@@ -173,11 +175,49 @@ const stats = computed(() => ({
   recommend: recommendResources.value.length,
 }));
 
-const sectionCards = computed(() => [
-  { key: "learning" as SectionKey, title: "学习内容", desc: "视频、文档、链接", count: stats.value.learning },
-  { key: "practice" as SectionKey, title: "练习", desc: "题库与练习顺序", count: stats.value.practice },
-  { key: "recommend" as SectionKey, title: "推荐资源", desc: "书籍与拓展阅读", count: stats.value.recommend },
-]);
+const sectionCards = computed(() => {
+  const icons: Record<SectionKey, Component> = {
+    learning: Reading,
+    practice: EditPen,
+    recommend: Collection,
+  };
+  return [
+    {
+      key: "learning" as SectionKey,
+      title: "学习资料",
+      desc: "视频、文档、课件与外链",
+      count: stats.value.learning,
+      icon: icons.learning,
+    },
+    {
+      key: "practice" as SectionKey,
+      title: "练习与题库",
+      desc: "题目与随堂练习顺序",
+      count: stats.value.practice,
+      icon: icons.practice,
+    },
+    {
+      key: "recommend" as SectionKey,
+      title: "推荐拓展",
+      desc: "书籍与课外阅读",
+      count: stats.value.recommend,
+      icon: icons.recommend,
+    },
+  ];
+});
+
+const graphLinkQuery = computed(() => ({
+  subject: subject.value || undefined,
+  grade: grade.value || undefined,
+}));
+
+const resourceDialogTitle = computed(() => {
+  const isRec = resourceDialogMode.value === "recommend";
+  if (resourceEditingId.value) {
+    return isRec ? "编辑推荐资源" : "编辑学习资源";
+  }
+  return isRec ? "新增推荐资源" : "新增学习资源";
+});
 
 function parseOptions(text: string) {
   return text
@@ -298,7 +338,7 @@ async function loadData() {
 
 function goBack() {
   router.push({
-    path: "/teacher/graph-workspace",
+    path: "/teacher/content",
     query: {
       subject: subject.value || undefined,
       grade: grade.value || undefined,
@@ -536,6 +576,12 @@ async function saveResource() {
   }
 }
 
+function handleResourceMoreCommand(cmd: string, item: ResourceItem) {
+  if (cmd === "preview") openPreview(item);
+  else if (cmd === "original") openOriginal(item);
+  else if (cmd === "remove") removeResource(item);
+}
+
 function openPreview(item: ResourceItem) {
   window.open(item.converted_preview_url || item.url, "_blank", "noopener,noreferrer");
 }
@@ -668,40 +714,78 @@ onMounted(async () => {
 <template>
   <div class="teacher-content-page" v-loading="loading">
     <div class="teacher-content-page__inner">
+      <nav class="content-breadcrumb-wrap" aria-label="页面位置">
+        <el-breadcrumb separator="/">
+          <el-breadcrumb-item>
+            <router-link class="content-breadcrumb-link" :to="{ path: '/teacher/workspace' }">
+              <el-icon class="content-breadcrumb-icon"><FolderOpened /></el-icon>
+              我的课程
+            </router-link>
+          </el-breadcrumb-item>
+          <el-breadcrumb-item>
+            <router-link
+              class="content-breadcrumb-link"
+              :to="{ path: '/teacher/content', query: graphLinkQuery }"
+            >
+              <el-icon class="content-breadcrumb-icon"><Share /></el-icon>
+              知识图谱
+            </router-link>
+          </el-breadcrumb-item>
+          <el-breadcrumb-item>{{ currentKpLabel }}</el-breadcrumb-item>
+        </el-breadcrumb>
+      </nav>
+
       <header class="content-topbar panel-shell">
         <div class="content-topbar__left">
-          <button class="content-back" @click="goBack">返回图谱</button>
-          <div>
-            <div class="content-eyebrow">Teacher Content Workspace</div>
-            <h1 class="content-title">老师资源配置页</h1>
-            <p class="content-subtitle">围绕单个知识点统一配置学习内容、练习和推荐资源。</p>
+          <button type="button" class="content-back" @click="goBack">
+            <span class="content-back__text">返回图谱</span>
+          </button>
+          <div class="content-topbar__titles">
+            <div class="content-eyebrow">知识点内容配置</div>
+            <h1 class="content-title">配置本知识点的学习与练习</h1>
+            <p class="content-subtitle">
+              建议顺序：先上传或挂接<strong>学习资料</strong>，再维护<strong>题库</strong>并加入<strong>随堂练习</strong>，最后补充<strong>推荐拓展</strong>。
+            </p>
           </div>
         </div>
         <div class="content-kp" v-if="kp">
-          <span>{{ kp.code }}</span>
-          <strong>{{ kp.title }}</strong>
-          <small>{{ kp.chapter || "未分章" }}</small>
+          <span class="content-kp__code">{{ kp.code }}</span>
+          <strong class="content-kp__title">{{ kp.title }}</strong>
+          <small class="content-kp__chapter">{{ kp.chapter || "未分章" }}</small>
         </div>
       </header>
 
-      <section class="content-summary">
+      <section class="content-summary" aria-label="本知识点内容概览">
         <div class="summary-card" v-for="card in sectionCards" :key="card.key">
-          <span>{{ card.title }}</span>
-          <strong>{{ card.count }}</strong>
-          <small>{{ card.desc }}</small>
+          <div class="summary-card__icon" :class="`summary-card__icon--${card.key}`" aria-hidden="true">
+            <el-icon :size="22"><component :is="card.icon" /></el-icon>
+          </div>
+          <div class="summary-card__body">
+            <span class="summary-card__label">{{ card.title }}</span>
+            <strong class="summary-card__value">{{ card.count }}</strong>
+            <small class="summary-card__desc">{{ card.desc }}</small>
+          </div>
         </div>
       </section>
 
       <div class="content-layout">
-        <aside class="content-nav panel-shell">
+        <aside class="content-nav panel-shell" aria-label="内容分区">
+          <p class="content-nav__hint">切换分区</p>
           <button
             v-for="card in sectionCards"
             :key="card.key"
+            type="button"
             class="content-nav__item"
             :class="{ active: activeSection === card.key }"
             @click="activeSection = card.key"
           >
-            <strong>{{ card.title }}</strong>
+            <div class="content-nav__item-head">
+              <span class="content-nav__icon-wrap" :class="{ active: activeSection === card.key }">
+                <el-icon :size="18"><component :is="card.icon" /></el-icon>
+              </span>
+              <strong>{{ card.title }}</strong>
+              <span class="content-nav__count">{{ card.count }}</span>
+            </div>
             <small>{{ card.desc }}</small>
           </button>
         </aside>
@@ -711,8 +795,8 @@ onMounted(async () => {
             <section class="content-card panel-shell">
               <div class="content-card__head">
                 <div>
-                  <h3>学习内容</h3>
-                  <p>先配学生要看的视频、文档、课件或外部链接。可用「全部一览」并排查看本知识点全部资源。</p>
+                  <h3>学习资料</h3>
+                  <p>上传或挂接视频、文档、课件与外链。下方「全部一览」可快速扫一遍；「按类型分组」便于检查是否缺某一类资源。</p>
                 </div>
                 <el-button type="primary" @click="openResourceCreate('learning')">新增学习资源</el-button>
               </div>
@@ -737,11 +821,21 @@ onMounted(async () => {
                         <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
                       </div>
                       <div class="content-item__actions">
-                        <el-button size="small" :disabled="item.preview_status === 'processing'" @click="openPreview(item)">预览</el-button>
-                        <el-button size="small" @click="openOriginal(item)">下载原文件</el-button>
+                        <el-button size="small" type="primary" plain @click="openResourceEdit(item, 'learning')">编辑</el-button>
                         <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
-                        <el-button size="small" @click="openResourceEdit(item, 'learning')">编辑</el-button>
-                        <el-button size="small" type="danger" @click="removeResource(item)">删除</el-button>
+                        <el-dropdown trigger="click" @command="(cmd) => handleResourceMoreCommand(String(cmd), item)">
+                          <el-button size="small">
+                            更多
+                            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                          </el-button>
+                          <template #dropdown>
+                            <el-dropdown-menu>
+                              <el-dropdown-item command="preview" :disabled="item.preview_status === 'processing'">预览</el-dropdown-item>
+                              <el-dropdown-item command="original">下载原文件</el-dropdown-item>
+                              <el-dropdown-item command="remove" divided class="resource-dropdown-danger">删除</el-dropdown-item>
+                            </el-dropdown-menu>
+                          </template>
+                        </el-dropdown>
                       </div>
                     </div>
                   </div>
@@ -771,11 +865,21 @@ onMounted(async () => {
                             <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
                           </div>
                           <div class="content-item__actions">
-                            <el-button size="small" :disabled="item.preview_status === 'processing'" @click="openPreview(item)">预览</el-button>
-                            <el-button size="small" @click="openOriginal(item)">下载原文件</el-button>
+                            <el-button size="small" type="primary" plain @click="openResourceEdit(item, 'learning')">编辑</el-button>
                             <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
-                            <el-button size="small" @click="openResourceEdit(item, 'learning')">编辑</el-button>
-                            <el-button size="small" type="danger" @click="removeResource(item)">删除</el-button>
+                            <el-dropdown trigger="click" @command="(cmd) => handleResourceMoreCommand(String(cmd), item)">
+                              <el-button size="small">
+                                更多
+                                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                              </el-button>
+                              <template #dropdown>
+                                <el-dropdown-menu>
+                                  <el-dropdown-item command="preview" :disabled="item.preview_status === 'processing'">预览</el-dropdown-item>
+                                  <el-dropdown-item command="original">下载原文件</el-dropdown-item>
+                                  <el-dropdown-item command="remove" divided class="resource-dropdown-danger">删除</el-dropdown-item>
+                                </el-dropdown-menu>
+                              </template>
+                            </el-dropdown>
                           </div>
                         </div>
                       </div>
@@ -790,8 +894,8 @@ onMounted(async () => {
             <section class="content-card panel-shell">
               <div class="content-card__head">
                 <div>
-                  <h3>练习题库</h3>
-                  <p>先维护题目并标注<strong>认知层级</strong>与<strong>能力二级标签</strong>，系统会按标签汇总学生在<strong>高阶题</strong>上的练习正确率。</p>
+                  <h3>题库</h3>
+                  <p>维护本题点下的题目，并标注<strong>认知层级</strong>与<strong>能力标签</strong>；下方「已加入的练习」决定学生端练习顺序。</p>
                 </div>
                 <el-button type="primary" @click="openQuestionCreate">新增题目</el-button>
               </div>
@@ -844,8 +948,8 @@ onMounted(async () => {
             <section class="content-card panel-shell">
               <div class="content-card__head">
                 <div>
-                  <h3>推荐资源</h3>
-                  <p>用于扩展学习、推荐书籍和课外阅读，不强制要求学生完成。</p>
+                  <h3>推荐拓展</h3>
+                  <p>拓展阅读、推荐书籍等，与主学习资料区分展示；学生可按需查看，不作硬性完成要求。</p>
                 </div>
                 <el-button type="primary" @click="openResourceCreate('recommend')">新增推荐资源</el-button>
               </div>
@@ -874,11 +978,21 @@ onMounted(async () => {
                         <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
                       </div>
                       <div class="content-item__actions">
-                        <el-button size="small" :disabled="item.preview_status === 'processing'" @click="openPreview(item)">预览</el-button>
-                        <el-button size="small" @click="openOriginal(item)">下载原文件</el-button>
+                        <el-button size="small" type="primary" plain @click="openResourceEdit(item, 'recommend')">编辑</el-button>
                         <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
-                        <el-button size="small" @click="openResourceEdit(item, 'recommend')">编辑</el-button>
-                        <el-button size="small" type="danger" @click="removeResource(item)">删除</el-button>
+                        <el-dropdown trigger="click" @command="(cmd) => handleResourceMoreCommand(String(cmd), item)">
+                          <el-button size="small">
+                            更多
+                            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                          </el-button>
+                          <template #dropdown>
+                            <el-dropdown-menu>
+                              <el-dropdown-item command="preview" :disabled="item.preview_status === 'processing'">预览</el-dropdown-item>
+                              <el-dropdown-item command="original">下载原文件</el-dropdown-item>
+                              <el-dropdown-item command="remove" divided class="resource-dropdown-danger">删除</el-dropdown-item>
+                            </el-dropdown-menu>
+                          </template>
+                        </el-dropdown>
                       </div>
                     </div>
                   </div>
@@ -892,7 +1006,7 @@ onMounted(async () => {
 
     <el-dialog
       v-model="resourceDialogOpen"
-      :title="resourceEditingId ? '编辑学习资源' : '新增学习资源'"
+      :title="resourceDialogTitle"
       width="1120px"
       class="resource-upload-dialog"
     >
@@ -957,7 +1071,9 @@ onMounted(async () => {
                 @dragleave.prevent="handleUploadDragLeave"
                 @drop.prevent="handleUploadDrop"
               >
-                <div class="resource-upload-dropzone__icon">↑</div>
+                <div class="resource-upload-dropzone__icon" aria-hidden="true">
+                  <el-icon :size="28"><Upload /></el-icon>
+                </div>
                 <div class="resource-upload-dropzone__title">把文件拖到这里，或点击选择文件</div>
                 <div class="resource-upload-dropzone__hint">文档、视频、图片会按类型分别校验。建议视频使用 MP4 / WebM，文档优先 PDF。</div>
                 <label class="resource-upload-dropzone__button">
@@ -1092,7 +1208,36 @@ onMounted(async () => {
   max-width: 1500px;
   margin: 0 auto;
   display: grid;
-  gap: 18px;
+  gap: 16px;
+}
+
+.content-breadcrumb-wrap {
+  padding: 0 2px;
+}
+
+.teacher-content-page :deep(.el-breadcrumb__inner) {
+  font-weight: 600;
+}
+
+.teacher-content-page :deep(.el-breadcrumb__separator) {
+  color: #b8c5d8;
+}
+
+.content-breadcrumb-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.content-breadcrumb-link:hover {
+  text-decoration: underline;
+}
+
+.content-breadcrumb-icon {
+  font-size: 15px;
 }
 
 .panel-shell {
@@ -1103,18 +1248,23 @@ onMounted(async () => {
 }
 
 .content-topbar {
-  min-height: 108px;
-  padding: 24px 26px;
+  min-height: 96px;
+  padding: 20px 24px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 18px;
 }
 
 .content-topbar__left {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
+  min-width: 0;
+}
+
+.content-topbar__titles {
+  min-width: 0;
 }
 
 .content-back {
@@ -1137,67 +1287,130 @@ onMounted(async () => {
 
 .content-title {
   margin: 4px 0 0;
-  font-size: 34px;
+  font-size: 26px;
+  line-height: 1.25;
   color: #1f2d3d;
+  letter-spacing: -0.02em;
 }
 
 .content-subtitle {
   margin: 8px 0 0;
   color: #6f829b;
-  font-size: 16px;
-  line-height: 1.7;
+  font-size: 14px;
+  line-height: 1.75;
+  max-width: 52ch;
+}
+
+.content-subtitle strong {
+  color: #4a6688;
+  font-weight: 700;
 }
 
 .content-kp {
   display: grid;
   justify-items: end;
-  gap: 4px;
+  gap: 6px;
   padding: 16px 18px;
   border-radius: 16px;
   border: 1px solid var(--app-border);
-  background: #fafbfd;
+  background: linear-gradient(165deg, #fbfdff 0%, #f4f8fc 100%);
   color: #445a78;
+  text-align: right;
+  max-width: 340px;
+  flex-shrink: 0;
 }
 
-.content-kp span,
-.content-kp small {
+.content-kp__code {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7f8ea3;
+}
+
+.content-kp__title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #1f2f44;
+  line-height: 1.35;
+}
+
+.content-kp__chapter {
   font-size: 12px;
   color: #7f8ea3;
 }
 
-.content-kp strong {
-  font-size: 16px;
-}
-
 .content-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
 
 .summary-card {
   background: #ffffff;
   border: 1px solid var(--app-border);
-  border-radius: 16px;
-  padding: 18px 20px;
-  display: grid;
-  gap: 6px;
+  border-radius: 18px;
+  padding: 16px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
   box-shadow: var(--app-shadow-soft);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.summary-card span {
+.summary-card:hover {
+  border-color: color-mix(in srgb, var(--app-primary) 22%, var(--app-border));
+  box-shadow: 0 14px 36px rgba(31, 47, 68, 0.06);
+}
+
+.summary-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.summary-card__icon--learning {
+  background: linear-gradient(145deg, #e8f8ef 0%, #dff5e8 100%);
+  color: #1f7a4a;
+}
+
+.summary-card__icon--practice {
+  background: linear-gradient(145deg, #e8f0ff 0%, #dce8ff 100%);
+  color: #2f6fed;
+}
+
+.summary-card__icon--recommend {
+  background: linear-gradient(145deg, #fff4e5 0%, #ffe8cc 100%);
+  color: #b86b00;
+}
+
+.summary-card__body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.summary-card__label {
   font-size: 13px;
   color: #75879f;
+  font-weight: 700;
 }
 
-.summary-card strong {
+.summary-card__value {
   font-size: 28px;
+  font-weight: 800;
   color: #233854;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
-.summary-card small {
+.summary-card__desc {
   color: #8a99ae;
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .content-layout {
@@ -1207,10 +1420,19 @@ onMounted(async () => {
 }
 
 .content-nav {
-  padding: 18px;
+  padding: 16px 14px 18px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   align-content: start;
+}
+
+.content-nav__hint {
+  margin: 0 4px 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a5b8;
 }
 
 .content-nav__item {
@@ -1219,25 +1441,71 @@ onMounted(async () => {
   background: #fcfdff;
   color: #4a5d77;
   text-align: left;
-  padding: 18px;
+  padding: 14px 14px 12px;
   cursor: pointer;
   display: grid;
-  gap: 6px;
+  gap: 8px;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
-.content-nav__item strong {
-  font-size: 16px;
+.content-nav__item:hover {
+  border-color: #c8d7e7;
+  background: #ffffff;
+}
+
+.content-nav__item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.content-nav__item-head strong {
+  font-size: 15px;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.content-nav__icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #dbe4ef;
+  display: grid;
+  place-items: center;
+  color: #5c7cb2;
+  flex-shrink: 0;
+}
+
+.content-nav__count {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary) 10%, transparent);
+  padding: 3px 9px;
+  border-radius: 999px;
 }
 
 .content-nav__item small {
   font-size: 12px;
-  color: #789;
+  color: #7a8fa8;
+  line-height: 1.45;
+  padding-left: 46px;
 }
 
 .content-nav__item.active {
-  background: #f3f7fc;
-  border-color: #c8d7e7;
+  background: linear-gradient(165deg, #f5f9ff 0%, #eef4fc 100%);
+  border-color: color-mix(in srgb, var(--app-primary) 35%, var(--app-border));
+  box-shadow: 0 8px 22px rgba(47, 111, 237, 0.08);
   color: #39506d;
+}
+
+.content-nav__item.active .content-nav__icon-wrap {
+  background: color-mix(in srgb, var(--app-primary) 12%, #ffffff);
+  border-color: color-mix(in srgb, var(--app-primary) 45%, #dbe4ef);
+  color: var(--app-primary);
 }
 
 .content-main {
@@ -1371,6 +1639,12 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.teacher-content-page :deep(.resource-dropdown-danger) {
+  color: #c04b4b !important;
 }
 
 .content-badge {

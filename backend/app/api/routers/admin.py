@@ -3,6 +3,7 @@ import logging
 import re
 import shutil
 import csv
+from collections import Counter
 from io import BytesIO, StringIO
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -348,6 +349,88 @@ def _build_student_detail_payload(
         .order_by(VideoProgress.updated_at.desc())
         .limit(10)
     ).all()
+
+    now = datetime.utcnow()
+    since_30d = now - timedelta(days=30)
+    since_14d = now - timedelta(days=14)
+
+    course_id = int(course.id) if course is not None and course.id is not None else None
+    behavior_scope_stmt = select(LearningBehaviorEvent).where(
+        LearningBehaviorEvent.user_id == user_id,
+        LearningBehaviorEvent.created_at >= since_30d,
+    )
+    if course_id is not None:
+        behavior_scope_stmt = behavior_scope_stmt.where(
+            or_(
+                LearningBehaviorEvent.course_id == course_id,
+                LearningBehaviorEvent.course_id.is_(None),
+            )
+        )
+    if kp_ids:
+        behavior_scope_stmt = behavior_scope_stmt.where(
+            or_(
+                LearningBehaviorEvent.kp_id.in_(kp_ids),
+                LearningBehaviorEvent.kp_id.is_(None),
+            )
+        )
+    scoped_behavior_rows = session.exec(
+        behavior_scope_stmt.order_by(LearningBehaviorEvent.created_at.desc()).limit(600)
+    ).all()
+    scoped_behavior_14d = [row for row in scoped_behavior_rows if row.created_at and row.created_at >= since_14d]
+
+    practice_14d = [row for row in practice_rows if row.created_at and row.created_at >= since_14d]
+    quiz_14d = [row for row in quiz_rows if row.created_at and row.created_at >= since_14d]
+    video_14d = [row for row in video_rows if row.updated_at and row.updated_at >= since_14d]
+
+    login_rows_30d = [row for row in scoped_behavior_rows if (row.event_type or "").strip().lower() == "login"]
+    login_days_30d = {row.created_at.date() for row in login_rows_30d if row.created_at}
+    active_days_14d = (
+        {row.created_at.date() for row in scoped_behavior_14d if row.created_at}
+        | {row.created_at.date() for row in practice_14d if row.created_at}
+        | {row.created_at.date() for row in quiz_14d if row.created_at}
+        | {row.updated_at.date() for row in video_14d if row.updated_at}
+    )
+    consecutive_days = 0
+    if active_days_14d:
+        ordered = sorted(active_days_14d, reverse=True)
+        consecutive_days = 1
+        for idx in range(1, len(ordered)):
+            if (ordered[idx - 1] - ordered[idx]).days == 1:
+                consecutive_days += 1
+                continue
+            break
+
+    practice_attempts_30d = len([row for row in practice_rows if row.created_at and row.created_at >= since_30d])
+    practice_correct_30d = len(
+        [row for row in practice_rows if row.created_at and row.created_at >= since_30d and bool(row.correct)]
+    )
+    practice_accuracy_30d = (practice_correct_30d / practice_attempts_30d) if practice_attempts_30d else 0.0
+
+    practice_total_ms_14d = sum(max(0, int(row.duration_ms or 0)) for row in practice_14d)
+    quiz_total_ms_14d = sum(max(0, int(row.duration_ms or 0)) for row in quiz_14d)
+    video_total_seconds_14d = sum(max(0.0, float(row.watched_seconds or 0.0)) for row in video_14d)
+    total_study_seconds_14d = (practice_total_ms_14d + quiz_total_ms_14d) / 1000.0 + video_total_seconds_14d
+
+    video_started_30d = len(
+        [
+            row
+            for row in video_rows
+            if row.updated_at and row.updated_at >= since_30d and float(row.watched_seconds or 0.0) > 0
+        ]
+    )
+    video_completed_30d = len(
+        [row for row in video_rows if row.updated_at and row.updated_at >= since_30d and bool(row.completed)]
+    )
+    video_completion_values = [
+        min(1.0, max(0.0, float(row.watched_seconds or 0.0) / float(row.duration_seconds)))
+        for row in video_rows
+        if row.updated_at and row.updated_at >= since_30d and float(row.duration_seconds or 0.0) > 0
+    ]
+    avg_video_completion_30d = (sum(video_completion_values) / len(video_completion_values)) if video_completion_values else 0.0
+
+    event_type_counter = Counter((row.event_type or "").strip() or "unknown" for row in scoped_behavior_rows)
+    top_event_types = [{"event_type": key, "count": int(count)} for key, count in event_type_counter.most_common(10) if key]
+
     portrait_summary = _json_load(snapshot.portrait_summary_json, {})
     final_confirmation = None
     if course is not None and course.id is not None:
@@ -423,6 +506,21 @@ def _build_student_detail_payload(
             else None
         ),
         "mastery_map": mastery_items,
+        "learning_behavior_overview": {
+            "window_days": {"recent": 14, "history": 30},
+            "login_count_30d": len(login_rows_30d),
+            "login_days_30d": len(login_days_30d),
+            "active_days_14d": len(active_days_14d),
+            "consecutive_days_14d": int(consecutive_days),
+            "study_duration_seconds_14d": round(float(total_study_seconds_14d), 2),
+            "study_duration_minutes_14d": round(float(total_study_seconds_14d) / 60.0, 2),
+            "video_started_30d": int(video_started_30d),
+            "video_completed_30d": int(video_completed_30d),
+            "avg_video_completion_30d": round(float(avg_video_completion_30d), 4),
+            "practice_attempts_30d": int(practice_attempts_30d),
+            "practice_accuracy_30d": round(float(practice_accuracy_30d), 4),
+            "top_event_types_30d": top_event_types,
+        },
         "behavior_timeline": behavior_items,
         "recommendations": recommendation_items,
         "recommendation_closure": {

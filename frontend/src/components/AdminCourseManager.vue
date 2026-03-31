@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
@@ -14,7 +14,6 @@ type Course = {
   target_class?: string | null;
   start_at?: string | null;
   end_at?: string | null;
-  archived_at?: string | null;
   teacher_id?: number | null;
   max_students?: number;
   apply_deadline?: string | null;
@@ -36,6 +35,7 @@ const page = ref(1);
 const pageSize = 15;
 const total = ref(0);
 const keyword = ref("");
+const lifecycleFilter = ref("all");
 
 const dialogOpen = ref(false);
 const editing = ref<Course | null>(null);
@@ -77,11 +77,22 @@ function normalizeIsoMinute(value?: string | null) {
 const isEdit = computed(() => Boolean(editing.value));
 const teacherNameMap = computed(() => {
   const map = new Map<number, string>();
-  for (const item of teachers.value) {
-    map.set(item.id, item.full_name || item.username);
-  }
+  for (const item of teachers.value) map.set(item.id, item.full_name || item.username);
   return map;
 });
+const filteredCourses = computed(() => {
+  const q = keyword.value.trim().toLowerCase();
+  return courses.value.filter((row) => {
+    const matchesKeyword = !q || [row.code, row.title, row.description, teacherNameMap.value.get(row.teacher_id || 0) || ""].join(" ").toLowerCase().includes(q);
+    const matchesLifecycle = lifecycleFilter.value === "all" || String(row.lifecycle_status || "draft").toLowerCase() === lifecycleFilter.value;
+    return matchesKeyword && matchesLifecycle;
+  });
+});
+const courseStats = computed(() => ({
+  active: courses.value.filter((item) => String(item.lifecycle_status || "draft").toLowerCase() === "active").length,
+  draft: courses.value.filter((item) => String(item.lifecycle_status || "draft").toLowerCase() === "draft").length,
+  archived: courses.value.filter((item) => String(item.lifecycle_status || "draft").toLowerCase() === "archived").length,
+}));
 
 async function loadTeachers() {
   const res = await api.get("/admin/users?page=1&page_size=200");
@@ -91,10 +102,7 @@ async function loadTeachers() {
 async function load() {
   loading.value = true;
   try {
-    const query = new URLSearchParams({
-      page: String(page.value),
-      page_size: String(pageSize),
-    });
+    const query = new URLSearchParams({ page: String(page.value), page_size: String(pageSize) });
     if (keyword.value.trim()) query.set("keyword", keyword.value.trim());
     const res = await api.get(`/admin/courses?${query.toString()}`);
     courses.value = res.data.items ?? [];
@@ -144,11 +152,9 @@ function openEdit(row: Course) {
 
 async function save() {
   if (saving.value) return;
-  const normalizedCode = form.code.trim();
-  const normalizedTitle = form.title.trim();
   const payload = {
-    code: normalizedCode,
-    title: normalizedTitle,
+    code: form.code.trim(),
+    title: form.title.trim(),
     description: form.description,
     active: form.active,
     lifecycle_status: form.lifecycle_status,
@@ -168,57 +174,31 @@ async function save() {
   try {
     if (isEdit.value) {
       await api.put(`/admin/courses/${form.id}`, payload);
-      ElMessage.success("已更新");
+      ElMessage.success("已更新课程");
     } else {
       await api.post("/admin/courses", payload);
-      ElMessage.success("已新增");
+      ElMessage.success("已新增课程");
     }
     dialogOpen.value = false;
+    await load();
   } catch (e: any) {
     const status = Number(e?.response?.status ?? 0);
-    const detail = e?.response?.data?.detail ?? "保存失败";
-    // 处理“后端已保存但响应异常/超时”的假失败：只在 5xx 或无状态码时回查
     if (!status || status >= 500) {
       try {
-        const probe = await api.get("/admin/courses", {
-          params: {
-            page: 1,
-            page_size: 100,
-            keyword: payload.code || payload.title,
-          },
-        });
+        const probe = await api.get("/admin/courses", { params: { page: 1, page_size: 100, keyword: payload.code || payload.title } });
         const rows: Course[] = probe.data?.items ?? [];
-        const matched = isEdit.value
-          ? rows.find((row) => row.id === form.id)
-          : rows.find((row) => row.code === payload.code && row.title === payload.title);
-        if (
-          matched
-          && matched.code === payload.code
-          && matched.title === payload.title
-          && (matched.description ?? "") === (payload.description ?? "")
-          && Boolean(matched.active) === Boolean(payload.active)
-          && Number(matched.max_students ?? 0) === Number(payload.max_students)
-          && String(matched.enroll_status || "open").toLowerCase() === String(payload.enroll_status || "open").toLowerCase()
-          && normalizeIsoMinute(matched.apply_deadline) === normalizeIsoMinute(payload.apply_deadline)
-        ) {
-          ElMessage.success(isEdit.value ? "已更新（已自动确认）" : "已新增（已自动确认）");
+        const matched = isEdit.value ? rows.find((row) => row.id === form.id) : rows.find((row) => row.code === payload.code && row.title === payload.title);
+        if (matched && matched.code === payload.code && matched.title === payload.title && normalizeIsoMinute(matched.apply_deadline) === normalizeIsoMinute(payload.apply_deadline)) {
+          ElMessage.success(isEdit.value ? "已更新课程（已自动确认）" : "已新增课程（已自动确认）");
           dialogOpen.value = false;
           await load();
           return;
         }
-      } catch {
-        // ignore verify failure and fall through to normal error
-      }
+      } catch {}
     }
-    ElMessage.error(detail);
-    return;
+    ElMessage.error(e?.response?.data?.detail ?? "保存失败");
   } finally {
     saving.value = false;
-  }
-  try {
-    await load();
-  } catch {
-    ElMessage.warning("课程已保存，但列表刷新失败，请手动点“刷新”");
   }
 }
 
@@ -235,36 +215,22 @@ async function remove(row: Course) {
 function setCourseActiveLocal(courseId: number, active: boolean) {
   courses.value = courses.value.map((item) => (item.id === courseId ? { ...item, active } : item));
 }
-
 function isToggling(courseId: number) {
   return togglingIds.value.includes(courseId);
 }
-
 function enrollStatusLabel(value?: string) {
   const normalized = String(value || "open").toLowerCase();
-  return (
-    enrollStatusOptions.find((item) => item.value === normalized)?.label
-    ?? normalized
-  );
+  return enrollStatusOptions.find((item) => item.value === normalized)?.label ?? normalized;
 }
-
 function lifecycleLabel(value?: string) {
   const normalized = String(value || "draft").toLowerCase();
   return lifecycleOptions.find((item) => item.value === normalized)?.label || normalized;
 }
-
 async function probeCourseActive(row: Course) {
-  const probe = await api.get("/admin/courses", {
-    params: {
-      page: 1,
-      page_size: 100,
-      keyword: row.code || row.title || "",
-    },
-  });
+  const probe = await api.get("/admin/courses", { params: { page: 1, page_size: 100, keyword: row.code || row.title || "" } });
   const rows: Course[] = probe.data?.items ?? [];
   return rows.find((item) => item.id === row.id) ?? null;
 }
-
 async function toggleActive(row: Course, value: boolean) {
   const previous = !value;
   if (isToggling(row.id)) return;
@@ -286,9 +252,7 @@ async function toggleActive(row: Course, value: boolean) {
             return;
           }
         }
-      } catch {
-        // ignore probe error and fallthrough
-      }
+      } catch {}
     }
     setCourseActiveLocal(row.id, previous);
     ElMessage.error(e?.response?.data?.detail ?? "更新状态失败");
@@ -301,41 +265,50 @@ Promise.all([loadTeachers(), load()]);
 </script>
 
 <template>
-  <el-card class="panel-card" shadow="never">
+  <el-card class="panel-card course-manager-card" shadow="never">
     <template #header>
       <div class="course-manager-header">
         <div class="course-manager-header__main">
           <div class="course-manager-header__eyebrow">Course Admin</div>
-          <div class="course-manager-header__title">课程管理</div>
-          <div class="course-manager-header__desc">管理员统一创建课程和配置基础信息。老师只能激活课程后，再去维护图谱和资源。</div>
+          <div class="course-manager-header__title">课程列表与配置</div>
+          <div class="course-manager-header__desc">先筛选和定位课程，再进行编辑、启停和报名配置。</div>
         </div>
         <div class="course-manager-header__actions">
-          <el-input
-            v-model="keyword"
-            placeholder="搜索课程名称/编码"
-            size="small"
-            class="course-manager-search"
-            @keyup.enter="() => { page = 1; load(); }"
-          />
-          <HintButton size="small" type="primary" tip="按课程名称或编码搜索课程。" @click="() => { page = 1; load(); }">搜索</HintButton>
-          <HintButton size="small" tip="重新加载课程列表。" @click="load" :loading="loading">刷新</HintButton>
-          <HintButton type="primary" tip="新增一门课程，作为后续图谱和题库的容器。" @click="openAdd">新增课程</HintButton>
+          <el-input v-model="keyword" placeholder="搜索课程名称 / 编码 / 教师" class="course-manager-search" clearable />
+          <el-select v-model="lifecycleFilter" class="course-manager-filter">
+            <el-option label="全部状态" value="all" />
+            <el-option v-for="item in lifecycleOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <HintButton @click="load" :loading="loading">刷新</HintButton>
+          <HintButton type="primary" @click="openAdd">新增课程</HintButton>
         </div>
       </div>
     </template>
 
+    <div class="course-manager-stats">
+      <span>开课中 {{ courseStats.active }}</span>
+      <span>待开课 {{ courseStats.draft }}</span>
+      <span>已归档 {{ courseStats.archived }}</span>
+      <span>筛选后 {{ filteredCourses.length }}</span>
+    </div>
+
     <div class="course-table-wrap">
-      <el-table :data="courses" size="small" v-loading="loading" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="70" />
+      <el-table :data="filteredCourses" size="small" v-loading="loading" style="width: 100%">
         <el-table-column prop="code" label="课程编码" width="140" />
-        <el-table-column prop="title" label="课程名称" width="220" />
-        <el-table-column prop="description" label="课程简介" min-width="240" />
-        <el-table-column label="教学设置" min-width="240">
+        <el-table-column label="课程信息" min-width="240">
+          <template #default="{ row }">
+            <div class="course-cell">
+              <strong>{{ row.title }}</strong>
+              <span>{{ row.description || '暂无课程简介' }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="教学设置" min-width="260">
           <template #default="{ row }">
             <div class="course-setting">
               <span class="course-setting__item">状态：{{ lifecycleLabel(row.lifecycle_status) }}</span>
-              <span class="course-setting__item">目标班级：{{ row.target_class || "未设置" }}</span>
-              <span class="course-setting__item">开课周期：{{ row.start_at ? row.start_at.replace("T", " ").slice(0, 16) : "未设置" }} ~ {{ row.end_at ? row.end_at.replace("T", " ").slice(0, 16) : "未设置" }}</span>
+              <span class="course-setting__item">班级：{{ row.target_class || '未设置' }}</span>
+              <span class="course-setting__item">教师：{{ row.teacher_id ? teacherNameMap.get(row.teacher_id) || `教师#${row.teacher_id}` : '未激活' }}</span>
             </div>
           </template>
         </el-table-column>
@@ -344,209 +317,85 @@ Promise.all([loadTeachers(), load()]);
             <div class="course-setting">
               <span class="course-setting__item">名额：{{ row.max_students ?? 200 }}</span>
               <span class="course-setting__item">状态：{{ enrollStatusLabel(row.enroll_status) }}</span>
-              <span class="course-setting__item">截止：{{ row.apply_deadline ? row.apply_deadline.replace("T", " ").slice(0, 16) : "未设置" }}</span>
+              <span class="course-setting__item">截止：{{ row.apply_deadline ? row.apply_deadline.replace('T', ' ').slice(0, 16) : '未设置' }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="激活老师" width="160">
+        <el-table-column label="启用" width="100">
           <template #default="{ row }">
-            {{
-              row.teacher_id
-                ? teacherNameMap.get(row.teacher_id) || `教师#${row.teacher_id}`
-                : "暂未激活"
-            }}
+            <el-switch :model-value="row.active" :loading="isToggling(row.id)" @change="(v: boolean) => toggleActive(row, v)" />
           </template>
         </el-table-column>
-        <el-table-column prop="active" label="状态" width="120">
+        <el-table-column label="操作" width="170" fixed="right">
           <template #default="{ row }">
-            <el-switch
-              :model-value="row.active"
-              :loading="isToggling(row.id)"
-              @change="(v: boolean) => toggleActive(row, v)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="160">
-          <template #default="{ row }">
-            <HintButton size="small" tip="修改课程基础信息、教师和报名设置。" @click="openEdit(row)">编辑</HintButton>
-            <HintButton size="small" type="danger" tip="删除该课程及其相关配置。" @click="remove(row)">删除</HintButton>
+            <div class="course-row-actions">
+              <HintButton size="small" @click="openEdit(row)">编辑</HintButton>
+              <HintButton size="small" type="danger" @click="remove(row)">删除</HintButton>
+            </div>
           </template>
         </el-table-column>
       </el-table>
     </div>
 
-    <div style="display: flex; justify-content: flex-end; margin-top: 10px">
-      <el-pagination
-        background
-        layout="prev, pager, next"
-        :page-size="pageSize"
-        :total="total"
-        v-model:current-page="page"
-        @current-change="load"
-      />
+    <div class="course-manager-pager">
+      <el-pagination background layout="prev, pager, next" :page-size="pageSize" :total="total" v-model:current-page="page" @current-change="load" />
     </div>
 
     <el-dialog v-model="dialogOpen" :title="isEdit ? '编辑课程' : '新增课程'" width="560px">
       <el-form label-width="90px">
-        <el-form-item label="课程编码">
-          <el-input v-model="form.code" placeholder="唯一编码；学生可在「课程加入」页凭此代码自助加入" />
-        </el-form-item>
-        <el-form-item label="课程名称">
-          <el-input v-model="form.title" placeholder="如 数据结构" />
-        </el-form-item>
-        <el-form-item label="激活老师">
-          <el-select v-model="form.teacher_id" clearable placeholder="不指定，等老师自己激活" style="width: 100%">
-            <el-option
-              v-for="teacher in teachers"
-              :key="teacher.id"
-              :label="teacher.full_name || teacher.username"
-              :value="teacher.id"
-            />
+        <el-form-item label="课程编码"><el-input v-model="form.code" placeholder="唯一编码，学生可凭此加入" /></el-form-item>
+        <el-form-item label="课程名称"><el-input v-model="form.title" placeholder="例如：数据结构" /></el-form-item>
+        <el-form-item label="激活教师">
+          <el-select v-model="form.teacher_id" clearable placeholder="不指定，等待教师自己激活" style="width: 100%">
+            <el-option v-for="teacher in teachers" :key="teacher.id" :label="teacher.full_name || teacher.username" :value="teacher.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="课程简介">
-          <el-input v-model="form.description" type="textarea" :rows="3" />
-        </el-form-item>
+        <el-form-item label="课程简介"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>
         <el-form-item label="开课状态">
           <el-select v-model="form.lifecycle_status" style="width: 100%">
             <el-option v-for="item in lifecycleOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="目标班级">
-          <el-input v-model="form.target_class" placeholder="例如 计科 221 / 软件 231" />
-        </el-form-item>
-        <el-form-item label="开始时间">
-          <el-date-picker
-            v-model="form.start_at"
-            type="datetime"
-            value-format="YYYY-MM-DDTHH:mm"
-            format="YYYY-MM-DD HH:mm"
-            placeholder="课程开始学习时间"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="结束时间">
-          <el-date-picker
-            v-model="form.end_at"
-            type="datetime"
-            value-format="YYYY-MM-DDTHH:mm"
-            format="YYYY-MM-DD HH:mm"
-            placeholder="课程结束或归档前时间"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="课程名额">
-          <el-input-number v-model="form.max_students" :min="1" :max="9999" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="报名截止">
-          <el-date-picker
-            v-model="form.apply_deadline"
-            type="datetime"
-            value-format="YYYY-MM-DDTHH:mm"
-            format="YYYY-MM-DD HH:mm"
-            placeholder="不设置则长期开放"
-            style="width: 100%"
-          />
-        </el-form-item>
+        <el-form-item label="目标班级"><el-input v-model="form.target_class" placeholder="例如 计科221" /></el-form-item>
+        <el-form-item label="开始时间"><el-date-picker v-model="form.start_at" type="datetime" value-format="YYYY-MM-DDTHH:mm" format="YYYY-MM-DD HH:mm" placeholder="课程开始时间" style="width: 100%" /></el-form-item>
+        <el-form-item label="结束时间"><el-date-picker v-model="form.end_at" type="datetime" value-format="YYYY-MM-DDTHH:mm" format="YYYY-MM-DD HH:mm" placeholder="课程结束时间" style="width: 100%" /></el-form-item>
+        <el-form-item label="课程名额"><el-input-number v-model="form.max_students" :min="1" :max="9999" style="width: 100%" /></el-form-item>
+        <el-form-item label="报名截止"><el-date-picker v-model="form.apply_deadline" type="datetime" value-format="YYYY-MM-DDTHH:mm" format="YYYY-MM-DD HH:mm" placeholder="不设置则长期开放" style="width: 100%" /></el-form-item>
         <el-form-item label="报名状态">
           <el-select v-model="form.enroll_status" style="width: 100%">
-            <el-option
-              v-for="item in enrollStatusOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
+            <el-option v-for="item in enrollStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="启用">
-          <el-switch v-model="form.active" />
-        </el-form-item>
+        <el-form-item label="启用"><el-switch v-model="form.active" /></el-form-item>
       </el-form>
       <template #footer>
-        <HintButton tip="关闭窗口，不保存当前修改。" @click="dialogOpen = false">取消</HintButton>
-        <HintButton type="primary" :loading="saving" tip="保存课程配置并更新列表。" @click="save">保存</HintButton>
+        <HintButton @click="dialogOpen = false">取消</HintButton>
+        <HintButton type="primary" :loading="saving" @click="save">保存</HintButton>
       </template>
     </el-dialog>
-
   </el-card>
 </template>
 
 <style scoped>
-.course-manager-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  flex-wrap: wrap;
-}
-
-.course-manager-header__main {
-  display: grid;
-  gap: 6px;
-}
-
-.course-manager-header__eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 800;
-  color: #6c86ab;
-}
-
-.course-manager-header__title {
-  font-size: 22px;
-  line-height: 1.2;
-  font-weight: 800;
-  color: #22395b;
-}
-
-.course-manager-header__desc {
-  max-width: 520px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #667d9b;
-}
-
-.course-manager-header__actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.course-manager-search {
-  width: 220px;
-}
-
-.course-table-wrap {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-}
-
-.course-setting {
-  display: grid;
-  gap: 6px;
-}
-
-.course-setting__item {
-  color: #667d9b;
-  line-height: 1.5;
-}
-
-.course-student-empty {
-  padding: 16px 0 4px;
-  color: #7d8ea4;
-}
-
+.course-manager-card :deep(.el-card__body) { padding-top: 18px; }
+.course-manager-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.course-manager-header__main { display: grid; gap: 6px; }
+.course-manager-header__eyebrow { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 800; color: #6c86ab; }
+.course-manager-header__title { font-size: 22px; line-height: 1.2; font-weight: 800; color: #22395b; }
+.course-manager-header__desc { max-width: 520px; font-size: 13px; line-height: 1.7; color: #667d9b; }
+.course-manager-header__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.course-manager-search { width: 240px; }
+.course-manager-filter { width: 140px; }
+.course-manager-stats { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; font-size: 13px; color: var(--app-text-soft); }
+.course-table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; }
+.course-cell { display: grid; gap: 6px; }
+.course-cell strong { color: var(--app-text-main); font-size: 15px; }
+.course-cell span, .course-setting__item { color: #667d9b; line-height: 1.6; }
+.course-setting { display: grid; gap: 6px; }
+.course-row-actions { display: flex; gap: 6px; }
+.course-manager-pager { display: flex; justify-content: flex-end; margin-top: 12px; }
 @media (max-width: 768px) {
-  .course-manager-header__actions {
-    width: 100%;
-  }
-
-  .course-manager-search {
-    width: 100%;
-  }
+  .course-manager-header__actions { width: 100%; }
+  .course-manager-search, .course-manager-filter { width: 100%; }
 }
 </style>

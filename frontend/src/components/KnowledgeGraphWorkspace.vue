@@ -453,6 +453,50 @@ const selectedCategoryOverview = computed(() => {
 });
 
 const drawerVisible = computed(() => drawerOpen.value && (selectedKp.value != null || selectedCategoryNode.value != null));
+type DrawerTab = "overview" | "resource" | "relation" | "evidence" | "goals";
+const drawerTab = ref<DrawerTab>("overview");
+const drawerTabOrder: DrawerTab[] = ["overview", "resource", "relation", "evidence", "goals"];
+const drawerTabLabelMap: Record<DrawerTab, string> = {
+  overview: "概览",
+  resource: "资源",
+  relation: "关系",
+  evidence: "证据",
+  goals: "目标",
+};
+const drawerTabDone = computed<Record<DrawerTab, boolean>>(() => {
+  const hasResource = (nodeDetail.value?.resource_list?.length ?? 0) > 0;
+  const hasRelation =
+    (nodeDetail.value?.prerequisites?.length ?? 0) > 0 ||
+    (nodeDetail.value?.downstream?.length ?? 0) > 0 ||
+    (nodeDetail.value?.related?.length ?? 0) > 0;
+  const hasEvidence = !!formatEvidenceSummary(nodeDetail.value?.overlay?.evidence as Record<string, unknown>);
+  const hasGoals = !!(
+    activeOverlay.value?.knowledge_label ||
+    selectedKp.value?.knowledge_tag ||
+    (activeOverlay.value?.ability_labels?.length ?? 0) > 0 ||
+    (activeOverlay.value?.literacy_labels?.length ?? 0) > 0 ||
+    selectedKp.value?.ability_tag ||
+    selectedKp.value?.literacy_tag
+  );
+  return {
+    overview: true,
+    resource: hasResource,
+    relation: hasRelation,
+    evidence: hasEvidence,
+    goals: hasGoals,
+  };
+});
+const drawerNextTab = computed<DrawerTab | null>(() => {
+  const idx = drawerTabOrder.indexOf(drawerTab.value);
+  if (idx < 0 || idx >= drawerTabOrder.length - 1) return null;
+  return drawerTabOrder[idx + 1];
+});
+const drawerFlowHint = computed(() => {
+  const next = drawerNextTab.value;
+  if (!next) return "已到最后一步，可返回“概览”或直接去学习。";
+  if (!drawerTabDone.value[next]) return `建议下一步：${drawerTabLabelMap[next]}（当前暂无数据，可先继续后续步骤）。`;
+  return `建议下一步：${drawerTabLabelMap[next]}。`;
+});
 
 function categoryPoint(key: string) {
   return categoryPositions.value[key] ?? defaultCategoryPositions.value[key] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y - 360 };
@@ -1079,6 +1123,10 @@ watch(selectedId, (value) => {
   }
 });
 
+watch([selectedType, selectedId, selectedCategory], () => {
+  drawerTab.value = "overview";
+});
+
 watch(visibleKps, () => {
   syncCategoryPositions();
   syncKpPositions();
@@ -1136,13 +1184,12 @@ onBeforeUnmount(() => {
     class="workspace-shell"
     :class="{
       'workspace-shell--embedded': props.embedded,
-      'teacher-workbench teacher-workbench--fullscreen': props.embedded,
     }"
   >
     <div v-if="!props.embedded" class="workspace-header">
       <div class="workspace-heading">
-        <h1 class="workspace-title">知识图谱工作台（学习视图）</h1>
-        <p class="workspace-subtitle">与教师端同一套图谱数据；左侧章节、中间节点、右侧详情；三色环表示知识/能力/素养达成。</p>
+        <h1 class="workspace-title">课程知识图谱</h1>
+        <p class="workspace-subtitle">学习通风格重构：左侧章节导航、中部图谱舞台、右侧学习卡片；视觉主题与本系统保持一致。</p>
       </div>
       <div class="workspace-controls">
         <el-input v-model="search" placeholder="搜索知识点" clearable class="workspace-search" />
@@ -1156,59 +1203,25 @@ onBeforeUnmount(() => {
       <HoverTip content="先在左边找分类，再点中间节点，最后在右边看资源和前后关系。" />
     </div>
 
-    <div v-else class="teacher-header">
-      <div class="teacher-heading">
-        <h1 class="teacher-title">知识图谱</h1>
-        <p class="teacher-subtitle">先在左边找分类，再点中间节点，最后在右边查看学习详情与资源。</p>
-      </div>
-      <div class="teacher-controls">
-        <el-input v-model="search" placeholder="搜索知识点" clearable class="teacher-search" />
-        <button type="button" class="teacher-btn" @click="fitVisibleToViewport">适应画布</button>
-        <button type="button" class="teacher-btn" @click="resetViewport">重置画布</button>
-        <button type="button" class="teacher-btn teacher-btn--primary" @click="drawerOpen = !drawerOpen">
-          {{ drawerVisible ? "收起右侧" : "打开右侧" }}
-        </button>
-      </div>
-    </div>
-
     <div
-      :class="
-        props.embedded
-          ? ['teacher-content', 'teacher-content--fullscreen', { 'teacher-content--drawer-collapsed': !drawerVisible }]
-          : 'workspace-content'
-      "
+      :class="['workspace-content', { 'workspace-content--embedded': props.embedded, 'workspace-content--drawer-collapsed': props.embedded && !drawerVisible }]"
     >
-      <aside :class="props.embedded ? 'teacher-sidebar workspace-sidebar' : 'workspace-sidebar'">
-        <div :class="props.embedded ? 'teacher-tree workspace-tree' : 'workspace-tree'">
-          <div v-if="treeNodes.length === 0" :class="props.embedded ? ['teacher-tree__empty', 'workspace-tree__empty'] : 'workspace-tree__empty'">
+      <aside class="workspace-sidebar">
+        <div class="workspace-tree">
+          <div v-if="treeNodes.length === 0" class="workspace-tree__empty">
             <strong>左边现在没有可选内容</strong>
             <span>可以先清空搜索词，或换一门课程再查看。</span>
           </div>
           <div v-for="item in treeNodes" :key="item.key" class="workspace-tree__group">
-            <div
-              :class="[
-                props.embedded ? 'teacher-tree__summary workspace-tree__summary' : 'workspace-tree__summary',
-                { active: activeChapter === item.key },
-              ]"
-              @click="selectCategory(item.key)"
-            >
+            <div :class="['workspace-tree__summary', { active: activeChapter === item.key }]" @click="selectCategory(item.key)">
               <span>{{ item.title }}</span>
-              <span :class="props.embedded ? 'teacher-tree__count workspace-tree__count' : 'workspace-tree__count'">{{
-                item.children.length
-              }}</span>
+              <span class="workspace-tree__count">{{ item.children.length }}</span>
             </div>
-            <div
-              class="workspace-tree__children"
-              :class="props.embedded ? 'teacher-tree__children' : ''"
-              v-if="activeChapter === item.key || activeChapter === '全部'"
-            >
+            <div class="workspace-tree__children" v-if="activeChapter === item.key || activeChapter === '全部'">
               <button
                 v-for="kp in item.children"
                 :key="kp.id"
-                :class="[
-                  props.embedded ? 'teacher-tree__child workspace-tree__child' : 'workspace-tree__child',
-                  { active: kp.id === selectedKp?.id },
-                ]"
+                :class="['workspace-tree__child', { active: kp.id === selectedKp?.id }]"
                 @click="selectKp(kp.id)"
               >
                 <span>{{ kp.title }}</span>
@@ -1219,58 +1232,41 @@ onBeforeUnmount(() => {
         </div>
       </aside>
 
-      <section
-        :class="[
-          props.embedded ? 'teacher-stage' : 'workspace-stage',
-          props.embedded
-            ? { 'teacher-stage--dragging': draggingCanvas }
-            : { 'workspace-stage--dragging': draggingCanvas },
-        ]"
-      >
+      <section :class="['workspace-stage', { 'workspace-stage--dragging': draggingCanvas, 'workspace-stage--embedded': props.embedded }]">
         <template v-if="props.embedded">
-          <div class="teacher-stage__top teacher-stage__top--embedded">
-            <div class="teacher-stage__top-row">
-              <div class="teacher-stage__stats">
-                <span class="teacher-stage__pill">分类 {{ canvasStageStats.categories }}</span>
-                <span class="teacher-stage__pill">知识点 {{ canvasStageStats.points }}</span>
-                <span class="teacher-stage__pill">关系 {{ canvasStageStats.edges }}</span>
+          <div class="workspace-stage__top">
+            <div class="workspace-stage__top-main">
+              <div class="workspace-stage__stats">
+                <span class="workspace-stage__pill">分类 {{ canvasStageStats.categories }}</span>
+                <span class="workspace-stage__pill">知识点 {{ canvasStageStats.points }}</span>
+                <span class="workspace-stage__pill">关系 {{ canvasStageStats.edges }}</span>
               </div>
-              <div class="teacher-stage__actions">
-                <button type="button" class="teacher-stage__button" @click="toggleAllKps">
-                  {{ showAllKps ? "仅看分类" : "显示全部节点" }}
-                </button>
-                <button type="button" class="teacher-stage__button teacher-stage__button--primary" @click.stop="openContentFromSelected">
-                  去学习
-                </button>
-                <button type="button" class="teacher-stage__button" @click="fitVisibleToViewport">适应画布</button>
-                <button type="button" class="teacher-stage__button" @click="resetViewport">重置画布</button>
-              </div>
-            </div>
-            <details class="teacher-stage__legend-details">
-              <summary class="teacher-stage__legend-summary">连线与图例说明（默认收起，点击展开）</summary>
-              <div class="teacher-stage__legend">
-                <span class="teacher-stage__legend-item">
-                  <i class="teacher-stage__legend-line teacher-stage__legend-line--solid"></i>
+              <div class="workspace-stage__legend">
+                <span class="workspace-stage__legend-item">
+                  <i class="workspace-stage__legend-line workspace-stage__legend-line--solid"></i>
                   实线箭头：前置 / 顺序关系
                 </span>
-                <span class="teacher-stage__legend-item">
-                  <i class="teacher-stage__legend-line teacher-stage__legend-line--dashed"></i>
+                <span class="workspace-stage__legend-item">
+                  <i class="workspace-stage__legend-line workspace-stage__legend-line--dashed"></i>
                   虚线 / 三角箭头：支撑、包含、分类归属
                 </span>
-                <span class="teacher-stage__legend-item">
-                  <i class="teacher-stage__legend-line teacher-stage__legend-line--path"></i>
+                <span class="workspace-stage__legend-item">
+                  <i class="workspace-stage__legend-line workspace-stage__legend-line--path"></i>
                   蓝色虚线：推荐路径；同名能力/素养标签共用同色环
                 </span>
-                <span class="teacher-stage__legend-item">
-                  <i class="teacher-stage__legend-rings">
-                    <span class="tr ring--literacy"></span>
-                    <span class="tr ring--ability"></span>
-                    <span class="tr ring--knowledge"></span>
-                  </i>
-                  三层环（与教师端一致）：知识（内）/ 能力（中）/ 素养（外）；同标签同色
-                </span>
               </div>
-            </details>
+            </div>
+            <div class="workspace-stage__focus">
+              <span>{{ selectedType === "kp" ? (selectedKp?.title || "未选择知识点") : (selectedCategoryNode?.title || "未选择分类") }}</span>
+              <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
+                {{ showAllKps ? "仅看分类" : "显示全部节点" }}
+              </button>
+              <button type="button" class="workspace-stage__learn-btn" @click.stop="openContentFromSelected">
+                去学习
+              </button>
+              <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click="fitVisibleToViewport">适应画布</button>
+              <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click="resetViewport">重置画布</button>
+            </div>
           </div>
         </template>
         <template v-else>
@@ -1319,12 +1315,12 @@ onBeforeUnmount(() => {
         </template>
         <div
           ref="stageRef"
-          :class="props.embedded ? 'teacher-stage__viewport' : 'workspace-stage__viewport'"
+          class="workspace-stage__viewport"
           @mousedown="onStageMouseDown"
           @wheel.prevent="onStageWheel"
         >
         <svg
-          :class="props.embedded ? 'teacher-canvas' : 'workspace-canvas'"
+          class="workspace-canvas"
           :width="CANVAS_WIDTH"
           :height="CANVAS_HEIGHT"
           :style="{ transform: `translate(${panX}px, ${panY}px) scale(${canvasScale})` }"
@@ -1451,92 +1447,155 @@ onBeforeUnmount(() => {
         </svg>
         </div>
 
-        <div :class="props.embedded ? 'teacher-stage__bottom' : 'workspace-bottom'">
-          <div :class="props.embedded ? 'teacher-stage__zoom' : 'workspace-zoom'">
+        <div class="workspace-bottom">
+          <div class="workspace-zoom">
             <button type="button" @click="zoomOut">-</button>
             <span>缩放 {{ Math.round(canvasScale * 100) }}%</span>
             <button type="button" @click="zoomIn">+</button>
           </div>
         </div>
 
-        <div v-if="!loading && !hasGraphData" :class="props.embedded ? 'teacher-stage__empty' : 'workspace-stage__empty'">
+        <div v-if="!loading && !hasGraphData" class="workspace-stage__empty">
           <strong>这门课还没有知识图谱</strong>
           <span>请先让老师创建知识点和关系，再回来查看。</span>
         </div>
       </section>
 
-      <aside
-        :class="[
-          props.embedded ? 'teacher-drawer workspace-drawer' : 'workspace-drawer',
-          { open: props.embedded && drawerOpen },
-        ]"
-        v-if="drawerVisible"
-      >
-        <div :class="props.embedded ? 'teacher-drawer__header workspace-drawer__header' : 'workspace-drawer__header'">
-          <h3 :class="props.embedded ? 'teacher-drawer__title workspace-drawer__title' : 'workspace-drawer__title'">
+      <aside :class="['workspace-drawer', { open: props.embedded && drawerOpen }]" v-if="drawerVisible">
+        <div class="workspace-drawer__header">
+          <h3 class="workspace-drawer__title">
             {{ selectedType === "kp" ? selectedKp?.title : selectedCategoryNode?.title }}
           </h3>
-          <button v-if="props.embedded" type="button" class="teacher-drawer__close" @click="drawerOpen = false">×</button>
+          <button v-if="props.embedded" type="button" class="workspace-drawer__close" @click="drawerOpen = false">×</button>
         </div>
 
         <div class="workspace-drawer__content">
           <template v-if="selectedType === 'kp' && selectedKp">
             <div class="workspace-drawer__meta">{{ selectedKp.code }} · {{ selectedKp.chapter || "未分章" }}</div>
-            <div class="workspace-drawer__status">{{ nodeLabel(activeOverlay?.status) }}</div>
             <div class="workspace-drawer__guide-inline">
               <span>知识点说明</span>
-              <HoverTip content="这里会显示这个知识点的学习状态、学习资源和前面要先学的内容。" />
+              <HoverTip content="按“概览-资源-关系-证据-目标”查看，不用在一个长页面里来回找信息。" />
             </div>
-            <div v-if="activeOverlay?.recommended" class="workspace-drawer__recommend">
-              这是系统当前推荐你优先学习的知识点。
+            <div class="workspace-drawer__tabs">
+              <button
+                v-for="tab in drawerTabOrder"
+                :key="tab"
+                class="workspace-drawer__tab"
+                :class="{ active: drawerTab === tab, done: drawerTabDone[tab] }"
+                @click="drawerTab = tab"
+              >
+                {{ drawerTabLabelMap[tab] }}
+                <span v-if="drawerTabDone[tab]" class="workspace-drawer__tab-check">已看</span>
+              </button>
             </div>
-            <div v-if="activeOverlay?.blocked_reason" class="workspace-drawer__blocked">
-              前置阻塞：{{ activeOverlay.blocked_reason }}
-            </div>
+            <p class="workspace-drawer__flow-hint">{{ drawerFlowHint }}</p>
 
-            <div v-if="formatEvidenceSummary(nodeDetail?.overlay?.evidence as Record<string, unknown>)" class="workspace-drawer__section">
+            <section v-if="drawerTab === 'overview'" class="workspace-drawer__section">
+              <div class="workspace-drawer__status">{{ nodeLabel(activeOverlay?.status) }}</div>
+              <div class="workspace-drawer__metrics">
+                <div class="workspace-drawer__metric">
+                  <span>掌握度</span>
+                  <strong>{{ metricPercent(activeOverlay?.mastery) }}%</strong>
+                </div>
+                <div class="workspace-drawer__metric">
+                  <span>难度</span>
+                  <strong>{{ metricPercent(selectedKp.difficulty) }}</strong>
+                </div>
+              </div>
+              <div v-if="activeOverlay?.recommended" class="workspace-drawer__recommend">这是系统当前推荐你优先学习的知识点。</div>
+              <div v-if="activeOverlay?.blocked_reason" class="workspace-drawer__blocked">前置阻塞：{{ activeOverlay.blocked_reason }}</div>
+              <div class="workspace-drawer__desc">
+                {{ selectedKp.description || "暂未填写描述" }}
+              </div>
+              <button class="workspace-drawer__learn-btn" @click="openContentFromSelected">去学习</button>
+            </section>
+
+            <section v-else-if="drawerTab === 'resource'" class="workspace-drawer__section">
+              <h4 class="workspace-drawer__section-title">学习资源</h4>
+              <button class="workspace-drawer__learn-btn" @click="openContentFromSelected">资源内容 / 去学习</button>
+              <div v-if="(nodeDetail?.resource_list?.length ?? 0) === 0" class="workspace-drawer__empty">暂无资源</div>
+              <button
+                v-for="item in nodeDetail?.resource_list ?? []"
+                :key="item.id"
+                type="button"
+                class="workspace-drawer__link workspace-drawer__link-btn"
+                @click="openResource(item)"
+              >
+                {{ item.title }}
+              </button>
+            </section>
+
+            <section v-else-if="drawerTab === 'relation'" class="workspace-drawer__section">
+              <h4 class="workspace-drawer__section-title">前置知识</h4>
+              <div v-if="(nodeDetail?.prerequisites?.length ?? 0) === 0" class="workspace-drawer__empty">无前置要求</div>
+              <div v-else class="workspace-drawer__tags">
+                <button v-for="item in nodeDetail?.prerequisites ?? []" :key="`pre-${item.id}`" class="workspace-drawer__tag" @click="selectKp(item.id)">
+                  {{ item.title }}
+                </button>
+              </div>
+
+              <h4 class="workspace-drawer__section-title">后续知识</h4>
+              <div v-if="(nodeDetail?.downstream?.length ?? 0) === 0" class="workspace-drawer__empty">暂无后续关系</div>
+              <div v-else class="workspace-drawer__tags">
+                <button v-for="item in nodeDetail?.downstream ?? []" :key="`next-${item.id}`" class="workspace-drawer__tag" @click="selectKp(item.id)">
+                  {{ item.title }}
+                </button>
+              </div>
+
+              <h4 class="workspace-drawer__section-title">关联知识</h4>
+              <div v-if="(nodeDetail?.related?.length ?? 0) === 0" class="workspace-drawer__empty">暂无关联关系</div>
+              <div v-else class="workspace-drawer__tags">
+                <button v-for="item in nodeDetail?.related ?? []" :key="`rel-${item.id}`" class="workspace-drawer__tag" @click="selectKp(item.id)">
+                  {{ item.title }}
+                </button>
+              </div>
+
+              <div v-if="learningHintsActive && graphPathHint" class="workspace-drawer__section">
+                <h4 class="workspace-drawer__section-title">建议下一步</h4>
+                <p class="workspace-drawer__hint-text">{{ graphPathHint.path_summary }}</p>
+                <div v-if="graphPathHint.blocked_titles?.length" class="workspace-drawer__blocked">
+                  需先补前置：{{ graphPathHint.blocked_titles.join("、") }}
+                </div>
+                <div v-else-if="graphPathHint.can_unlock_next && (graphPathHint.next_candidate_ids?.length ?? 0) > 0" class="workspace-drawer__next-btns">
+                  <button
+                    v-for="(nid, idx) in graphPathHint.next_candidate_ids.slice(0, 5)"
+                    :key="`nx-${nid}`"
+                    type="button"
+                    class="workspace-drawer__next-btn"
+                    @click="selectKp(nid)"
+                  >
+                    {{ nextStepTitle(idx) }}
+                  </button>
+                </div>
+                <p v-else class="workspace-drawer__hint-text">暂无可点击的后继节点，可在前置或关联知识点中继续探索。</p>
+              </div>
+              <div v-if="isPathNode(selectedKp.id)" class="workspace-drawer__recommend">当前知识点位于系统推荐路径中，可按路径顺序继续学习。</div>
+            </section>
+
+            <section v-else-if="drawerTab === 'evidence'" class="workspace-drawer__section">
               <h4 class="workspace-drawer__section-title">过程证据摘要</h4>
-              <p class="workspace-drawer__evidence-line">
+              <p v-if="formatEvidenceSummary(nodeDetail?.overlay?.evidence as Record<string, unknown>)" class="workspace-drawer__evidence-line">
                 {{ formatEvidenceSummary(nodeDetail?.overlay?.evidence as Record<string, unknown>) }}
               </p>
+              <p v-else class="workspace-drawer__empty">暂无过程证据数据</p>
               <p class="workspace-drawer__micro-hint">依据您在本知识点的练习、小测、视频与资源访问等记录汇总，与图谱色环判定一致。</p>
-            </div>
 
-            <div v-if="learningHintsActive && graphPathHint" class="workspace-drawer__section">
-              <h4 class="workspace-drawer__section-title">建议下一步</h4>
-              <p class="workspace-drawer__hint-text">{{ graphPathHint.path_summary }}</p>
-              <div v-if="graphPathHint.blocked_titles?.length" class="workspace-drawer__blocked">
-                需先补前置：{{ graphPathHint.blocked_titles.join("、") }}
-              </div>
-              <div v-else-if="graphPathHint.can_unlock_next && (graphPathHint.next_candidate_ids?.length ?? 0) > 0" class="workspace-drawer__next-btns">
-                <button
-                  v-for="(nid, idx) in graphPathHint.next_candidate_ids.slice(0, 5)"
-                  :key="`nx-${nid}`"
-                  type="button"
-                  class="workspace-drawer__next-btn"
-                  @click="selectKp(nid)"
+              <div v-if="learningHintsActive && graphRecoHint" class="workspace-drawer__section">
+                <h4 class="workspace-drawer__section-title">个性化推荐</h4>
+                <p class="workspace-drawer__hint-text">{{ graphRecoHint.reason_summary }}</p>
+                <p v-if="graphRecoHint.advice_text" class="workspace-drawer__hint-text">{{ graphRecoHint.advice_text }}</p>
+                <div
+                  v-if="graphRecoHint.target_kp_id && graphRecoHint.target_kp_id !== selectedKp.id"
+                  class="workspace-drawer__next-btns"
                 >
-                  {{ nextStepTitle(idx) }}
-                </button>
+                  <button type="button" class="workspace-drawer__next-btn workspace-drawer__next-btn--accent" @click="selectKp(graphRecoHint.target_kp_id)">
+                    前往推荐：{{ graphRecoHint.target_code }} {{ graphRecoHint.target_title }}
+                  </button>
+                </div>
               </div>
-              <p v-else class="workspace-drawer__hint-text">暂无可点击的后继节点，可在「前置知识」或关联知识点中继续探索。</p>
-            </div>
+            </section>
 
-            <div v-if="learningHintsActive && graphRecoHint" class="workspace-drawer__section">
-              <h4 class="workspace-drawer__section-title">个性化推荐</h4>
-              <p class="workspace-drawer__hint-text">{{ graphRecoHint.reason_summary }}</p>
-              <p v-if="graphRecoHint.advice_text" class="workspace-drawer__hint-text">{{ graphRecoHint.advice_text }}</p>
-              <div
-                v-if="graphRecoHint.target_kp_id && graphRecoHint.target_kp_id !== selectedKp.id"
-                class="workspace-drawer__next-btns"
-              >
-                <button type="button" class="workspace-drawer__next-btn workspace-drawer__next-btn--accent" @click="selectKp(graphRecoHint.target_kp_id)">
-                  前往推荐：{{ graphRecoHint.target_code }} {{ graphRecoHint.target_title }}
-                </button>
-              </div>
-            </div>
-
-            <div class="workspace-drawer__section">
+            <section v-else class="workspace-drawer__section">
               <h4 class="workspace-drawer__section-title">知识点详细内容</h4>
               <div class="workspace-drawer__detail-grid">
                 <div class="workspace-drawer__detail-item">
@@ -1556,26 +1615,9 @@ onBeforeUnmount(() => {
                   <strong>{{ (activeOverlay?.literacy_labels ?? []).join("、") || selectedKp.literacy_tag || "暂未设置" }}</strong>
                 </div>
               </div>
-              <div class="workspace-drawer__desc">
-                {{ selectedKp.description || "暂未填写描述" }}
-              </div>
-            </div>
-
-            <div class="workspace-drawer__metrics">
-              <div class="workspace-drawer__metric">
-                <span>掌握度</span>
-                <strong>{{ metricPercent(activeOverlay?.mastery) }}%</strong>
-              </div>
-              <div class="workspace-drawer__metric">
-                <span>难度</span>
-                <strong>{{ metricPercent(selectedKp.difficulty) }}</strong>
-              </div>
-            </div>
-
-            <div class="workspace-drawer__section">
               <h4 class="workspace-drawer__section-title">知识 / 能力 / 素养</h4>
               <p class="workspace-drawer__ability-hint">
-                「能力」由教师在知识点上标注能力标签（如逻辑推理），系统根据您的掌握度、练习与小测证据自动判定是否达成；图谱<strong>中层绿环</strong>与右侧状态与此一致。
+                「能力」由教师在知识点上标注能力标签，系统根据掌握度与学习证据自动判定是否达成；图谱中层绿环与这里状态一致。
               </p>
               <div class="workspace-drawer__tags">
                 <span class="workspace-drawer__tag workspace-drawer__tag--knowledge">
@@ -1602,35 +1644,7 @@ onBeforeUnmount(() => {
                   <strong>{{ nodeLabel(activeOverlay?.literacy_status || 'not_started') }}</strong>
                 </div>
               </div>
-            </div>
-
-            <div class="workspace-drawer__section">
-              <h4 class="workspace-drawer__section-title">学习资源</h4>
-              <button class="workspace-drawer__learn-btn" @click="openContentFromSelected">资源内容 / 去学习</button>
-              <div v-if="(nodeDetail?.resource_list?.length ?? 0) === 0" class="workspace-drawer__empty">暂无资源</div>
-              <button
-                v-for="item in nodeDetail?.resource_list ?? []"
-                :key="item.id"
-                type="button"
-                class="workspace-drawer__link workspace-drawer__link-btn"
-                @click="openResource(item)"
-              >
-                {{ item.title }}
-              </button>
-            </div>
-
-            <div class="workspace-drawer__section">
-              <h4 class="workspace-drawer__section-title">前置知识</h4>
-              <div v-if="(nodeDetail?.prerequisites?.length ?? 0) === 0" class="workspace-drawer__empty">无前置要求</div>
-              <div v-else class="workspace-drawer__tags">
-                <button v-for="item in nodeDetail?.prerequisites ?? []" :key="item.id" class="workspace-drawer__tag" @click="selectKp(item.id)">
-                  {{ item.title }}
-                </button>
-              </div>
-            </div>
-            <div v-if="isPathNode(selectedKp.id)" class="workspace-drawer__recommend">
-              当前知识点位于系统推荐路径中，可按路径顺序继续学习。
-            </div>
+            </section>
           </template>
 
           <template v-else-if="selectedCategoryNode && selectedCategoryOverview">
@@ -2149,12 +2163,12 @@ onBeforeUnmount(() => {
   left: var(--graph-stage-viewport-inset-x);
   right: var(--graph-stage-viewport-inset-x);
   top: 96px;
-  bottom: 56px;
+  bottom: var(--graph-stage-viewport-inset-x);
   width: auto;
   min-height: 0;
   overflow: hidden;
   border-radius: max(0px, calc(var(--app-radius-lg) - var(--graph-stage-viewport-inset-x)));
-  background: var(--graph-canvas-bg);
+  background: radial-gradient(circle at 24px 24px, rgba(79, 135, 255, 0.08) 1px, transparent 1px), radial-gradient(circle at 0 0, rgba(79, 135, 255, 0.04) 1px, transparent 1px), var(--graph-canvas-bg);
   contain: layout style;
   isolation: isolate;
   transform: translateZ(0);
@@ -2202,6 +2216,7 @@ onBeforeUnmount(() => {
   bottom: calc(var(--graph-stage-viewport-inset-x) + 10px);
   right: calc(var(--graph-stage-viewport-inset-x) + 10px);
   z-index: 10;
+  pointer-events: none;
 }
 
 .workspace-stage__empty {
@@ -2237,9 +2252,10 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 4px;
   border-radius: 999px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid #dce6f2;
-  box-shadow: none;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  pointer-events: auto;
 }
 
 .workspace-zoom button {
@@ -2325,6 +2341,48 @@ onBeforeUnmount(() => {
 
 .workspace-drawer__content {
   padding-top: 16px;
+}
+
+.workspace-drawer__tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.workspace-drawer__tab {
+  border: 1px solid #dce6f2;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #3c587d;
+  min-height: 34px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-drawer__tab.active {
+  border-color: #a8c5f8;
+  background: linear-gradient(165deg, #f5f9ff 0%, #eef4fc 100%);
+  color: #22549b;
+}
+
+.workspace-drawer__tab.done {
+  border-color: #bfe2cd;
+}
+
+.workspace-drawer__tab-check {
+  margin-left: 4px;
+  font-size: 10px;
+  color: #2f7a47;
+}
+
+.workspace-drawer__flow-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #667b98;
+  line-height: 1.55;
 }
 
 .workspace-drawer__guide {

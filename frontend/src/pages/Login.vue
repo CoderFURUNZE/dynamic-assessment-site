@@ -3,21 +3,37 @@ import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { setRole, setToken, validateInput } from "../token";
-import { useRouter } from "vue-router";
-import { User, Lock, Monitor, ArrowRight } from "@element-plus/icons-vue";
+import { useRoute, useRouter } from "vue-router";
+import { User, Lock, ArrowRight } from "@element-plus/icons-vue";
 
 const router = useRouter();
+const route = useRoute();
 const loading = ref(false);
 
+/** 由路由决定：/login/student | /login/staff（教师与管理员共用 staff 页） */
+const mode = computed<"student" | "staff">(() =>
+  route.path === "/login/staff" ? "staff" : "student",
+);
+
 const loginForm = reactive({
-  role: "student",
   username: "",
   password: "",
   remember: true,
 });
 
-const loginAccountLabel = computed(() => (loginForm.role === "student" ? "学号" : "工号/账号"));
-const loginAccountPlaceholder = computed(() => (loginForm.role === "student" ? "请输入学号" : "请输入工号或账号"));
+const loginAccountLabel = computed(() => (mode.value === "student" ? "学号" : "工号/账号"));
+const loginAccountPlaceholder = computed(() =>
+  mode.value === "student" ? "请输入学号" : "请输入工号或管理员账号",
+);
+
+const cardTitle = computed(() =>
+  mode.value === "student" ? "学生登录" : "教师 / 管理员登录",
+);
+const cardSubtitle = computed(() =>
+  mode.value === "student"
+    ? "请使用学号与密码进入学习端"
+    : "请使用教师工号或管理员账号进入管理端",
+);
 
 function lastRouteKey(username: string) {
   return `da_last_route_${username}`;
@@ -40,8 +56,8 @@ function goAfterLogin(role: string, username: string) {
       return;
     }
   }
-  if (role === "student") router.push("/student/overview");
-  else if (role === "teacher") router.push("/teacher/courses");
+  if (role === "student") router.push("/student/dashboard");
+  else if (role === "teacher") router.push("/teacher/workspace");
   else router.push("/admin/dashboard");
 }
 
@@ -61,7 +77,7 @@ async function submitLogin() {
   if (!validateLoginForm()) return;
   loading.value = true;
   try {
-    const endpoint = loginForm.role === "student" ? "/auth/login/student" : "/auth/login/admin";
+    const endpoint = mode.value === "student" ? "/auth/login/student" : "/auth/login/admin";
     const res = await api.post(endpoint, { username: loginForm.username, password: loginForm.password });
     setToken(res.data.access_token, loginForm.remember ? 7 : 0);
     setRole(res.data.role);
@@ -114,25 +130,29 @@ async function submitLogin() {
         <section class="form-section">
           <div class="login-card glass-card">
             <header class="card-header">
-              <h2>欢迎回来</h2>
-              <p>请登录您的账号以继续</p>
+              <h2>{{ cardTitle }}</h2>
+              <p>{{ cardSubtitle }}</p>
             </header>
 
-            <div class="role-selector">
-              <div 
-                class="role-tab" 
-                :class="{ active: loginForm.role === 'student' }"
-                @click="loginForm.role = 'student'"
+            <div class="role-selector" role="tablist" aria-label="选择登录入口">
+              <router-link
+                to="/login/student"
+                class="role-tab"
+                :class="{ active: mode === 'student' }"
+                role="tab"
+                :aria-selected="mode === 'student'"
               >
                 学生登录
-              </div>
-              <div 
-                class="role-tab" 
-                :class="{ active: loginForm.role === 'admin' }"
-                @click="loginForm.role = 'admin'"
+              </router-link>
+              <router-link
+                to="/login/staff"
+                class="role-tab"
+                :class="{ active: mode === 'staff' }"
+                role="tab"
+                :aria-selected="mode === 'staff'"
               >
                 教师 / 管理员
-              </div>
+              </router-link>
             </div>
 
             <form class="login-form" @submit.prevent="submitLogin">
@@ -173,9 +193,12 @@ async function submitLogin() {
             </form>
 
             <footer class="card-footer">
-              <p>系统由管理员统一分配账号</p>
-              <div class="demo-account">
-                <span>演示账号:</span> admin / teacher1
+              <p>系统由管理员统一分配账号，不提供自助注册</p>
+              <div v-if="mode === 'student'" class="demo-account">
+                <span>学生演示:</span> student1
+              </div>
+              <div v-else class="demo-account">
+                <span>教师/管理演示:</span> teacher1 / admin
               </div>
             </footer>
           </div>
@@ -360,6 +383,7 @@ async function submitLogin() {
   color: var(--app-text-soft);
   cursor: pointer;
   border-radius: var(--app-radius-sm);
+  text-decoration: none;
   transition: background var(--app-duration) var(--app-ease-out),
     color var(--app-duration) var(--app-ease-out),
     box-shadow var(--app-duration) var(--app-ease-out);

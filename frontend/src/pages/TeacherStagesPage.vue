@@ -21,7 +21,7 @@ onMounted(loadCourses);
 <template>
   <div class="teacher-page">
     <WorkspaceTopbar v-model="subject" :courses="courses" badge="Teacher Stages" title="阶段管理" @change="syncQuery">
-      <el-button @click="router.push({ path: '/teacher/imports', query: { subject: subject || undefined } })">去导入数据</el-button>
+      <el-button @click="router.push({ path: '/teacher/evaluation', query: { subject: subject || undefined, tab: 'imports' } })">去数据导入</el-button>
     </WorkspaceTopbar>
     <PageSectionCard eyebrow="Stages" title="阶段管理">
       <TeacherStageManager :course-id="selectedCourseId" :subject="subject" :grade="grade" />

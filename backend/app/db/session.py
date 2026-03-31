@@ -58,7 +58,8 @@ def _ensure_columns(table_name: str, columns: dict[str, str]) -> None:
     for ddl in missing.values():
         try:
             with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}"))
+                # Quote table identifiers to support reserved names like "user".
+                conn.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN {ddl}'))
         except Exception:
             # Best-effort compatibility migration: keep progressing even if a
             # single column DDL fails, so other missing columns can still be added.
@@ -117,15 +118,19 @@ def _ensure_relation_type_values() -> None:
 
 
 def _ensure_user_columns() -> None:
+    active_default = "active BOOLEAN DEFAULT TRUE" if _is_postgres() else "active BOOLEAN DEFAULT 1"
     _ensure_columns(
         "user",
         {
-            "active": "active BOOLEAN DEFAULT 1",
+            "active": active_default,
         },
     )
     try:
         with engine.begin() as conn:
-            conn.execute(text("UPDATE \"user\" SET active=1 WHERE active IS NULL"))
+            if _is_postgres():
+                conn.execute(text('UPDATE "user" SET active=TRUE WHERE active IS NULL'))
+            else:
+                conn.execute(text('UPDATE "user" SET active=1 WHERE active IS NULL'))
     except Exception:
         pass
 
