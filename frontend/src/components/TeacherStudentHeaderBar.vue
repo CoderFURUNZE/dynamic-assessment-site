@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 type StudentRow = {
   user_id: number;
   username: string;
@@ -20,13 +20,12 @@ const emit = defineEmits<{
     <div class="detail-header__main">
       <span class="detail-header__eyebrow">学生详情</span>
       <div class="detail-title">按学生切换查看画像、阶段和学习记录</div>
-      <div class="detail-subtitle">先选学生，再看阶段变化、教师补充评价和行为记录。</div>
     </div>
     <div class="detail-actions">
       <div class="detail-actions__meta">共 {{ students.length }} 名学生</div>
       <el-select
         :model-value="selectedUserId"
-        placeholder="选择学生"
+        placeholder=""
         style="width: 300px"
         filterable
         @update:model-value="(value) => emit('update:selectedUserId', value as number | null)"
@@ -62,10 +61,6 @@ const emit = defineEmits<{
   font-size: 20px;
   font-weight: 700;
   color: var(--app-ink);
-}
-.detail-subtitle {
-  font-size: 13px;
-  color: var(--app-ink-soft);
 }
 .detail-actions {
   display: flex;

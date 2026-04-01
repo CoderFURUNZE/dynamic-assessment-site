@@ -659,8 +659,7 @@ onBeforeUnmount(() => {
 }
 
 .import-overview__card small {
-  color: #8a99ae;
-  font-size: 12px;
+  display: none;
 }
 
 .import-header {
@@ -678,11 +677,7 @@ onBeforeUnmount(() => {
 }
 
 .import-subtitle {
-  margin-top: 4px;
-  color: #617b96;
-  font-size: 13px;
-  line-height: 1.6;
-  max-width: 760px;
+  display: none;
 }
 
 .import-actions {
@@ -698,7 +693,7 @@ onBeforeUnmount(() => {
 }
 
 .import-view-help {
-  margin-bottom: 14px;
+  display: none;
 }
 
 .import-auto-card {
@@ -712,9 +707,7 @@ onBeforeUnmount(() => {
 }
 
 .import-auto-card__text {
-  color: #55697f;
-  line-height: 1.7;
-  font-size: 13px;
+  display: none;
 }
 
 .mapping-panel {
@@ -759,15 +752,11 @@ onBeforeUnmount(() => {
 }
 
 .mapping-item__body span {
-  font-size: 12px;
-  line-height: 1.6;
-  color: #6d8199;
+  display: none;
 }
 
 .mapping-panel__hint {
-  font-size: 12px;
-  line-height: 1.7;
-  color: #60778f;
+  display: none;
 }
 
 .import-auto-card__actions {
@@ -820,11 +809,7 @@ onBeforeUnmount(() => {
 }
 
 .guide-panel {
-  margin-bottom: 18px;
-  padding: 16px;
-  border-radius: 18px;
-  border: 1px solid #dfe9f2;
-  background: #fbfdff;
+  display: none;
 }
 
 .import-result-card {
@@ -863,8 +848,7 @@ onBeforeUnmount(() => {
 }
 
 .import-result-card__next {
-  color: #55697f;
-  line-height: 1.7;
+  display: none;
 }
 
 .import-result-card__actions {
@@ -873,28 +857,19 @@ onBeforeUnmount(() => {
 }
 
 .guide-summary {
-  color: #4f6c89;
-  font-size: 13px;
-  line-height: 1.7;
-  margin-bottom: 12px;
+  display: none;
 }
 
 .guide-block {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 12px;
+  display: none;
 }
 
 .guide-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--app-ink);
+  display: none;
 }
 
 .guide-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: none;
 }
 
 .guide-chip {
@@ -918,37 +893,19 @@ onBeforeUnmount(() => {
 }
 
 .guide-next {
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: #eef5fb;
-  color: #47627d;
-  font-size: 13px;
-  line-height: 1.6;
+  display: none;
 }
 
 .import-hint {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: #eef5fb;
-  color: #4f6c89;
-  font-size: 13px;
-  line-height: 1.6;
+  display: none;
 }
 
 .import-hint--merge {
-  border: 1px dashed #cfdaea;
-  background: #f8fbff;
+  display: none;
 }
 
 .import-tip-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  color: #637995;
-  font-size: 13px;
-  font-weight: 700;
+  display: none;
 }
 
 .ok-text {

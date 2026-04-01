@@ -12,8 +12,7 @@ const emit = defineEmits<{
   <div class="report-header">
     <div class="report-header__main">
       <div class="report-header__eyebrow">Learning Report</div>
-      <div class="report-title">我的学习情况</div>
-      <div class="report-subtitle">这里会告诉你现在学得怎么样、哪里学得好、下一步该做什么。</div>
+      <div class="report-title">学习报告</div>
     </div>
     <el-button size="small" @click="emit('refresh')" :loading="loading">刷新</el-button>
   </div>
@@ -46,14 +45,6 @@ const emit = defineEmits<{
   line-height: 1.2;
   font-weight: 800;
   color: #22395b;
-}
-
-.report-subtitle {
-  max-width: 720px;
-  margin-top: 2px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #667d9b;
 }
 
 @media (max-width: 960px) {

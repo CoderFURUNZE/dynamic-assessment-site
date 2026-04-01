@@ -683,3 +683,15 @@ body {
 .workspace-shell .workspace-drawer__next-btn:hover {
   transform: translateY(-1px);
 }
+
+/* prompt cleanup: hide tooltip/popover text and placeholder hints globally */
+.el-tooltip__popper,
+.app-tooltip-popper {
+  display: none !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: transparent !important;
+  opacity: 0 !important;
+}

@@ -419,42 +419,9 @@ watch(
     </template>
 
     <div v-if="profile" class="report-grid">
-      <div class="report-tip-inline">
-        <span>查看提示</span>
-        <HoverTip content="先看上面的结果，再看下面的详细内容，不需要一次看完。" />
-      </div>
-      <el-collapse class="report-ability-provenance">
-        <el-collapse-item title="学习者的「能力」从哪里体现？" name="ability-source">
-          <div class="report-ability-provenance__body">
-            <p>
-              <strong>配置来源：</strong>教师在知识图谱的每个知识点上可设置能力标签（以及素养标签）。这些标签是把课程目标拆成可观测「能力维度」的锚点。
-            </p>
-            <p>
-              <strong>证据来源：</strong>系统根据您的知识点<strong>掌握度</strong>、<strong>练习作答</strong>与<strong>小测成绩</strong>等学习记录，判断与该知识点绑定的能力是否视为「已达成」。同一能力标签若在多个知识点上出现，会按累计达成比例汇总。
-            </p>
-            <p>
-              <strong>在哪里看：</strong>知识图谱上节点的<strong>中层色环（黄）</strong>表示能力层状态；下方「知识 / 能力 / 素养」进度与「当前较强能力」列表与图谱数据同源。动态评分与阶段画像还会间接反映您在行为与成效上的整体变化。
-            </p>
-          </div>
-        </el-collapse-item>
-        <el-collapse-item title="动态评分与「练习题 / 小测」分别是什么？" name="dynamic-vs-practice">
-          <div class="report-ability-provenance__body">
-            <p>
-              <strong>动态评分：</strong>在画像配置权重下，综合<strong>阶段评价、课程掌握度、学习行为与过程性证据</strong>等得到的总体指数；用于看整体走势，不等同于单次测验分数。
-            </p>
-            <p>
-              <strong>练习题（知识点学习页）：</strong>按题库逐题作答，计入掌握度更新，并可按题目标注的<strong>认知层级与能力标签</strong>汇总（如下方「练习表现」板块）。
-            </p>
-            <p>
-              <strong>小测（图谱节点）：</strong>教师配置的成套测验，证据维度与「练习题」并列；报告中的能力达成会同时参考多类证据，请勿把三者混为一谈。
-            </p>
-          </div>
-        </el-collapse-item>
-      </el-collapse>
+      <LearnerReportHero class="report-grid__hero" :profile="profile" :current-stage="currentStage" :has-stage-model="hasStageModel" />
 
-      <LearnerReportHero :profile="profile" :current-stage="currentStage" :has-stage-model="hasStageModel" />
-
-      <section class="dimension-board">
+<section class="dimension-board">
         <div class="board-title">核心维度</div>
         <div class="dimension-list">
           <div v-for="item in dimensions" :key="item.label" class="dimension-item">
@@ -1117,7 +1084,11 @@ watch(
 .report-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.report-grid__hero {
+  grid-column: 1 / -1;
 }
 
 .report-empty {

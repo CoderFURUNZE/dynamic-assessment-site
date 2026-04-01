@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+﻿<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
@@ -199,17 +199,8 @@ const filteredKps = computed(() => {
 });
 
 const visibleKps = computed(() => {
-  let list: KP[];
-  if (showAllKps.value) {
-    list = filteredKps.value;
-  } else {
-    const activeChapterKey =
-      selectedType.value === "category"
-        ? selectedCategory.value
-        : (selectedKp.value?.chapter || selectedCategory.value || null);
-    if (!activeChapterKey) list = [] as KP[];
-    else list = filteredKps.value.filter((kp) => (kp.chapter || "未分章") === activeChapterKey);
-  }
+  if (!showAllKps.value) return [];
+  let list: KP[] = filteredKps.value;
   if (showIncompleteOnly.value) {
     list = list.filter((kp) => {
       const c = kpCoverageMap.value[kp.id];
@@ -379,7 +370,7 @@ function restoreViewState() {
     panY.value = Number(parsed.panY ?? 0);
     activeChapter.value = typeof parsed.activeChapter === "string" && parsed.activeChapter ? parsed.activeChapter : "全部";
     search.value = typeof parsed.search === "string" ? parsed.search : "";
-    showAllKps.value = parsed.showAllKps === true;
+    showAllKps.value = parsed.showAllKps !== false;
     selectedType.value = parsed.selectedType === "category" ? "category" : "kp";
     selectedId.value = Number.isFinite(Number(parsed.selectedId)) ? Number(parsed.selectedId) : null;
     selectedCategory.value = typeof parsed.selectedCategory === "string" ? parsed.selectedCategory : null;
@@ -690,7 +681,6 @@ function resetCreateForm(chapter = "") {
 }
 
 function selectKp(id: number) {
-  showAllKps.value = false;
   if (linkSelectionMode.value && selectedId.value && id !== selectedId.value) {
     createEdgeFromCanvas(id);
     return;
@@ -703,10 +693,12 @@ function selectKp(id: number) {
   detailTab.value = "overview";
   syncFormFromSelected();
   centerOnPoint(kpPoint(id));
+  if (props.fullscreen) {
+    openContentWorkspace();
+  }
 }
 
 function selectCategory(chapter: string) {
-  showAllKps.value = false;
   if (categoryLinkMode.value && selectedCategory.value && chapter !== selectedCategory.value) {
     createChapterEdge(selectedCategory.value, chapter);
     return;
@@ -722,10 +714,18 @@ function selectCategory(chapter: string) {
 }
 
 function toggleAllKps() {
-  showAllKps.value = !showAllKps.value;
-  if (showAllKps.value) {
-    activeChapter.value = "全部";
-  }
+  const next = !showAllKps.value;
+  showAllKps.value = next;
+  activeChapter.value = "全部";
+  ElMessage.success(next ? "已显示全部节点" : "已仅显示方形节点");
+  nextTick(() => {
+    fitViewportRetryCount = 0;
+    if (next) {
+      fitVisibleToViewport();
+      return;
+    }
+    fitCategoryNodesToViewport();
+  });
 }
 
 function openGraphEditorForSelected() {
@@ -817,7 +817,11 @@ function resetViewport() {
 }
 
 function fitVisibleToViewport() {
-  if (!stageRef.value || visibleKps.value.length === 0) return;
+  if (!stageRef.value) return;
+  if (visibleKps.value.length === 0) {
+    fitCategoryNodesToViewport();
+    return;
+  }
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -835,14 +839,45 @@ function fitVisibleToViewport() {
   const sw = stageRef.value.clientWidth;
   const sh = stageRef.value.clientHeight;
   const pad = 100;
-  const scale = Math.min(MAX_CANVAS_SCALE, Math.max(MIN_CANVAS_SCALE, Math.min((sw - pad) / w, (sh - pad) / h)));
-  canvasScale.value = scale;
+  const scale = Math.min((sw - pad) / w, (sh - pad) / h, DEFAULT_CANVAS_SCALE);
+  canvasScale.value = Math.max(MIN_CANVAS_SCALE, Math.min(MAX_CANVAS_SCALE, Number(scale.toFixed(4))));
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
-  panX.value = sw / 2 - cx * scale;
-  panY.value = sh / 2 - cy * scale;
+  panX.value = sw / 2 - cx * canvasScale.value;
+  panY.value = sh / 2 - cy * canvasScale.value;
   persistViewState();
 }
+
+function fitCategoryNodesToViewport() {
+  if (!stageRef.value || categoryNodes.value.length === 0) return;
+  const sw = stageRef.value.clientWidth;
+  const sh = stageRef.value.clientHeight;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const item of categoryNodes.value) {
+    const p = categoryPoint(item.key);
+    const halfW = 130;
+    const halfH = 54;
+    minX = Math.min(minX, p.x - halfW);
+    maxX = Math.max(maxX, p.x + halfW);
+    minY = Math.min(minY, p.y - halfH);
+    maxY = Math.max(maxY, p.y + halfH);
+  }
+  const w = maxX - minX || 1;
+  const h = maxY - minY || 1;
+  const pad = 100;
+  const scale = Math.min((sw - pad) / w, (sh - pad) / h, DEFAULT_CANVAS_SCALE);
+  canvasScale.value = Math.max(MIN_CANVAS_SCALE, Math.min(MAX_CANVAS_SCALE, Number(scale.toFixed(4))));
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  panX.value = sw / 2 - cx * canvasScale.value;
+  panY.value = sh / 2 - cy * canvasScale.value;
+  persistViewState();
+}
+
+function zoomIn()
 
 function clampPan(nextX = panX.value, nextY = panY.value) {
   panX.value = nextX;
@@ -1064,6 +1099,10 @@ async function load() {
       if (selectedType.value === "kp" && selectedId.value) centerOnPoint(kpPoint(selectedId.value));
       else if (selectedCategory.value) centerOnPoint(categoryPoint(selectedCategory.value));
     }
+    nextTick(() => {
+      fitViewportRetryCount = 0;
+      fitVisibleToViewport();
+    });
     persistViewState();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载教师图谱失败");
@@ -1329,7 +1368,11 @@ onBeforeUnmount(() => {
         <p class="teacher-subtitle">先找分类，再选知识点，然后补信息、连关系、进内容页。</p>
       </div>
       <div class="teacher-controls">
-        <el-input v-model="search" placeholder="搜索知识点" clearable class="teacher-search" />
+        <div class="teacher-search-card">
+          <span class="teacher-search-card__label">搜索知识点</span>
+          <el-input v-model="search" placeholder="" clearable class="teacher-search" />
+          <span class="teacher-search-card__hint">按编码、标题、章节筛选节点</span>
+        </div>
         <el-checkbox v-model="showIncompleteOnly" size="small" border title="仅显示缺资源或缺题的知识点">仅待完善</el-checkbox>
         <el-dropdown trigger="click">
           <button type="button" class="teacher-btn">导出 ▾</button>
@@ -1347,13 +1390,13 @@ onBeforeUnmount(() => {
           新建知识点
         </button>
         <button class="teacher-btn" @click="resetViewport">重置视图</button>
-        <button class="teacher-btn teacher-btn--primary" @click="drawerOpen = !drawerOpen">
+        <button v-if="!props.fullscreen" class="teacher-btn teacher-btn--primary" @click="drawerOpen = !drawerOpen">
           {{ drawerVisible ? "收起右侧" : "打开右侧" }}
         </button>
       </div>
     </div>
 
-    <div class="teacher-guide">
+    <div v-if="!props.fullscreen" class="teacher-guide">
       <span>查看提示</span>
       <HoverTip content="先找分类，再点节点，最后改内容或连关系。" />
     </div>
@@ -1365,7 +1408,7 @@ onBeforeUnmount(() => {
         'teacher-content--drawer-collapsed': !drawerVisible,
       }"
     >
-      <aside class="teacher-sidebar">
+      <aside v-if="!props.fullscreen" class="teacher-sidebar">
         <div class="teacher-tree">
           <div class="teacher-tree__intro">
             <strong>先选分类或知识点</strong>
@@ -1415,7 +1458,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="teacher-stage__actions">
             <button class="teacher-stage__button" @click="toggleAllKps">
-              {{ showAllKps ? "仅看分类" : "显示全部节点" }}
+              {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
             </button>
             <button class="teacher-stage__button teacher-stage__button--primary" :disabled="props.readonly" @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)">新增知识点</button>
             <button class="teacher-stage__button" @click="fitVisibleToViewport">适应画布</button>
@@ -1424,9 +1467,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="teacher-stage__focus">
-          <span>{{ selectedType === "kp" ? (selectedKp?.title || "未选择知识点") : (selectedCategoryNode?.title || "未选择分类") }}</span>
           <button class="teacher-stage__focus-btn" @click="toggleAllKps">
-            {{ showAllKps ? "只看分类" : "展开全部节点" }}
+            {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
           </button>
           <button
             v-if="selectedType === 'kp' && selectedKp"
@@ -1540,7 +1582,7 @@ onBeforeUnmount(() => {
           @click="selectCategory(category.key)"
           @mousedown="onNodeMouseDown($event, 'category', category.key)"
         >
-          <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#edf4ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#7fb0ff' : '#d7e2f0'" stroke-width="1.8" />
+          <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#eef5ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#8fb8ff' : '#dbe5f1'" stroke-width="1.8" />
           <text class="teacher-category-node__title" text-anchor="middle" y="-6">{{ category.title }}</text>
           <text class="teacher-category-node__meta" text-anchor="middle" y="22">{{ category.total }} 个知识点</text>
         </g>
@@ -1558,8 +1600,8 @@ onBeforeUnmount(() => {
           <circle :r="nodeRadius(kp) + 18" fill="transparent" :stroke="ringStroke('literacy', kp)" :stroke-width="splitLabels(kp.literacy_tag).length ? 5 : 0" />
           <circle :r="nodeRadius(kp) + 10" fill="transparent" :stroke="ringStroke('ability', kp)" :stroke-width="splitLabels(kp.ability_tag).length ? 5 : 0" />
           <circle :r="nodeRadius(kp) + 2" fill="transparent" stroke="#9db7e8" stroke-width="3.5" />
-          <circle :r="nodeRadius(kp) + 22" :fill="kp.id === selectedKp?.id ? 'rgba(70, 122, 235, 0.12)' : 'rgba(96,139,232,0.08)'" />
-          <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#eef5ff' : '#f5f9ff'" :stroke="kp.id === selectedKp?.id ? '#7ca9f3' : '#c5d8f0'" stroke-width="2" />
+          <circle :r="nodeRadius(kp) + 22" :fill="kp.id === selectedKp?.id ? 'rgba(70, 122, 235, 0.10)' : 'rgba(96,139,232,0.06)'" />
+          <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#f7fbff' : '#ffffff'" :stroke="kp.id === selectedKp?.id ? '#76a7f8' : '#dbe5f1'" stroke-width="2" />
           <text class="teacher-node__code" text-anchor="middle" y="-8">{{ kp.code }}</text>
           <text class="teacher-node__title" text-anchor="middle" y="16">{{ kp.title.slice(0, 10) }}</text>
           <g v-if="kpCoverageWarnLabels(kp.id).length" :transform="`translate(0, ${nodeRadius(kp) + 16})`">
@@ -1569,7 +1611,7 @@ onBeforeUnmount(() => {
       </svg>
 
       <div
-        v-if="selectedKp && selectedLayout"
+        v-if="!props.fullscreen && selectedKp && selectedLayout"
         class="teacher-stage__menu"
         :class="{ 'teacher-stage__menu--below': selectedMenuBelow }"
         :style="selectedMenuStyle"
@@ -1579,7 +1621,7 @@ onBeforeUnmount(() => {
         <button class="danger" :disabled="props.readonly" @click="removeKp">删除</button>
       </div>
 
-      <div v-if="linkSelectionMode" class="teacher-stage__hint">
+      <div v-if="!props.fullscreen && linkSelectionMode" class="teacher-stage__hint">
         <span>
           {{
             linkSelectionMode === 'forward'
@@ -1596,7 +1638,7 @@ onBeforeUnmount(() => {
         <button @click="cancelLinkSelection">取消</button>
       </div>
 
-      <div v-if="categoryLinkMode" class="teacher-stage__hint teacher-stage__hint--chapter">
+      <div v-if="!props.fullscreen && categoryLinkMode" class="teacher-stage__hint teacher-stage__hint--chapter">
         <span>
           {{ categoryLinkMode === 'prerequisite' ? '正在给分类添加前后顺序，请再点一个分类。' : categoryLinkMode === 'support' ? '正在给分类添加支撑关系，请再点一个分类。' : '正在给分类添加关联关系，请再点一个分类。' }}
         </span>
@@ -1622,15 +1664,15 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div v-else-if="!loading && visibleKps.length === 0" class="teacher-stage__empty">
+      <div v-else-if="!loading && showAllKps && visibleKps.length === 0" class="teacher-stage__empty">
         <strong>当前没有可显示的知识点</strong>
-        <span>默认只显示分类节点。点击某个分类，或点击“显示全部节点”。</span>
+        <span>当前处于全部节点模式，但没有可渲染的圆形知识点。</span>
       </div>
       </div>
 
     </section>
 
-    <aside class="teacher-drawer" :class="{ open: drawerOpen }" v-if="drawerVisible">
+    <aside v-if="!props.fullscreen && drawerVisible" class="teacher-drawer" :class="{ open: drawerOpen }">
       <div class="teacher-drawer__header">
         <h3 class="teacher-drawer__title">{{ drawerTitle }}</h3>
         <button class="teacher-drawer__close" @click="drawerOpen = false">×</button>
@@ -1890,11 +1932,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .teacher-workbench {
-  background: transparent;
+  background: #f7faff;
   overflow: hidden;
-  border-radius: 0;
-  border: 0;
-  box-shadow: none;
+  border-radius: 28px;
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.06);
 }
 
 .teacher-workbench--fullscreen {
@@ -1919,65 +1961,73 @@ onBeforeUnmount(() => {
 }
 
 .teacher-workbench--fullscreen .teacher-header {
-  display: grid;
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-  align-items: center;
-  gap: 8px 12px;
-  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  background: #ffffff;
+  border-radius: 24px;
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
 .teacher-workbench--fullscreen .teacher-title {
-  font-size: 16px;
-  line-height: 1.25;
+  font-size: 22px;
+  line-height: 1.2;
 }
 
 .teacher-workbench--fullscreen .teacher-controls {
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .teacher-workbench--fullscreen .teacher-search {
-  width: min(200px, 36vw);
+  width: min(220px, 36vw);
 }
 
 .teacher-workbench--fullscreen .teacher-btn {
-  min-height: 34px;
-  padding: 0 12px;
-  font-size: 12px;
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
 }
 
 .teacher-workbench--fullscreen .teacher-content {
   flex: 1;
   min-height: 0;
-  gap: 8px;
-  padding: 8px;
+  gap: 0;
+  padding: 0;
 }
 
 .teacher-workbench--fullscreen .teacher-sidebar {
-  flex: 0 0 260px;
-  width: 260px;
-  max-width: 260px;
-  padding: 12px;
+  flex: 0 0 280px;
+  width: 280px;
+  max-width: 280px;
+  padding: 16px;
 }
 
 .teacher-workbench--fullscreen .teacher-drawer {
-  flex: 0 0 320px;
-  width: 320px;
-  max-width: 320px;
+  flex: 0 0 336px;
+  width: 336px;
+  max-width: 336px;
   padding: 0;
+}
+
+.teacher-workbench--fullscreen .teacher-stage {
+  min-height: calc(100dvh - 250px);
 }
 
 .teacher-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
+  align-items: flex-start;
+  padding: 18px 20px 14px;
   gap: 16px;
-  border-radius: var(--app-radius);
-  background: var(--app-card);
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-soft);
+  border-radius: 24px;
+  background: linear-gradient(135deg, #f7fbff 0%, #eef5ff 52%, #ffffff 100%);
+  border: 1px solid color-mix(in srgb, var(--app-primary) 14%, #dfe7f1);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
 .teacher-heading {
@@ -1986,7 +2036,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-title {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 800;
   color: #243449;
   margin: 0;
@@ -1994,18 +2044,11 @@ onBeforeUnmount(() => {
 }
 
 .teacher-subtitle {
-  margin: 0;
-  color: #718097;
-  font-size: 12px;
-  line-height: 1.5;
+  display: none;
 }
 
 .teacher-guide {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 0;
-  background: transparent;
+  display: none;
 }
 
 .teacher-guide span {
@@ -2028,8 +2071,25 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
+.teacher-search-card {
+  display: grid;
+  gap: 6px;
+  min-width: 240px;
+}
+
+.teacher-search-card__label {
+  font-size: 12px;
+  font-weight: 800;
+  color: #243449;
+}
+
+.teacher-search-card__hint {
+  font-size: 12px;
+  color: #6f829a;
+}
+
 .teacher-search {
-  width: 200px;
+  width: 240px;
 }
 
 .teacher-search :deep(.el-input__wrapper) {
@@ -2071,7 +2131,7 @@ onBeforeUnmount(() => {
 .teacher-content {
   display: flex;
   align-items: stretch;
-  gap: 12px;
+  gap: 18px;
   padding: 0;
   min-width: 0;
   overflow: hidden;
@@ -2092,15 +2152,16 @@ onBeforeUnmount(() => {
 }
 
 .teacher-sidebar {
-  width: 260px;
-  flex: 0 0 260px;
+  width: 280px;
+  flex: 0 0 280px;
   max-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 14px;
-  border-radius: var(--app-radius-lg);
-  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-primary-soft) 100%);
-  border: 1px solid var(--app-border);
+  padding: 16px;
+  border-radius: 24px;
+  background: #ffffff;
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
   color: var(--app-text-soft);
   z-index: 4;
 }
@@ -2117,12 +2178,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-tree__intro {
-  padding: 12px 12px 10px;
-  border-radius: 16px;
-  background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
-  border: 1px solid #d9e6f7;
-  display: grid;
-  gap: 4px;
+  display: none;
 }
 
 .teacher-tree__intro strong {
@@ -2138,9 +2194,9 @@ onBeforeUnmount(() => {
 
 .teacher-tree__create {
   min-height: 40px;
-  border: 1px solid #cfe0fb;
-  border-radius: 14px;
-  background: #edf4ff;
+  border: 1px solid #dfe7f1;
+  border-radius: 16px;
+  background: #f8fbff;
   color: #2459ab;
   font-size: 13px;
   font-weight: 800;
@@ -2157,7 +2213,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   padding: 14px;
   border-radius: 18px;
-  border: 1px dashed #d7e2ef;
+  border: 1px dashed #dfe7f1;
   background: #ffffff;
   color: #617792;
 }
@@ -2177,8 +2233,9 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 14px;
-  border-radius: 16px;
-  background: #ffffff;
+  border-radius: 18px;
+  background: #f8fbff;
+  border: 1px solid #dfe7f1;
   color: #475569;
   font-size: 13px;
   cursor: pointer;
@@ -2186,12 +2243,14 @@ onBeforeUnmount(() => {
 }
 
 .teacher-tree__summary:hover {
-  background: #eff5ff;
+  background: #eef5ff;
+  border-color: #cfe0f6;
 }
 
 .teacher-tree__summary.active {
-  background: #e3f2fd;
-  color: #1565c0;
+  background: #edf4ff;
+  color: #2459ab;
+  border-color: #a9c5ef;
 }
 
 .teacher-tree__count {
@@ -2210,7 +2269,7 @@ onBeforeUnmount(() => {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #e1eaf1;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #ffffff;
   color: #475569;
   font-size: 12px;
@@ -2228,13 +2287,13 @@ onBeforeUnmount(() => {
 }
 
 .teacher-tree__child:hover {
-  background: #f8fafc;
+  background: #f8fbff;
 }
 
 .teacher-tree__child.active {
-  background: #e3f2fd;
-  border-color: #90caf9;
-  color: #1565c0;
+  background: #edf4ff;
+  border-color: #a9c5ef;
+  color: #2459ab;
 }
 
 .teacher-stage {
@@ -2252,10 +2311,10 @@ onBeforeUnmount(() => {
   min-height: 0;
   max-height: 100%;
   height: 100%;
-  border-radius: var(--app-radius-lg);
-  background: linear-gradient(180deg, var(--app-card) 0%, rgba(79, 140, 255, 0.06) 100%);
-  border: 1px solid var(--app-border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  border-radius: 24px;
+  background: #ffffff;
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
 .teacher-workbench--fullscreen .teacher-stage {
@@ -2269,8 +2328,9 @@ onBeforeUnmount(() => {
   width: 100%;
   overflow: hidden;
   /* 与外层 .teacher-stage 圆角同心：内半径 = 外半径 − 内边距，避免底角“直角顶到”外框 */
-  border-radius: max(0px, calc(var(--app-radius-lg) - var(--graph-stage-pad)));
-  background: var(--graph-canvas-bg);
+  border-radius: 20px;
+  background: #f8fbff;
+  border: 1px solid #e8eef6;
   contain: layout style;
   isolation: isolate;
   transform: translateZ(0);
@@ -2312,10 +2372,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__legend-details {
-  min-width: 0;
-  border-radius: 14px;
-  border: 1px solid #e2ebf5;
-  background: rgba(255, 255, 255, 0.88);
+  display: none;
 }
 
 .teacher-stage__legend-summary {
@@ -2358,10 +2415,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-  align-items: flex-start;
+  display: none;
 }
 
 .teacher-stage__legend-item {
@@ -2436,7 +2490,7 @@ onBeforeUnmount(() => {
   min-height: 36px;
   padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid #dce6f2;
+  border: 1px solid #dfe7f1;
   background: #ffffff;
   color: #35507f;
   font-size: 12px;
@@ -2469,10 +2523,10 @@ onBeforeUnmount(() => {
 
 .teacher-stage__focus {
   margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.76);
-  border: 1px solid rgba(202, 218, 242, 0.95);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2554,10 +2608,10 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 8px;
   padding: 8px;
-  border-radius: 18px;
+  border-radius: 20px;
   background: #ffffff;
-  border: 1px solid #dce6f2;
-  box-shadow: 0 20px 38px rgba(15, 23, 42, 0.12);
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
 }
 
 .teacher-stage__menu--below {
@@ -2599,35 +2653,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__hint {
-  position: absolute;
-  left: 50%;
-  bottom: 88px;
-  transform: translateX(-50%);
-  z-index: 5;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 14px;
-  border-radius: 18px;
-  background: #ffffff;
-  border: 1px solid #dce6f2;
-  color: #475569;
-  font-size: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.teacher-stage__hint button {
-  min-height: 32px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: #eff5ff;
-  color: #35507f;
-  font-size: 11px;
-  transition: background 0.2s ease;
-}
-
-.teacher-stage__hint button:hover {
-  background: #dfefff;
+  display: none;
 }
 
 .teacher-stage__hint--chapter {
@@ -2641,11 +2667,11 @@ onBeforeUnmount(() => {
   z-index: 6;
   width: 380px;
   max-height: calc(100% - 128px);
-  padding: 16px;
-  border-radius: 20px;
+  padding: 18px;
+  border-radius: 24px;
   background: #ffffff;
-  border: 1px solid #dce6f2;
-  box-shadow: 0 22px 40px rgba(15, 23, 42, 0.12);
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.08);
   color: #475569;
   display: flex;
   flex-direction: column;
@@ -2701,8 +2727,8 @@ onBeforeUnmount(() => {
   padding: 4px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #dce6f2;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
   pointer-events: auto;
 }
 
@@ -2738,7 +2764,7 @@ onBeforeUnmount(() => {
   place-items: center;
   gap: 8px;
   text-align: center;
-  border: 1px dashed #dce6f2;
+  border: 1px dashed #dfe7f1;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.96);
   color: #35507f;
@@ -2768,17 +2794,18 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer {
-  width: 320px;
-  flex: 0 0 320px;
+  width: 336px;
+  flex: 0 0 336px;
   max-height: 100%;
   overflow-x: hidden;
   overflow-y: hidden;
   padding: 0;
-  border-radius: var(--app-radius-lg);
+  border-radius: 24px;
   background: #ffffff;
-  border: 1px solid var(--app-border);
+  border: 1px solid #dfe7f1;
   color: var(--app-text-soft);
   z-index: 5;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
 .teacher-content--fullscreen .teacher-drawer {
@@ -2793,8 +2820,8 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid #e1eaf1;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid #e5edf6;
 }
 
 .teacher-drawer__title {
@@ -2815,13 +2842,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer__guide-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  color: #617792;
-  font-size: 12px;
-  font-weight: 700;
+  display: none;
 }
 
 .teacher-drawer__close:hover {
@@ -2830,20 +2851,22 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer__content {
-  padding: 16px;
+  padding: 16px 18px 20px;
   overflow-y: auto;
   min-height: 0;
 }
 
 .teacher-drawer__guide {
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: #f4f8fc;
-  border: 1px solid #dde7f2;
-  color: #617792;
-  font-size: 12px;
-  line-height: 1.7;
-  margin-bottom: 14px;
+  display: none;
+}
+
+.teacher-stage__hint,
+.teacher-stage__hint--chapter,
+.teacher-stage__empty-btn,
+.teacher-drawer__flow-hint,
+.teacher-drawer__recommend,
+.teacher-drawer__ability-hint {
+  display: none;
 }
 
 .teacher-drawer__meta {
@@ -2856,7 +2879,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .teacher-drawer__tabs button {
@@ -2897,8 +2920,8 @@ onBeforeUnmount(() => {
 .teacher-drawer__metric {
   padding: 12px;
   border-radius: 18px;
-  background: #ffffff;
-  border: 1px solid #e1eaf1;
+  background: #f8fbff;
+  border: 1px solid #dfe7f1;
 }
 
 .teacher-drawer__metric span {
@@ -2927,7 +2950,7 @@ onBeforeUnmount(() => {
 .teacher-drawer__detail-item {
   padding: 12px 14px;
   border-radius: 16px;
-  border: 1px solid #dde7f2;
+  border: 1px solid #dfe7f1;
   background: #f8fbff;
   display: grid;
   gap: 4px;
@@ -2947,7 +2970,7 @@ onBeforeUnmount(() => {
 .teacher-drawer__desc {
   padding: 12px 14px;
   border-radius: 16px;
-  border: 1px solid #dde7f2;
+  border: 1px solid #dfe7f1;
   background: #f8fbff;
   color: #51657f;
   font-size: 13px;
@@ -3006,7 +3029,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid #e1eaf1;
+  border: 1px solid #dfe7f1;
   border-radius: 16px;
   background: #ffffff;
   color: #475569;
@@ -3269,4 +3292,240 @@ onBeforeUnmount(() => {
     align-items: flex-start;
   }
 }
+
+.teacher-workbench {
+  gap: 14px;
+  padding: 16px;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef4fb 100%);
+}
+
+.teacher-header,
+.teacher-sidebar,
+.teacher-stage,
+.teacher-drawer {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #dbe5f1;
+  box-shadow: var(--app-shadow-soft);
+}
+
+.teacher-header {
+  border-radius: 28px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #f7fbff 0%, #eef5ff 52%, #ffffff 100%);
+  border-color: color-mix(in srgb, var(--app-primary) 14%, #dbe5f1);
+}
+
+.teacher-sidebar {
+  border-radius: 28px;
+}
+
+.teacher-stage {
+  border-radius: 28px;
+}
+
+.teacher-stage__top {
+  padding: 14px 16px;
+  gap: 12px;
+  background: linear-gradient(135deg, #f7fbff 0%, #eef5ff 52%, #ffffff 100%);
+  border-bottom: 1px solid color-mix(in srgb, var(--app-primary) 10%, #e6eef7);
+}
+
+.teacher-stage__stats,
+.teacher-stage__focus {
+  gap: 8px;
+}
+
+.teacher-stage__pill {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #f5f9ff;
+  border-color: #d8e5f6;
+  color: #35507f;
+}
+
+.teacher-stage__button,
+.teacher-stage__focus-btn,
+.teacher-stage__menu button,
+.teacher-stage__zoom button,
+.teacher-drawer__primary,
+.teacher-drawer__secondary,
+.teacher-drawer__tag,
+.teacher-drawer__relation-item button {
+  border-radius: 12px;
+}
+
+.teacher-stage__button,
+.teacher-stage__focus-btn,
+.teacher-stage__menu button {
+  min-height: 34px;
+  padding-inline: 12px;
+  border: 1px solid #d8e5f6;
+  background: #ffffff;
+  color: #35507f;
+}
+
+.teacher-stage__focus-btn {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
+}
+
+.teacher-stage__button--primary,
+.teacher-stage__focus-btn--primary,
+.teacher-drawer__primary {
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  border-color: var(--app-green);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+}
+
+.teacher-stage__legend {
+  gap: 8px 12px;
+}
+
+.teacher-stage__legend-item {
+  color: #5f738f;
+}
+
+.teacher-stage__legend-line,
+.teacher-stage__legend-rings {
+  opacity: 0.85;
+}
+
+.teacher-stage__viewport {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  background: linear-gradient(180deg, #f9fbff 0%, #f1f6fc 100%);
+}
+
+.teacher-stage__empty {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: #dbe5f1;
+}
+
+.teacher-drawer {
+  border-radius: 28px;
+}
+
+.teacher-drawer__header {
+  padding: 14px 16px 10px;
+  border-bottom-color: #e6eef7;
+}
+
+.teacher-drawer__content {
+  padding: 14px 14px 16px;
+}
+
+.teacher-drawer__guide-inline,
+.teacher-drawer__flow-hint,
+.teacher-drawer__recommend,
+.teacher-drawer__ability-hint,
+.teacher-stage__hint,
+.teacher-stage__hint--chapter,
+.teacher-stage__empty-btn {
+  display: none;
+}
+
+.teacher-drawer__tabs {
+  gap: 8px;
+  padding: 8px;
+  border-radius: 18px;
+  background: #f6faff;
+  border: 1px solid #dfe9f5;
+}
+
+.teacher-drawer__tabs button {
+  min-height: 34px;
+  border-radius: 12px;
+  border-color: #d8e5f6;
+  background: #ffffff;
+}
+
+.teacher-drawer__tabs button.active {
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
+  border-color: var(--app-green);
+}
+
+.teacher-drawer__metric,
+.teacher-drawer__desc,
+.teacher-drawer__empty,
+.teacher-drawer__relation-tip {
+  border-radius: 16px;
+}
+
+.teacher-drawer__metric {
+  background: #f8fbff;
+  border-color: #dbe5f1;
+}
+
+.teacher-drawer__tag {
+  background: #edf4ff;
+  border-color: #d8e5f6;
+  color: #35507f;
+}
+
+.teacher-drawer__secondary {
+  background: #f8fbff;
+  border-color: #dbe5f1;
+  color: #475569;
+}
+
+.teacher-drawer__secondary:hover {
+  background: #e3f2fd;
+  border-color: #90caf9;
+  color: #1565c0;
+}
+
+.teacher-drawer__relation-item button {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.teacher-tree__summary,
+.teacher-tree__child,
+.teacher-stage__menu,
+.teacher-stage__zoom {
+  border-radius: 18px;
+  border: 1px solid #dbe5f1;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.teacher-tree__summary {
+  box-shadow: var(--app-shadow-soft);
+}
+
+.teacher-tree__summary.active,
+.teacher-tree__child.active {
+  background: linear-gradient(180deg, #f4f8ff 0%, #edf4ff 100%);
+  border-color: #8fb8ff;
+}
+
+.teacher-tree__child:hover {
+  background: #f7fbff;
+}
+
+.teacher-stage__menu {
+  padding: 8px;
+  gap: 8px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.teacher-stage__menu button {
+  border: 1px solid #d8e5f6;
+  background: #ffffff;
+  color: #35507f;
+}
+
+.teacher-stage__menu .danger {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #f5c2c7;
+}
+
+.teacher-node:hover circle:last-of-type,
+.teacher-category-node:hover rect {
+  filter: drop-shadow(0 10px 18px rgba(59, 130, 246, 0.12));
+}
 </style>
+
+

@@ -38,12 +38,12 @@ defineProps<{
 
 <style scoped>
 .report-hero {
-  padding: 24px;
+  padding: 18px 20px;
   border-radius: 20px;
   background: #ffffff;
   color: var(--app-ink);
   display: grid;
-  gap: 12px;
+  gap: 10px;
   border: 1px solid var(--app-border);
   box-shadow: var(--app-shadow-soft);
 }
@@ -56,7 +56,7 @@ defineProps<{
 }
 
 .hero-title {
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 800;
 }
 
@@ -70,7 +70,7 @@ defineProps<{
 }
 
 .hero-text {
-  line-height: 1.7;
+  line-height: 1.65;
   font-size: 13px;
   color: var(--app-ink-soft);
 }
@@ -82,7 +82,7 @@ defineProps<{
 }
 
 .hero-metric {
-  padding: 14px;
+  padding: 12px 14px;
   border-radius: 16px;
   background: #fcfdff;
   display: grid;

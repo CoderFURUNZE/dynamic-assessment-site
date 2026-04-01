@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api, getWithCache } from "../api";
 import { getRole, getUsername } from "../token";
+import { resolveStudentSubject, saveStudentSubject } from "../utils/studentCourse";
 
 type KP = {
   id: number;
@@ -68,7 +69,7 @@ watch(
   [subject, isStudent],
   () => {
     if (isStudent.value && subject.value) {
-      localStorage.setItem("da_student_last_subject", subject.value);
+      saveStudentSubject(subject.value);
     }
   },
   { immediate: true }
@@ -101,11 +102,6 @@ const currentStageSummary = computed(() => {
   const stage = profile.value?.current_stage;
   if (!stage?.stage_title) return "当前暂无阶段信息";
   return `${stage.stage_title}${stage.trend_label ? ` · ${stage.trend_label}` : ""}`;
-});
-const nextActionText = computed(() => {
-  if (recommendedTarget.value) return `下一步先学 ${recommendedTarget.value.title}`;
-  if (currentKp.value) return `继续当前知识点 ${currentKp.value.title}`;
-  return "先选择课程和知识点";
 });
 const dashboardStats = computed(() => [
   { label: "动态评分", value: `${Math.round((profile.value?.dynamic_score || 0) * 100)}%` },
@@ -141,7 +137,7 @@ async function loadCourses() {
       code: String(item.code || ""),
       title: String(item.title || ""),
     }));
-    if (!subject.value && courses.value.length) subject.value = courses.value[0].title;
+    subject.value = resolveStudentSubject(String(route.query.subject || ""), subject.value, courses.value);
   } catch (e: any) {
     if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "加载课程失败");
@@ -219,17 +215,6 @@ async function onKpChange() {
   await loadReco();
 }
 
-function openGraphWorkspace() {
-  router.push({
-    path: "/student/graph-workspace",
-    query: studentQuery({
-      subject: subject.value || undefined,
-      kp: currentKpId.value ? String(currentKpId.value) : undefined,
-      from: "student-dashboard",
-    }),
-  });
-}
-
 function openCurrentLearning(targetId?: number | null) {
   const kpId = targetId ?? currentKpId.value;
   if (!kpId) {
@@ -244,14 +229,6 @@ function openCurrentLearning(targetId?: number | null) {
       from: "student-dashboard",
     }),
   });
-}
-
-async function goToRecommended() {
-  if (!reco.value?.target_kp?.id) return;
-  currentKpId.value = reco.value.target_kp.id;
-  localStorage.setItem(kpStorageKey(), String(reco.value.target_kp.id));
-  await refreshMastery();
-  openCurrentLearning(reco.value.target_kp.id);
 }
 
 onMounted(async () => {
@@ -274,21 +251,13 @@ onMounted(async () => {
       <section class="student-dashboard__hero">
         <div class="student-dashboard__hero-main">
           <div class="student-dashboard__hero-copy">
-            <span class="student-dashboard__hero-label">今日主任务</span>
-            <h2>{{ nextActionText }}</h2>
-            <p>
-              {{ currentStageSummary }}
-              <span v-if="profile?.reason_summary">，{{ profile.reason_summary }}</span>
-            </p>
+            <h2>{{ currentKp ? currentKp.title : subject || "" }}</h2>
+            <p>{{ currentStageSummary }}</p>
           </div>
           <div class="student-dashboard__hero-actions">
             <el-select v-model="subject" placeholder="切换课程" @change="onCourseChange" style="width: 220px">
               <el-option v-for="c in courses" :key="c.id" :label="c.title" :value="c.title" />
             </el-select>
-            <el-button type="primary" size="large" @click="openCurrentLearning()" :disabled="!currentKp">
-              继续学习
-            </el-button>
-            <el-button size="large" @click="openGraphWorkspace" :disabled="!kps.length">进入知识图谱</el-button>
           </div>
         </div>
 
@@ -300,35 +269,11 @@ onMounted(async () => {
         </div>
       </section>
 
-      <section class="student-dashboard__entry-grid">
-        <button class="student-entry-card student-entry-card--primary" @click="openCurrentLearning()" :disabled="!currentKp">
-          <span class="student-entry-card__eyebrow">主操作</span>
-          <strong>{{ currentKp ? `学习 ${currentKp.title}` : "先选择知识点" }}</strong>
-          <span>{{ currentKp ? "直接进入学习资源和练习。" : "当前课程还没有可学习知识点。" }}</span>
-        </button>
-        <button class="student-entry-card" @click="openGraphWorkspace" :disabled="!kps.length">
-          <span class="student-entry-card__eyebrow">路径查看</span>
-          <strong>进入知识图谱</strong>
-          <span>在独立工作区里找前后关系和学习路径。</span>
-        </button>
-        <button class="student-entry-card" @click="router.push({ path: '/student/report', query: studentQuery({ subject: subject || undefined }) })">
-          <span class="student-entry-card__eyebrow">结果查看</span>
-          <strong>学习报告</strong>
-          <span>查看画像、阶段变化和动态评价结果。</span>
-        </button>
-        <button class="student-entry-card" @click="router.push({ path: '/student/questionnaire', query: studentQuery({ subject: subject || undefined }) })">
-          <span class="student-entry-card__eyebrow">补充信息</span>
-          <strong>填写问卷</strong>
-          <span>补充过程信息，帮助系统调整建议。</span>
-        </button>
-      </section>
-
       <section class="student-dashboard__main-grid">
         <section class="edu-panel student-dashboard__panel">
           <header class="edu-panel__header student-dashboard__panel-header">
             <div>
               <h2 class="edu-panel__title">当前知识点</h2>
-              <p class="student-dashboard__panel-desc">首页只保留当前学习目标和必要切换。</p>
             </div>
             <el-tag round type="info">{{ profile?.persona_label || "学习中" }}</el-tag>
           </header>
@@ -339,7 +284,7 @@ onMounted(async () => {
               <el-tag size="small" effect="plain">{{ masteryStageLabel }}</el-tag>
             </div>
             <h3>{{ currentKp.title }}</h3>
-            <p>{{ currentKp.description || "当前知识点暂无详细说明。" }}</p>
+            <p>{{ currentKp.description || "" }}</p>
             <div class="student-dashboard__progress-box">
               <div class="student-dashboard__progress-head">
                 <span>当前掌握度</span>
@@ -351,28 +296,7 @@ onMounted(async () => {
               <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
             </el-select>
           </div>
-          <el-empty v-else description="请先选择一个知识点" />
-        </section>
-
-        <section class="edu-panel student-dashboard__panel">
-          <header class="edu-panel__header student-dashboard__panel-header">
-            <div>
-              <h2 class="edu-panel__title">系统建议</h2>
-              <p class="student-dashboard__panel-desc">只给出下一步建议，不在首页堆详细解释。</p>
-            </div>
-            <el-button link type="primary" @click="loadReco" :disabled="!currentKpId">刷新建议</el-button>
-          </header>
-
-          <div v-if="reco" class="student-dashboard__reco-card">
-            <span class="student-dashboard__reco-label">{{ reco.recommendation_stage_label || "下一步" }}</span>
-            <h3>{{ recommendedTarget?.title || reco.target_kp.title }}</h3>
-            <p>{{ reco.reason_summary }}</p>
-            <div class="student-dashboard__reco-actions">
-              <el-button @click="openGraphWorkspace">看路径</el-button>
-              <el-button type="primary" @click="goToRecommended">去学习这个点</el-button>
-            </div>
-          </div>
-          <el-empty v-else description="点击“刷新建议”获取下一步推荐" />
+          <el-empty v-else description="" />
         </section>
       </section>
 
@@ -412,7 +336,6 @@ onMounted(async () => {
           <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
         </el-select>
       </div>
-      <p class="preview-tip">当前正在以教师或管理员身份预览学生端，可继续进入知识图谱或知识点学习页查看完整流程。</p>
     </section>
   </div>
 </template>
@@ -448,17 +371,6 @@ onMounted(async () => {
   max-width: 60ch;
 }
 
-.student-dashboard__hero-label {
-  display: inline-flex;
-  width: fit-content;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.12);
-  color: #1d4ed8;
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .student-dashboard__hero-copy h2 {
   margin: 0;
   font-size: clamp(24px, 4vw, 34px);
@@ -480,7 +392,6 @@ onMounted(async () => {
 }
 
 .student-dashboard__stats,
-.student-dashboard__entry-grid,
 .student-dashboard__quick-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -510,52 +421,9 @@ onMounted(async () => {
   color: var(--app-text-main);
 }
 
-.student-entry-card {
-  display: grid;
-  gap: 8px;
-  padding: 18px;
-  border-radius: var(--app-radius);
-  border: 1px solid var(--app-border);
-  background: var(--app-card);
-  box-shadow: var(--app-shadow-soft);
-  text-align: left;
-  cursor: pointer;
-  transition: transform var(--app-duration) var(--app-ease-out), border-color var(--app-duration) var(--app-ease-out), box-shadow var(--app-duration) var(--app-ease-out);
-}
-
-.student-entry-card:hover:not(:disabled) {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--app-primary) 25%, var(--app-border));
-  box-shadow: var(--app-shadow);
-}
-
-.student-entry-card--primary {
-  background: linear-gradient(145deg, #fdfefe 0%, #eef6ff 100%);
-  border-color: color-mix(in srgb, var(--app-primary) 24%, var(--app-border));
-}
-
-.student-entry-card__eyebrow {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--app-primary-deep);
-}
-
-.student-entry-card strong {
-  font-size: 16px;
-  color: var(--app-text-main);
-}
-
-.student-entry-card span:last-child {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--app-text-soft);
-}
-
 .student-dashboard__main-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -567,15 +435,7 @@ onMounted(async () => {
   align-items: flex-start;
 }
 
-.student-dashboard__panel-desc {
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--app-text-soft);
-}
-
-.student-dashboard__kp-card,
-.student-dashboard__reco-card {
+.student-dashboard__kp-card {
   display: grid;
   gap: 14px;
 }
@@ -588,8 +448,7 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
-.student-dashboard__kp-code,
-.student-dashboard__reco-label {
+.student-dashboard__kp-code {
   display: inline-flex;
   width: fit-content;
   padding: 5px 10px;
@@ -603,20 +462,13 @@ onMounted(async () => {
   color: var(--app-primary-deep);
 }
 
-.student-dashboard__reco-label {
-  background: rgba(16, 185, 129, 0.12);
-  color: #047857;
-}
-
-.student-dashboard__kp-card h3,
-.student-dashboard__reco-card h3 {
+.student-dashboard__kp-card h3 {
   margin: 0;
   font-size: 20px;
   color: var(--app-text-main);
 }
 
-.student-dashboard__kp-card p,
-.student-dashboard__reco-card p {
+.student-dashboard__kp-card p {
   margin: 0;
   font-size: 13px;
   line-height: 1.7;
@@ -648,15 +500,8 @@ onMounted(async () => {
   color: var(--app-text-main);
 }
 
-.student-dashboard__reco-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 @media (max-width: 1100px) {
   .student-dashboard__stats,
-  .student-dashboard__entry-grid,
   .student-dashboard__main-grid,
   .student-dashboard__quick-grid {
     grid-template-columns: 1fr;

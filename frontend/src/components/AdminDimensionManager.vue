@@ -396,9 +396,7 @@ watch(
 }
 
 .content-subtitle {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #7186a6;
+  display: none;
 }
 
 .dimension-tabs :deep(.el-tabs__header) {
@@ -509,11 +507,7 @@ watch(
 }
 
 .panel-subtitle {
-  margin-top: 8px;
-  max-width: 860px;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #6f809f;
+  display: none;
 }
 
 .indicator-table-header {

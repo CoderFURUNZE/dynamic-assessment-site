@@ -6,7 +6,6 @@ import { api } from "../api";
 import ResourcePane from "../components/ResourcePane.vue";
 import QuizPane from "../components/QuizPane.vue";
 import StudentKpHeader from "../components/StudentKpHeader.vue";
-import StudentKpStepTabs from "../components/StudentKpStepTabs.vue";
 
 type KpInfo = {
   id: number;
@@ -85,7 +84,7 @@ const router = useRouter();
 
 const loading = ref(false);
 type WorkspaceView = "overview" | "resource" | "practice" | "review" | "next";
-const activeView = ref<WorkspaceView>("overview");
+const activeView = ref<WorkspaceView>("resource");
 const workflowSteps: WorkspaceView[] = ["overview", "resource", "practice", "review", "next"];
 type QuizSubView = "practice" | "records" | "wrong" | "review";
 const quizSubViewFromPath = computed<QuizSubView | null>(() => {
@@ -452,13 +451,6 @@ watch(kpId, async () => {
       </div>
     </section>
 
-    <StudentKpStepTabs
-      :active-view="activeView"
-      :next-disabled="getStepDisabled('next')"
-      :next-disabled-reason="nextStepDisabledReason"
-      @switch="switchView"
-    />
-
     <main class="student-content-main">
       <template v-if="activeView === 'overview'">
         <section v-if="recommendationContext" class="student-content-reco">
@@ -610,52 +602,36 @@ watch(kpId, async () => {
 <style scoped>
 .student-content-page {
   min-height: 100vh;
-  padding: 16px;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 20px 20px 28px;
   background: var(--app-bg);
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .student-content-overview {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .student-content-nav-card {
-  border-radius: 18px;
-  border: 1px solid var(--app-border);
+  border-radius: 22px;
+  border: 1px solid #dfe7f1;
   background: #ffffff;
-  box-shadow: var(--app-shadow-soft);
-  padding: 16px 18px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  padding: 16px;
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .student-content-nav-card__head {
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: flex-start;
-}
-
-.student-content-nav-card__head strong {
-  display: block;
-  color: #23405f;
-  font-size: 16px;
-}
-
-.student-content-nav-card__head span {
-  display: block;
-  margin-top: 4px;
-  color: #6d819c;
-  font-size: 12px;
+  display: none;
 }
 
 .student-content-nav-card__actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  display: none;
 }
 
 .student-content-nav-card__list {
@@ -683,13 +659,13 @@ watch(kpId, async () => {
 }
 
 .student-content-overview__item {
-  border-radius: 16px;
-  border: 1px solid var(--app-border);
+  border-radius: 20px;
+  border: 1px solid #dfe7f1;
   background: #ffffff;
-  padding: 16px;
+  padding: 18px;
   display: grid;
   gap: 6px;
-  box-shadow: var(--app-shadow-soft);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.04);
 }
 
 .student-content-overview__item span {
@@ -703,15 +679,15 @@ watch(kpId, async () => {
 }
 
 .student-content-reco {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 16px;
-  border-radius: 16px;
-  border: 1px solid var(--app-border);
+  border-radius: 20px;
+  border: 1px solid #dfe7f1;
   background: #ffffff;
-  padding: 16px 18px;
-  box-shadow: var(--app-shadow-soft);
+  padding: 18px 20px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.04);
 }
 
 .student-content-reco__main {
@@ -720,11 +696,7 @@ watch(kpId, async () => {
 }
 
 .student-content-reco__eyebrow {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #6d83a6;
-  text-transform: uppercase;
+  display: none;
 }
 
 .student-content-reco__title {
@@ -740,9 +712,9 @@ watch(kpId, async () => {
 }
 
 .student-content-reco__btn {
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
-  background: #f7f9fc;
+  border: 1px solid #dfe7f1;
+  border-radius: 14px;
+  background: #f8fbff;
   color: #39506d;
   padding: 10px 16px;
   font-size: 13px;
@@ -757,15 +729,15 @@ watch(kpId, async () => {
 }
 
 .student-content-closure {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 16px;
-  border-radius: 16px;
+  border-radius: 20px;
   border: 1px solid #dbe7df;
   background: #ffffff;
-  padding: 16px 18px;
-  box-shadow: var(--app-shadow-soft);
+  padding: 18px 20px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.04);
 }
 
 .student-content-closure__main {
@@ -774,11 +746,7 @@ watch(kpId, async () => {
 }
 
 .student-content-closure__eyebrow {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #5f856f;
-  text-transform: uppercase;
+  display: none;
 }
 
 .student-content-closure__title {
@@ -906,23 +874,11 @@ watch(kpId, async () => {
 .student-content-main {
   min-width: 0;
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .student-content-step-nav {
-  position: sticky;
-  bottom: 12px;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid var(--app-border);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(3px);
-  box-shadow: var(--app-shadow-soft);
-  padding: 10px 12px;
+  display: none;
 }
 
 .student-content-step-nav__hint {
@@ -931,7 +887,10 @@ watch(kpId, async () => {
 }
 
 .student-content-card {
-  border-radius: 16px;
+  border-radius: 22px;
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
 }
 
 .student-content-reco--inner {
@@ -945,10 +904,15 @@ watch(kpId, async () => {
 .student-content-empty {
   color: #8ea1ba;
   font-size: 13px;
+  padding: 4px 0;
 }
 
 .student-content-section {
   margin-bottom: 18px;
+}
+
+.student-content-section:last-child {
+  margin-bottom: 0;
 }
 
 .student-content-section h3 {
@@ -981,10 +945,10 @@ watch(kpId, async () => {
 }
 
 .student-content-task {
-  border: 1px solid #dce6f2;
-  border-radius: 12px;
-  padding: 12px;
-  background: #ffffff;
+  border: 1px solid #dfe7f1;
+  border-radius: 16px;
+  padding: 14px;
+  background: #f8fbff;
 }
 
 .student-content-task strong {
@@ -1019,6 +983,17 @@ watch(kpId, async () => {
   cursor: pointer;
 }
 
+.student-content-card :deep(.el-card__header) {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #e8eef6;
+  font-weight: 800;
+  color: #264160;
+}
+
+.student-content-card :deep(.el-card__body) {
+  padding: 18px 20px 20px;
+}
+
 @media (max-width: 1080px) {
   .student-content-overview {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1041,5 +1016,15 @@ watch(kpId, async () => {
     grid-template-columns: 1fr;
   }
 
+}
+
+@media (max-width: 720px) {
+  .student-content-page {
+    padding: 16px 14px 24px;
+  }
+
+  .student-content-overview {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

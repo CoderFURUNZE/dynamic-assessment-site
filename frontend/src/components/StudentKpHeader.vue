@@ -20,8 +20,6 @@ const emit = defineEmits<{
       <button class="student-content-page__back" @click="emit('back')">返回图谱</button>
       <div>
         <h1 class="student-content-page__title">{{ title }}</h1>
-        <p class="student-content-page__subtitle">{{ subtitle }}</p>
-        <div class="student-content-page__hint">{{ hint }}</div>
       </div>
     </div>
     <div v-if="kpTitle" class="student-content-page__chips">
@@ -37,19 +35,19 @@ const emit = defineEmits<{
 .student-content-page__toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 18px;
-  padding: 18px 20px;
-  border-radius: 20px;
-  border: 1px solid var(--app-border);
+  padding: 20px 22px;
+  border-radius: 24px;
+  border: 1px solid #dfe7f1;
   background: #ffffff;
-  box-shadow: var(--app-shadow-soft);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
 .student-content-page__left {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 14px;
 }
 
 .student-content-page__back {
@@ -71,27 +69,9 @@ const emit = defineEmits<{
 
 .student-content-page__title {
   margin: 0;
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
   color: #243449;
-}
-
-.student-content-page__subtitle {
-  margin: 4px 0 0;
-  color: #6e8097;
-  font-size: 13px;
-}
-
-.student-content-page__hint {
-  margin-top: 10px;
-  max-width: 720px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--app-border);
-  background: #f8fbff;
-  color: #57708f;
-  font-size: 12px;
-  line-height: 1.6;
 }
 
 .student-content-page__chips {
@@ -101,8 +81,8 @@ const emit = defineEmits<{
   flex-wrap: wrap;
   padding: 12px 16px;
   border-radius: 999px;
-  background: #fafbfd;
-  border: 1px solid var(--app-border);
+  background: #f8fbff;
+  border: 1px solid #dfe7f1;
   color: #314661;
 }
 
@@ -126,6 +106,10 @@ const emit = defineEmits<{
   .student-content-page__toolbar {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .student-content-page__left {
+    flex-direction: column;
   }
 }
 </style>

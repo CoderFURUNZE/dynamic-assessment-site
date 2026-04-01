@@ -77,7 +77,7 @@ router.addRoute({
 router.addRoute({
   path: "/student/graph-workspace",
   component: StudentGraphWorkspacePage,
-  meta: { title: "图谱学习", standaloneWorkspace: true },
+  meta: { title: "图谱学习" },
 });
 router.addRoute({
   path: "/student/enroll",
@@ -173,7 +173,7 @@ router.addRoute({
 router.addRoute({
   path: "/teacher/content",
   component: TeacherGraphWorkspacePage,
-  meta: { title: "内容建设", standaloneWorkspace: true },
+  meta: { title: "内容建设" },
 });
 router.addRoute({
   path: "/teacher/evaluation",

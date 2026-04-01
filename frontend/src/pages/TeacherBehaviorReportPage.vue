@@ -285,7 +285,7 @@ onMounted(async () => {
 
 <template>
   <div class="teacher-page">
-    <WorkspaceTopbar v-model="subject" :courses="courses" badge="Teacher Behavior" title="行为画像明细" :meta-text="selectedStage ? `阶段 ${selectedStage.stage_order}. ${selectedStage.title}` : '请选择课程与阶段查看行为画像'" @change="syncQuery">
+    <WorkspaceTopbar v-model="subject" :courses="courses" badge="Teacher Behavior" title="行为画像明细" :meta-text="selectedStage ? `阶段 ${selectedStage.stage_order}. ${selectedStage.title}` : ''" @change="syncQuery">
       <HintButton tip="回到阶段评价里的数据导入页，继续上传班级数据。" @click="router.push({ path: '/teacher/evaluation', query: { ...buildTeacherSubjectQuery(subject), tab: 'imports' } })">去数据导入</HintButton>
       <HintButton tip="导出当前阶段的行为画像明细 CSV。" @click="downloadCsv">导出 CSV</HintButton>
       <HintButton type="primary" :loading="applying" tip="将系统行为汇总写入阶段画像并重新计算。" @click="applyBehavior">一键导入并重算</HintButton>
@@ -473,11 +473,11 @@ onMounted(async () => {
 .behavior-auto-collect-hint :deep(.el-alert__description) {
   margin: 0;
 }
+.behavior-auto-collect-hint {
+  display: none;
+}
 .behavior-auto-collect-hint__body {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.65;
-  color: var(--app-ink-soft);
+  display: none;
 }
 
 .behavior-toolbar {
@@ -505,8 +505,7 @@ onMounted(async () => {
 }
 
 .behavior-toolbar__meta {
-  max-width: 560px;
-  line-height: 1.7;
+  display: none;
 }
 
 .behavior-metrics {
@@ -535,10 +534,7 @@ onMounted(async () => {
 }
 
 .metric-card__hint {
-  margin-top: 6px;
-  color: var(--app-ink-soft);
-  font-size: 12px;
-  line-height: 1.6;
+  display: none;
 }
 
 .behavior-panels {
@@ -566,8 +562,7 @@ onMounted(async () => {
 }
 
 .behavior-panel__header small {
-  color: var(--app-ink-soft);
-  font-size: 12px;
+  display: none;
 }
 
 .score-bars,

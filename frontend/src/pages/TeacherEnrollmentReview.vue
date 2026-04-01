@@ -282,30 +282,18 @@ onMounted(async () => {
 }
 
 .review-help {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--app-border);
-  border-radius: 16px;
-  background: #fafbfd;
-  display: grid;
-  gap: 6px;
+  display: none;
 }
 
 .review-help__title {
-  font-size: 13px;
-  font-weight: 900;
-  color: #24374f;
+  display: none;
 }
 
 .review-help__text {
-  font-size: 13px;
-  color: #5a6f86;
-  line-height: 1.6;
+  display: none;
 }
 
 .review-help__action {
-  font-size: 13px;
-  color: #6a82a0;
-  font-weight: 700;
+  display: none;
 }
 </style>

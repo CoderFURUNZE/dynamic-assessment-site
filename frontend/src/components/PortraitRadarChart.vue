@@ -19,7 +19,7 @@ const props = withDefaults(
     title: "五维雷达图",
     subtitle: "",
     accent: "#5c7cff",
-    emptyText: "当前还没有足够数据生成雷达图",
+    emptyText: "暂无足够数据生成雷达图",
   }
 );
 
@@ -41,7 +41,7 @@ const normalizedItems = computed(() =>
 const hasData = computed(() => normalizedItems.value.some((item) => item.score != null));
 
 function getPoint(index: number, total: number, scale: number) {
-  const angle = (-Math.PI / 2) + (Math.PI * 2 * index) / Math.max(total, 1);
+  const angle = -Math.PI / 2 + (Math.PI * 2 * index) / Math.max(total, 1);
   return {
     x: center + Math.cos(angle) * radius * scale,
     y: center + Math.sin(angle) * radius * scale,
@@ -102,7 +102,6 @@ const labelPoints = computed(() => {
     <div class="radar-card__head">
       <div>
         <div class="radar-card__title">{{ title }}</div>
-        <div v-if="subtitle" class="radar-card__subtitle">{{ subtitle }}</div>
       </div>
     </div>
 
@@ -179,13 +178,6 @@ const labelPoints = computed(() => {
   color: var(--app-ink, #24324a);
 }
 
-.radar-card__subtitle {
-  margin-top: 4px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--app-ink-soft, #667694);
-}
-
 .radar-card__body {
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(180px, 1fr);
@@ -229,9 +221,10 @@ const labelPoints = computed(() => {
 }
 
 .radar-svg__label {
-  fill: var(--app-ink, #24324a);
-  font-size: 11px;
+  font-size: 12px;
+  fill: #506784;
   font-weight: 600;
+  dominant-baseline: middle;
 }
 
 .radar-legend {
@@ -244,40 +237,29 @@ const labelPoints = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(92, 124, 255, 0.12);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fbff;
+  border: 1px solid var(--app-border);
 }
 
 .radar-legend__label {
   font-size: 13px;
-  color: var(--app-ink-soft, #667694);
+  color: var(--app-ink);
 }
 
 .radar-legend__value {
-  font-size: 15px;
-  color: var(--app-ink, #24324a);
+  font-size: 14px;
+  color: #254d8a;
 }
 
 .radar-card__empty {
-  padding: 20px 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px dashed rgba(92, 124, 255, 0.2);
-  color: var(--app-ink-soft, #667694);
-  font-size: 13px;
-  text-align: center;
-}
-
-@media (max-width: 900px) {
-  .radar-card__body {
-    grid-template-columns: 1fr;
-    justify-items: center;
-  }
-
-  .radar-legend {
-    width: 100%;
-  }
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  color: var(--app-ink-soft);
+  border-radius: 16px;
+  background: #fcfdff;
+  border: 1px dashed var(--app-border);
 }
 </style>

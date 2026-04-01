@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api, getWithCache } from "../api";
 import { getRole, getUsername } from "../token";
+import { resolveStudentSubject, saveStudentSubject } from "../utils/studentCourse";
 import HoverTip from "../components/HoverTip.vue";
 import HintButton from "../components/HintButton.vue";
 
@@ -98,7 +99,7 @@ watch(
   [subject, isStudent],
   () => {
     if (isStudent.value && subject.value) {
-      localStorage.setItem("da_student_last_subject", subject.value);
+      saveStudentSubject(subject.value);
     }
   },
   { immediate: true }
@@ -166,7 +167,7 @@ async function loadCourses() {
       code: String(item.code || ""),
       title: String(item.title || ""),
     }));
-    if (!subject.value && courses.value.length) subject.value = courses.value[0].title;
+    subject.value = resolveStudentSubject(String(route.query.subject || ""), subject.value, courses.value);
   } catch (e: any) {
     if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "加载课程失败");

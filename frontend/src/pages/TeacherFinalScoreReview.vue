@@ -314,7 +314,7 @@ onMounted(async () => {
         </template>
 
         <el-card v-else class="panel-card empty-card" shadow="never">
-          请选择一个学生查看最终评分确认详情。
+          <div></div>
         </el-card>
       </main>
     </div>
@@ -360,9 +360,7 @@ onMounted(async () => {
 }
 
 .sidebar-head__subtitle {
-  margin-top: 4px;
-  font-size: 13px;
-  color: #6d829f;
+  display: none;
 }
 
 .student-list {

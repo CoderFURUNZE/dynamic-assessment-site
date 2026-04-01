@@ -201,7 +201,7 @@ watch(
         <div class="persona-header">
           <div>
             <div class="persona-title">学习者画像规则</div>
-            <div class="persona-subtitle">管理员在这里配置分型阈值、策略模板，并可一键重算全体学生画像。</div>
+            <div class="persona-subtitle"></div>
           </div>
           <div class="persona-actions">
             <el-button size="small" @click="reloadAll">刷新</el-button>
@@ -290,7 +290,7 @@ watch(
         <div class="persona-header">
           <div>
             <div class="persona-title">学习者画像分析</div>
-            <div class="persona-subtitle">教师端为只读分析模式：只查看画像结果，不维护规则。</div>
+            <div class="persona-subtitle"></div>
           </div>
           <div class="persona-actions">
             <el-button size="small" @click="reloadAll">刷新</el-button>
@@ -381,9 +381,7 @@ watch(
 }
 
 .persona-subtitle {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--app-ink-soft);
+  display: none;
 }
 
 .persona-actions {

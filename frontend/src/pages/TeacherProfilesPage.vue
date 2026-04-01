@@ -19,9 +19,7 @@ onMounted(loadCourses);
 </script>
 <template>
   <div class="teacher-page">
-    <WorkspaceTopbar v-model="subject" :courses="courses" badge="Teacher Profiles" title="学生画像" @change="syncQuery">
-      <el-button @click="router.push({ path: '/teacher/review', query: { subject: subject || undefined, tab: 'final' } })">去最终评分</el-button>
-    </WorkspaceTopbar>
+    <WorkspaceTopbar v-model="subject" :courses="courses" badge="Teacher Profiles" title="学生画像" @change="syncQuery" />
     <PageSectionCard eyebrow="Profiles" title="学生画像">
       <AdminPersonaManager :subject="subject" :grade="grade" :readonly="true" :show-student-detail-action="true" @view-student="(id:number)=>router.push({ path: '/teacher/students', query: { user_id: String(id), subject: subject || undefined, tab: 'detail' } })" />
     </PageSectionCard>

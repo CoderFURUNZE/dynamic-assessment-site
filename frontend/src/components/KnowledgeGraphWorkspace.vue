@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch, withDefaults } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
@@ -278,23 +278,8 @@ const filteredKps = computed(() => {
 });
 
 const visibleKps = computed(() => {
-  let list: GraphKp[];
-  if (showAllKps.value) {
-    list = filteredKps.value;
-  } else {
-    const activeChapterKey =
-      selectedType.value === "category"
-        ? selectedCategory.value
-        : (selectedKp.value?.chapter || selectedCategory.value || null);
-    if (!activeChapterKey) list = [] as GraphKp[];
-    else list = filteredKps.value.filter((kp) => (kp.chapter || "未分章") === activeChapterKey);
-  }
-  // 搜索过滤后当前选中知识点可能不在列表中，画布丢失节点导致无法再次点击；始终保留选中节点
-  if (selectedType.value === "kp" && selectedId.value != null && !list.some((k) => k.id === selectedId.value)) {
-    const pinned = kps.value.find((k) => k.id === selectedId.value);
-    if (pinned) list = [...list, pinned];
-  }
-  return list;
+  if (!showAllKps.value) return [];
+  return filteredKps.value;
 });
 
 const treeNodes = computed(() => {
@@ -622,7 +607,7 @@ function restoreStudentViewState() {
     selectedType.value = parsed.selectedType === "category" ? "category" : "kp";
     selectedId.value = Number.isFinite(Number(parsed.selectedId)) ? Number(parsed.selectedId) : null;
     selectedCategory.value = typeof parsed.selectedCategory === "string" ? parsed.selectedCategory : null;
-    showAllKps.value = parsed.showAllKps === true;
+    showAllKps.value = parsed.showAllKps !== false;
     return true;
   } catch {
     return false;
@@ -894,7 +879,7 @@ async function load() {
 
 function applyInitialCenterAfterLoad() {
   // 嵌入页必须根据当前视口重新适配，不能因「已恢复视图」跳过（否则节点在画布外）
-  if (props.embedded && visibleKps.value.length > 0) {
+  if (props.embedded) {
     fitViewportRetryCount = 0;
     nextTick(() => {
       fitVisibleToViewport();
@@ -948,7 +933,6 @@ async function loadNodeDetail(id: number | null) {
 }
 
 function selectKp(id: number) {
-  showAllKps.value = false;
   selectedType.value = "kp";
   selectedId.value = id;
   selectedCategory.value = selectedKp.value?.chapter || kps.value.find((item) => item.id === id)?.chapter || null;
@@ -971,7 +955,6 @@ function openContentFromSelected() {
 }
 
 function selectCategory(chapter: string) {
-  showAllKps.value = false;
   selectedType.value = "category";
   selectedCategory.value = chapter;
   selectedId.value = null;
@@ -982,10 +965,18 @@ function selectCategory(chapter: string) {
 }
 
 function toggleAllKps() {
-  showAllKps.value = !showAllKps.value;
-  if (showAllKps.value) {
-    activeChapter.value = "全部";
-  }
+  const next = !showAllKps.value;
+  showAllKps.value = next;
+  activeChapter.value = "全部";
+  ElMessage.success(next ? "已显示全部节点" : "已仅显示方形节点");
+  nextTick(() => {
+    fitViewportRetryCount = 0;
+    if (next) {
+      fitVisibleToViewport();
+      return;
+    }
+    fitCategoryNodesToViewport();
+  });
 }
 
 function zoomIn() {
@@ -997,7 +988,11 @@ function zoomOut() {
 }
 
 function fitVisibleToViewport() {
-  if (!stageRef.value || visibleKps.value.length === 0) return;
+  if (!stageRef.value) return;
+  if (visibleKps.value.length === 0) {
+    fitCategoryNodesToViewport();
+    return;
+  }
   const sw0 = stageRef.value.clientWidth;
   const sh0 = stageRef.value.clientHeight;
   if (sw0 < 48 || sh0 < 48) {
@@ -1022,17 +1017,51 @@ function fitVisibleToViewport() {
   }
   const w = maxX - minX || 1;
   const h = maxY - minY || 1;
-  const sw = sw0;
-  const sh = sh0;
   const pad = 100;
-  const scale = Math.min(MAX_CANVAS_SCALE, Math.max(MIN_CANVAS_SCALE, Math.min((sw - pad) / w, (sh - pad) / h)));
-  canvasScale.value = scale;
+  const scale = Math.min((sw0 - pad) / w, (sh0 - pad) / h, DEFAULT_CANVAS_SCALE);
+  canvasScale.value = Math.max(MIN_CANVAS_SCALE, Math.min(MAX_CANVAS_SCALE, Number(scale.toFixed(4))));
+  const sw = stageRef.value.clientWidth;
+  const sh = stageRef.value.clientHeight;
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
-  panX.value = sw / 2 - cx * scale;
-  panY.value = sh / 2 - cy * scale;
+  panX.value = sw / 2 - cx * canvasScale.value;
+  panY.value = sh / 2 - cy * canvasScale.value;
   persistStudentViewState();
 }
+
+function fitCategoryNodesToViewport() {
+  if (!stageRef.value || categoryNodes.value.length === 0) return;
+  const sw0 = stageRef.value.clientWidth;
+  const sh0 = stageRef.value.clientHeight;
+  if (sw0 < 48 || sh0 < 48) return;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const item of categoryNodes.value) {
+    const p = categoryPoint(item.key);
+    const halfW = 130;
+    const halfH = 54;
+    minX = Math.min(minX, p.x - halfW);
+    maxX = Math.max(maxX, p.x + halfW);
+    minY = Math.min(minY, p.y - halfH);
+    maxY = Math.max(maxY, p.y + halfH);
+  }
+  const w = maxX - minX || 1;
+  const h = maxY - minY || 1;
+  const pad = 100;
+  const scale = Math.min((sw0 - pad) / w, (sh0 - pad) / h, DEFAULT_CANVAS_SCALE);
+  canvasScale.value = Math.max(MIN_CANVAS_SCALE, Math.min(MAX_CANVAS_SCALE, Number(scale.toFixed(4))));
+  const sw = stageRef.value.clientWidth;
+  const sh = stageRef.value.clientHeight;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  panX.value = sw / 2 - cx * canvasScale.value;
+  panY.value = sh / 2 - cy * canvasScale.value;
+  persistStudentViewState();
+}
+
+function zoomOut()
 
 function resetViewport() {
   canvasScale.value = DEFAULT_CANVAS_SCALE;
@@ -1131,7 +1160,7 @@ watch(visibleKps, () => {
   syncCategoryPositions();
   syncKpPositions();
   normalizeStudentSelectionState();
-  if (props.embedded && visibleKps.value.length > 0) {
+  if (props.embedded) {
     nextTick(() => {
       fitViewportRetryCount = 0;
       fitVisibleToViewport();
@@ -1206,7 +1235,7 @@ onBeforeUnmount(() => {
     <div
       :class="['workspace-content', { 'workspace-content--embedded': props.embedded, 'workspace-content--drawer-collapsed': props.embedded && !drawerVisible }]"
     >
-      <aside class="workspace-sidebar">
+      <aside v-if="!props.embedded" class="workspace-sidebar">
         <div class="workspace-tree">
           <div v-if="treeNodes.length === 0" class="workspace-tree__empty">
             <strong>左边现在没有可选内容</strong>
@@ -1257,11 +1286,10 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <div class="workspace-stage__focus">
-              <span>{{ selectedType === "kp" ? (selectedKp?.title || "未选择知识点") : (selectedCategoryNode?.title || "未选择分类") }}</span>
-              <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
-                {{ showAllKps ? "仅看分类" : "显示全部节点" }}
+                            <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
+                {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
               </button>
-              <button type="button" class="workspace-stage__learn-btn" @click.stop="openContentFromSelected">
+              <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="openContentFromSelected">
                 去学习
               </button>
               <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click="fitVisibleToViewport">适应画布</button>
@@ -1301,11 +1329,8 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <div class="workspace-stage__focus">
-              <span>
-                {{ selectedType === "kp" ? (selectedKp?.title || "未选择知识点") : (selectedCategoryNode?.title || "未选择分类") }}
-              </span>
-              <button class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
-                {{ showAllKps ? "仅看分类" : "显示全部节点" }}
+                            <button class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
+                {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
               </button>
               <button v-if="selectedType === 'kp' && selectedKp" class="workspace-stage__learn-btn" @click.stop="openContentFromSelected">
                 去学习
@@ -1392,7 +1417,7 @@ onBeforeUnmount(() => {
             @click="selectCategory(category.key)"
             @mousedown="onNodeMouseDown($event, 'category', category.key)"
           >
-            <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#edf4ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#7fb0ff' : '#d7e2f0'" stroke-width="1.8" />
+            <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#eef5ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#8fb8ff' : '#dbe5f1'" stroke-width="1.8" />
             <text
               :class="props.embedded ? 'teacher-category-node__title workspace-category-node__title' : 'workspace-category-node__title'"
               text-anchor="middle"
@@ -1422,11 +1447,11 @@ onBeforeUnmount(() => {
             <circle :r="nodeRadius(kp) + 18" :fill="'transparent'" :stroke="ringColor('literacy', effectiveOverlayMap.get(kp.id)?.literacy_status, effectiveOverlayMap.get(kp.id)?.literacy_labels || splitLabels(kp.literacy_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.literacy_enabled ? 5 : 0" />
             <circle :r="nodeRadius(kp) + 10" :fill="'transparent'" :stroke="ringColor('ability', effectiveOverlayMap.get(kp.id)?.ability_status, effectiveOverlayMap.get(kp.id)?.ability_labels || splitLabels(kp.ability_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.ability_enabled ? 5 : 0" />
             <circle :r="nodeRadius(kp) + 2" :fill="'transparent'" :stroke="ringColor('knowledge', effectiveOverlayMap.get(kp.id)?.knowledge_status)" :stroke-width="4" />
-            <circle :r="nodeRadius(kp) + 22" :fill="isRecommended(kp.id) || isPathNode(kp.id) ? 'rgba(70, 122, 235, 0.14)' : 'rgba(96,139,232,0.08)'" />
+            <circle :r="nodeRadius(kp) + 22" :fill="isRecommended(kp.id) || isPathNode(kp.id) ? 'rgba(70, 122, 235, 0.12)' : 'rgba(96,139,232,0.06)'" />
             <circle
               :r="nodeRadius(kp)"
-              :fill="kp.id === selectedKp?.id ? '#eef5ff' : ((isRecommended(kp.id) || isPathNode(kp.id)) ? '#f4f8ff' : '#ffffff')"
-              :stroke="kp.id === selectedKp?.id ? '#7ca9f3' : ((isRecommended(kp.id) || isPathNode(kp.id)) ? '#5a8ef0' : '#d7e2f0')"
+              :fill="kp.id === selectedKp?.id ? '#f7fbff' : ((isRecommended(kp.id) || isPathNode(kp.id)) ? '#f8fbff' : '#ffffff')"
+              :stroke="kp.id === selectedKp?.id ? '#76a7f8' : ((isRecommended(kp.id) || isPathNode(kp.id)) ? '#5a8ef0' : '#dbe5f1')"
               :stroke-width="isRecommended(kp.id) ? 2.6 : (isPathNode(kp.id) ? 2.3 : 2)"
             />
             <text :class="props.embedded ? 'teacher-node__code workspace-node__code' : 'workspace-node__code'" text-anchor="middle" y="-8">
@@ -1461,7 +1486,7 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <aside :class="['workspace-drawer', { open: props.embedded && drawerOpen }]" v-if="drawerVisible">
+      <aside v-if="!props.embedded && drawerVisible" :class="['workspace-drawer', { open: props.embedded && drawerOpen }]">
         <div class="workspace-drawer__header">
           <h3 class="workspace-drawer__title">
             {{ selectedType === "kp" ? selectedKp?.title : selectedCategoryNode?.title }}
@@ -1681,21 +1706,22 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .workspace-shell {
-  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-surface-muted) 55%, rgba(79, 140, 255, 0.04) 100%);
+  background: #f7faff;
   overflow: hidden;
-  border-radius: var(--app-radius-lg);
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-lg);
+  border-radius: 28px;
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.06);
 }
 
 .workspace-shell--embedded {
-  border-radius: var(--app-radius-lg);
+  border-radius: 28px;
   display: flex;
   flex-direction: column;
   min-height: 0;
   flex: 1;
-  box-shadow: var(--app-shadow-lg);
-  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-surface-muted) 50%, rgba(79, 140, 255, 0.035) 100%);
+  box-shadow: none;
+  background: transparent;
+  border: 0;
 }
 
 .workspace-toolbar-inline {
@@ -1720,42 +1746,29 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--app-border);
-  background: var(--app-card);
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid #e5edf6;
+  background: #f7faff;
   flex-shrink: 0;
 }
 
 .workspace-guide {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 12px 22px 0;
-  background: var(--app-card);
-  flex-shrink: 0;
-}
-
-.workspace-guide span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid #dbe6f2;
-  background: #f4f8fc;
-  color: #536883;
-  font-size: 12px;
-  font-weight: 700;
+  display: none;
 }
 
 .workspace-drawer__guide-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  color: #617792;
-  font-size: 12px;
-  font-weight: 700;
+  display: none;
+}
+
+.workspace-drawer__flow-hint,
+.workspace-drawer__guide,
+.workspace-drawer__micro-hint,
+.workspace-drawer__hint-text,
+.workspace-drawer__blocked,
+.workspace-drawer__next-btns,
+.workspace-drawer__recommend,
+.workspace-drawer__ability-hint {
+  display: none;
 }
 
 .workspace-heading {
@@ -1771,9 +1784,7 @@ onBeforeUnmount(() => {
 }
 
 .workspace-subtitle {
-  margin: 0;
-  color: #718097;
-  font-size: 13px;
+  display: none;
 }
 
 .workspace-controls {
@@ -1832,8 +1843,8 @@ onBeforeUnmount(() => {
 .workspace-content {
   display: flex;
   align-items: stretch;
-  gap: 16px;
-  padding: 16px;
+  gap: 18px;
+  padding: 18px;
   overflow: hidden;
   height: min(72vh, 820px);
   max-height: min(72vh, 820px);
@@ -1845,9 +1856,9 @@ onBeforeUnmount(() => {
   height: auto;
   max-height: none;
   flex: 1;
-  min-height: var(--app-graph-canvas-min-height, clamp(360px, 52dvh, 820px));
-  padding: 14px 16px 16px;
-  gap: 14px;
+  min-height: calc(100dvh - 190px);
+  padding: 0;
+  gap: 0;
 }
 
 .workspace-content > * {
@@ -1868,10 +1879,11 @@ onBeforeUnmount(() => {
   max-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 14px;
-  border-radius: var(--app-radius-lg);
-  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-primary-soft) 100%);
-  border: 1px solid var(--app-border);
+  padding: 16px;
+  border-radius: 24px;
+  background: #ffffff;
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
 .workspace-sidebar--collapsed {
@@ -1887,9 +1899,9 @@ onBeforeUnmount(() => {
 .workspace-sidebar__toggle {
   width: 100%;
   min-height: 44px;
-  border: 1px solid #dce6f2;
-  border-radius: 16px;
-  background: #ffffff;
+  border: 1px solid #dbe5f0;
+  border-radius: 18px;
+  background: #f8fbff;
   color: #35507f;
   cursor: pointer;
 }
@@ -1924,21 +1936,24 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 14px;
-  border-radius: 16px;
-  background: #ffffff;
+  border-radius: 18px;
+  background: #f8fbff;
+  border: 1px solid #e1eaf2;
   color: #475569;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .workspace-tree__summary:hover {
-  background: #eff5ff;
+  background: #eef5ff;
+  border-color: #cfe0f6;
 }
 
 .workspace-tree__summary.active {
-  background: #e3f2fd;
-  color: #1565c0;
+  background: #edf4ff;
+  border-color: #a9c5ef;
+  color: #2459ab;
 }
 
 .workspace-tree__count {
@@ -1957,7 +1972,7 @@ onBeforeUnmount(() => {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #e1eaf1;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #ffffff;
   color: #475569;
   font-size: 12px;
@@ -1968,13 +1983,13 @@ onBeforeUnmount(() => {
 }
 
 .workspace-tree__child:hover {
-  background: #f8fafc;
+  background: #f8fbff;
 }
 
 .workspace-tree__child.active {
-  background: #e3f2fd;
-  border-color: #90caf9;
-  color: #1565c0;
+  background: #edf4ff;
+  border-color: #a9c5ef;
+  color: #2459ab;
 }
 
 .workspace-stage {
@@ -1990,14 +2005,14 @@ onBeforeUnmount(() => {
   min-height: var(--app-graph-canvas-min-height, clamp(360px, 52dvh, 820px));
   max-height: 100%;
   height: 100%;
-  border-radius: var(--app-radius-lg);
-  background: linear-gradient(180deg, var(--app-card) 0%, rgba(79, 140, 255, 0.06) 100%);
-  border: 1px solid var(--app-border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  border-radius: 28px;
+  background: #ffffff;
+  border: 1px solid #dfe7f1;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
 .workspace-shell--embedded .workspace-stage {
-  min-height: max(340px, min(58dvh, 880px));
+  min-height: max(420px, min(76dvh, 980px));
 }
 
 .workspace-stage--dragging {
@@ -2006,14 +2021,19 @@ onBeforeUnmount(() => {
 
 .workspace-stage__top {
   position: absolute;
-  top: 16px;
-  left: 18px;
-  right: 18px;
+  top: 14px;
+  left: 14px;
+  right: 14px;
   z-index: 3;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: rgba(248, 251, 255, 0.92);
+  border: 1px solid #e1eaf2;
+  backdrop-filter: blur(8px);
 }
 
 .workspace-stage__top-main {
@@ -2029,9 +2049,7 @@ onBeforeUnmount(() => {
 }
 
 .workspace-stage__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
+  display: none;
 }
 
 .workspace-stage__legend-item {
@@ -2105,7 +2123,7 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border-radius: 999px;
   background: #ffffff;
-  border: 1px solid #dce6f2;
+  border: 1px solid #dbe5f0;
   color: #35507f;
   font-size: 12px;
   font-weight: 700;
@@ -2115,10 +2133,15 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  max-width: 420px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-wrap: wrap;
+  max-width: none;
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .workspace-stage__focus span {
@@ -2162,13 +2185,14 @@ onBeforeUnmount(() => {
   position: absolute;
   left: var(--graph-stage-viewport-inset-x);
   right: var(--graph-stage-viewport-inset-x);
-  top: 96px;
+  top: 94px;
   bottom: var(--graph-stage-viewport-inset-x);
   width: auto;
   min-height: 0;
   overflow: hidden;
-  border-radius: max(0px, calc(var(--app-radius-lg) - var(--graph-stage-viewport-inset-x)));
-  background: radial-gradient(circle at 24px 24px, rgba(79, 135, 255, 0.08) 1px, transparent 1px), radial-gradient(circle at 0 0, rgba(79, 135, 255, 0.04) 1px, transparent 1px), var(--graph-canvas-bg);
+  border-radius: max(0px, calc(28px - var(--graph-stage-viewport-inset-x)));
+  background: radial-gradient(circle at 24px 24px, rgba(79, 135, 255, 0.06) 1px, transparent 1px), radial-gradient(circle at 0 0, rgba(79, 135, 255, 0.03) 1px, transparent 1px), #f8fbff;
+  border: 1px solid #e8eef6;
   contain: layout style;
   isolation: isolate;
   transform: translateZ(0);
@@ -2292,11 +2316,12 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 14px;
-  border-radius: var(--app-radius-lg);
-  background: linear-gradient(180deg, var(--app-card) 0%, var(--app-surface-muted) 100%);
-  border: 1px solid var(--app-border);
+  padding: 16px;
+  border-radius: 24px;
+  background: #ffffff;
+  border: 1px solid #dfe7f1;
   color: var(--app-text-soft);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
 }
 
 /* 嵌入学生工作台：与 .teacher-drawer 组合时改由内部区域滚动，见下方 .teacher-drawer.workspace-drawer */
@@ -2312,8 +2337,8 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 14px;
-  border-bottom: 1px solid #e1eaf1;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5edf6;
 }
 
 .workspace-drawer__title {
@@ -3347,4 +3372,245 @@ onBeforeUnmount(() => {
 .teacher-drawer__close:hover {
   color: #475569;
 }
+
+.workspace-shell {
+  gap: 14px;
+  padding: 16px;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef4fb 100%);
+}
+
+.workspace-header,
+.workspace-sidebar,
+.workspace-stage,
+.workspace-drawer {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #dbe5f1;
+  box-shadow: var(--app-shadow-soft);
+}
+
+.workspace-header {
+  border-radius: 28px;
+  padding: 18px 20px;
+}
+
+.workspace-sidebar {
+  border-radius: 28px;
+}
+
+.workspace-stage {
+  border-radius: 28px;
+}
+
+.workspace-stage__top {
+  padding: 14px 16px;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  border-bottom: 1px solid #e6eef7;
+}
+
+.workspace-stage__stats,
+.workspace-stage__focus {
+  gap: 8px;
+}
+
+.workspace-stage__pill {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #f5f9ff;
+  border-color: #d8e5f6;
+  color: #35507f;
+}
+
+.workspace-stage__learn-btn,
+.workspace-stage__focus-btn,
+.workspace-stage__menu button,
+.workspace-stage__zoom button,
+.workspace-drawer__primary,
+.workspace-drawer__secondary,
+.workspace-drawer__link-btn,
+.workspace-drawer__tag {
+  border-radius: 12px;
+}
+
+.workspace-stage__learn-btn,
+.workspace-stage__focus-btn,
+.workspace-stage__menu button {
+  min-height: 34px;
+  padding-inline: 12px;
+  border: 1px solid #d8e5f6;
+  background: #ffffff;
+  color: #35507f;
+}
+
+.workspace-stage__learn-btn--ghost,
+.workspace-stage__focus-btn--ghost {
+  background: #f7fbff;
+}
+
+.workspace-stage__learn-btn--primary,
+.workspace-stage__focus-btn--primary {
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  border-color: var(--app-green);
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+}
+
+.workspace-stage__legend {
+  gap: 8px 12px;
+}
+
+.workspace-stage__legend-item {
+  color: #5f738f;
+}
+
+.workspace-stage__legend-line,
+.workspace-stage__legend-rings {
+  opacity: 0.85;
+}
+
+.workspace-stage__viewport {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  background: linear-gradient(180deg, #f9fbff 0%, #f1f6fc 100%);
+}
+
+.workspace-stage__empty {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: #dbe5f1;
+}
+
+.workspace-drawer {
+  border-radius: 28px;
+}
+
+.workspace-drawer__header {
+  padding: 14px 16px 10px;
+  border-bottom-color: #e6eef7;
+}
+
+.workspace-drawer__content {
+  padding: 14px 14px 16px;
+}
+
+.workspace-drawer__guide-inline,
+.workspace-drawer__flow-hint,
+.workspace-drawer__recommend,
+.workspace-drawer__ability-hint {
+  display: none;
+}
+
+.workspace-drawer__tabs {
+  gap: 8px;
+  padding: 8px;
+  border-radius: 18px;
+  background: #f6faff;
+  border: 1px solid #dfe9f5;
+}
+
+.workspace-drawer__tab {
+  min-height: 34px;
+  border-radius: 12px;
+  border-color: #d8e5f6;
+  background: #ffffff;
+}
+
+.workspace-drawer__tab.active {
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
+  border-color: var(--app-green);
+}
+
+.workspace-drawer__section,
+.workspace-drawer__metrics,
+.workspace-drawer__detail-grid {
+  gap: 10px;
+}
+
+.workspace-drawer__metric,
+.workspace-drawer__desc,
+.workspace-drawer__empty,
+.workspace-drawer__relation-tip {
+  border-radius: 16px;
+}
+
+.workspace-drawer__metric {
+  background: #f8fbff;
+  border-color: #dbe5f1;
+}
+
+.workspace-drawer__tag {
+  background: #edf4ff;
+  border-color: #d8e5f6;
+  color: #35507f;
+}
+
+.workspace-drawer__primary {
+  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  color: #ffffff;
+  border-color: var(--app-green);
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+}
+
+.workspace-drawer__secondary,
+.workspace-drawer__link-btn {
+  background: #f8fbff;
+  border-color: #dbe5f1;
+  color: #475569;
+}
+
+.workspace-drawer__secondary:hover,
+.workspace-drawer__link-btn:hover {
+  background: #e3f2fd;
+  border-color: #90caf9;
+  color: #1565c0;
+}
+
+.workspace-tree__summary,
+.workspace-tree__child,
+.workspace-stage__menu,
+.workspace-zoom {
+  border-radius: 18px;
+  border: 1px solid #dbe5f1;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.workspace-tree__summary {
+  box-shadow: var(--app-shadow-soft);
+}
+
+.workspace-tree__summary.active,
+.workspace-tree__child.active {
+  background: linear-gradient(180deg, #f4f8ff 0%, #edf4ff 100%);
+  border-color: #8fb8ff;
+}
+
+.workspace-tree__child:hover {
+  background: #f7fbff;
+}
+
+.workspace-stage__menu {
+  padding: 8px;
+  gap: 8px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.workspace-stage__menu button {
+  border: 1px solid #d8e5f6;
+  background: #ffffff;
+  color: #35507f;
+}
+
+.workspace-stage__menu .danger {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #f5c2c7;
+}
+
+.workspace-node:hover circle:last-of-type,
+.workspace-category-node:hover rect {
+  filter: drop-shadow(0 10px 18px rgba(59, 130, 246, 0.12));
+}
 </style>
+
+

@@ -6,6 +6,7 @@ import { api } from "../api";
 import WorkspaceTopbar from "../components/WorkspaceTopbar.vue";
 import LearnerReportPane from "../components/LearnerReportPane.vue";
 import PageSectionCard from "../components/PageSectionCard.vue";
+import { resolveStudentSubject, saveStudentSubject } from "../utils/studentCourse";
 
 type Course = { id: number; code: string; title: string };
 
@@ -20,8 +21,7 @@ async function loadCourses() {
   try {
     const res = await api.get("/graph/courses");
     courses.value = res.data ?? [];
-    const querySubject = String(route.query.subject || "");
-    subject.value = querySubject || subject.value || courses.value[0]?.title || "";
+    subject.value = resolveStudentSubject(String(route.query.subject || ""), subject.value, courses.value);
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载课程失败");
   }
@@ -37,6 +37,7 @@ function studentQuery(extra: Record<string, string | undefined> = {}) {
 
 function syncQuery() {
   const preview = String(route.query.preview || "");
+  if (subject.value) saveStudentSubject(subject.value);
   router.replace({
     path: "/student/report",
     query: {
@@ -47,6 +48,13 @@ function syncQuery() {
 }
 
 watch(subject, () => syncQuery());
+watch(
+  () => route.query.subject,
+  (value) => {
+    const next = String(value || "").trim();
+    if (next && next !== subject.value) subject.value = next;
+  }
+);
 
 onMounted(async () => {
   await loadCourses();

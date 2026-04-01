@@ -26,8 +26,6 @@ const catalogRows = ref<CourseRow[]>([]);
 const myCourses = computed(() => catalogRows.value.filter((item) => item.activated));
 const availableRows = computed(() => catalogRows.value.filter((item) => !item.activated));
 const disabledRows = computed(() => availableRows.value.filter((item) => !item.can_activate));
-const primaryCourse = computed(() => myCourses.value[0] ?? null);
-
 function lifecycleLabel(value?: string) {
   const normalized = String(value || "draft").toLowerCase();
   if (normalized === "active") return "开课中";
@@ -62,16 +60,6 @@ async function activateCourse(row: CourseRow) {
   }
 }
 
-function openCourseWorkspace(row: CourseRow) {
-  saveTeacherSubject(row.title);
-  router.push({ path: "/teacher/content", query: { subject: row.title } });
-}
-
-function openCourseStages(row: CourseRow) {
-  saveTeacherSubject(row.title);
-  router.push({ path: "/teacher/evaluation", query: { subject: row.title, tab: "stages" } });
-}
-
 onMounted(loadCatalog);
 </script>
 
@@ -79,16 +67,13 @@ onMounted(loadCatalog);
   <div class="teacher-courses-page" v-loading="loading">
     <section class="teacher-courses-page__hero">
       <div class="teacher-courses-page__hero-copy">
-        <span class="teacher-courses-page__eyebrow">课程工作台</span>
-        <h1>先确定当前课程，再进入图谱和评价工作区</h1>
-        <p>首页只保留课程概览和关键动作，图谱编辑、阶段评价、学生分析都进入各自独立页面处理。</p>
+        <h1>课程工作台</h1>
       </div>
       <div class="teacher-courses-page__hero-actions">
         <el-button type="primary" plain round @click="loadCatalog" :loading="loading">
           <el-icon class="el-icon--left"><Refresh /></el-icon>
           刷新课程
         </el-button>
-        <el-button v-if="primaryCourse" type="primary" round @click="openCourseWorkspace(primaryCourse)">进入知识图谱</el-button>
       </div>
     </section>
 
@@ -116,23 +101,6 @@ onMounted(loadCatalog);
       </article>
     </section>
 
-    <section class="teacher-courses-page__focus-grid">
-      <article class="teacher-courses-page__focus-card teacher-courses-page__focus-card--primary">
-        <span class="teacher-courses-page__focus-label">当前最重要的事</span>
-        <strong>{{ primaryCourse ? `继续建设 ${primaryCourse.title}` : "先激活一门课程" }}</strong>
-        <p>{{ primaryCourse ? "先补图谱、资源和题目，再进入阶段评价。" : "没有激活课程时，图谱、评价和学生分析都无法形成闭环。" }}</p>
-        <div class="teacher-courses-page__focus-actions">
-          <el-button v-if="primaryCourse" type="primary" round @click="openCourseWorkspace(primaryCourse)">进入知识图谱</el-button>
-          <el-button v-if="primaryCourse" round @click="openCourseStages(primaryCourse)">阶段评价</el-button>
-        </div>
-      </article>
-      <article class="teacher-courses-page__focus-card">
-        <span class="teacher-courses-page__focus-label">页面说明</span>
-        <strong>这里负责选课程，不负责做全部事情</strong>
-        <p>课程激活后，从这里进入知识图谱工作区、阶段评价页面和其他二级页面，不再把功能堆在首页。</p>
-      </article>
-    </section>
-
     <section class="teacher-courses-page__columns">
       <section class="teacher-courses-page__panel">
         <header class="teacher-courses-page__panel-head">
@@ -149,10 +117,6 @@ onMounted(loadCatalog);
             <div class="teacher-course-card__chips">
               <span class="teacher-course-card__chip">{{ lifecycleLabel(row.lifecycle_status) }}</span>
               <span class="teacher-course-card__chip teacher-course-card__chip--muted">{{ row.target_class || "班级未绑定" }}</span>
-            </div>
-            <div class="teacher-course-card__actions">
-              <el-button type="primary" round @click="openCourseWorkspace(row)">知识图谱</el-button>
-              <el-button round @click="openCourseStages(row)">阶段评价</el-button>
             </div>
           </article>
         </div>
@@ -197,7 +161,6 @@ onMounted(loadCatalog);
 
 .teacher-courses-page__hero,
 .teacher-courses-page__panel,
-.teacher-courses-page__focus-card,
 .teacher-courses-page__stat-card {
   border-radius: 24px;
   border: 1px solid #e3ebf5;
@@ -219,32 +182,13 @@ onMounted(loadCatalog);
   max-width: 60ch;
 }
 
-.teacher-courses-page__eyebrow,
-.teacher-courses-page__focus-label {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--app-primary-deep);
-}
-
-.teacher-courses-page__hero-copy h1,
-.teacher-courses-page__focus-card strong {
+.teacher-courses-page__hero-copy h1 {
   margin: 0;
   font-size: 28px;
   color: var(--app-text-main);
 }
 
-.teacher-courses-page__hero-copy p,
-.teacher-courses-page__focus-card p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--app-text-soft);
-}
-
 .teacher-courses-page__hero-actions,
-.teacher-courses-page__focus-actions,
 .teacher-course-card__actions {
   display: flex;
   gap: 10px;
@@ -252,7 +196,6 @@ onMounted(loadCatalog);
 }
 
 .teacher-courses-page__stats,
-.teacher-courses-page__focus-grid,
 .teacher-courses-page__columns {
   display: grid;
   gap: 16px;
@@ -260,10 +203,6 @@ onMounted(loadCatalog);
 
 .teacher-courses-page__stats {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.teacher-courses-page__focus-grid {
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
 }
 
 .teacher-courses-page__columns {
@@ -299,16 +238,6 @@ onMounted(loadCatalog);
 .teacher-courses-page__stat-card strong {
   font-size: 26px;
   color: var(--app-text-main);
-}
-
-.teacher-courses-page__focus-card {
-  display: grid;
-  gap: 10px;
-  padding: 20px 22px;
-}
-
-.teacher-courses-page__focus-card--primary {
-  background: linear-gradient(145deg, #fdfefe 0%, #eef6ff 100%);
 }
 
 .teacher-courses-page__panel {
@@ -394,7 +323,6 @@ onMounted(loadCatalog);
 
 @media (max-width: 1100px) {
   .teacher-courses-page__stats,
-  .teacher-courses-page__focus-grid,
   .teacher-courses-page__columns,
   .teacher-courses-page__card-grid {
     grid-template-columns: 1fr;
