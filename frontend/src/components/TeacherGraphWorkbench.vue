@@ -71,9 +71,10 @@ type WorkbenchViewState = {
   detailTab: "overview" | "relations" | "content";
 };
 
-const props = withDefaults(defineProps<{ subject: string; grade: string; fullscreen?: boolean; readonly?: boolean }>(), {
+const props = withDefaults(defineProps<{ subject: string; grade: string; fullscreen?: boolean; readonly?: boolean; embedded?: boolean }>(), {
   fullscreen: false,
   readonly: false,
+  embedded: false,
 });
 const router = useRouter();
 const emit = defineEmits<{
@@ -97,7 +98,7 @@ const activeChapter = ref("全部");
 const selectedType = ref<"kp" | "category">("kp");
 const selectedId = ref<number | null>(null);
 const selectedCategory = ref<string | null>(null);
-const showAllKps = ref(false);
+const showAllKps = ref(props.fullscreen);
 const graphEditorOpen = ref(false);
 const linkSelectionMode = ref<null | "forward" | "backward" | "related" | "support" | "contains">(null);
 const categoryLinkMode = ref<null | "prerequisite" | "related" | "support">(null);
@@ -110,6 +111,7 @@ const SCALE_STEP = 0.2;
 const canvasScale = ref(DEFAULT_CANVAS_SCALE);
 const panX = ref(0);
 const panY = ref(0);
+const viewportFitRetryCount = ref(0);
 const stageRef = ref<HTMLElement | null>(null);
 const draggingCanvas = ref(false);
 const draggingNode = ref<DragNode | null>(null);
@@ -238,6 +240,7 @@ const selectedKp = computed(() => (selectedType.value === "kp" ? kps.value.find(
 const selectedCategoryNode = computed(() =>
   selectedType.value === "category" ? categoryNodes.value.find((item) => item.key === selectedCategory.value) ?? null : null,
 );
+const inlineEditorEnabled = computed(() => !props.embedded && !props.fullscreen);
 const drawerVisible = computed(() => drawerOpen.value && (graphEditorOpen.value || selectedKp.value != null || selectedCategoryNode.value != null));
 const drawerTitle = computed(() => {
   if (graphEditorOpen.value) return form.id ? "编辑知识点" : "新建知识点";
@@ -661,6 +664,10 @@ function resetCreateForm(chapter = "") {
     ElMessage.warning("当前课程已归档，图谱只读");
     return;
   }
+  if (props.embedded || props.fullscreen) {
+    openCreateWorkspaceInNewTab(chapter);
+    return;
+  }
   selectedType.value = "kp";
   selectedId.value = null;
   selectedCategory.value = null;
@@ -685,6 +692,10 @@ function selectKp(id: number) {
     createEdgeFromCanvas(id);
     return;
   }
+  if (props.embedded || props.fullscreen) {
+    openContentWorkspaceInNewTab(id);
+    return;
+  }
   categoryLinkMode.value = null;
   selectedType.value = "kp";
   selectedId.value = id;
@@ -693,9 +704,6 @@ function selectKp(id: number) {
   detailTab.value = "overview";
   syncFormFromSelected();
   centerOnPoint(kpPoint(id));
-  if (props.fullscreen) {
-    openContentWorkspace();
-  }
 }
 
 function selectCategory(chapter: string) {
@@ -734,24 +742,44 @@ function openGraphEditorForSelected() {
     return;
   }
   if (!selectedKp.value) return;
+  if (props.embedded || props.fullscreen) {
+    openContentWorkspaceInNewTab(selectedKp.value.id);
+    return;
+  }
   syncFormFromSelected();
   graphEditorOpen.value = true;
   drawerOpen.value = true;
 }
 
-function openContentWorkspace() {
-  if (!selectedKp.value?.id) {
+function openContentWorkspaceInNewTab(kpId: number) {
+  if (!kpId) {
     ElMessage.warning("请先选择一个知识点");
     return;
   }
-  router.push({
-    path: `/teacher/kp-content/${selectedKp.value.id}`,
+  const target = router.resolve({
+    path: `/teacher/kp-content/${kpId}`,
     query: {
       subject: props.subject || undefined,
       grade: props.grade || undefined,
+      mode: "edit",
       from: "graph-workspace",
     },
   });
+  window.open(target.href, "_blank", "noopener,noreferrer");
+}
+
+function openCreateWorkspaceInNewTab(chapter = "") {
+  const target = router.resolve({
+    path: "/teacher/kp-content/0",
+    query: {
+      subject: props.subject || undefined,
+      grade: props.grade || undefined,
+      chapter: chapter || undefined,
+      mode: "create",
+      from: "graph-workspace",
+    },
+  });
+  window.open(target.href, "_blank", "noopener,noreferrer");
 }
 
 function startLinkSelection(modeValue: "forward" | "backward" | "related" | "support" | "contains") {
@@ -816,8 +844,23 @@ function resetViewport() {
   persistViewState();
 }
 
+function scheduleViewportFit(next: "categories" | "visible") {
+  if (viewportFitRetryCount.value >= 3) return;
+  viewportFitRetryCount.value += 1;
+  requestAnimationFrame(() => {
+    if (next === "visible") fitVisibleToViewport();
+    else fitCategoryNodesToViewport();
+  });
+}
+
 function fitVisibleToViewport() {
   if (!stageRef.value) return;
+  const sw = stageRef.value.clientWidth;
+  const sh = stageRef.value.clientHeight;
+  if (sw <= 0 || sh <= 0) {
+    scheduleViewportFit("visible");
+    return;
+  }
   if (visibleKps.value.length === 0) {
     fitCategoryNodesToViewport();
     return;
@@ -836,8 +879,6 @@ function fitVisibleToViewport() {
   }
   const w = maxX - minX || 1;
   const h = maxY - minY || 1;
-  const sw = stageRef.value.clientWidth;
-  const sh = stageRef.value.clientHeight;
   const pad = 100;
   const scale = Math.min((sw - pad) / w, (sh - pad) / h, DEFAULT_CANVAS_SCALE);
   canvasScale.value = Math.max(MIN_CANVAS_SCALE, Math.min(MAX_CANVAS_SCALE, Number(scale.toFixed(4))));
@@ -852,6 +893,10 @@ function fitCategoryNodesToViewport() {
   if (!stageRef.value || categoryNodes.value.length === 0) return;
   const sw = stageRef.value.clientWidth;
   const sh = stageRef.value.clientHeight;
+  if (sw <= 0 || sh <= 0) {
+    scheduleViewportFit("categories");
+    return;
+  }
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -1035,6 +1080,7 @@ async function load() {
   if (!props.subject) return;
   loading.value = true;
   try {
+    const viewRestored = !props.fullscreen && restoreViewState();
     const [kpRes, edgeRes, chapterEdgeRes, covRes, layoutRes] = await Promise.all([
       api.get(`/graph/kps?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`),
       api.get(`/admin/edges?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}&page=1&page_size=500`),
@@ -1094,14 +1140,35 @@ async function load() {
     categoryPositions.value = mergedCat;
     syncCategoryPositions();
     syncKpPositions();
+    if (props.fullscreen && !viewRestored) {
+      canvasScale.value = DEFAULT_CANVAS_SCALE;
+      panX.value = 0;
+      panY.value = 0;
+      activeChapter.value = "全部";
+      search.value = "";
+      selectedType.value = "category";
+      selectedId.value = null;
+      selectedCategory.value = categoryNodes.value[0]?.key || null;
+      drawerOpen.value = false;
+      detailTab.value = "overview";
+    }
     const normalizedChanged = normalizeWorkbenchSelectionState();
     if (normalizedChanged) {
       if (selectedType.value === "kp" && selectedId.value) centerOnPoint(kpPoint(selectedId.value));
       else if (selectedCategory.value) centerOnPoint(categoryPoint(selectedCategory.value));
     }
     nextTick(() => {
-      fitViewportRetryCount = 0;
-      fitVisibleToViewport();
+      viewportFitRetryCount.value = 0;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (props.fullscreen) {
+            if (showAllKps.value && visibleKps.value.length > 0) fitVisibleToViewport();
+            else fitCategoryNodesToViewport();
+          } else {
+            fitVisibleToViewport();
+          }
+        });
+      });
     });
     persistViewState();
   } catch (e: any) {
@@ -1307,13 +1374,14 @@ watch(
     graphEditorOpen.value = false;
     selectedId.value = null;
     selectedCategory.value = null;
-    const restored = restoreViewState();
-    if (!restored) {
+    const restored = !props.fullscreen && restoreViewState();
+    if (!restored || props.fullscreen) {
       canvasScale.value = DEFAULT_CANVAS_SCALE;
       panX.value = 0;
       panY.value = 0;
       activeChapter.value = "全部";
       search.value = "";
+      showAllKps.value = true;
       selectedType.value = "kp";
       drawerOpen.value = true;
       detailTab.value = "overview";
@@ -1359,10 +1427,11 @@ onBeforeUnmount(() => {
     class="teacher-workbench"
     :class="{
       'teacher-workbench--fullscreen': props.fullscreen,
+      'teacher-workbench--embedded': props.embedded,
     }"
     v-loading="loading"
   >
-    <div class="teacher-header">
+    <div v-if="!props.embedded" class="teacher-header">
       <div class="teacher-heading">
         <h1 class="teacher-title">知识图谱建设</h1>
         <p class="teacher-subtitle">先找分类，再选知识点，然后补信息、连关系、进内容页。</p>
@@ -1396,7 +1465,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="!props.fullscreen" class="teacher-guide">
+    <div v-if="!props.embedded && !props.fullscreen" class="teacher-guide">
       <span>查看提示</span>
       <HoverTip content="先找分类，再点节点，最后改内容或连关系。" />
     </div>
@@ -1456,17 +1525,17 @@ onBeforeUnmount(() => {
             <span class="teacher-stage__pill">知识点 {{ stageStats.points }}</span>
             <span class="teacher-stage__pill">关系 {{ stageStats.edges }}</span>
           </div>
-          <div class="teacher-stage__actions">
-            <button class="teacher-stage__button" @click="toggleAllKps">
-              {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
-            </button>
-            <button class="teacher-stage__button teacher-stage__button--primary" :disabled="props.readonly" @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)">新增知识点</button>
-            <button class="teacher-stage__button" @click="fitVisibleToViewport">适应画布</button>
-            <button class="teacher-stage__button" @click="resetViewport">重置画布</button>
-            <button class="teacher-stage__button" @click="detailTab = 'relations'; drawerOpen = true">管理当前关系</button>
-          </div>
+        <div class="teacher-stage__actions">
+          <button class="teacher-stage__button" @click="toggleAllKps">
+            {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
+          </button>
+          <button class="teacher-stage__button teacher-stage__button--primary" :disabled="props.readonly" @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)">新增知识点</button>
+          <button class="teacher-stage__button" @click="fitVisibleToViewport">适应画布</button>
+          <button class="teacher-stage__button" @click="resetViewport">重置画布</button>
+          <button v-if="inlineEditorEnabled" class="teacher-stage__button" @click="detailTab = 'relations'; drawerOpen = true">管理当前关系</button>
         </div>
-        <div class="teacher-stage__focus">
+      </div>
+        <div v-if="!props.fullscreen" class="teacher-stage__focus">
           <button class="teacher-stage__focus-btn" @click="toggleAllKps">
             {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
           </button>
@@ -1664,15 +1733,33 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div v-else-if="!loading && showAllKps && visibleKps.length === 0" class="teacher-stage__empty">
-        <strong>当前没有可显示的知识点</strong>
-        <span>当前处于全部节点模式，但没有可渲染的圆形知识点。</span>
+      <div v-else-if="!loading && visibleKps.length === 0" class="teacher-stage__empty">
+        <strong>{{ showAllKps ? "当前没有可显示的知识点" : "当前仅显示方形节点" }}</strong>
+        <span>
+          {{
+            showAllKps
+              ? "当前处于全部节点模式，但没有可渲染的圆形知识点。"
+              : "已隐藏圆形节点，点击上方“展开全部节点”可查看完整图谱。"
+          }}
+        </span>
+        <div class="teacher-stage__empty-actions">
+          <button class="teacher-stage__empty-btn" @click="toggleAllKps">
+            {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
+          </button>
+          <button
+            v-if="!props.readonly"
+            class="teacher-stage__empty-btn teacher-stage__empty-btn--ghost"
+            @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)"
+          >
+            新建知识点
+          </button>
+        </div>
       </div>
       </div>
 
     </section>
 
-    <aside v-if="!props.fullscreen && drawerVisible" class="teacher-drawer" :class="{ open: drawerOpen }">
+    <aside v-if="drawerVisible && inlineEditorEnabled" class="teacher-drawer" :class="{ open: drawerOpen }">
       <div class="teacher-drawer__header">
         <h3 class="teacher-drawer__title">{{ drawerTitle }}</h3>
         <button class="teacher-drawer__close" @click="drawerOpen = false">×</button>
@@ -2793,6 +2880,21 @@ onBeforeUnmount(() => {
   box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
 }
 
+.teacher-stage__empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.teacher-stage__empty-btn--ghost {
+  background: #ffffff;
+  color: #35507f;
+  border-color: #dbe5f1;
+  box-shadow: none;
+}
+
 .teacher-drawer {
   width: 336px;
   flex: 0 0 336px;
@@ -2862,7 +2964,6 @@ onBeforeUnmount(() => {
 
 .teacher-stage__hint,
 .teacher-stage__hint--chapter,
-.teacher-stage__empty-btn,
 .teacher-drawer__flow-hint,
 .teacher-drawer__recommend,
 .teacher-drawer__ability-hint {
@@ -3420,8 +3521,7 @@ onBeforeUnmount(() => {
 .teacher-drawer__recommend,
 .teacher-drawer__ability-hint,
 .teacher-stage__hint,
-.teacher-stage__hint--chapter,
-.teacher-stage__empty-btn {
+.teacher-stage__hint--chapter {
   display: none;
 }
 

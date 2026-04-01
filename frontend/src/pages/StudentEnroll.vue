@@ -49,9 +49,7 @@ const courses = ref<EnrollableCourse[]>([]);
 const applications = ref<CourseApplication[]>([]);
 const notices = ref<Notice[]>([]);
 const applyReasonMap = ref<Record<number, string>>({});
-const joinCodeInput = ref("");
-const joinByCodeLoading = ref(false);
-const activeTab = ref<"join" | "applications" | "notifications">("join");
+const activeTab = ref<"search" | "applications" | "notifications">("search");
 const keyword = ref("");
 
 function normalizeStatus(status?: string | null) {
@@ -83,9 +81,9 @@ function autoJoinHint(course: EnrollableCourse) {
   if (normalizeStatus(course.application_status) === "pending") return "申请已提交，等待老师审核。";
   if (normalizeStatus(course.lifecycle_status) === "archived") return "课程已归档，仅保留查看记录。";
   if (normalizeStatus(course.lifecycle_status) === "draft") return "课程未正式开课，开课后可加入。";
-  if (normalizeStatus(course.enrollment_mode) === "class_auto") return `系统会按班级 ${course.target_class || ""} 自动关联，也可使用课程代码加入。`;
+  if (normalizeStatus(course.enrollment_mode) === "class_auto") return `系统会按班级 ${course.target_class || ""} 自动关联。`;
   if (normalizeStatus(course.enroll_status) !== "open") return "当前不在开放报名时间。";
-  return "优先使用课程代码加入；只有无法自动匹配时再提交申请。";
+  return "搜索课程后，可直接查看状态并提交申请。";
 }
 
 const filteredCourses = computed(() => {
@@ -115,30 +113,6 @@ async function loadAll() {
     ElMessage.error(e?.response?.data?.detail ?? "加载报名数据失败");
   } finally {
     loading.value = false;
-  }
-}
-
-async function joinByCourseCode() {
-  const code = joinCodeInput.value.trim();
-  if (!code) {
-    ElMessage.warning("请先输入课程代码");
-    return;
-  }
-  joinByCodeLoading.value = true;
-  try {
-    const res = await api.post("/enrollment/courses/join-by-code", { join_code: code });
-    const title = res.data?.title || "";
-    if (res.data?.already_enrolled) {
-      ElMessage.success(title ? `你已在《${title}》中` : "你已加入该课程");
-    } else {
-      ElMessage.success(title ? `已加入《${title}》` : "加入成功");
-    }
-    joinCodeInput.value = "";
-    await loadAll();
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "加入失败");
-  } finally {
-    joinByCodeLoading.value = false;
   }
 }
 
@@ -184,10 +158,10 @@ onMounted(loadAll);
 <template>
   <div class="enroll-page" v-loading="loading">
     <section class="enroll-page__hero">
-      <div>
+      <div class="enroll-page__hero-copy">
         <span class="enroll-page__eyebrow">课程加入</span>
-        <h1>先用课程代码加入，再看申请记录和站内通知</h1>
-        <p>这个页面只处理课程加入、报名记录和通知，不再堆长篇说明。</p>
+        <h1>先搜索课程，再看申请记录和站内通知</h1>
+        <p>这个页面只处理课程搜索、报名记录和通知，不再堆长篇说明。</p>
       </div>
       <div class="enroll-page__hero-actions">
         <el-button @click="goBackStudy">返回学习中心</el-button>
@@ -202,18 +176,12 @@ onMounted(loadAll);
     </section>
 
     <el-tabs v-model="activeTab" class="enroll-tabs">
-      <el-tab-pane name="join" label="加入课程">
+      <el-tab-pane name="search" label="课程搜索">
         <section class="enroll-page__toolbar panel-card">
-          <div class="enroll-page__toolbar-group enroll-page__toolbar-group--join">
-            <span class="enroll-page__field-label">课程代码</span>
-            <div class="enroll-page__join-box">
-              <el-input v-model="joinCodeInput" size="large" placeholder="" clearable class="join-code-input" />
-              <el-button size="large" type="primary" :loading="joinByCodeLoading" @click="joinByCourseCode">加入课程</el-button>
-            </div>
-          </div>
           <div class="enroll-page__toolbar-group enroll-page__toolbar-group--search">
             <span class="enroll-page__field-label">搜索课程</span>
             <el-input v-model="keyword" size="large" placeholder="" clearable class="keyword-input" />
+            <span class="enroll-page__toolbar-note">支持课程名、课程代码、教师名检索</span>
           </div>
         </section>
 
@@ -221,7 +189,7 @@ onMounted(loadAll);
           <article v-for="course in filteredCourses" :key="course.id" class="enroll-course-card panel-card">
             <div class="enroll-course-card__main">
               <div class="enroll-course-card__top">
-                <div>
+                <div class="enroll-course-card__title-block">
                   <strong>{{ course.title }}</strong>
                   <p>{{ course.code }} · {{ course.teacher_name || '未分配教师' }}</p>
                 </div>
@@ -233,24 +201,31 @@ onMounted(loadAll);
                 <span v-if="course.target_class">班级 {{ course.target_class }}</span>
               </div>
               <p class="enroll-course-card__desc">{{ course.description || autoJoinHint(course) }}</p>
-              <p class="enroll-course-card__hint">{{ autoJoinHint(course) }}</p>
+              <div class="enroll-course-card__meta">
+                <span>{{ autoJoinHint(course) }}</span>
+              </div>
             </div>
             <div class="enroll-course-card__actions">
-              <div class="enroll-course-card__reason-label">申请理由（可选）</div>
-              <el-input
-                v-model="applyReasonMap[course.id]"
-                placeholder=""
-                :disabled="!!course.application_status || normalizeStatus(course.enrollment_mode) === 'class_auto'"
-              />
-              <el-button
-                type="primary"
-                plain
-                :loading="applying === course.id"
-                :disabled="!!course.application_status || normalizeStatus(course.enroll_status) !== 'open' || normalizeStatus(course.enrollment_mode) === 'class_auto'"
-                @click="applyCourse(course)"
-              >
-                {{ normalizeStatus(course.enrollment_mode) === 'class_auto' ? '自动关联课程' : '申请加入' }}
-              </el-button>
+              <div class="enroll-course-card__reason-head">
+                <span class="enroll-course-card__reason-label">申请理由（可选）</span>
+                <span class="enroll-course-card__reason-tip">可留空，直接提交即可</span>
+              </div>
+              <div class="enroll-course-card__action-row">
+                <el-input
+                  v-model="applyReasonMap[course.id]"
+                  placeholder=""
+                  :disabled="!!course.application_status || normalizeStatus(course.enrollment_mode) === 'class_auto'"
+                />
+                <el-button
+                  type="primary"
+                  plain
+                  :loading="applying === course.id"
+                  :disabled="!!course.application_status || normalizeStatus(course.enroll_status) !== 'open' || normalizeStatus(course.enrollment_mode) === 'class_auto'"
+                  @click="applyCourse(course)"
+                >
+                  {{ normalizeStatus(course.enrollment_mode) === 'class_auto' ? '自动关联课程' : '申请加入' }}
+                </el-button>
+              </div>
             </div>
           </article>
           <el-empty v-if="filteredCourses.length === 0" description="没有匹配到课程" />
@@ -302,7 +277,11 @@ onMounted(loadAll);
 </template>
 
 <style scoped>
-.enroll-page { display: grid; gap: 18px; }
+.enroll-page {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 12px;
+}
 .enroll-page__hero,
 .enroll-page__toolbar,
 .enroll-course-card,
@@ -316,76 +295,137 @@ onMounted(loadAll);
 .enroll-page__hero {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  padding: 24px 26px;
-  background: linear-gradient(135deg, #eef4ff 0%, #f6fbff 48%, #ffffff 100%);
+  align-items: center;
+  gap: 20px;
+  padding: 22px 24px;
+  background:
+    radial-gradient(circle at top right, rgba(79, 140, 255, 0.12), transparent 30%),
+    linear-gradient(135deg, #eef4ff 0%, #f6fbff 52%, #ffffff 100%);
+}
+.enroll-page__hero-copy {
+  display: grid;
+  gap: 8px;
+  max-width: 760px;
 }
 .enroll-page__eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--app-primary-deep); }
-.enroll-page__hero h1 { margin: 8px 0 0; font-size: 28px; color: var(--app-text-main); }
-.enroll-page__hero p { margin: 10px 0 0; line-height: 1.7; color: var(--app-text-soft); }
-.enroll-page__hero-actions, .enroll-page__join-box, .enroll-course-card__actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.enroll-page__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.enroll-page__stat-card { padding: 18px; display: grid; gap: 8px; }
+.enroll-page__hero h1 { margin: 0; font-size: 28px; color: var(--app-text-main); line-height: 1.18; letter-spacing: -0.03em; }
+.enroll-page__hero p { margin: 0; line-height: 1.65; color: var(--app-text-soft); font-size: 14px; }
+.enroll-page__hero-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.enroll-page__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.enroll-page__stat-card { padding: 18px 20px; display: grid; gap: 8px; min-height: 96px; }
 .enroll-page__stat-card span { font-size: 12px; color: var(--app-text-soft); }
-.enroll-page__stat-card strong { font-size: 26px; color: var(--app-text-main); }
+.enroll-page__stat-card strong { font-size: 28px; color: var(--app-text-main); line-height: 1; }
 .enroll-page__toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-  gap: 16px;
-  padding: 18px;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 16px;
   margin-bottom: 14px;
   align-items: stretch;
 }
 .enroll-page__toolbar-group {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   padding: 14px 16px;
-  border-radius: 18px;
+  border-radius: 20px;
   border: 1px solid color-mix(in srgb, var(--app-border) 88%, #ffffff);
   background: linear-gradient(180deg, #fbfdff 0%, #f8fbff 100%);
 }
-.enroll-page__toolbar-group--search {
-  align-content: start;
-}
+.enroll-page__toolbar-group--search { align-content: start; }
 .enroll-page__field-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.02em;
   color: var(--app-text-main);
 }
-.enroll-page__join-box {
+.enroll-page__toolbar-note {
+  font-size: 12px;
+  color: var(--app-text-soft);
+}
+.enroll-page__list, .notice-list { display: grid; gap: 12px; }
+.enroll-course-card {
+  padding: 20px 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: 18px;
+  align-items: stretch;
+}
+.enroll-course-card__top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.enroll-course-card__title-block { display: grid; gap: 4px; }
+.enroll-course-card__top strong { font-size: 19px; color: var(--app-text-main); }
+.enroll-course-card__top p, .enroll-course-card__desc, .notice-item p, .notice-item small { margin: 0; color: var(--app-text-soft); line-height: 1.6; }
+.enroll-course-card__desc { font-size: 14px; }
+.enroll-course-card__meta {
+  font-size: 12px;
+  color: var(--app-text-soft);
+  line-height: 1.6;
+  padding-top: 2px;
+}
+.enroll-course-card__chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.enroll-course-card__chips span { padding: 5px 10px; border-radius: 999px; border: 1px solid #dbe6f2; background: #f8fbff; font-size: 12px; color: #58718f; }
+.enroll-course-card__main {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding-right: 4px;
+}
+.enroll-course-card__actions {
+  align-items: stretch;
+  padding: 16px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.98));
+  border: 1px solid color-mix(in srgb, var(--app-border) 84%, #ffffff);
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+}
+.enroll-course-card__reason-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+.enroll-course-card__reason-label { font-size: 12px; font-weight: 800; color: var(--app-text-main); }
+.enroll-course-card__reason-tip { font-size: 12px; color: var(--app-text-light); }
+.enroll-course-card__action-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
 }
-.enroll-page__list, .notice-list { display: grid; gap: 12px; }
-.enroll-course-card { padding: 18px 20px; display: grid; gap: 14px; }
-.enroll-course-card__top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-.enroll-course-card__top strong { font-size: 18px; color: var(--app-text-main); }
-.enroll-course-card__top p, .enroll-course-card__desc, .enroll-course-card__hint, .notice-item p, .notice-item small { margin: 0; color: var(--app-text-soft); line-height: 1.6; }
-.enroll-course-card__chips { display: flex; gap: 8px; flex-wrap: wrap; }
-.enroll-course-card__chips span { padding: 5px 10px; border-radius: 999px; border: 1px solid #dbe6f2; background: #f8fbff; font-size: 12px; color: #58718f; }
-.enroll-course-card__hint { font-size: 13px; }
-.enroll-course-card__actions { align-items: center; }
-.enroll-course-card__reason-label { font-size: 12px; font-weight: 700; color: var(--app-text-soft); }
-.enroll-course-card__actions :deep(.el-input) { flex: 1 1 240px; }
-.join-code-input,
 .keyword-input { width: 100%; }
 .enroll-page__toolbar :deep(.el-input__wrapper) {
-  border-radius: 14px;
-  min-height: 44px;
+  border-radius: 16px;
+  min-height: 48px;
 }
 .enroll-page__toolbar :deep(.el-button) {
-  border-radius: 14px;
-  min-height: 44px;
+  border-radius: 16px;
+  min-height: 48px;
+  padding-inline: 18px;
+}
+.enroll-course-card__actions :deep(.el-input__wrapper) {
+  border-radius: 16px;
+  min-height: 46px;
+}
+.enroll-course-card__actions :deep(.el-button) {
+  border-radius: 16px;
+  min-height: 46px;
   padding-inline: 18px;
 }
 .enroll-table-card { padding: 18px 20px; }
 .enroll-table-card__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .enroll-table-card__head h3 { margin: 0; font-size: 18px; color: var(--app-text-main); }
 .enroll-table-card__head span { color: var(--app-text-soft); font-size: 13px; }
-.notice-item { border: 1px solid var(--app-border); border-radius: 16px; padding: 16px; display: flex; justify-content: space-between; gap: 14px; align-items: center; background: #fcfdff; }
+.notice-item {
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  background: linear-gradient(180deg, #fcfdff 0%, #f7fbff 100%);
+}
 .empty { color: #7c8da2; padding: 6px 0; }
 @media (max-width: 980px) {
   .enroll-page__hero,
@@ -396,7 +436,8 @@ onMounted(loadAll);
     align-items: flex-start;
   }
   .enroll-page__toolbar { grid-template-columns: 1fr; }
-  .enroll-page__join-box { grid-template-columns: 1fr; }
+  .enroll-course-card { grid-template-columns: 1fr; }
+  .enroll-course-card__action-row { grid-template-columns: 1fr; }
   .enroll-page__stats { grid-template-columns: 1fr; }
 }
 </style>

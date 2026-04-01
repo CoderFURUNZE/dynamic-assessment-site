@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import type { Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -11,6 +11,12 @@ type KpInfo = {
   code: string;
   title: string;
   chapter?: string;
+  description?: string;
+  knowledge_tag?: string;
+  ability_tag?: string;
+  literacy_tag?: string;
+  importance?: number;
+  difficulty?: number;
 };
 
 type ResourceItem = {
@@ -136,6 +142,8 @@ const kpId = computed(() => {
 
 const subject = computed(() => String(route.query.subject || ""));
 const grade = computed(() => String(route.query.grade || "通用"));
+const mode = computed(() => String(route.query.mode || ""));
+const createMode = computed(() => kpId.value === 0 || mode.value === "create");
 
 const learningResources = computed(() =>
   resources.value.filter((item) => (item.category || "learning") !== "recommend")
@@ -159,9 +167,50 @@ const resourceTagPreview = computed(() =>
 );
 const resourceDescriptionCount = computed(() => resourceForm.description.trim().length);
 const currentKpLabel = computed(() => {
+  if (createMode.value) return "新建知识点";
   if (!kp.value) return "当前知识点";
   return `${kp.value.code} ${kp.value.title}`;
 });
+
+const kpForm = reactive({
+  code: "",
+  title: "",
+  chapter: "",
+  description: "",
+  knowledge_tag: "",
+  ability_tag: "",
+  literacy_tag: "",
+  importance: 0.5,
+  difficulty: 0.5,
+});
+
+function resetKpForm(chapter = "") {
+  Object.assign(kpForm, {
+    code: "",
+    title: "",
+    chapter,
+    description: "",
+    knowledge_tag: "",
+    ability_tag: "",
+    literacy_tag: "",
+    importance: 0.5,
+    difficulty: 0.5,
+  });
+}
+
+function syncKpFormFromNode(node: Partial<KpInfo> | null | undefined) {
+  Object.assign(kpForm, {
+    code: node?.code || "",
+    title: node?.title || "",
+    chapter: node?.chapter || String(route.query.chapter || ""),
+    description: node?.description || "",
+    knowledge_tag: node?.knowledge_tag || "",
+    ability_tag: node?.ability_tag || "",
+    literacy_tag: node?.literacy_tag || "",
+    importance: node?.importance ?? 0.5,
+    difficulty: node?.difficulty ?? 0.5,
+  });
+}
 
 const assignedQuestionIds = computed(() => new Set(assignedPractice.value.map((item) => item.question_id)));
 
@@ -307,9 +356,21 @@ function cognitiveLabel(code?: string) {
 }
 
 async function loadData() {
-  if (!kpId.value) return;
   loading.value = true;
   try {
+    if (createMode.value) {
+      kp.value = null;
+      resources.value = [];
+      questions.value = [];
+      assignedPractice.value = [];
+      resetKpForm(String(route.query.chapter || ""));
+      return;
+    }
+    if (!kpId.value) {
+      ElMessage.warning("缺少知识点参数");
+      goBack();
+      return;
+    }
     const [nodeRes, questionRes, assignedRes] = await Promise.all([
       api.get(`/graph/node/${kpId.value}`),
       api.get(`/admin/questions?kp_id=${kpId.value}&page=1&page_size=200`),
@@ -323,8 +384,15 @@ async function loadData() {
           code: node.code,
           title: node.title,
           chapter: node.chapter,
+          description: node.description,
+          knowledge_tag: node.knowledge_tag,
+          ability_tag: node.ability_tag,
+          literacy_tag: node.literacy_tag,
+          importance: node.importance,
+          difficulty: node.difficulty,
         }
       : null;
+    syncKpFormFromNode(kp.value);
 
     resources.value = nodeRes.data?.resource_list ?? [];
     questions.value = questionRes.data?.items ?? [];
@@ -701,14 +769,73 @@ async function removeAssignedPractice(assignmentId: number) {
   }
 }
 
-onMounted(async () => {
-  if (!kpId.value) {
-    ElMessage.warning("缺少知识点参数");
-    goBack();
-    return;
+
+async function saveKpMeta() {
+  saving.value = true;
+  try {
+    const payload = {
+      subject: subject.value || "",
+      grade: grade.value || "??",
+      code: kpForm.code.trim(),
+      title: kpForm.title.trim(),
+      description: kpForm.description.trim(),
+      chapter: kpForm.chapter.trim(),
+      knowledge_tag: kpForm.knowledge_tag.trim(),
+      ability_tag: kpForm.ability_tag.trim(),
+      literacy_tag: kpForm.literacy_tag.trim(),
+      importance: kpForm.importance,
+      difficulty: kpForm.difficulty,
+    };
+    if (!payload.code) {
+      ElMessage.warning("????????");
+      return;
+    }
+    if (!payload.title) {
+      ElMessage.warning("????????");
+      return;
+    }
+    if (createMode.value) {
+      const res = await api.post("/admin/kps", payload);
+      const newId = Number(res.data?.id || 0);
+      ElMessage.success("??????");
+      if (newId > 0) {
+        router.replace({
+          path: `/teacher/kp-content/${newId}`,
+          query: {
+            subject: subject.value || undefined,
+            grade: grade.value || undefined,
+            from: "graph-workspace",
+          },
+        });
+      } else {
+        await loadData();
+      }
+      return;
+    }
+    if (!kpId.value) {
+      ElMessage.warning("???????");
+      return;
+    }
+    await api.put(`/admin/kps/${kpId.value}`, payload);
+    ElMessage.success("??????");
+    await loadData();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "???????");
+  } finally {
+    saving.value = false;
   }
+}
+
+onMounted(async () => {
   await loadData();
 });
+
+watch(
+  () => [route.params.kpId, route.query.mode, route.query.chapter, route.query.subject, route.query.grade],
+  () => {
+    loadData();
+  },
+);
 </script>
 
 <template>
@@ -755,7 +882,30 @@ onMounted(async () => {
         </div>
       </header>
 
-      <section class="content-summary" aria-label="本知识点内容概览">
+      <section class="content-meta panel-shell">
+        <div class="content-meta__head">
+          <div>
+            <h3>{{ createMode ? "?????" : "???????" }}</h3>
+            <p>{{ createMode ? "?????????????????" : "??????????????????" }}</p>
+          </div>
+          <el-button type="primary" :loading="saving" @click="saveKpMeta">
+            {{ createMode ? "?????" : "????" }}
+          </el-button>
+        </div>
+        <div class="content-meta__grid">
+          <el-form-item label="??"><el-input v-model="kpForm.code" /></el-form-item>
+          <el-form-item label="??"><el-input v-model="kpForm.title" /></el-form-item>
+          <el-form-item label="??"><el-input v-model="kpForm.chapter" /></el-form-item>
+          <el-form-item label="????"><el-input v-model="kpForm.knowledge_tag" /></el-form-item>
+          <el-form-item label="????"><el-input v-model="kpForm.ability_tag" /></el-form-item>
+          <el-form-item label="????"><el-input v-model="kpForm.literacy_tag" /></el-form-item>
+          <el-form-item label="????"><el-input-number v-model="kpForm.importance" :min="0" :max="1" :step="0.05" /></el-form-item>
+          <el-form-item label="????"><el-input-number v-model="kpForm.difficulty" :min="0" :max="1" :step="0.05" /></el-form-item>
+          <el-form-item class="content-meta__full" label="??"><el-input v-model="kpForm.description" type="textarea" :rows="3" /></el-form-item>
+        </div>
+      </section>
+
+      <section class="content-summary" aria-label="????????">
         <div class="summary-card" v-for="card in sectionCards" :key="card.key">
           <div class="summary-card__icon" :class="`summary-card__icon--${card.key}`" aria-hidden="true">
             <el-icon :size="22"><component :is="card.icon" /></el-icon>
@@ -768,7 +918,12 @@ onMounted(async () => {
         </div>
       </section>
 
-      <div class="content-layout">
+      <section v-if="createMode" class="content-create-empty panel-shell">
+        <strong>??????????????????</strong>
+        <span>?????????????????????</span>
+      </section>
+
+      <div v-if="!createMode" class="content-layout">
         <aside class="content-nav panel-shell" aria-label="内容分区">
           <p class="content-nav__hint">切换分区</p>
           <button
@@ -1331,6 +1486,58 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.content-meta {
+  padding: 18px 20px 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.content-meta__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.content-meta__head h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1f2f44;
+}
+
+.content-meta__head p {
+  margin: 6px 0 0;
+  color: #6c7d95;
+  line-height: 1.6;
+}
+
+.content-meta__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.content-meta__full {
+  grid-column: 1 / -1;
+}
+
+.content-create-empty {
+  padding: 24px;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  color: #4b627f;
+}
+
+.content-create-empty strong {
+  font-size: 16px;
+  color: #1f2f44;
+}
+
+.content-create-empty span {
+  line-height: 1.7;
 }
 
 .summary-card {
@@ -2006,6 +2213,14 @@ onMounted(async () => {
   }
 
   .content-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .content-meta__head {
+    flex-direction: column;
+  }
+
+  .content-meta__grid {
     grid-template-columns: 1fr;
   }
 
