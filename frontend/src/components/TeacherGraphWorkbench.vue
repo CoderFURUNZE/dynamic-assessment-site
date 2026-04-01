@@ -240,8 +240,12 @@ const selectedKp = computed(() => (selectedType.value === "kp" ? kps.value.find(
 const selectedCategoryNode = computed(() =>
   selectedType.value === "category" ? categoryNodes.value.find((item) => item.key === selectedCategory.value) ?? null : null,
 );
-const inlineEditorEnabled = computed(() => !props.embedded && !props.fullscreen);
-const drawerVisible = computed(() => drawerOpen.value && (graphEditorOpen.value || selectedKp.value != null || selectedCategoryNode.value != null));
+const showSidebar = computed(() => !props.fullscreen && !props.embedded);
+const showInspector = computed(() => !props.fullscreen && !props.embedded);
+const inlineEditorEnabled = computed(() => showInspector.value);
+const drawerVisible = computed(
+  () => showInspector.value && drawerOpen.value && (graphEditorOpen.value || selectedKp.value != null || selectedCategoryNode.value != null),
+);
 const drawerTitle = computed(() => {
   if (graphEditorOpen.value) return form.id ? "编辑知识点" : "新建知识点";
   if (selectedType.value === "kp") return selectedKp.value?.title || "知识点详情";
@@ -692,10 +696,6 @@ function selectKp(id: number) {
     createEdgeFromCanvas(id);
     return;
   }
-  if (props.embedded || props.fullscreen) {
-    openContentWorkspaceInNewTab(id);
-    return;
-  }
   categoryLinkMode.value = null;
   selectedType.value = "kp";
   selectedId.value = id;
@@ -742,13 +742,7 @@ function openGraphEditorForSelected() {
     return;
   }
   if (!selectedKp.value) return;
-  if (props.embedded || props.fullscreen) {
-    openContentWorkspaceInNewTab(selectedKp.value.id);
-    return;
-  }
-  syncFormFromSelected();
-  graphEditorOpen.value = true;
-  drawerOpen.value = true;
+  openContentWorkspaceInNewTab(selectedKp.value.id);
 }
 
 function openContentWorkspaceInNewTab(kpId: number) {
@@ -766,6 +760,14 @@ function openContentWorkspaceInNewTab(kpId: number) {
     },
   });
   window.open(target.href, "_blank", "noopener,noreferrer");
+}
+
+function openContentFromSelected() {
+  if (!selectedKp.value) {
+    ElMessage.warning("请先选择一个知识点");
+    return;
+  }
+  openContentWorkspaceInNewTab(selectedKp.value.id);
 }
 
 function openCreateWorkspaceInNewTab(chapter = "") {
@@ -921,8 +923,6 @@ function fitCategoryNodesToViewport() {
   panY.value = sh / 2 - cy * canvasScale.value;
   persistViewState();
 }
-
-function zoomIn()
 
 function clampPan(nextX = panX.value, nextY = panY.value) {
   panX.value = nextX;
@@ -1477,7 +1477,7 @@ onBeforeUnmount(() => {
         'teacher-content--drawer-collapsed': !drawerVisible,
       }"
     >
-      <aside v-if="!props.fullscreen" class="teacher-sidebar">
+      <aside v-if="showSidebar" class="teacher-sidebar">
         <div class="teacher-tree">
           <div class="teacher-tree__intro">
             <strong>先选分类或知识点</strong>
@@ -1680,13 +1680,13 @@ onBeforeUnmount(() => {
       </svg>
 
       <div
-        v-if="!props.fullscreen && selectedKp && selectedLayout"
+        v-if="selectedKp && selectedLayout"
         class="teacher-stage__menu"
         :class="{ 'teacher-stage__menu--below': selectedMenuBelow }"
         :style="selectedMenuStyle"
       >
         <button :disabled="props.readonly" @click="openGraphEditorForSelected">改信息</button>
-        <button :disabled="props.readonly" @click="detailTab = 'relations'; drawerOpen = true">管关系</button>
+        <button @click="openContentFromSelected">进入内容页</button>
         <button class="danger" :disabled="props.readonly" @click="removeKp">删除</button>
       </div>
 
@@ -3627,5 +3627,3 @@ onBeforeUnmount(() => {
   filter: drop-shadow(0 10px 18px rgba(59, 130, 246, 0.12));
 }
 </style>
-
-

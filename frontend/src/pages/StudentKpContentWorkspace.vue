@@ -112,6 +112,7 @@ const kpId = computed(() => {
 const subject = computed(() => String(route.query.subject || ""));
 const grade = computed(() => String(route.query.grade || "通用"));
 const isPreview = computed(() => String(route.query.preview || "") === "1");
+const isTeacherPreview = computed(() => String(route.path || "").startsWith("/teacher/kp-preview/"));
 const graphView = computed(() => {
   const v = String(route.query.view || "");
   return v === "path" || v === "reco" || v === "map" ? v : "map";
@@ -245,7 +246,7 @@ const masterySummary = computed(() => {
 
 function goBack() {
   router.push({
-    path: "/student/graph-workspace",
+    path: isTeacherPreview.value ? "/teacher/content" : "/student/graph-workspace",
     query: {
       subject: subject.value || undefined,
       grade: grade.value || undefined,
@@ -258,7 +259,7 @@ function goBack() {
 
 function goToKp(id: number) {
   router.push({
-    path: `/student/kp-content/${id}`,
+    path: isTeacherPreview.value ? `/teacher/kp-preview/${id}` : `/student/kp-content/${id}`,
     query: {
       subject: subject.value || undefined,
       grade: grade.value || undefined,
@@ -278,6 +279,10 @@ function goToRecommendedTarget() {
 }
 
 function goToReport() {
+  if (isTeacherPreview.value) {
+    goBack();
+    return;
+  }
   router.push({
     path: "/student/report",
     query: {
@@ -290,7 +295,8 @@ function goToReport() {
 
 function goQuizSubView(view: QuizSubView) {
   if (!kpId.value) return;
-  const targetPath = `/student/kp-content/${kpId.value}/${view === "practice" ? "practice" : view}`;
+  const base = isTeacherPreview.value ? `/teacher/kp-preview/${kpId.value}` : `/student/kp-content/${kpId.value}`;
+  const targetPath = `${base}/${view === "practice" ? "practice" : view}`;
   const currentPath = String(router.currentRoute.value?.path || "");
   if (currentPath === targetPath) return;
   router

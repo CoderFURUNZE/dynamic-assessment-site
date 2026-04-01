@@ -143,8 +143,9 @@ const props = withDefaults(
     graphRecoHint?: GraphRecoHint | null;
     /** 嵌入学生「图谱工作台」页：隐藏重复标题区并由外层控制高度，避免整页被撑长 */
     embedded?: boolean;
+    actorMode?: "student" | "teacher";
   }>(),
-  { embedded: false },
+  { embedded: false, actorMode: "student" },
 );
 
 const emit = defineEmits<{
@@ -198,9 +199,10 @@ const useLegacyFallbackLayout = ref(false);
 const hoveredKpId = ref<number | null>(null);
 
 const overlayMap = computed(() => new Map(overlay.value.map((item) => [item.kp_id, item])));
+const isTeacherMode = computed(() => props.actorMode === "teacher");
 const effectiveOverlayMap = computed(() => {
   const map = new Map(overlayMap.value);
-  if (props.recommendedKpId) {
+  if (!isTeacherMode.value && props.recommendedKpId) {
     const current = map.get(props.recommendedKpId);
     map.set(props.recommendedKpId, {
       kp_id: props.recommendedKpId,
@@ -947,7 +949,7 @@ function openContentFromSelected() {
     return;
   }
   const blockedReason = activeOverlay.value?.blocked_reason;
-  if (blockedReason) {
+  if (!isTeacherMode.value && blockedReason) {
     ElMessage.warning(blockedReason);
     return;
   }
@@ -1273,24 +1275,29 @@ onBeforeUnmount(() => {
               <div class="workspace-stage__legend">
                 <span class="workspace-stage__legend-item">
                   <i class="workspace-stage__legend-line workspace-stage__legend-line--solid"></i>
-                  实线箭头：前置 / 顺序关系
+                  {{ isTeacherMode ? "实线箭头：前置 / 后继关系" : "实线箭头：前置 / 顺序关系" }}
                 </span>
                 <span class="workspace-stage__legend-item">
                   <i class="workspace-stage__legend-line workspace-stage__legend-line--dashed"></i>
                   虚线 / 三角箭头：支撑、包含、分类归属
                 </span>
-                <span class="workspace-stage__legend-item">
+                <span v-if="!isTeacherMode" class="workspace-stage__legend-item">
                   <i class="workspace-stage__legend-line workspace-stage__legend-line--path"></i>
                   蓝色虚线：推荐路径；同名能力/素养标签共用同色环
                 </span>
               </div>
             </div>
             <div class="workspace-stage__focus">
-                            <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
+              <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
                 {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
               </button>
-              <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="openContentFromSelected">
-                去学习
+              <button
+                v-if="selectedType === 'kp' && selectedKp"
+                type="button"
+                class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost"
+                @click.stop="openContentFromSelected"
+              >
+                {{ isTeacherMode ? "进入配置页" : "去学习" }}
               </button>
               <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click="fitVisibleToViewport">适应画布</button>
               <button type="button" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click="resetViewport">重置画布</button>
@@ -1447,12 +1454,12 @@ onBeforeUnmount(() => {
             <circle :r="nodeRadius(kp) + 18" :fill="'transparent'" :stroke="ringColor('literacy', effectiveOverlayMap.get(kp.id)?.literacy_status, effectiveOverlayMap.get(kp.id)?.literacy_labels || splitLabels(kp.literacy_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.literacy_enabled ? 5 : 0" />
             <circle :r="nodeRadius(kp) + 10" :fill="'transparent'" :stroke="ringColor('ability', effectiveOverlayMap.get(kp.id)?.ability_status, effectiveOverlayMap.get(kp.id)?.ability_labels || splitLabels(kp.ability_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.ability_enabled ? 5 : 0" />
             <circle :r="nodeRadius(kp) + 2" :fill="'transparent'" :stroke="ringColor('knowledge', effectiveOverlayMap.get(kp.id)?.knowledge_status)" :stroke-width="4" />
-            <circle :r="nodeRadius(kp) + 22" :fill="isRecommended(kp.id) || isPathNode(kp.id) ? 'rgba(70, 122, 235, 0.12)' : 'rgba(96,139,232,0.06)'" />
+            <circle :r="nodeRadius(kp) + 22" :fill="!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id)) ? 'rgba(70, 122, 235, 0.12)' : 'rgba(96,139,232,0.06)'" />
             <circle
               :r="nodeRadius(kp)"
-              :fill="kp.id === selectedKp?.id ? '#f7fbff' : ((isRecommended(kp.id) || isPathNode(kp.id)) ? '#f8fbff' : '#ffffff')"
-              :stroke="kp.id === selectedKp?.id ? '#76a7f8' : ((isRecommended(kp.id) || isPathNode(kp.id)) ? '#5a8ef0' : '#dbe5f1')"
-              :stroke-width="isRecommended(kp.id) ? 2.6 : (isPathNode(kp.id) ? 2.3 : 2)"
+              :fill="kp.id === selectedKp?.id ? '#f7fbff' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#f8fbff' : '#ffffff')"
+              :stroke="kp.id === selectedKp?.id ? '#76a7f8' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#5a8ef0' : '#dbe5f1')"
+              :stroke-width="!isTeacherMode && isRecommended(kp.id) ? 2.6 : (!isTeacherMode && isPathNode(kp.id) ? 2.3 : 2)"
             />
             <text :class="props.embedded ? 'teacher-node__code workspace-node__code' : 'workspace-node__code'" text-anchor="middle" y="-8">
               {{ kp.code }}
@@ -1460,11 +1467,11 @@ onBeforeUnmount(() => {
             <text :class="props.embedded ? 'teacher-node__title workspace-node__title' : 'workspace-node__title'" text-anchor="middle" y="16">
               {{ kp.title.slice(0, 10) }}
             </text>
-            <g v-if="isRecommended(kp.id)">
+            <g v-if="!isTeacherMode && isRecommended(kp.id)">
               <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#5a8ef0" />
               <text class="workspace-node__badge" text-anchor="middle" y="-36">推荐</text>
             </g>
-            <g v-else-if="isPathNode(kp.id)">
+            <g v-else-if="!isTeacherMode && isPathNode(kp.id)">
               <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#89aef5" />
               <text class="workspace-node__badge" text-anchor="middle" y="-36">路径</text>
             </g>
@@ -1482,7 +1489,7 @@ onBeforeUnmount(() => {
 
         <div v-if="!loading && !hasGraphData" class="workspace-stage__empty">
           <strong>这门课还没有知识图谱</strong>
-          <span>请先让老师创建知识点和关系，再回来查看。</span>
+          <span>{{ isTeacherMode ? "请先创建知识点并配置关系。" : "请先让老师创建知识点和关系，再回来查看。" }}</span>
         </div>
       </section>
 
@@ -3612,5 +3619,4 @@ onBeforeUnmount(() => {
   filter: drop-shadow(0 10px 18px rgba(59, 130, 246, 0.12));
 }
 </style>
-
 

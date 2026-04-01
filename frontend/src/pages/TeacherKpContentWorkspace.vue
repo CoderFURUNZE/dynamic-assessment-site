@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import type { Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
-import { Reading, EditPen, Collection, FolderOpened, Share, Upload, ArrowDown } from "@element-plus/icons-vue";
+import { Reading, EditPen, Collection, FolderOpened, Share, Upload, ArrowDown, Setting, Connection, CircleCheck } from "@element-plus/icons-vue";
 import { api } from "../api";
 
 type KpInfo = {
@@ -83,19 +83,31 @@ type AssignedPracticeRow = {
   prompt: string;
 };
 
-type SectionKey = "learning" | "practice" | "recommend";
+type EdgeRow = {
+  id: number;
+  prereq_id: number;
+  next_id: number;
+  relation_type: string;
+};
+
+type RelationDirection = "incoming" | "outgoing";
+type RelationTypeValue = "prerequisite" | "related" | "support" | "contains";
+type SectionKey = "basic" | "learning" | "practice" | "relation" | "check";
 
 const route = useRoute();
 const router = useRouter();
 
 const loading = ref(false);
 const saving = ref(false);
-const activeSection = ref<SectionKey>("learning");
+const relationSaving = ref(false);
+const activeSection = ref<SectionKey>("basic");
 
 const kp = ref<KpInfo | null>(null);
 const resources = ref<ResourceItem[]>([]);
 const questions = ref<QuestionRow[]>([]);
 const assignedPractice = ref<AssignedPracticeRow[]>([]);
+const graphKps = ref<KpInfo[]>([]);
+const graphEdges = ref<EdgeRow[]>([]);
 
 const resourceDialogOpen = ref(false);
 const resourceEditingId = ref<number | null>(null);
@@ -115,6 +127,16 @@ const clientUploadMeta = ref<ClientUploadMeta | null>(null);
 
 const questionDialogOpen = ref(false);
 const questionEditingId = ref<number | null>(null);
+const relationForm = reactive<{
+  targetId: number | null;
+  relationType: RelationTypeValue;
+  direction: RelationDirection;
+}>({
+  targetId: null,
+  relationType: "prerequisite",
+  direction: "outgoing",
+});
+
 const COGNITIVE_OPTIONS = [
   { value: "remember", label: "记忆 remember" },
   { value: "understand", label: "理解 understand" },
@@ -213,24 +235,32 @@ function syncKpFormFromNode(node: Partial<KpInfo> | null | undefined) {
 }
 
 const assignedQuestionIds = computed(() => new Set(assignedPractice.value.map((item) => item.question_id)));
-
-const unassignedQuestions = computed(() =>
-  questions.value.filter((item) => !assignedQuestionIds.value.has(item.id))
-);
+const kpMap = computed(() => new Map(graphKps.value.map((item) => [item.id, item])));
 
 const stats = computed(() => ({
+  basic: createMode.value ? 0 : 1,
   learning: learningResources.value.length,
   practice: assignedPractice.value.length,
-  recommend: recommendResources.value.length,
+  relation: kp.value ? graphEdges.value.filter((item) => item.prereq_id === kp.value?.id || item.next_id === kp.value?.id).length : 0,
+  check: completenessScore.value,
 }));
 
 const sectionCards = computed(() => {
   const icons: Record<SectionKey, Component> = {
+    basic: Setting,
     learning: Reading,
     practice: EditPen,
-    recommend: Collection,
+    relation: Connection,
+    check: CircleCheck,
   };
   return [
+    {
+      key: "basic" as SectionKey,
+      title: "基础信息",
+      desc: "名称、标签、难度与章节",
+      count: createMode.value ? "新建" : "已建",
+      icon: icons.basic,
+    },
     {
       key: "learning" as SectionKey,
       title: "学习资料",
@@ -246,11 +276,18 @@ const sectionCards = computed(() => {
       icon: icons.practice,
     },
     {
-      key: "recommend" as SectionKey,
-      title: "推荐拓展",
-      desc: "书籍与课外阅读",
-      count: stats.value.recommend,
-      icon: icons.recommend,
+      key: "relation" as SectionKey,
+      title: "图谱关系",
+      desc: "前置、后继、关联与支撑",
+      count: stats.value.relation,
+      icon: icons.relation,
+    },
+    {
+      key: "check" as SectionKey,
+      title: "配置检查",
+      desc: "检查是否已形成学习闭环",
+      count: `${stats.value.check}%`,
+      icon: icons.check,
     },
   ];
 });
@@ -267,6 +304,86 @@ const resourceDialogTitle = computed(() => {
   }
   return isRec ? "新增推荐资源" : "新增学习资源";
 });
+
+const relationOptions = computed(() =>
+  graphKps.value
+    .filter((item) => item.id !== kpId.value)
+    .sort((a, b) => `${a.chapter || ""}${a.code}${a.title}`.localeCompare(`${b.chapter || ""}${b.code}${b.title}`, "zh-Hans-CN"))
+    .map((item) => ({
+      value: item.id,
+      label: `${item.code} ${item.title}${item.chapter ? ` · ${item.chapter}` : ""}`,
+    })),
+);
+
+const relationSummary = computed(() => {
+  const currentId = kpId.value;
+  const findNode = (id: number) => kpMap.value.get(id);
+  const rows = graphEdges.value.filter((item) => item.prereq_id === currentId || item.next_id === currentId);
+  return {
+    prerequisitesIn: rows
+      .filter((item) => item.relation_type === "prerequisite" && item.next_id === currentId)
+      .map((item) => ({ edgeId: item.id, node: findNode(item.prereq_id), text: "作为当前知识点的前置知识" }))
+      .filter((item) => item.node),
+    prerequisitesOut: rows
+      .filter((item) => item.relation_type === "prerequisite" && item.prereq_id === currentId)
+      .map((item) => ({ edgeId: item.id, node: findNode(item.next_id), text: "作为当前知识点的后继知识" }))
+      .filter((item) => item.node),
+    related: rows
+      .filter((item) => item.relation_type === "related")
+      .map((item) => {
+        const targetId = item.prereq_id === currentId ? item.next_id : item.prereq_id;
+        return { edgeId: item.id, node: findNode(targetId), text: "关联知识点" };
+      })
+      .filter((item) => item.node),
+    support: rows
+      .filter((item) => item.relation_type === "support")
+      .map((item) => ({
+        edgeId: item.id,
+        node: findNode(item.prereq_id === currentId ? item.next_id : item.prereq_id),
+        text: item.prereq_id === currentId ? "由当前知识点支撑" : "支撑当前知识点",
+      }))
+      .filter((item) => item.node),
+    contains: rows
+      .filter((item) => item.relation_type === "contains")
+      .map((item) => ({
+        edgeId: item.id,
+        node: findNode(item.prereq_id === currentId ? item.next_id : item.prereq_id),
+        text: item.prereq_id === currentId ? "当前知识点包含" : "包含当前知识点",
+      }))
+      .filter((item) => item.node),
+  };
+});
+
+const checklistItems = computed(() => {
+  const relationTotal =
+    relationSummary.value.prerequisitesIn.length +
+    relationSummary.value.prerequisitesOut.length +
+    relationSummary.value.related.length +
+    relationSummary.value.support.length +
+    relationSummary.value.contains.length;
+  return [
+    { key: "code", label: "已填写知识点编码", done: Boolean(kpForm.code.trim()), detail: kpForm.code.trim() || "缺少编码" },
+    { key: "title", label: "已填写知识点名称", done: Boolean(kpForm.title.trim()), detail: kpForm.title.trim() || "缺少名称" },
+    { key: "chapter", label: "已选择所属分类", done: Boolean(kpForm.chapter.trim()), detail: kpForm.chapter.trim() || "缺少分类" },
+    { key: "description", label: "已填写知识点描述", done: Boolean(kpForm.description.trim()), detail: kpForm.description.trim() || "建议补充学习说明" },
+    { key: "learning", label: "已配置学习资源", done: learningResources.value.length > 0, detail: `${learningResources.value.length} 个` },
+    { key: "practice", label: "已配置练习题", done: questions.value.length > 0, detail: `${questions.value.length} 题` },
+    { key: "practiceAssigned", label: "已加入随堂练习", done: assignedPractice.value.length > 0, detail: `${assignedPractice.value.length} 题` },
+    { key: "relation", label: "已配置图谱关系", done: relationTotal > 0, detail: `${relationTotal} 条` },
+    { key: "ability", label: "已配置能力标签", done: Boolean(kpForm.ability_tag.trim()), detail: kpForm.ability_tag.trim() || "缺少能力标签" },
+    { key: "literacy", label: "已配置素养标签", done: Boolean(kpForm.literacy_tag.trim()), detail: kpForm.literacy_tag.trim() || "缺少素养标签" },
+    { key: "recommend", label: "已配置推荐拓展", done: recommendResources.value.length > 0, detail: `${recommendResources.value.length} 个` },
+  ];
+});
+
+const completenessScore = computed(() => {
+  const total = checklistItems.value.length;
+  if (!total) return 0;
+  const done = checklistItems.value.filter((item) => item.done).length;
+  return Math.round((done / total) * 100);
+});
+
+const missingChecklistItems = computed(() => checklistItems.value.filter((item) => !item.done));
 
 function parseOptions(text: string) {
   return text
@@ -363,7 +480,15 @@ async function loadData() {
       resources.value = [];
       questions.value = [];
       assignedPractice.value = [];
+      graphEdges.value = [];
+      if (subject.value) {
+        const kpsRes = await api.get(`/graph/kps?subject=${encodeURIComponent(subject.value)}&grade=${encodeURIComponent(grade.value)}`);
+        graphKps.value = Array.isArray(kpsRes.data) ? kpsRes.data : [];
+      } else {
+        graphKps.value = [];
+      }
       resetKpForm(String(route.query.chapter || ""));
+      activeSection.value = "basic";
       return;
     }
     if (!kpId.value) {
@@ -371,10 +496,12 @@ async function loadData() {
       goBack();
       return;
     }
-    const [nodeRes, questionRes, assignedRes] = await Promise.all([
+    const [nodeRes, questionRes, assignedRes, kpsRes, edgesRes] = await Promise.all([
       api.get(`/graph/node/${kpId.value}`),
       api.get(`/admin/questions?kp_id=${kpId.value}&page=1&page_size=200`),
       api.get(`/admin/kp-questions?kp_id=${kpId.value}`),
+      api.get(`/graph/kps?subject=${encodeURIComponent(subject.value)}&grade=${encodeURIComponent(grade.value)}`),
+      api.get(`/admin/edges?subject=${encodeURIComponent(subject.value)}&grade=${encodeURIComponent(grade.value)}&page=1&page_size=500`),
     ]);
 
     const node = nodeRes.data?.kp;
@@ -397,6 +524,8 @@ async function loadData() {
     resources.value = nodeRes.data?.resource_list ?? [];
     questions.value = questionRes.data?.items ?? [];
     assignedPractice.value = assignedRes.data ?? [];
+    graphKps.value = Array.isArray(kpsRes.data) ? kpsRes.data : [];
+    graphEdges.value = edgesRes.data?.items ?? [];
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载知识点内容失败");
   } finally {
@@ -412,6 +541,27 @@ function goBack() {
       grade: grade.value || undefined,
     },
   });
+}
+
+function openStudentPreview() {
+  if (!kpId.value) {
+    ElMessage.warning("请先保存知识点，再打开学生预览");
+    return;
+  }
+  const target = router.resolve({
+    path: `/teacher/kp-preview/${kpId.value}`,
+    query: {
+      subject: subject.value || undefined,
+      grade: grade.value || undefined,
+      preview: "1",
+    },
+  });
+  window.open(target.href, "_blank", "noopener,noreferrer");
+}
+
+async function saveAndBack() {
+  const ok = await saveKpMeta();
+  if (ok) goBack();
 }
 
 function openResourceCreate(mode: "learning" | "recommend") {
@@ -769,13 +919,65 @@ async function removeAssignedPractice(assignmentId: number) {
   }
 }
 
+async function createRelation() {
+  if (!kpId.value) {
+    ElMessage.warning("请先保存知识点，再配置图谱关系");
+    return;
+  }
+  if (!relationForm.targetId) {
+    ElMessage.warning("请选择目标知识点");
+    return;
+  }
+  relationSaving.value = true;
+  try {
+    let prereqId = kpId.value;
+    let nextId = relationForm.targetId;
+    if (relationForm.relationType === "prerequisite") {
+      if (relationForm.direction === "incoming") {
+        prereqId = relationForm.targetId;
+        nextId = kpId.value;
+      }
+    } else if (relationForm.direction === "incoming") {
+      prereqId = relationForm.targetId;
+      nextId = kpId.value;
+    }
+    await api.post("/admin/edges", {
+      subject: subject.value,
+      grade: grade.value,
+      prereq_id: prereqId,
+      next_id: nextId,
+      relation_type: relationForm.relationType,
+    });
+    ElMessage.success("图谱关系已添加");
+    relationForm.targetId = null;
+    await loadData();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "添加关系失败");
+  } finally {
+    relationSaving.value = false;
+  }
+}
+
+async function removeRelation(edgeId: number) {
+  try {
+    await api.delete(`/admin/edges/${edgeId}`);
+    ElMessage.success("图谱关系已删除");
+    await loadData();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "删除关系失败");
+  }
+}
+
+function jumpToSection(section: SectionKey) {
+  activeSection.value = section;
+}
 
 async function saveKpMeta() {
   saving.value = true;
   try {
     const payload = {
       subject: subject.value || "",
-      grade: grade.value || "??",
+      grade: grade.value || "通用",
       code: kpForm.code.trim(),
       title: kpForm.title.trim(),
       description: kpForm.description.trim(),
@@ -787,17 +989,17 @@ async function saveKpMeta() {
       difficulty: kpForm.difficulty,
     };
     if (!payload.code) {
-      ElMessage.warning("????????");
-      return;
+      ElMessage.warning("请输入知识点编码");
+      return false;
     }
     if (!payload.title) {
-      ElMessage.warning("????????");
-      return;
+      ElMessage.warning("请输入知识点名称");
+      return false;
     }
     if (createMode.value) {
       const res = await api.post("/admin/kps", payload);
       const newId = Number(res.data?.id || 0);
-      ElMessage.success("??????");
+      ElMessage.success("知识点已创建");
       if (newId > 0) {
         router.replace({
           path: `/teacher/kp-content/${newId}`,
@@ -810,17 +1012,19 @@ async function saveKpMeta() {
       } else {
         await loadData();
       }
-      return;
+      return true;
     }
     if (!kpId.value) {
-      ElMessage.warning("???????");
-      return;
+      ElMessage.warning("缺少知识点参数");
+      return false;
     }
     await api.put(`/admin/kps/${kpId.value}`, payload);
-    ElMessage.success("??????");
+    ElMessage.success("基础信息已保存");
     await loadData();
+    return true;
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "???????");
+    ElMessage.error(e?.response?.data?.detail ?? "保存知识点失败");
+    return false;
   } finally {
     saving.value = false;
   }
@@ -850,10 +1054,7 @@ watch(
             </router-link>
           </el-breadcrumb-item>
           <el-breadcrumb-item>
-            <router-link
-              class="content-breadcrumb-link"
-              :to="{ path: '/teacher/content', query: graphLinkQuery }"
-            >
+            <router-link class="content-breadcrumb-link" :to="{ path: '/teacher/content', query: graphLinkQuery }">
               <el-icon class="content-breadcrumb-icon"><Share /></el-icon>
               知识图谱
             </router-link>
@@ -868,44 +1069,43 @@ watch(
             <span class="content-back__text">返回图谱</span>
           </button>
           <div class="content-topbar__titles">
-            <div class="content-eyebrow">知识点内容配置</div>
-            <h1 class="content-title">配置本知识点的学习与练习</h1>
-            <p class="content-subtitle">
-              建议顺序：先上传或挂接<strong>学习资料</strong>，再维护<strong>题库</strong>并加入<strong>随堂练习</strong>，最后补充<strong>推荐拓展</strong>。
-            </p>
+            <div class="content-eyebrow">知识点配置</div>
+            <h1 class="content-title">知识点配置工作台</h1>
+            <p class="content-subtitle">围绕当前知识点完成基础信息、学习资源、练习题库、图谱关系和完整度检查。</p>
           </div>
         </div>
-        <div class="content-kp" v-if="kp">
-          <span class="content-kp__code">{{ kp.code }}</span>
-          <strong class="content-kp__title">{{ kp.title }}</strong>
-          <small class="content-kp__chapter">{{ kp.chapter || "未分章" }}</small>
+        <div class="content-topbar__actions">
+          <el-button :loading="saving" @click="saveKpMeta">保存基础信息</el-button>
+          <el-button type="primary" :loading="saving" @click="saveAndBack">保存并返回图谱</el-button>
         </div>
       </header>
 
       <section class="content-meta panel-shell">
         <div class="content-meta__head">
           <div>
-            <h3>{{ createMode ? "?????" : "???????" }}</h3>
-            <p>{{ createMode ? "?????????????????" : "??????????????????" }}</p>
+            <h3>{{ createMode ? "创建知识点" : "基础信息" }}</h3>
+            <p>{{ createMode ? "先完成基础信息保存，保存成功后即可继续配置内容。" : "这里定义知识点的名称、标签、难度和所属分类，是后续资源与题目配置的基础。" }}</p>
           </div>
           <el-button type="primary" :loading="saving" @click="saveKpMeta">
-            {{ createMode ? "?????" : "????" }}
+            {{ createMode ? "创建知识点" : "保存基础信息" }}
           </el-button>
         </div>
         <div class="content-meta__grid">
-          <el-form-item label="??"><el-input v-model="kpForm.code" /></el-form-item>
-          <el-form-item label="??"><el-input v-model="kpForm.title" /></el-form-item>
-          <el-form-item label="??"><el-input v-model="kpForm.chapter" /></el-form-item>
-          <el-form-item label="????"><el-input v-model="kpForm.knowledge_tag" /></el-form-item>
-          <el-form-item label="????"><el-input v-model="kpForm.ability_tag" /></el-form-item>
-          <el-form-item label="????"><el-input v-model="kpForm.literacy_tag" /></el-form-item>
-          <el-form-item label="????"><el-input-number v-model="kpForm.importance" :min="0" :max="1" :step="0.05" /></el-form-item>
-          <el-form-item label="????"><el-input-number v-model="kpForm.difficulty" :min="0" :max="1" :step="0.05" /></el-form-item>
-          <el-form-item class="content-meta__full" label="??"><el-input v-model="kpForm.description" type="textarea" :rows="3" /></el-form-item>
+          <el-form-item label="知识点编码"><el-input v-model="kpForm.code" placeholder="例如 OS-04" /></el-form-item>
+          <el-form-item label="知识点名称"><el-input v-model="kpForm.title" placeholder="例如 同步与互斥" /></el-form-item>
+          <el-form-item label="所属分类"><el-input v-model="kpForm.chapter" placeholder="例如 进程管理" /></el-form-item>
+          <el-form-item label="知识目标"><el-input v-model="kpForm.knowledge_tag" placeholder="例如 临界区、信号量" /></el-form-item>
+          <el-form-item label="能力标签"><el-input v-model="kpForm.ability_tag" placeholder="例如 逻辑推理,系统分析" /></el-form-item>
+          <el-form-item label="素养标签"><el-input v-model="kpForm.literacy_tag" placeholder="例如 主动学习,规范意识" /></el-form-item>
+          <el-form-item label="重要度"><el-input-number v-model="kpForm.importance" :min="0" :max="1" :step="0.05" /></el-form-item>
+          <el-form-item label="理解难度"><el-input-number v-model="kpForm.difficulty" :min="0" :max="1" :step="0.05" /></el-form-item>
+          <el-form-item class="content-meta__full" label="知识点描述">
+            <el-input v-model="kpForm.description" type="textarea" :rows="3" placeholder="说明学生学什么、为什么重要、建议如何学习" />
+          </el-form-item>
         </div>
       </section>
 
-      <section class="content-summary" aria-label="????????">
+      <section class="content-summary" aria-label="配置概览">
         <div class="summary-card" v-for="card in sectionCards" :key="card.key">
           <div class="summary-card__icon" :class="`summary-card__icon--${card.key}`" aria-hidden="true">
             <el-icon :size="22"><component :is="card.icon" /></el-icon>
@@ -919,13 +1119,12 @@ watch(
       </section>
 
       <section v-if="createMode" class="content-create-empty panel-shell">
-        <strong>??????????????????</strong>
-        <span>?????????????????????</span>
+        <strong>基础信息已准备好后，再继续配置内容</strong>
+        <span>创建成功后，这个页面会继续解锁学习资源、练习题库、图谱关系和配置检查四个分区。</span>
       </section>
 
       <div v-if="!createMode" class="content-layout">
         <aside class="content-nav panel-shell" aria-label="内容分区">
-          <p class="content-nav__hint">切换分区</p>
           <button
             v-for="card in sectionCards"
             :key="card.key"
@@ -941,28 +1140,79 @@ watch(
               <strong>{{ card.title }}</strong>
               <span class="content-nav__count">{{ card.count }}</span>
             </div>
-            <small>{{ card.desc }}</small>
           </button>
         </aside>
 
         <main class="content-main">
-          <template v-if="activeSection === 'learning'">
+          <template v-if="activeSection === 'basic'">
+            <section class="content-card panel-shell">
+              <div class="content-card__head">
+                <div>
+                  <h3>基础信息</h3>
+                  <p>定义这个知识点是什么、属于哪里、培养什么能力，是资源和练习配置的前提。</p>
+                </div>
+                <div class="content-card__head-actions">
+                  <el-button :loading="saving" @click="saveKpMeta">保存基础信息</el-button>
+                  <el-button @click="activeSection = 'learning'">继续配置资源</el-button>
+                </div>
+              </div>
+              <div class="content-check-grid">
+                <article class="check-card">
+                  <span>编码</span>
+                  <strong>{{ kpForm.code || "未填写" }}</strong>
+                </article>
+                <article class="check-card">
+                  <span>名称</span>
+                  <strong>{{ kpForm.title || "未填写" }}</strong>
+                </article>
+                <article class="check-card">
+                  <span>所属分类</span>
+                  <strong>{{ kpForm.chapter || "未填写" }}</strong>
+                </article>
+                <article class="check-card">
+                  <span>难度 / 重要度</span>
+                  <strong>{{ Math.round(kpForm.difficulty * 100) }}% / {{ Math.round(kpForm.importance * 100) }}%</strong>
+                </article>
+              </div>
+              <div class="content-tags-panel">
+                <div class="content-tags-panel__group">
+                  <span>知识目标</span>
+                  <div class="content-tags"><span class="content-chip">{{ kpForm.knowledge_tag || "未填写知识目标" }}</span></div>
+                </div>
+                <div class="content-tags-panel__group">
+                  <span>能力标签</span>
+                  <div class="content-tags"><span class="content-chip">{{ kpForm.ability_tag || "未填写能力标签" }}</span></div>
+                </div>
+                <div class="content-tags-panel__group">
+                  <span>素养标签</span>
+                  <div class="content-tags"><span class="content-chip">{{ kpForm.literacy_tag || "未填写素养标签" }}</span></div>
+                </div>
+              </div>
+              <div class="content-empty">{{ kpForm.description || "建议补充知识点描述，方便学生端理解学习目标和学习方式。" }}</div>
+            </section>
+          </template>
+
+          <template v-else-if="activeSection === 'learning'">
             <section class="content-card panel-shell">
               <div class="content-card__head">
                 <div>
                   <h3>学习资料</h3>
-                  <p>上传或挂接视频、文档、课件与外链。下方「全部一览」可快速扫一遍；「按类型分组」便于检查是否缺某一类资源。</p>
+                  <p>上传或挂接视频、文档、课件与外链。可同时配置学生学习资源和推荐拓展资源。</p>
                 </div>
-                <el-button type="primary" @click="openResourceCreate('learning')">新增学习资源</el-button>
+                <div class="content-card__head-actions">
+                  <el-button type="primary" @click="openResourceCreate('learning')">新增学习资源</el-button>
+                  <el-button @click="openResourceCreate('recommend')">新增推荐资源</el-button>
+                </div>
               </div>
-              <div v-if="learningResources.length === 0" class="content-empty">还没有学习资源</div>
+              <div v-if="learningResources.length === 0 && recommendResources.length === 0" class="content-empty">还没有学习资源或推荐拓展</div>
               <el-tabs v-else v-model="teacherResourceView" class="teacher-resource-tabs">
                 <el-tab-pane label="全部资源一览" name="all">
                   <div class="content-list content-list--scroll">
-                    <div v-for="item in allLearningResourcesSorted" :key="item.id" class="content-item">
+                    <div v-for="item in [...allLearningResourcesSorted, ...recommendResources]" :key="`${item.category}-${item.id}`" class="content-item">
                       <div class="content-item__body">
                         <div class="content-item__meta">
                           <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
+                          <div class="content-badge">{{ (item.category || 'learning') === 'recommend' ? '推荐拓展' : '学习资源' }}</div>
                           <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">
                             {{ previewStatusLabel(item.preview_status) }}
                           </div>
@@ -976,7 +1226,7 @@ watch(
                         <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
                       </div>
                       <div class="content-item__actions">
-                        <el-button size="small" type="primary" plain @click="openResourceEdit(item, 'learning')">编辑</el-button>
+                        <el-button size="small" type="primary" plain @click="openResourceEdit(item, (item.category || 'learning') === 'recommend' ? 'recommend' : 'learning')">编辑</el-button>
                         <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
                         <el-dropdown trigger="click" @command="(cmd) => handleResourceMoreCommand(String(cmd), item)">
                           <el-button size="small">
@@ -1007,34 +1257,35 @@ watch(
                           <div class="content-item__body">
                             <div class="content-item__meta">
                               <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
-                              <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">
-                                {{ previewStatusLabel(item.preview_status) }}
-                              </div>
+                              <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">{{ previewStatusLabel(item.preview_status) }}</div>
                             </div>
                             <strong>{{ item.title }}</strong>
-                            <span>
-                              原始格式：{{ (item.file_extension || "").replace('.', '').toUpperCase() || resourceTypeLabel(item.type) }}
-                              · 预览方式：{{ previewLabel(item) }}
-                            </span>
-                            <span v-if="item.original_file_name">{{ item.original_file_name }}</span>
-                            <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
                           </div>
                           <div class="content-item__actions">
                             <el-button size="small" type="primary" plain @click="openResourceEdit(item, 'learning')">编辑</el-button>
                             <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
-                            <el-dropdown trigger="click" @command="(cmd) => handleResourceMoreCommand(String(cmd), item)">
-                              <el-button size="small">
-                                更多
-                                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                              </el-button>
-                              <template #dropdown>
-                                <el-dropdown-menu>
-                                  <el-dropdown-item command="preview" :disabled="item.preview_status === 'processing'">预览</el-dropdown-item>
-                                  <el-dropdown-item command="original">下载原文件</el-dropdown-item>
-                                  <el-dropdown-item command="remove" divided class="resource-dropdown-danger">删除</el-dropdown-item>
-                                </el-dropdown-menu>
-                              </template>
-                            </el-dropdown>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="content-group">
+                      <div class="content-group__head">
+                        <strong>推荐拓展</strong>
+                        <span>{{ recommendResources.length }} 个</span>
+                      </div>
+                      <div v-if="recommendResources.length === 0" class="content-empty">还没有推荐拓展资源</div>
+                      <div v-else class="content-list">
+                        <div v-for="item in recommendResources" :key="item.id" class="content-item">
+                          <div class="content-item__body">
+                            <div class="content-item__meta">
+                              <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
+                              <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">{{ previewStatusLabel(item.preview_status) }}</div>
+                            </div>
+                            <strong>{{ item.title }}</strong>
+                          </div>
+                          <div class="content-item__actions">
+                            <el-button size="small" type="primary" plain @click="openResourceEdit(item, 'recommend')">编辑</el-button>
+                            <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
                           </div>
                         </div>
                       </div>
@@ -1050,7 +1301,7 @@ watch(
               <div class="content-card__head">
                 <div>
                   <h3>题库</h3>
-                  <p>维护本题点下的题目，并标注<strong>认知层级</strong>与<strong>能力标签</strong>；下方「已加入的练习」决定学生端练习顺序。</p>
+                  <p>维护本知识点下的题目，并标注认知层级与能力标签；下方“已加入的练习”决定学生端练习顺序。</p>
                 </div>
                 <el-button type="primary" @click="openQuestionCreate">新增题目</el-button>
               </div>
@@ -1099,59 +1350,134 @@ watch(
             </section>
           </template>
 
-          <template v-else>
+          <template v-else-if="activeSection === 'relation'">
             <section class="content-card panel-shell">
               <div class="content-card__head">
                 <div>
-                  <h3>推荐拓展</h3>
-                  <p>拓展阅读、推荐书籍等，与主学习资料区分展示；学生可按需查看，不作硬性完成要求。</p>
+                  <h3>图谱关系</h3>
+                  <p>配置当前知识点和其他知识点的前置、后继、关联、支撑与包含关系，决定图谱结构和学习路径。</p>
                 </div>
-                <el-button type="primary" @click="openResourceCreate('recommend')">新增推荐资源</el-button>
               </div>
-              <div v-if="recommendResources.length === 0" class="content-empty">还没有推荐资源</div>
-              <div v-else class="content-group-list">
-                <section v-for="group in groupedRecommendResources" :key="group.key" class="content-group">
-                  <div class="content-group__head">
-                    <strong>{{ group.title }}</strong>
-                    <span>{{ group.items.length }} 个</span>
-                  </div>
-                  <div class="content-list">
-                    <div v-for="item in group.items" :key="item.id" class="content-item">
-                      <div class="content-item__body">
-                        <div class="content-item__meta">
-                          <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
-                          <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">
-                            {{ previewStatusLabel(item.preview_status) }}
-                          </div>
-                        </div>
-                        <strong>{{ item.title }}</strong>
-                        <span>
-                          原始格式：{{ (item.file_extension || "").replace('.', '').toUpperCase() || resourceTypeLabel(item.type) }}
-                          · 预览方式：{{ previewLabel(item) }}
-                        </span>
-                        <span v-if="item.original_file_name">{{ item.original_file_name }}</span>
-                        <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
-                      </div>
-                      <div class="content-item__actions">
-                        <el-button size="small" type="primary" plain @click="openResourceEdit(item, 'recommend')">编辑</el-button>
-                        <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
-                        <el-dropdown trigger="click" @command="(cmd) => handleResourceMoreCommand(String(cmd), item)">
-                          <el-button size="small">
-                            更多
-                            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                          </el-button>
-                          <template #dropdown>
-                            <el-dropdown-menu>
-                              <el-dropdown-item command="preview" :disabled="item.preview_status === 'processing'">预览</el-dropdown-item>
-                              <el-dropdown-item command="original">下载原文件</el-dropdown-item>
-                              <el-dropdown-item command="remove" divided class="resource-dropdown-danger">删除</el-dropdown-item>
-                            </el-dropdown-menu>
-                          </template>
-                        </el-dropdown>
-                      </div>
+
+              <div class="relation-create">
+                <el-form-item label="关系类型">
+                  <el-select v-model="relationForm.relationType" style="width: 100%">
+                    <el-option label="前置 / 后继" value="prerequisite" />
+                    <el-option label="关联" value="related" />
+                    <el-option label="支撑" value="support" />
+                    <el-option label="包含" value="contains" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="关系方向">
+                  <el-segmented
+                    v-model="relationForm.direction"
+                    :options="[
+                      { label: '当前点 -> 目标点', value: 'outgoing' },
+                      { label: '目标点 -> 当前点', value: 'incoming' },
+                    ]"
+                  />
+                </el-form-item>
+                <el-form-item label="目标知识点">
+                  <el-select v-model="relationForm.targetId" filterable style="width: 100%" placeholder="选择要建立关系的知识点">
+                    <el-option v-for="item in relationOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  </el-select>
+                </el-form-item>
+                <div class="relation-create__actions">
+                  <el-button type="primary" :loading="relationSaving" @click="createRelation">添加关系</el-button>
+                </div>
+              </div>
+
+              <div class="relation-grid">
+                <section class="relation-panel">
+                  <div class="relation-panel__head"><strong>前置知识点</strong><span>{{ relationSummary.prerequisitesIn.length }}</span></div>
+                  <div v-if="relationSummary.prerequisitesIn.length === 0" class="content-empty">当前没有前置知识点</div>
+                  <div v-else class="relation-list">
+                    <div v-for="item in relationSummary.prerequisitesIn" :key="`pre-in-${item.edgeId}`" class="relation-item">
+                      <div><strong>{{ item.node?.title }}</strong><span>{{ item.node?.code }} · {{ item.text }}</span></div>
+                      <el-button type="danger" plain size="small" @click="removeRelation(item.edgeId)">删除</el-button>
                     </div>
                   </div>
                 </section>
+                <section class="relation-panel">
+                  <div class="relation-panel__head"><strong>后继知识点</strong><span>{{ relationSummary.prerequisitesOut.length }}</span></div>
+                  <div v-if="relationSummary.prerequisitesOut.length === 0" class="content-empty">当前没有后继知识点</div>
+                  <div v-else class="relation-list">
+                    <div v-for="item in relationSummary.prerequisitesOut" :key="`pre-out-${item.edgeId}`" class="relation-item">
+                      <div><strong>{{ item.node?.title }}</strong><span>{{ item.node?.code }} · {{ item.text }}</span></div>
+                      <el-button type="danger" plain size="small" @click="removeRelation(item.edgeId)">删除</el-button>
+                    </div>
+                  </div>
+                </section>
+                <section class="relation-panel">
+                  <div class="relation-panel__head"><strong>关联知识点</strong><span>{{ relationSummary.related.length }}</span></div>
+                  <div v-if="relationSummary.related.length === 0" class="content-empty">当前没有关联知识点</div>
+                  <div v-else class="relation-list">
+                    <div v-for="item in relationSummary.related" :key="`related-${item.edgeId}`" class="relation-item">
+                      <div><strong>{{ item.node?.title }}</strong><span>{{ item.node?.code }} · {{ item.text }}</span></div>
+                      <el-button type="danger" plain size="small" @click="removeRelation(item.edgeId)">删除</el-button>
+                    </div>
+                  </div>
+                </section>
+                <section class="relation-panel">
+                  <div class="relation-panel__head"><strong>支撑 / 包含关系</strong><span>{{ relationSummary.support.length + relationSummary.contains.length }}</span></div>
+                  <div v-if="relationSummary.support.length === 0 && relationSummary.contains.length === 0" class="content-empty">当前没有支撑或包含关系</div>
+                  <div v-else class="relation-list">
+                    <div v-for="item in relationSummary.support" :key="`support-${item.edgeId}`" class="relation-item">
+                      <div><strong>{{ item.node?.title }}</strong><span>{{ item.node?.code }} · {{ item.text }}</span></div>
+                      <el-button type="danger" plain size="small" @click="removeRelation(item.edgeId)">删除</el-button>
+                    </div>
+                    <div v-for="item in relationSummary.contains" :key="`contains-${item.edgeId}`" class="relation-item">
+                      <div><strong>{{ item.node?.title }}</strong><span>{{ item.node?.code }} · {{ item.text }}</span></div>
+                      <el-button type="danger" plain size="small" @click="removeRelation(item.edgeId)">删除</el-button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </template>
+
+          <template v-else-if="activeSection === 'check'">
+            <section class="content-card panel-shell">
+              <div class="content-card__head">
+                <div>
+                  <h3>配置检查</h3>
+                  <p>检查这个知识点是否已形成“基础信息 + 学习资源 + 练习题库 + 图谱关系”的完整闭环。</p>
+                </div>
+                <div class="content-card__head-actions">
+                  <el-button @click="openStudentPreview">查看学生端预览</el-button>
+                  <el-button type="primary" :loading="saving" @click="saveAndBack">保存并返回图谱</el-button>
+                </div>
+              </div>
+
+              <div class="check-overview">
+                <div class="check-overview__score">
+                  <span>当前完整度</span>
+                  <strong>{{ completenessScore }}%</strong>
+                </div>
+                <div class="check-overview__summary">
+                  <strong>{{ missingChecklistItems.length === 0 ? "这个知识点已经可以进入学生端使用" : "还有以下配置项待补充" }}</strong>
+                  <span v-if="missingChecklistItems.length === 0">基础信息、学习资源、练习题和图谱关系都已配置完成。</span>
+                  <span v-else>{{ missingChecklistItems.map((item) => item.label).join("、") }}</span>
+                </div>
+              </div>
+
+              <div class="check-list">
+                <article v-for="item in checklistItems" :key="item.key" class="check-list__item" :class="{ done: item.done }">
+                  <div class="check-list__copy">
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.detail }}</span>
+                  </div>
+                  <div class="check-list__actions">
+                    <span class="check-list__status">{{ item.done ? "已完成" : "待补充" }}</span>
+                    <el-button
+                      v-if="!item.done"
+                      size="small"
+                      @click="jumpToSection(item.key === 'relation' ? 'relation' : item.key === 'learning' || item.key === 'recommend' ? 'learning' : item.key === 'practice' || item.key === 'practiceAssigned' ? 'practice' : 'basic')"
+                    >
+                      去处理
+                    </el-button>
+                  </div>
+                </article>
               </div>
             </section>
           </template>
@@ -1348,7 +1674,6 @@ watch(
         <el-button type="primary" :loading="saving" @click="saveQuestion">保存</el-button>
       </template>
     </el-dialog>
-
   </div>
 </template>
 
@@ -1409,6 +1734,13 @@ watch(
   justify-content: space-between;
   align-items: flex-start;
   gap: 18px;
+}
+
+.content-topbar__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .content-topbar__left {
@@ -1484,7 +1816,7 @@ watch(
 
 .content-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -1576,7 +1908,17 @@ watch(
   color: #2f6fed;
 }
 
-.summary-card__icon--recommend {
+.summary-card__icon--basic {
+  background: linear-gradient(145deg, #f4f0ff 0%, #ece5ff 100%);
+  color: #7251d3;
+}
+
+.summary-card__icon--relation {
+  background: linear-gradient(145deg, #e9fbf7 0%, #ddf7f0 100%);
+  color: #148166;
+}
+
+.summary-card__icon--check {
   background: linear-gradient(145deg, #fff4e5 0%, #ffe8cc 100%);
   color: #b86b00;
 }
@@ -1698,6 +2040,12 @@ watch(
   align-content: start;
 }
 
+.content-card__head-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .content-card {
   padding: 22px;
   display: grid;
@@ -1729,6 +2077,63 @@ watch(
   border: 1px dashed #d6e1ee;
   border-radius: 16px;
   background: #fafbfd;
+}
+
+.content-check-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.check-card {
+  padding: 16px 18px;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  background: #fcfdff;
+  display: grid;
+  gap: 6px;
+}
+
+.check-card span {
+  font-size: 12px;
+  color: #7a8ba2;
+}
+
+.check-card strong {
+  color: #223754;
+  font-size: 16px;
+}
+
+.content-tags-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.content-tags-panel__group {
+  display: grid;
+  gap: 8px;
+}
+
+.content-tags-panel__group > span {
+  font-size: 13px;
+  color: #5d708a;
+  font-weight: 700;
+}
+
+.content-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.content-chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #d7e1ed;
+  background: #f6f9fc;
+  color: #445a78;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .content-list {
@@ -2174,8 +2579,177 @@ watch(
   font-size: 14px;
 }
 
+.relation-create {
+  display: grid;
+  grid-template-columns: 1fr auto 1.2fr auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.relation-create__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.relation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.relation-panel {
+  border: 1px solid #dce5f0;
+  border-radius: 18px;
+  background: #fafcff;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.relation-panel__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #223754;
+}
+
+.relation-panel__head strong {
+  font-size: 16px;
+}
+
+.relation-panel__head span {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--app-primary);
+}
+
+.relation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.relation-item {
+  padding: 14px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.relation-item > div {
+  display: grid;
+  gap: 4px;
+}
+
+.relation-item strong {
+  color: #223754;
+}
+
+.relation-item span {
+  color: #6c7d95;
+  font-size: 13px;
+}
+
+.check-overview {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.check-overview__score,
+.check-overview__summary {
+  border: 1px solid var(--app-border);
+  border-radius: 18px;
+  background: #fcfdff;
+  padding: 18px 20px;
+}
+
+.check-overview__score {
+  display: grid;
+  gap: 8px;
+}
+
+.check-overview__score span {
+  color: #6f8199;
+  font-size: 13px;
+}
+
+.check-overview__score strong {
+  font-size: 42px;
+  line-height: 1;
+  color: #1f2f44;
+}
+
+.check-overview__summary {
+  display: grid;
+  gap: 8px;
+}
+
+.check-overview__summary strong {
+  color: #223754;
+  font-size: 16px;
+}
+
+.check-overview__summary span {
+  color: #6f8199;
+  line-height: 1.6;
+}
+
+.check-list {
+  display: grid;
+  gap: 10px;
+}
+
+.check-list__item {
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  background: #fcfdff;
+  padding: 16px 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+}
+
+.check-list__item.done {
+  background: #f2fbf6;
+  border-color: #cfe8d7;
+}
+
+.check-list__copy {
+  display: grid;
+  gap: 4px;
+}
+
+.check-list__copy strong {
+  color: #223754;
+}
+
+.check-list__copy span {
+  color: #6f8199;
+  font-size: 13px;
+}
+
+.check-list__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.check-list__status {
+  font-size: 12px;
+  font-weight: 800;
+  color: #5c708c;
+}
+
 @media (max-width: 1120px) {
-  .content-summary {
+  .content-summary,
+  .content-check-grid,
+  .relation-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2196,6 +2770,37 @@ watch(
     border-bottom: 1px solid #ecf1f6;
   }
 
+  .relation-create,
+  .check-overview {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+@media (max-width: 768px) {
+  .content-summary,
+  .content-check-grid,
+  .relation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .content-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .content-topbar__actions,
+  .content-card__head-actions,
+  .check-list__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .relation-item,
+  .check-list__item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 760px) {

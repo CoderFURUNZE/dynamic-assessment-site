@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 从仓库任意位置调用：必须在 backend 目录下执行 uvicorn，否则找不到 app 包。
+# 从仓库任意位置调用后端启动脚本。
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT/backend"

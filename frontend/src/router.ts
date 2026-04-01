@@ -27,6 +27,7 @@ const TeacherStudentsWorkspacePage = () => import("./pages/TeacherStudentsWorksp
 const TeacherReviewWorkspacePage = () => import("./pages/TeacherReviewWorkspacePage.vue");
 const TeacherKpContentWorkspacePage = () => import("./pages/TeacherKpContentWorkspace.vue");
 const TeacherResourceDetailPage = () => import("./pages/TeacherResourceDetail.vue");
+const TeacherKpPreviewPage = () => import("./pages/StudentKpContentWorkspace.vue");
 
 const StartPage = () => import("./pages/Start.vue");
 const LoginPage = () => import("./pages/Login.vue");
@@ -198,7 +199,20 @@ router.addRoute({
 router.addRoute({
   path: "/teacher/kp-content/:kpId",
   component: TeacherKpContentWorkspacePage,
-  meta: { title: "知识点内容" },
+  meta: { title: "知识点配置工作台", standaloneWorkspace: true },
+});
+[
+  "/teacher/kp-preview/:kpId",
+  "/teacher/kp-preview/:kpId/practice",
+  "/teacher/kp-preview/:kpId/records",
+  "/teacher/kp-preview/:kpId/wrong",
+  "/teacher/kp-preview/:kpId/review",
+].forEach((path) => {
+  router.addRoute({
+    path,
+    component: TeacherKpPreviewPage,
+    meta: { title: "学生端预览" },
+  });
 });
 [
   ["/teacher/courses", "/teacher/workspace"],

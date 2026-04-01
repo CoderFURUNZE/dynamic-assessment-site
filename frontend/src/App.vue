@@ -100,14 +100,15 @@ const currentNavItem = computed(() => currentSection.value?.children?.find((item
 
 const pageTitle = computed(() => {
   if (route.path.startsWith("/student/kp-content/")) return "知识点学习";
-  if (route.path.startsWith("/teacher/kp-content/")) return "知识点内容";
+  if (route.path.startsWith("/teacher/kp-content/")) return "知识点配置工作台";
   if (route.path.startsWith("/teacher/resources/")) return "资源详情";
   return currentNavItem.value?.label || String(route.meta?.title || "当前页面");
 });
 
 const pageSection = computed(() => {
   if (route.path.startsWith("/student/kp-content/")) return "学习任务";
-  if (route.path.startsWith("/teacher/kp-content/") || route.path.startsWith("/teacher/resources/")) return "课程工作台";
+  if (route.path.startsWith("/teacher/kp-content/")) return "知识点配置";
+  if (route.path.startsWith("/teacher/resources/")) return "课程工作台";
   return currentSection.value?.label || (routeGroup.value === "student" ? "学生端" : routeGroup.value === "teacher" ? "教师端" : routeGroup.value === "admin" ? "管理端" : "");
 });
 

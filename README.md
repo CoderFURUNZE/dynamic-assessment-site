@@ -13,6 +13,10 @@ copy .env.example .env
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+说明：
+- 现在也支持在仓库根目录直接执行 `uvicorn app.main:app`。
+- 如果使用项目脚本启动，优先执行 `scripts/run_backend.sh`。
+
 默认账号：
 - `admin / admin123`
 - `teacher1 / teacher123`
