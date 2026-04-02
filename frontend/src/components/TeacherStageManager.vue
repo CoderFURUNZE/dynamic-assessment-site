@@ -142,7 +142,7 @@ watch(
     resetForm();
     load();
   },
-  { immediate: true }
+  { immediate: true },
 );
 </script>
 
@@ -154,8 +154,10 @@ watch(
           <div class="stage-title">阶段管理</div>
         </div>
         <div class="stage-actions">
-          <el-button size="small" @click="load" :loading="loading">刷新</el-button>
-          <el-button type="primary" size="small" @click="openAdd" :disabled="!courseId">新增阶段</el-button>
+          <el-button class="stage-actions__btn" size="small" :loading="loading" @click="load">刷新</el-button>
+          <el-button class="stage-actions__btn stage-actions__btn--accent" type="primary" size="small" :disabled="!courseId" @click="openAdd">
+            新增阶段
+          </el-button>
         </div>
       </div>
     </template>
@@ -163,7 +165,7 @@ watch(
     <el-empty v-if="!courseId" description="" />
 
     <template v-else>
-      <el-table :data="stages" size="small" v-loading="loading" style="width: 100%">
+      <el-table v-loading="loading" :data="stages" size="small" style="width: 100%">
         <el-table-column prop="stage_order" label="序号" width="90" />
         <el-table-column prop="title" label="阶段名称" min-width="180" />
         <el-table-column label="起止时间" min-width="220">
@@ -175,10 +177,12 @@ watch(
         </el-table-column>
         <el-table-column prop="grade" label="年级" width="100" />
         <el-table-column prop="description" label="说明" min-width="220" />
-        <el-table-column label="操作" width="160">
+        <el-table-column label="操作" width="180">
           <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="remove(row)">删除</el-button>
+            <div class="table-actions">
+              <el-button class="table-action-btn" size="small" @click="openEdit(row)">编辑</el-button>
+              <el-button class="table-action-btn table-action-btn--danger" size="small" type="danger" @click="remove(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -189,24 +193,24 @@ watch(
     <el-dialog v-model="dialogOpen" :title="editingId ? '编辑阶段' : '新增阶段'" width="620px">
       <el-form label-width="96px">
         <el-form-item label="阶段名称">
-          <el-input v-model="form.title" placeholder="" />
+          <el-input v-model="form.title" placeholder="例如：阶段 1" />
         </el-form-item>
         <el-form-item label="阶段序号">
           <el-input-number v-model="form.stage_order" :min="1" :max="99" />
         </el-form-item>
         <el-form-item label="开始日期">
-          <el-date-picker v-model="form.starts_at" type="date" value-format="YYYY-MM-DD" format="YYYY-MM-DD" placeholder="" />
+          <el-date-picker v-model="form.starts_at" type="date" value-format="YYYY-MM-DD" format="YYYY-MM-DD" placeholder="选择日期" />
         </el-form-item>
         <el-form-item label="结束日期">
-          <el-date-picker v-model="form.ends_at" type="date" value-format="YYYY-MM-DD" format="YYYY-MM-DD" placeholder="" />
+          <el-date-picker v-model="form.ends_at" type="date" value-format="YYYY-MM-DD" format="YYYY-MM-DD" placeholder="选择日期" />
         </el-form-item>
         <el-form-item label="说明">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="" />
+          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="补充阶段说明" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogOpen = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button class="dialog-action-btn" @click="dialogOpen = false">取消</el-button>
+        <el-button class="dialog-action-btn dialog-action-btn--accent" type="primary" @click="save">保存</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -227,9 +231,60 @@ watch(
   color: var(--app-ink);
 }
 
-.stage-actions {
+.stage-actions,
+.table-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.stage-actions :deep(.el-button),
+.table-actions :deep(.el-button),
+.dialog-action-btn {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px !important;
+  border: 1px solid #d7e4f5 !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #274263 !important;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+
+.stage-actions :deep(.el-button:hover),
+.table-actions :deep(.el-button:hover),
+.dialog-action-btn:hover {
+  border-color: #9fbef3 !important;
+  background: #f8fbff !important;
+  background-image: none !important;
+  color: #214d8f !important;
+}
+
+.stage-actions__btn--accent,
+.dialog-action-btn--accent {
+  border-color: #b8cdf3 !important;
+  color: #2e5ea8 !important;
+}
+
+.table-action-btn--danger {
+  border-color: #efc2c9 !important;
+  color: #b04c5d !important;
+}
+
+.table-action-btn--danger:hover {
+  border-color: #e49aa8 !important;
+  background: #fff7f8 !important;
+  color: #a43f50 !important;
+}
+
+.stage-actions :deep(.el-button.is-disabled),
+.stage-actions :deep(.el-button.is-disabled:hover),
+.dialog-action-btn.is-disabled,
+.dialog-action-btn.is-disabled:hover {
+  border-color: #e3eaf5 !important;
+  background: #f8fbff !important;
+  background-image: none !important;
+  color: #afbdd0 !important;
 }
 </style>

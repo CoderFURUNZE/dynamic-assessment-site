@@ -50,6 +50,7 @@ const finalDimensions = computed(() => detail.value?.profile?.final_portrait_dim
 const termSummary = computed(() => detail.value?.profile?.term_summary ?? {});
 const recommendationClosure = computed(() => detail.value?.recommendation_closure ?? {});
 const selectedStudent = computed(() => students.value.find((item) => item.user_id === selectedUserId.value) ?? null);
+const canConfirmFinalScore = computed(() => Number(termSummary.value?.stage_count || 0) > 0);
 
 function toPercent(value?: number | null) {
   return Math.round(Number(value || 0) * 100);
@@ -75,11 +76,12 @@ async function loadCourses() {
 
 function syncQuery() {
   saveTeacherSubject(subject.value);
+  const routeUserId = String(route.query.user_id || "").trim();
   router.replace({
     path: "/teacher/review",
     query: {
       ...buildTeacherSubjectQuery(subject.value, {
-        user_id: selectedUserId.value ? String(selectedUserId.value) : undefined,
+        user_id: selectedUserId.value ? String(selectedUserId.value) : routeUserId || undefined,
       }),
       tab: "final",
     },
@@ -265,11 +267,12 @@ onMounted(async () => {
                   <el-input v-model="form.comment" type="textarea" :rows="4" placeholder="填写最终评分依据、教学观察或补充说明" />
                 </div>
                 <div class="confirm-form__actions">
-                  <el-button type="primary" :loading="saving" @click="saveConfirmation">确认并归档</el-button>
+                  <el-button type="primary" :loading="saving" :disabled="!canConfirmFinalScore" @click="saveConfirmation">确认并归档</el-button>
                   <el-button @click="router.push({ path: '/teacher/students', query: buildTeacherSubjectQuery(subject, { tab: 'detail', user_id: String(selectedUserId || '') || undefined }) })">
                     打开学生详情
                   </el-button>
                 </div>
+                <div v-if="!canConfirmFinalScore" class="empty-text">该学生还没有阶段评价数据，暂时不能确认期末成绩。</div>
               </div>
             </el-card>
           </section>

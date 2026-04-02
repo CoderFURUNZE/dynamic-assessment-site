@@ -114,6 +114,7 @@ const importView = ref<ImportView>("import");
 const metricOptions = [
   { label: "视频学习记录", value: "video" },
   { label: "作业完成记录", value: "assignment" },
+  { label: "小测成绩记录", value: "quiz" },
   { label: "考勤记录", value: "attendance" },
   { label: "任务完成记录", value: "task" },
   { label: "课堂参与记录", value: "participation" },

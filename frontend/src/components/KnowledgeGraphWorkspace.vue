@@ -173,7 +173,7 @@ const overlay = ref<OverlayNode[]>([]);
 const selectedType = ref<"kp" | "category">("kp");
 const selectedId = ref<number | null>(null);
 const selectedCategory = ref<string | null>(null);
-const showAllKps = ref(false);
+const showAllKps = ref(props.actorMode === "teacher");
 const nodeDetail = ref<NodeDetail | null>(null);
 const drawerOpen = ref(true);
 const sidebarOpen = ref(true);
@@ -197,9 +197,11 @@ const mutingLayoutPersist = ref(false);
 const layoutRestored = ref(false);
 const useLegacyFallbackLayout = ref(false);
 const hoveredKpId = ref<number | null>(null);
+const savingGraphLayout = ref(false);
 
 const overlayMap = computed(() => new Map(overlay.value.map((item) => [item.kp_id, item])));
 const isTeacherMode = computed(() => props.actorMode === "teacher");
+const canEditLayout = computed(() => isTeacherMode.value);
 const effectiveOverlayMap = computed(() => {
   const map = new Map(overlayMap.value);
   if (!isTeacherMode.value && props.recommendedKpId) {
@@ -317,11 +319,16 @@ const stageStats = computed(() => {
 
 const hasGraphData = computed(() => kps.value.length > 0);
 
-/** 与教师端画布顶部统计一致：分类数 / 可见知识点 / 可见边 */
+const filteredEdgeCount = computed(() => {
+  const ids = new Set(filteredKps.value.map((kp) => kp.id));
+  return edges.value.filter((edge) => ids.has(edge.prereq_id) && ids.has(edge.next_id)).length;
+});
+
+/** 顶部统计反映当前筛选结果，不受“是否展开全部节点”影响 */
 const canvasStageStats = computed(() => ({
   categories: categoryNodes.value.length,
-  points: visibleKps.value.length,
-  edges: visibleEdges.value.length,
+  points: filteredKps.value.length,
+  edges: filteredEdgeCount.value,
 }));
 
 const deterministicLayout = computed(() =>
@@ -493,6 +500,29 @@ function kpPoint(id: number) {
   return kpPositions.value[id] ?? defaultKpPositions.value[id] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y };
 }
 
+function clampPoint(point: Point, type: "kp" | "category", kp?: GraphKp | null): Point {
+  if (type === "category") {
+    return {
+      x: Math.max(140, Math.min(CANVAS_WIDTH - 140, point.x)),
+      y: Math.max(84, Math.min(CANVAS_HEIGHT - 84, point.y)),
+    };
+  }
+  const radius = kp ? nodeRadius(kp) + 24 : 110;
+  return {
+    x: Math.max(radius, Math.min(CANVAS_WIDTH - radius, point.x)),
+    y: Math.max(radius, Math.min(CANVAS_HEIGHT - radius, point.y)),
+  };
+}
+
+function stageClientToCanvasPoint(clientX: number, clientY: number): Point {
+  const rect = stageRef.value?.getBoundingClientRect();
+  if (!rect) return { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y };
+  return {
+    x: (clientX - rect.left - panX.value) / canvasScale.value,
+    y: (clientY - rect.top - panY.value) / canvasScale.value,
+  };
+}
+
 function edgeLine(edge: GraphEdge) {
   const from = kpPoint(edge.prereq_id);
   const to = kpPoint(edge.next_id);
@@ -557,7 +587,32 @@ function persistStudentLayout() {
   return;
 }
 
+async function persistGraphLayoutChange(node: DragNode | null) {
+  if (!node || !canEditLayout.value || !props.subject) return;
+  try {
+    savingGraphLayout.value = true;
+    if (node.type === "kp" && typeof node.id === "number") {
+      const point = kpPositions.value[node.id];
+      if (!point) return;
+      await api.put(`/admin/kps/${node.id}/position`, { x: point.x, y: point.y });
+      return;
+    }
+    if (node.type === "category" && typeof node.id === "string") {
+      await api.put("/admin/graph/chapter-layout", {
+        subject: props.subject,
+        grade: props.grade,
+        chapters: categoryPositions.value,
+      });
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "保存图谱布局失败");
+  } finally {
+    savingGraphLayout.value = false;
+  }
+}
+
 function persistStudentViewState() {
+  if (isTeacherMode.value && props.embedded) return;
   if (mutingLayoutPersist.value) return;
   const key = studentViewStateStorageKey();
   if (!key) return;
@@ -582,6 +637,25 @@ function restoreStudentLayout() {
 }
 
 function restoreStudentViewState() {
+  if (isTeacherMode.value && props.embedded) {
+    mutingLayoutPersist.value = true;
+    try {
+      canvasScale.value = DEFAULT_CANVAS_SCALE;
+      panX.value = 0;
+      panY.value = 0;
+      activeChapter.value = "全部";
+      search.value = "";
+      drawerOpen.value = true;
+      sidebarOpen.value = true;
+      selectedType.value = "kp";
+      selectedId.value = null;
+      selectedCategory.value = null;
+      showAllKps.value = true;
+      return false;
+    } finally {
+      mutingLayoutPersist.value = false;
+    }
+  }
   const key = studentViewStateStorageKey();
   if (!key) return false;
   const raw = localStorage.getItem(key);
@@ -609,7 +683,7 @@ function restoreStudentViewState() {
     selectedType.value = parsed.selectedType === "category" ? "category" : "kp";
     selectedId.value = Number.isFinite(Number(parsed.selectedId)) ? Number(parsed.selectedId) : null;
     selectedCategory.value = typeof parsed.selectedCategory === "string" ? parsed.selectedCategory : null;
-    showAllKps.value = parsed.showAllKps !== false;
+    showAllKps.value = isTeacherMode.value ? true : parsed.showAllKps !== false;
     return true;
   } catch {
     return false;
@@ -838,7 +912,15 @@ function emitState() {
 }
 
 async function load() {
-  if (!props.subject) return;
+  if (!props.subject) {
+    kps.value = [];
+    edges.value = [];
+    overlay.value = [];
+    selectedId.value = null;
+    selectedCategory.value = null;
+    nodeDetail.value = null;
+    return;
+  }
   loading.value = true;
   try {
     const res = await api.get(`/graph/map?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`);
@@ -871,6 +953,12 @@ async function load() {
       layoutRestored.value = false;
     }
   } catch (e: any) {
+    kps.value = [];
+    edges.value = [];
+    overlay.value = [];
+    selectedId.value = null;
+    selectedCategory.value = null;
+    nodeDetail.value = null;
     if (e?.response?.status !== 401) {
       ElMessage.error(e?.response?.data?.detail ?? "加载知识图谱失败");
     }
@@ -884,8 +972,15 @@ function applyInitialCenterAfterLoad() {
   if (props.embedded) {
     fitViewportRetryCount = 0;
     nextTick(() => {
-      fitVisibleToViewport();
-      requestAnimationFrame(() => fitVisibleToViewport());
+      if (visibleKps.value.length > 0) {
+        fitVisibleToViewport();
+        requestAnimationFrame(() => fitVisibleToViewport());
+        requestAnimationFrame(() => requestAnimationFrame(() => fitVisibleToViewport()));
+        return;
+      }
+      fitCategoryNodesToViewport();
+      requestAnimationFrame(() => fitCategoryNodesToViewport());
+      requestAnimationFrame(() => requestAnimationFrame(() => fitCategoryNodesToViewport()));
     });
     return;
   }
@@ -982,11 +1077,25 @@ function toggleAllKps() {
 }
 
 function zoomIn() {
-  canvasScale.value = Math.min(MAX_CANVAS_SCALE, Number((canvasScale.value + SCALE_STEP).toFixed(2)));
+  zoomToScale(Math.min(MAX_CANVAS_SCALE, Number((canvasScale.value + SCALE_STEP).toFixed(2))));
 }
 
 function zoomOut() {
-  canvasScale.value = Math.max(MIN_CANVAS_SCALE, Number((canvasScale.value - SCALE_STEP).toFixed(2)));
+  zoomToScale(Math.max(MIN_CANVAS_SCALE, Number((canvasScale.value - SCALE_STEP).toFixed(2))));
+}
+
+function zoomToScale(nextScale: number) {
+  if (!stageRef.value) {
+    canvasScale.value = nextScale;
+    return;
+  }
+  const centerX = stageRef.value.clientWidth / 2;
+  const centerY = stageRef.value.clientHeight / 2;
+  const worldX = (centerX - panX.value) / canvasScale.value;
+  const worldY = (centerY - panY.value) / canvasScale.value;
+  canvasScale.value = nextScale;
+  panX.value = centerX - worldX * nextScale;
+  panY.value = centerY - worldY * nextScale;
 }
 
 function fitVisibleToViewport() {
@@ -1063,8 +1172,6 @@ function fitCategoryNodesToViewport() {
   persistStudentViewState();
 }
 
-function zoomOut()
-
 function resetViewport() {
   canvasScale.value = DEFAULT_CANVAS_SCALE;
   activeChapter.value = "全部";
@@ -1127,17 +1234,55 @@ function onStageMouseDown(event: MouseEvent) {
 
 function onNodeMouseDown(event: MouseEvent, type: "kp" | "category", id: number | string) {
   event.stopPropagation();
+  if (!canEditLayout.value) return;
+  draggingCanvas.value = false;
+  dragStartX.value = event.clientX;
+  dragStartY.value = event.clientY;
+  if (type === "kp" && typeof id === "number") {
+    const point = kpPoint(id);
+    dragOriginX.value = point.x;
+    dragOriginY.value = point.y;
+  } else {
+    const point = categoryPoint(String(id));
+    dragOriginX.value = point.x;
+    dragOriginY.value = point.y;
+  }
+  draggingNode.value = {
+    type,
+    id,
+    origin: { x: dragOriginX.value, y: dragOriginY.value },
+  };
 }
 
 function onWindowMouseMove(event: MouseEvent) {
+  if (draggingNode.value) {
+    const pointer = stageClientToCanvasPoint(event.clientX, event.clientY);
+    if (draggingNode.value.type === "kp" && typeof draggingNode.value.id === "number") {
+      const kp = kps.value.find((item) => item.id === draggingNode.value?.id) ?? null;
+      kpPositions.value = {
+        ...kpPositions.value,
+        [draggingNode.value.id]: clampPoint(pointer, "kp", kp),
+      };
+      return;
+    }
+    if (draggingNode.value.type === "category" && typeof draggingNode.value.id === "string") {
+      categoryPositions.value = {
+        ...categoryPositions.value,
+        [draggingNode.value.id]: clampPoint(pointer, "category"),
+      };
+      return;
+    }
+  }
   if (!draggingCanvas.value) return;
   panX.value = dragOriginX.value + (event.clientX - dragStartX.value);
   panY.value = dragOriginY.value + (event.clientY - dragStartY.value);
 }
 
 function stopDragging() {
+  const dragNode = draggingNode.value;
   draggingCanvas.value = false;
   draggingNode.value = null;
+  void persistGraphLayoutChange(dragNode);
 }
 
 watch(
@@ -1186,13 +1331,27 @@ watch(
     embeddedResizeObserver?.disconnect();
     embeddedResizeObserver = null;
     if (ld || !emb || !el) return;
+    nextTick(() => {
+      fitViewportRetryCount = 0;
+      if (visibleKps.value.length > 0) {
+        fitVisibleToViewport();
+        requestAnimationFrame(() => fitVisibleToViewport());
+        return;
+      }
+      fitCategoryNodesToViewport();
+      requestAnimationFrame(() => fitCategoryNodesToViewport());
+    });
     embeddedResizeObserver = new ResizeObserver(() => {
-      if (!props.embedded || visibleKps.value.length === 0) return;
+      if (!props.embedded) return;
       if (embeddedResizeDebounce) clearTimeout(embeddedResizeDebounce);
       embeddedResizeDebounce = setTimeout(() => {
         embeddedResizeDebounce = null;
         fitViewportRetryCount = 0;
-        fitVisibleToViewport();
+        if (visibleKps.value.length > 0) {
+          fitVisibleToViewport();
+          return;
+        }
+        fitCategoryNodesToViewport();
       }, 100);
     });
     embeddedResizeObserver.observe(el);
@@ -1353,11 +1512,9 @@ onBeforeUnmount(() => {
         >
         <svg
           class="workspace-canvas"
-          :width="CANVAS_WIDTH"
-          :height="CANVAS_HEIGHT"
-          :style="{ transform: `translate(${panX}px, ${panY}px) scale(${canvasScale})` }"
+          width="100%"
+          height="100%"
         >
-          <rect x="0" y="0" :width="CANVAS_WIDTH" :height="CANVAS_HEIGHT" fill="var(--graph-canvas-bg)" />
           <defs>
             <marker id="teacher-edge-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(100,116,139,0.55)" />
@@ -1375,105 +1532,106 @@ onBeforeUnmount(() => {
               <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(75,94,130,0.55)" />
             </marker>
           </defs>
-
-          <line
-            v-for="edge in visibleChapterEdges"
-            :key="`chapter-${edge.id}`"
-            :x1="categoryPoint(edge.source_chapter).x"
-            :y1="categoryPoint(edge.source_chapter).y"
-            :x2="categoryPoint(edge.target_chapter).x"
-            :y2="categoryPoint(edge.target_chapter).y"
-            :stroke="chapterEdgeStroke(edge)"
-            stroke-width="2.2"
-            stroke-dasharray="6 6"
-            :marker-end="edge.relation_type === 'related' ? undefined : 'url(#teacher-chapter-arrow)'"
-          />
-
-          <line
-            v-for="edge in visibleEdges"
-            :key="`${edge.prereq_id}-${edge.next_id}-${edge.relation_type}`"
-            :x1="edgeLine(edge).x1"
-            :y1="edgeLine(edge).y1"
-            :x2="edgeLine(edge).x2"
-            :y2="edgeLine(edge).y2"
-            :stroke="edgeStroke(edge)"
-            :stroke-width="edgeWidth(edge)"
-            stroke-linecap="round"
-            :stroke-dasharray="edgeDasharray(edge)"
-            :marker-end="edgeMarker(edge)"
-          />
-
-          <line
-            v-for="kp in visibleKps"
-            :key="`cat-${kp.id}`"
-            :x1="categoryKpLine(kp).x1"
-            :y1="categoryKpLine(kp).y1"
-            :x2="categoryKpLine(kp).x2"
-            :y2="categoryKpLine(kp).y2"
-            stroke="rgba(100,116,139,0.4)"
-            stroke-width="1.2"
-            stroke-linecap="round"
-            stroke-dasharray="3 4"
-          />
-
-          <g
-            v-for="category in categoryNodes"
-            :key="category.key"
-            :class="props.embedded ? 'teacher-category-node workspace-category-node' : 'workspace-category-node'"
-            :transform="`translate(${categoryPoint(category.key).x}, ${categoryPoint(category.key).y})`"
-            @click="selectCategory(category.key)"
-            @mousedown="onNodeMouseDown($event, 'category', category.key)"
-          >
-            <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#eef5ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#8fb8ff' : '#dbe5f1'" stroke-width="1.8" />
-            <text
-              :class="props.embedded ? 'teacher-category-node__title workspace-category-node__title' : 'workspace-category-node__title'"
-              text-anchor="middle"
-              y="-6"
-            >
-              {{ category.title }}
-            </text>
-            <text
-              :class="props.embedded ? 'teacher-category-node__meta workspace-category-node__meta' : 'workspace-category-node__meta'"
-              text-anchor="middle"
-              y="22"
-            >
-              {{ category.total }} 个知识点
-            </text>
-          </g>
-
-          <g
-            v-for="kp in visibleKps"
-            :key="kp.id"
-            :class="props.embedded ? 'teacher-node workspace-node' : 'workspace-node'"
-            :transform="`translate(${kpPoint(kp.id).x}, ${kpPoint(kp.id).y})`"
-            @click="selectKp(kp.id)"
-            @mousedown="onNodeMouseDown($event, 'kp', kp.id)"
-            @mouseenter="hoveredKpId = kp.id"
-            @mouseleave="hoveredKpId = null"
-          >
-            <circle :r="nodeRadius(kp) + 18" :fill="'transparent'" :stroke="ringColor('literacy', effectiveOverlayMap.get(kp.id)?.literacy_status, effectiveOverlayMap.get(kp.id)?.literacy_labels || splitLabels(kp.literacy_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.literacy_enabled ? 5 : 0" />
-            <circle :r="nodeRadius(kp) + 10" :fill="'transparent'" :stroke="ringColor('ability', effectiveOverlayMap.get(kp.id)?.ability_status, effectiveOverlayMap.get(kp.id)?.ability_labels || splitLabels(kp.ability_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.ability_enabled ? 5 : 0" />
-            <circle :r="nodeRadius(kp) + 2" :fill="'transparent'" :stroke="ringColor('knowledge', effectiveOverlayMap.get(kp.id)?.knowledge_status)" :stroke-width="4" />
-            <circle :r="nodeRadius(kp) + 22" :fill="!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id)) ? 'rgba(70, 122, 235, 0.12)' : 'rgba(96,139,232,0.06)'" />
-            <circle
-              :r="nodeRadius(kp)"
-              :fill="kp.id === selectedKp?.id ? '#f7fbff' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#f8fbff' : '#ffffff')"
-              :stroke="kp.id === selectedKp?.id ? '#76a7f8' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#5a8ef0' : '#dbe5f1')"
-              :stroke-width="!isTeacherMode && isRecommended(kp.id) ? 2.6 : (!isTeacherMode && isPathNode(kp.id) ? 2.3 : 2)"
+          <g :transform="`translate(${panX} ${panY}) scale(${canvasScale})`">
+            <line
+              v-for="edge in visibleChapterEdges"
+              :key="`chapter-${edge.id}`"
+              :x1="categoryPoint(edge.source_chapter).x"
+              :y1="categoryPoint(edge.source_chapter).y"
+              :x2="categoryPoint(edge.target_chapter).x"
+              :y2="categoryPoint(edge.target_chapter).y"
+              :stroke="chapterEdgeStroke(edge)"
+              stroke-width="2.2"
+              stroke-dasharray="6 6"
+              :marker-end="edge.relation_type === 'related' ? undefined : 'url(#teacher-chapter-arrow)'"
             />
-            <text :class="props.embedded ? 'teacher-node__code workspace-node__code' : 'workspace-node__code'" text-anchor="middle" y="-8">
-              {{ kp.code }}
-            </text>
-            <text :class="props.embedded ? 'teacher-node__title workspace-node__title' : 'workspace-node__title'" text-anchor="middle" y="16">
-              {{ kp.title.slice(0, 10) }}
-            </text>
-            <g v-if="!isTeacherMode && isRecommended(kp.id)">
-              <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#5a8ef0" />
-              <text class="workspace-node__badge" text-anchor="middle" y="-36">推荐</text>
+
+            <line
+              v-for="edge in visibleEdges"
+              :key="`${edge.prereq_id}-${edge.next_id}-${edge.relation_type}`"
+              :x1="edgeLine(edge).x1"
+              :y1="edgeLine(edge).y1"
+              :x2="edgeLine(edge).x2"
+              :y2="edgeLine(edge).y2"
+              :stroke="edgeStroke(edge)"
+              :stroke-width="edgeWidth(edge)"
+              stroke-linecap="round"
+              :stroke-dasharray="edgeDasharray(edge)"
+              :marker-end="edgeMarker(edge)"
+            />
+
+            <line
+              v-for="kp in visibleKps"
+              :key="`cat-${kp.id}`"
+              :x1="categoryKpLine(kp).x1"
+              :y1="categoryKpLine(kp).y1"
+              :x2="categoryKpLine(kp).x2"
+              :y2="categoryKpLine(kp).y2"
+              stroke="rgba(100,116,139,0.4)"
+              stroke-width="1.2"
+              stroke-linecap="round"
+              stroke-dasharray="3 4"
+            />
+
+            <g
+              v-for="category in categoryNodes"
+              :key="category.key"
+              :class="props.embedded ? 'teacher-category-node workspace-category-node' : 'workspace-category-node'"
+              :transform="`translate(${categoryPoint(category.key).x}, ${categoryPoint(category.key).y})`"
+              @click="selectCategory(category.key)"
+              @mousedown="onNodeMouseDown($event, 'category', category.key)"
+            >
+              <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#eef5ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#8fb8ff' : '#dbe5f1'" stroke-width="1.8" />
+              <text
+                :class="props.embedded ? 'teacher-category-node__title workspace-category-node__title' : 'workspace-category-node__title'"
+                text-anchor="middle"
+                y="-6"
+              >
+                {{ category.title }}
+              </text>
+              <text
+                :class="props.embedded ? 'teacher-category-node__meta workspace-category-node__meta' : 'workspace-category-node__meta'"
+                text-anchor="middle"
+                y="22"
+              >
+                {{ category.total }} 个知识点
+              </text>
             </g>
-            <g v-else-if="!isTeacherMode && isPathNode(kp.id)">
-              <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#89aef5" />
-              <text class="workspace-node__badge" text-anchor="middle" y="-36">路径</text>
+
+            <g
+              v-for="kp in visibleKps"
+              :key="kp.id"
+              :class="props.embedded ? 'teacher-node workspace-node' : 'workspace-node'"
+              :transform="`translate(${kpPoint(kp.id).x}, ${kpPoint(kp.id).y})`"
+              @click="selectKp(kp.id)"
+              @mousedown="onNodeMouseDown($event, 'kp', kp.id)"
+              @mouseenter="hoveredKpId = kp.id"
+              @mouseleave="hoveredKpId = null"
+            >
+              <circle :r="nodeRadius(kp) + 18" :fill="'transparent'" :stroke="ringColor('literacy', effectiveOverlayMap.get(kp.id)?.literacy_status, effectiveOverlayMap.get(kp.id)?.literacy_labels || splitLabels(kp.literacy_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.literacy_enabled ? 5 : 0" />
+              <circle :r="nodeRadius(kp) + 10" :fill="'transparent'" :stroke="ringColor('ability', effectiveOverlayMap.get(kp.id)?.ability_status, effectiveOverlayMap.get(kp.id)?.ability_labels || splitLabels(kp.ability_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.ability_enabled ? 5 : 0" />
+              <circle :r="nodeRadius(kp) + 2" :fill="'transparent'" :stroke="ringColor('knowledge', effectiveOverlayMap.get(kp.id)?.knowledge_status)" :stroke-width="4" />
+              <circle :r="nodeRadius(kp) + 22" :fill="!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id)) ? 'rgba(70, 122, 235, 0.12)' : 'rgba(96,139,232,0.06)'" />
+              <circle
+                :r="nodeRadius(kp)"
+                :fill="kp.id === selectedKp?.id ? '#f7fbff' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#f8fbff' : '#ffffff')"
+                :stroke="kp.id === selectedKp?.id ? '#76a7f8' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#5a8ef0' : '#dbe5f1')"
+                :stroke-width="!isTeacherMode && isRecommended(kp.id) ? 2.6 : (!isTeacherMode && isPathNode(kp.id) ? 2.3 : 2)"
+              />
+              <text :class="props.embedded ? 'teacher-node__code workspace-node__code' : 'workspace-node__code'" text-anchor="middle" y="-8">
+                {{ kp.code }}
+              </text>
+              <text :class="props.embedded ? 'teacher-node__title workspace-node__title' : 'workspace-node__title'" text-anchor="middle" y="16">
+                {{ kp.title.slice(0, 10) }}
+              </text>
+              <g v-if="!isTeacherMode && isRecommended(kp.id)">
+                <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#5a8ef0" />
+                <text class="workspace-node__badge" text-anchor="middle" y="-36">推荐</text>
+              </g>
+              <g v-else-if="!isTeacherMode && isPathNode(kp.id)">
+                <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#89aef5" />
+                <text class="workspace-node__badge" text-anchor="middle" y="-36">路径</text>
+              </g>
             </g>
           </g>
         </svg>
@@ -2200,9 +2358,8 @@ onBeforeUnmount(() => {
   border-radius: max(0px, calc(28px - var(--graph-stage-viewport-inset-x)));
   background: radial-gradient(circle at 24px 24px, rgba(79, 135, 255, 0.06) 1px, transparent 1px), radial-gradient(circle at 0 0, rgba(79, 135, 255, 0.03) 1px, transparent 1px), #f8fbff;
   border: 1px solid #e8eef6;
-  contain: layout style;
+  contain: layout;
   isolation: isolate;
-  transform: translateZ(0);
 }
 
 .workspace-canvas {
@@ -2214,6 +2371,7 @@ onBeforeUnmount(() => {
   transition: transform 0.08s ease;
   cursor: grab;
   z-index: 1;
+  backface-visibility: hidden;
 }
 
 .workspace-node,

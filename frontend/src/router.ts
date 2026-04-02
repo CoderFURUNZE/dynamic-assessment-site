@@ -6,6 +6,12 @@ export const router = createRouter({
   routes: [],
 });
 
+function persistLastRoute(fullPath: string) {
+  const username = getUsername();
+  if (!username) return;
+  localStorage.setItem(`da_last_route_${username}`, fullPath);
+}
+
 const StudentDashboardPage = () => import("./pages/StudentDashboardPage.vue");
 const StudentQuestionnairePage = () => import("./pages/StudentQuestionnairePage.vue");
 const StudentReportPage = () => import("./pages/StudentReportPage.vue");
@@ -199,7 +205,7 @@ router.addRoute({
 router.addRoute({
   path: "/teacher/kp-content/:kpId",
   component: TeacherKpContentWorkspacePage,
-  meta: { title: "知识点配置工作台", standaloneWorkspace: true },
+  meta: { title: "知识点配置工作台" },
 });
 [
   "/teacher/kp-preview/:kpId",
@@ -268,11 +274,13 @@ router.beforeEach((to) => {
       ]);
       if (!allowedAdminPaths.has(to.path)) return "/admin/dashboard";
     }
+    persistLastRoute(to.fullPath);
     return true;
   }
   if (to.path.startsWith("/teacher")) {
     if (role === "student") return "/student/dashboard";
     if (role === "admin") return "/admin/dashboard";
+    persistLastRoute(to.fullPath);
     return true;
   }
   if (to.path.startsWith("/student")) {
@@ -281,9 +289,12 @@ router.beforeEach((to) => {
     if (role === "admin" && !previewEnabled) return "/admin/dashboard";
     if (role === "teacher" && !previewEnabled) return "/teacher/workspace";
   }
-  const username = getUsername();
-  if (username) {
-    localStorage.setItem(`da_last_route_${username}`, to.fullPath);
-  }
+  persistLastRoute(to.fullPath);
   return true;
+});
+
+router.afterEach((to) => {
+  if (typeof document === "undefined") return;
+  const pageTitle = String(to.meta?.title || "").trim();
+  document.title = pageTitle ? `${pageTitle} | 动态评价系统` : "动态评价系统";
 });

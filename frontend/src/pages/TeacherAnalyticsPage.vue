@@ -32,10 +32,10 @@ onMounted(loadCourses);
         <el-select v-model="subject" placeholder="切换课程" @change="syncQuery" style="width: 200px">
           <el-option v-for="c in courses" :key="c.id" :label="c.title" :value="c.title" />
         </el-select>
-        <el-button-group style="margin-left: 12px">
-          <el-button @click="router.push({ path: '/teacher/students', query: { subject: subject || undefined, tab: 'detail' } })">学生详情</el-button>
-          <el-button type="primary" @click="router.push({ path: '/teacher/evaluation', query: { subject: subject || undefined, tab: 'behavior' } })">行为画像</el-button>
-        </el-button-group>
+        <div class="edu-header__button-row">
+          <el-button class="edu-header__btn" @click="router.push({ path: '/teacher/students', query: { subject: subject || undefined, tab: 'detail' } })">学生详情</el-button>
+          <el-button class="edu-header__btn edu-header__btn--accent" @click="router.push({ path: '/teacher/evaluation', query: { subject: subject || undefined, tab: 'behavior' } })">行为画像</el-button>
+        </div>
       </div>
     </header>
 
@@ -49,4 +49,52 @@ onMounted(loadCourses);
     </section>
   </div>
 </template>
-<style scoped>.teacher-page{display:grid;gap:20px}</style>
+<style scoped>
+.teacher-page{display:grid;gap:20px}
+
+.edu-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.edu-header__button-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.edu-header__actions :deep(.el-select__wrapper) {
+  min-height: 42px;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 1px #d7e4f5 inset !important;
+}
+
+.edu-header__btn {
+  min-width: 118px;
+  min-height: 42px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid #d7e4f5;
+  background: #ffffff;
+  color: #274263;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.edu-header__btn:hover,
+.edu-header__btn:focus-visible {
+  border-color: #9fbef3;
+  background: #f8fbff;
+  color: #214d8f;
+}
+
+.edu-header__btn.edu-header__btn--accent {
+  border-color: #b8cdf3;
+  color: #2e5ea8;
+}
+</style>

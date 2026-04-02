@@ -318,9 +318,14 @@ const categoryOverview = computed(() => {
   };
 });
 
+const filteredEdgeCount = computed(() => {
+  const ids = new Set(filteredKps.value.map((kp) => kp.id));
+  return edges.value.filter((edge) => ids.has(edge.prereq_id) && ids.has(edge.next_id)).length;
+});
+
 const stageStats = computed(() => ({
-  points: visibleKps.value.length,
-  edges: edges.value.length + chapterEdges.value.length,
+  points: filteredKps.value.length,
+  edges: filteredEdgeCount.value + visibleChapterEdges.value.length,
   categories: categoryNodes.value.length,
 }));
 
@@ -750,7 +755,7 @@ function openContentWorkspaceInNewTab(kpId: number) {
     ElMessage.warning("请先选择一个知识点");
     return;
   }
-  const target = router.resolve({
+  router.push({
     path: `/teacher/kp-content/${kpId}`,
     query: {
       subject: props.subject || undefined,
@@ -759,7 +764,6 @@ function openContentWorkspaceInNewTab(kpId: number) {
       from: "graph-workspace",
     },
   });
-  window.open(target.href, "_blank", "noopener,noreferrer");
 }
 
 function openContentFromSelected() {
@@ -771,7 +775,7 @@ function openContentFromSelected() {
 }
 
 function openCreateWorkspaceInNewTab(chapter = "") {
-  const target = router.resolve({
+  router.push({
     path: "/teacher/kp-content/0",
     query: {
       subject: props.subject || undefined,
@@ -781,7 +785,6 @@ function openCreateWorkspaceInNewTab(chapter = "") {
       from: "graph-workspace",
     },
   });
-  window.open(target.href, "_blank", "noopener,noreferrer");
 }
 
 function startLinkSelection(modeValue: "forward" | "backward" | "related" | "support" | "contains") {
@@ -1544,7 +1547,7 @@ onBeforeUnmount(() => {
             class="teacher-stage__focus-btn teacher-stage__focus-btn--primary"
             @click.stop="openContentFromSelected"
           >
-            进入知识点内容
+            打开知识点配置页
           </button>
         </div>
         <details class="teacher-stage__legend-details">
@@ -1685,8 +1688,8 @@ onBeforeUnmount(() => {
         :class="{ 'teacher-stage__menu--below': selectedMenuBelow }"
         :style="selectedMenuStyle"
       >
-        <button :disabled="props.readonly" @click="openGraphEditorForSelected">改信息</button>
-        <button @click="openContentFromSelected">进入内容页</button>
+          <button :disabled="props.readonly" @click="openGraphEditorForSelected">编辑基础信息</button>
+          <button @click="openContentFromSelected">打开知识点配置页</button>
         <button class="danger" :disabled="props.readonly" @click="removeKp">删除</button>
       </div>
 
@@ -1868,7 +1871,7 @@ onBeforeUnmount(() => {
           <div class="teacher-drawer__tabs">
             <button :class="{ active: detailTab === 'overview' }" @click="detailTab = 'overview'">看信息</button>
             <button :class="{ active: detailTab === 'relations' }" @click="detailTab = 'relations'">管关系</button>
-            <button :class="{ active: detailTab === 'content' }" @click="detailTab = 'content'">去内容</button>
+            <button :class="{ active: detailTab === 'content' }" @click="detailTab = 'content'">内容配置</button>
           </div>
           <div class="teacher-drawer__meta">{{ selectedKp.code }} · {{ selectedKp.chapter || '未分章' }}</div>
           <div class="teacher-drawer__guide-inline">
@@ -1899,7 +1902,7 @@ onBeforeUnmount(() => {
             <div class="teacher-drawer__section">
               <h4 class="teacher-drawer__section-title">先改基础信息</h4>
               <div class="teacher-drawer__actions">
-                <button class="teacher-drawer__primary" @click="openGraphEditorForSelected">打开编辑表单</button>
+                <button class="teacher-drawer__primary" @click="openGraphEditorForSelected">编辑基础信息</button>
               </div>
             </div>
 
@@ -2000,7 +2003,7 @@ onBeforeUnmount(() => {
 
           <div v-else>
             <div class="teacher-drawer__section">
-              <h4 class="teacher-drawer__section-title">进入知识点内容页</h4>
+              <h4 class="teacher-drawer__section-title">知识点内容配置</h4>
               <div class="teacher-drawer__guide-inline">
                 <span>查看提示</span>
                 <HoverTip content="点击下面按钮，进入独立的资源内容页面，单独维护视频、练习和推荐资源。" />

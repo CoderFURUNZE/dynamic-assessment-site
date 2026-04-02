@@ -20,6 +20,9 @@ from app.db.models import (
     CourseEnrollStatus,
     ChapterEdge,
     Course,
+    CourseApplication,
+    CoursePortraitIndicatorSelection,
+    CoursePrerequisite,
     CourseStage,
     EvalConfig,
     KnowledgeEdge,
@@ -34,6 +37,7 @@ from app.db.models import (
     RecommendationLog,
     RelationType,
     ResourceType,
+    QuestionnairePortraitIndicatorInput,
     KpQuestionAssignment,
     PracticeAttempt,
     Enrollment,
@@ -45,11 +49,13 @@ from app.db.models import (
     ReviewSchedule,
     Note,
     ExpressionEvent,
+    StageImportBatch,
     StageImportRecord,
     InterviewAnswer,
     InterviewSession,
     StageEvaluationSnapshot,
     TeacherFinalScoreConfirmation,
+    TeacherPortraitIndicatorInput,
     StageTeacherFeedback,
     User,
     UserRole,
@@ -235,6 +241,46 @@ def _resolve_course_for_subject(session: Session, *, subject: str) -> Course | N
 def _check_teacher_subject_access(*, admin: User, course: Course | None) -> None:
     if admin.role == UserRole.teacher and course is not None and course.teacher_id != admin.id:
         raise HTTPException(status_code=403, detail="No permission for this subject")
+
+
+def _active_course_student_ids(session: Session, *, course_id: int) -> list[int]:
+    rows = session.exec(
+        select(Enrollment.student_id).where(
+            Enrollment.course_id == course_id,
+            Enrollment.status == EnrollmentStatus.active,
+        )
+    ).all()
+    return [int(row) for row in rows if row is not None]
+
+
+def _course_delete_blockers(session: Session, *, course_id: int, subject: str) -> list[str]:
+    checks = [
+        ("知识点", session.exec(select(func.count()).select_from(KnowledgePoint).where(KnowledgePoint.subject == subject)).one()),
+        ("选课申请", session.exec(select(func.count()).select_from(CourseApplication).where(CourseApplication.course_id == course_id)).one()),
+        ("选课记录", session.exec(select(func.count()).select_from(Enrollment).where(Enrollment.course_id == course_id)).one()),
+        ("课程阶段", session.exec(select(func.count()).select_from(CourseStage).where(CourseStage.course_id == course_id)).one()),
+        ("阶段导入批次", session.exec(select(func.count()).select_from(StageImportBatch).where(StageImportBatch.course_id == course_id)).one()),
+        ("阶段导入记录", session.exec(select(func.count()).select_from(StageImportRecord).where(StageImportRecord.course_id == course_id)).one()),
+        ("阶段评价快照", session.exec(select(func.count()).select_from(StageEvaluationSnapshot).where(StageEvaluationSnapshot.course_id == course_id)).one()),
+        ("教师阶段反馈", session.exec(select(func.count()).select_from(StageTeacherFeedback).where(StageTeacherFeedback.course_id == course_id)).one()),
+        ("期末确认记录", session.exec(select(func.count()).select_from(TeacherFinalScoreConfirmation).where(TeacherFinalScoreConfirmation.course_id == course_id)).one()),
+        ("教师画像输入", session.exec(select(func.count()).select_from(TeacherPortraitIndicatorInput).where(TeacherPortraitIndicatorInput.course_id == course_id)).one()),
+        ("问卷画像输入", session.exec(select(func.count()).select_from(QuestionnairePortraitIndicatorInput).where(QuestionnairePortraitIndicatorInput.course_id == course_id)).one()),
+        ("课程画像配置", session.exec(select(func.count()).select_from(CoursePortraitIndicatorSelection).where(CoursePortraitIndicatorSelection.course_id == course_id)).one()),
+        ("行为记录", session.exec(select(func.count()).select_from(LearningBehaviorEvent).where(LearningBehaviorEvent.course_id == course_id)).one()),
+        (
+            "先修课程关系",
+            session.exec(
+                select(func.count()).select_from(CoursePrerequisite).where(
+                    or_(
+                        CoursePrerequisite.course_id == course_id,
+                        CoursePrerequisite.prerequisite_course_id == course_id,
+                    )
+                )
+            ).one(),
+        ),
+    ]
+    return [f"{label}{int(count)}条" for label, count in checks if int(count or 0) > 0]
 
 
 def _build_student_detail_payload(
@@ -1268,9 +1314,9 @@ def delete_course(
     course = session.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
-    kp_count = session.exec(select(func.count()).select_from(KnowledgePoint).where(KnowledgePoint.subject == course.title)).one()
-    if kp_count:
-        raise HTTPException(status_code=400, detail="Course has knowledge points, cannot delete")
+    blockers = _course_delete_blockers(session, course_id=course_id, subject=course.title)
+    if blockers:
+        raise HTTPException(status_code=400, detail=f"课程已有关联数据，不能删除：{'、'.join(blockers)}")
     session.delete(course)
     session.commit()
     _log_action(session, admin, "course_delete", f"id={course_id} code={course.code}")
@@ -1978,6 +2024,10 @@ def create_edge(
         select(KnowledgeEdge).where(KnowledgeEdge.prereq_id == payload.prereq_id, KnowledgeEdge.next_id == payload.next_id)
     ).first()
     if exists:
+        exists.relation_type = relation_type
+        session.add(exists)
+        session.commit()
+        session.refresh(exists)
         return KnowledgeEdgeOut(
             id=exists.id,
             prereq_id=exists.prereq_id,
@@ -3977,7 +4027,13 @@ def list_final_score_students(
 ):
     course = _resolve_course_for_subject(session, subject=subject)
     _check_teacher_subject_access(admin=admin, course=course)
-    students = session.exec(select(User).where(User.role == UserRole.student).order_by(User.id)).all()
+    student_stmt = select(User).where(User.role == UserRole.student)
+    if course is not None and course.id is not None:
+        active_student_ids = _active_course_student_ids(session, course_id=int(course.id))
+        if not active_student_ids:
+            return {"items": []}
+        student_stmt = student_stmt.where(User.id.in_(active_student_ids))
+    students = session.exec(student_stmt.order_by(User.id)).all()
     confirmation_map: dict[int, TeacherFinalScoreConfirmation] = {}
     if course is not None and course.id is not None:
         rows = session.exec(
@@ -4021,6 +4077,10 @@ def final_score_detail(
 ):
     course = _resolve_course_for_subject(session, subject=subject)
     _check_teacher_subject_access(admin=admin, course=course)
+    if course is not None and course.id is not None:
+        active_student_ids = set(_active_course_student_ids(session, course_id=int(course.id)))
+        if user_id not in active_student_ids:
+            raise HTTPException(status_code=404, detail="Student not enrolled in this course")
     return _build_student_detail_payload(
         session,
         user_id=user_id,
@@ -4040,11 +4100,16 @@ def confirm_final_score(
     if course is None or course.id is None:
         raise HTTPException(status_code=404, detail="课程不存在")
     _check_teacher_subject_access(admin=admin, course=course)
+    active_student_ids = set(_active_course_student_ids(session, course_id=int(course.id)))
+    if payload.user_id not in active_student_ids:
+        raise HTTPException(status_code=404, detail="Student not enrolled in this course")
     student = session.get(User, payload.user_id)
     if student is None or student.role != UserRole.student:
         raise HTTPException(status_code=404, detail="Student not found")
     snapshot = _snapshot_for_user(session, user_id=payload.user_id, subject=payload.subject, grade=payload.grade)
     term_summary = _json_load(snapshot.portrait_summary_json, {}).get("term_summary", {})
+    if int(term_summary.get("stage_count") or 0) <= 0:
+        raise HTTPException(status_code=400, detail="No stage evaluation data for this student")
     confirmed_score = max(0.0, min(1.0, float(payload.confirmed_score)))
     row = session.exec(
         select(TeacherFinalScoreConfirmation).where(

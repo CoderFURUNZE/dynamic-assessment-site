@@ -160,7 +160,7 @@ function studentQuery(extra: Record<string, string | undefined> = {}) {
 
 async function loadCourses() {
   try {
-    const endpoint = isStudent.value ? "/graph/available-courses" : "/graph/courses";
+    const endpoint = "/graph/courses";
     const data = await api.get(endpoint);
     courses.value = (data.data ?? []).map((item: any) => ({
       id: Number(item.id),
@@ -183,7 +183,11 @@ async function loadStudentCourses() {
 }
 
 async function loadKps() {
-  if (!subject.value) return;
+  if (!subject.value) {
+    kps.value = [];
+    currentKpId.value = null;
+    return;
+  }
   try {
     const data = await getWithCache("/graph/kps", {
       subject: subject.value,

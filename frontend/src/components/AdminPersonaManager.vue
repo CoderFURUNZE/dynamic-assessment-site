@@ -501,6 +501,34 @@ watch(
   align-items: center;
 }
 
+.persona-actions :deep(.el-button),
+.override-cell :deep(.el-button) {
+  border-radius: 999px !important;
+  border: 1px solid #d7e4f5 !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #274263 !important;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+
+.persona-actions :deep(.el-button:hover),
+.override-cell :deep(.el-button:hover) {
+  border-color: #9fbef3 !important;
+  background: #f8fbff !important;
+  background-image: none !important;
+  color: #214d8f !important;
+}
+
+.persona-actions :deep(.el-button--primary),
+.persona-actions :deep(.el-button--warning),
+.override-cell :deep(.el-button--primary) {
+  border-color: #b8cdf3 !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #2e5ea8 !important;
+}
+
 @media (max-width: 960px) {
   .persona-grid {
     grid-template-columns: 1fr;

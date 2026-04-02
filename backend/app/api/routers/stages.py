@@ -13,6 +13,7 @@ from app.api.deps import require_role
 from app.db.models import (
     AuditLog,
     Course,
+    CourseLifecycleStatus,
     CourseStage,
     Enrollment,
     EnrollmentStatus,
@@ -173,6 +174,12 @@ def _get_course_or_403(session: Session, user: User, course_id: int) -> Course:
     return course
 
 
+def _assert_course_stage_editable(course: Course) -> None:
+    lifecycle = course.lifecycle_status.value if isinstance(course.lifecycle_status, CourseLifecycleStatus) else str(course.lifecycle_status or "")
+    if not bool(course.active) or lifecycle != CourseLifecycleStatus.active.value:
+        raise HTTPException(status_code=400, detail="当前课程已归档或未处于开课状态，不能修改阶段数据")
+
+
 def _get_stage_or_403(session: Session, user: User, stage_id: int) -> CourseStage:
     stage = session.get(CourseStage, stage_id)
     if stage is None:
@@ -244,6 +251,21 @@ def _to_ratio(value: str | None) -> float:
 def _to_bool(value: str | None) -> bool:
     raw = (value or "").strip().lower()
     return raw in {"1", "true", "yes", "y", "是", "已提交", "on_time"}
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+def _risk_level(dynamic_score: float) -> str:
+    value = float(dynamic_score or 0.0)
+    if value >= 0.85:
+        return "优秀"
+    if value >= 0.70:
+        return "良好"
+    if value >= 0.50:
+        return "预警"
+    return "风险"
 
 
 def _normalize_import_row(row: dict[str, str]) -> dict[str, str]:
@@ -1102,6 +1124,7 @@ def create_stage(
     user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _get_course_or_403(session, user, course_id)
+    _assert_course_stage_editable(course)
     title = payload.title.strip()
     if not title:
         raise HTTPException(status_code=400, detail="title required")
@@ -1140,6 +1163,8 @@ def update_stage(
     user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     stage = _get_stage_or_403(session, user, stage_id)
+    course = _get_course_or_403(session, user, stage.course_id)
+    _assert_course_stage_editable(course)
     if payload.title is not None:
         title = payload.title.strip()
         if not title:
@@ -1182,6 +1207,8 @@ def delete_stage(
     user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     stage = _get_stage_or_403(session, user, stage_id)
+    course = _get_course_or_403(session, user, stage.course_id)
+    _assert_course_stage_editable(course)
     has_batch = session.exec(select(StageImportBatch).where(StageImportBatch.stage_id == stage_id)).first()
     if has_batch is not None:
         raise HTTPException(status_code=400, detail="Stage already has imported data and cannot be deleted")
@@ -1353,6 +1380,7 @@ def internal_behavior_summary(
 ):
     course = _get_course_or_403(session, user, course_id)
     stage = _get_stage_or_403(session, user, stage_id)
+    _assert_course_stage_editable(course)
     if stage.course_id != course_id:
         raise HTTPException(status_code=400, detail="stage does not belong to the course")
     summary, rows = _behavior_stage_rows(session, course=course, stage=stage)
@@ -1385,6 +1413,7 @@ def export_internal_behavior_summary(
 ):
     course = _get_course_or_403(session, user, course_id)
     stage = _get_stage_or_403(session, user, stage_id)
+    _assert_course_stage_editable(course)
     if stage.course_id != course_id:
         raise HTTPException(status_code=400, detail="stage does not belong to the course")
     _, rows = _behavior_stage_rows(session, course=course, stage=stage)
@@ -1493,6 +1522,7 @@ def apply_internal_behavior_summary(
 ):
     course = _get_course_or_403(session, user, course_id)
     stage = _get_stage_or_403(session, user, stage_id)
+    _assert_course_stage_editable(course)
     if stage.course_id != course_id:
         raise HTTPException(status_code=400, detail="stage does not belong to the course")
     batch, recalculated_users = _apply_behavior_stage_rows(

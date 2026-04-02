@@ -49,7 +49,7 @@ function handleChange(value: string) {
   border-radius: var(--app-radius);
   border: 1px solid var(--app-border);
   box-shadow: var(--app-shadow-soft);
-  background: var(--app-card);
+  background: #ffffff;
   overflow: hidden;
 }
 
@@ -94,10 +94,66 @@ function handleChange(value: string) {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .workspace-topbar__select {
   width: 280px;
+  max-width: 100%;
+}
+
+.workspace-topbar__actions :deep(.el-select__wrapper) {
+  min-height: 42px;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 1px #d7e4f5 inset !important;
+}
+
+.workspace-topbar__actions :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #7ea9f6 inset, 0 0 0 3px rgba(87, 133, 231, 0.12) !important;
+}
+
+.workspace-topbar__actions :deep(.el-select__placeholder),
+.workspace-topbar__actions :deep(.el-select__selected-item),
+.workspace-topbar__actions :deep(.el-select__caret) {
+  color: #5a6f8f !important;
+}
+
+.workspace-topbar__actions :deep(.el-button) {
+  min-width: 118px;
+  min-height: 42px;
+  padding: 0 20px;
+  border-radius: 999px !important;
+  border: 1px solid #d7e4f5 !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #274263 !important;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+
+.workspace-topbar__actions :deep(.el-button:hover),
+.workspace-topbar__actions :deep(.el-button:focus-visible) {
+  border-color: #9fbef3 !important;
+  background: #f8fbff !important;
+  background-image: none !important;
+  color: #214d8f !important;
+}
+
+.workspace-topbar__actions :deep(.el-button--primary) {
+  border-color: #b8cdf3 !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #2e5ea8 !important;
+}
+
+.workspace-topbar__actions :deep(.el-button.is-disabled),
+.workspace-topbar__actions :deep(.el-button.is-disabled:hover) {
+  border-color: #e3eaf5 !important;
+  background: #f8fbff !important;
+  background-image: none !important;
+  color: #afbdd0 !important;
 }
 
 .workspace-topbar__meta {
@@ -120,7 +176,7 @@ function handleChange(value: string) {
   background: var(--app-green);
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1120px) {
   .workspace-topbar__content {
     grid-template-columns: 1fr;
     padding: 14px 16px 12px;
@@ -138,7 +194,7 @@ function handleChange(value: string) {
     width: 100%;
     justify-content: flex-start;
   }
-  
+
   .workspace-topbar__meta {
     padding: 10px 16px 12px;
   }

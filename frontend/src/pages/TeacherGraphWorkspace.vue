@@ -67,7 +67,7 @@ function openTeacherKpWorkspace(kpId: number) {
     ElMessage.warning("请先选择一个知识点");
     return;
   }
-  const target = router.resolve({
+  router.push({
     path: `/teacher/kp-content/${kpId}`,
     query: {
       subject: subject.value || undefined,
@@ -76,12 +76,10 @@ function openTeacherKpWorkspace(kpId: number) {
       from: "graph-workspace",
     },
   });
-  const popup = window.open(target.href, "_blank", "noopener,noreferrer");
-  if (!popup) router.push(target);
 }
 
 function createTeacherKp() {
-  const target = router.resolve({
+  router.push({
     path: "/teacher/kp-content/0",
     query: {
       subject: subject.value || undefined,
@@ -90,8 +88,6 @@ function createTeacherKp() {
       from: "graph-workspace",
     },
   });
-  const popup = window.open(target.href, "_blank", "noopener,noreferrer");
-  if (!popup) router.push(target);
 }
 
 watch(
@@ -127,9 +123,9 @@ onMounted(async () => {
         <el-select v-model="subject" class="graph-page__select" placeholder="选择课程">
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
-        <el-button type="primary" plain :disabled="isReadonlyCourse" @click="createTeacherKp">新建知识点</el-button>
-        <el-button @click="goBack">返回工作台</el-button>
-        <el-button type="primary" @click="refreshWorkspace">刷新</el-button>
+        <el-button class="graph-page__toolbar-btn graph-page__toolbar-btn--accent" :disabled="isReadonlyCourse" @click="createTeacherKp">新建知识点</el-button>
+        <el-button class="graph-page__toolbar-btn" @click="goBack">返回工作台</el-button>
+        <el-button class="graph-page__toolbar-btn graph-page__toolbar-btn--accent" @click="refreshWorkspace">刷新</el-button>
       </div>
     </section>
 
@@ -169,6 +165,7 @@ onMounted(async () => {
   align-items: center;
   gap: 16px;
   padding: 12px 16px;
+  background: #ffffff;
 }
 
 .graph-page__toolbar-copy {
@@ -200,6 +197,55 @@ onMounted(async () => {
 
 .graph-page__select {
   width: 240px;
+}
+
+.graph-page__toolbar-actions :deep(.el-select__wrapper) {
+  min-height: 42px;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 1px #d7e4f5 inset !important;
+}
+
+.graph-page__toolbar-actions :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #7ea9f6 inset, 0 0 0 3px rgba(87, 133, 231, 0.12) !important;
+}
+
+.graph-page__toolbar-actions :deep(.el-select__placeholder),
+.graph-page__toolbar-actions :deep(.el-select__selected-item),
+.graph-page__toolbar-actions :deep(.el-select__caret) {
+  color: #5a6f8f !important;
+}
+
+.graph-page__toolbar-btn {
+  min-width: 118px;
+  min-height: 42px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid #d7e4f5;
+  background: #ffffff;
+  color: #274263;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.graph-page__toolbar-btn:hover,
+.graph-page__toolbar-btn:focus-visible {
+  border-color: #9fbef3;
+  background: #f8fbff;
+  color: #214d8f;
+}
+
+.graph-page__toolbar-btn.graph-page__toolbar-btn--accent {
+  border-color: #b8cdf3;
+  color: #2e5ea8;
+}
+
+.graph-page__toolbar-btn.is-disabled,
+.graph-page__toolbar-btn.is-disabled:hover {
+  border-color: #e3eaf5;
+  background: #f8fbff;
+  color: #afbdd0;
 }
 
 .graph-page__panel {

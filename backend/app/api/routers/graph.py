@@ -173,6 +173,8 @@ def _assert_student_subject_access(session: Session, user_id: int, subject: str)
     course = session.exec(select(Course).where(Course.title == subject).order_by(Course.created_at.desc())).first()
     if course is None or course.id is None:
         raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
+    if not _is_course_learning_available(course):
+        raise HTTPException(status_code=403, detail="当前课程已结课或未在学习周期内，暂时无法进入课程学习")
     enrollment = session.exec(
         select(Enrollment).where(
             Enrollment.student_id == user_id,
@@ -199,8 +201,6 @@ def _assert_student_subject_access(session: Session, user_id: int, subject: str)
     }
     if app_ids:
         return
-    if not _is_course_learning_available(course):
-        raise HTTPException(status_code=403, detail="课程尚未开课，暂无法学习")
     raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
 
 

@@ -132,8 +132,9 @@ async function removeResource() {
 }
 
 function backToWorkspace() {
+  const kpId = Number(detail.value?.kp_id || route.query.kp_id || 0);
   router.push({
-    path: "/teacher/content",
+    path: kpId > 0 ? `/teacher/kp-content/${kpId}` : "/teacher/content",
     query: {
       subject: detail.value?.subject || String(route.query.subject || "") || undefined,
       grade: detail.value?.grade || String(route.query.grade || "") || undefined,

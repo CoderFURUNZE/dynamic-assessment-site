@@ -3,7 +3,6 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ArrowLeft, Expand, Fold, Monitor, SwitchButton, User } from "@element-plus/icons-vue";
 import { clearToken, getRole } from "./token";
-import { isLoading } from "./loading";
 import { appNavigation, type AppNavItem } from "./layouts/appNavigation";
 import { buildTeacherSubjectQuery, getSavedTeacherSubject } from "./utils/teacherCourse";
 
@@ -284,11 +283,6 @@ function goBackToMain() {
       </section>
     </template>
 
-    <div v-if="isLoading" class="loading-overlay">
-      <div class="loading-spinner"></div>
-      <span>正在处理...</span>
-    </div>
-
     <button v-if="isStandaloneWorkspace" class="pro-standalone-back" @click="goBackToMain">
       <el-icon><ArrowLeft /></el-icon>
       <span>返回主工作台</span>
@@ -299,9 +293,7 @@ function goBackToMain() {
 <style scoped>
 .pro-shell {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top right, rgba(79, 140, 255, 0.1), transparent 28%),
-    linear-gradient(180deg, #f3f6fb 0%, #f7f9fc 100%);
+  background: var(--app-gradient-page);
 }
 
 .pro-shell--standalone {
@@ -327,9 +319,11 @@ function goBackToMain() {
   display: flex;
   flex-direction: column;
   padding: 18px 14px;
-  background: linear-gradient(180deg, #0d1b2a 0%, #10253c 58%, #12314e 100%);
+  background:
+    radial-gradient(circle at top left, rgba(88, 146, 255, 0.18), transparent 22%),
+    linear-gradient(180deg, #10233a 0%, #173451 58%, #1d4468 100%);
   color: #d7e4f5;
-  box-shadow: 18px 0 36px rgba(8, 15, 30, 0.16);
+  box-shadow: 18px 0 40px rgba(15, 34, 62, 0.16);
   z-index: 1100;
   transition: width 0.22s ease;
 }
@@ -354,10 +348,10 @@ function goBackToMain() {
   border-radius: 14px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #1677ff 0%, #46c2ff 100%);
+  background: linear-gradient(135deg, #4a84ff 0%, #6bc5ff 100%);
   color: #fff;
   font-weight: 800;
-  box-shadow: 0 16px 28px rgba(22, 119, 255, 0.28);
+  box-shadow: 0 16px 28px rgba(74, 132, 255, 0.28);
 }
 
 .pro-brand__text {
@@ -421,9 +415,9 @@ function goBackToMain() {
 }
 
 .pro-menu__item.active {
-  background: linear-gradient(90deg, rgba(22, 119, 255, 0.24) 0%, rgba(70, 194, 255, 0.16) 100%);
+  background: linear-gradient(90deg, rgba(74, 132, 255, 0.28) 0%, rgba(107, 197, 255, 0.18) 100%);
   color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(120, 186, 255, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(162, 205, 255, 0.22);
 }
 
 .pro-menu__item--section {
@@ -487,10 +481,10 @@ function goBackToMain() {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background: rgba(255, 255, 255, 0.92);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 251, 255, 0.94) 100%);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid #e6edf5;
-  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.04);
+  border-bottom: 1px solid rgba(211, 223, 242, 0.9);
+  box-shadow: 0 8px 24px rgba(87, 116, 166, 0.07);
 }
 
 .pro-header__left,
@@ -520,8 +514,8 @@ function goBackToMain() {
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid #dce6f2;
-  background: #fff;
+  border: 1px solid rgba(211, 223, 242, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.98) 100%);
   color: #526274;
   display: grid;
   place-items: center;
@@ -530,9 +524,9 @@ function goBackToMain() {
 }
 
 .pro-icon-btn:hover {
-  border-color: #c9d7e7;
-  background: #f8fbff;
-  color: #2f4d73;
+  border-color: rgba(144, 175, 230, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(237, 243, 255, 1) 100%);
+  color: #2f5ea4;
 }
 
 .pro-content {
@@ -550,11 +544,11 @@ function goBackToMain() {
   z-index: 1400;
   min-height: 40px;
   padding: 0 14px;
-  border: 1px solid #dce6f2;
+  border: 1px solid rgba(211, 223, 242, 0.95);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 248, 255, 0.96) 100%);
   color: #31455f;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 12px 28px rgba(87, 116, 166, 0.16);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -575,36 +569,6 @@ function goBackToMain() {
 .page-fade-leave-to {
   opacity: 0;
   transform: translateY(-10px);
-}
-
-.loading-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  background: color-mix(in srgb, var(--app-card) 82%, transparent);
-  backdrop-filter: blur(4px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--app-space-4);
-  color: var(--app-primary);
-  font-weight: 600;
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--app-primary-tint);
-  border-top-color: var(--app-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @media (max-width: 1100px) {

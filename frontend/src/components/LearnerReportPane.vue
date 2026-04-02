@@ -191,6 +191,16 @@ const stageHistory = computed(() => profile.value?.stage_history ?? []);
 const dimensionConfig = computed(() => (profile.value?.dimension_config ?? []).filter((item) => item.enabled));
 const hasStageModel = computed(() => stageHistory.value.length > 0 || Boolean(currentStage.value));
 const portraitDimensions = computed(() => currentStage.value?.portrait_dimensions ?? profile.value?.portrait_dimensions ?? []);
+const stageResultRows = computed(() => {
+  if (portraitDimensions.value.length) return portraitDimensions.value;
+  if (!currentStage.value) return [];
+  return [
+    { dimension_title: "学习投入", score: currentStage.value.engagement ?? 0, available: true },
+    { dimension_title: "学习成效", score: currentStage.value.achievement ?? 0, available: true },
+    { dimension_title: "学习习惯", score: currentStage.value.habit ?? 0, available: true },
+    { dimension_title: "学习特征", score: currentStage.value.characteristic ?? 0, available: true },
+  ];
+});
 const finalPortraitDimensions = computed(() => profile.value?.final_portrait_dimensions ?? []);
 const termSummary = computed(() => profile.value?.term_summary ?? {});
 const portraitIndicatorRows = computed(() => currentStage.value?.portrait_indicators ?? profile.value?.portrait_indicators ?? []);
@@ -601,12 +611,12 @@ watch(
         <PortraitRadarChart
           title="当前阶段结果图"
           subtitle="这张图表示你在当前阶段各方面的大致情况。"
-          :items="portraitDimensions"
+          :items="stageResultRows"
           accent="#2f8cff"
           empty-text="这门课当前还没有足够数据生成雷达图"
         />
-        <div v-if="portraitDimensions.length" class="dimension-list">
-          <div v-for="item in portraitDimensions" :key="item.dimension_title" class="dimension-item">
+        <div v-if="stageResultRows.length" class="dimension-list">
+          <div v-for="item in stageResultRows" :key="item.dimension_title" class="dimension-item">
             <div class="dimension-top">
               <span>{{ item.dimension_title }}</span>
               <strong>{{ item.score == null ? "待补充" : `${Math.round(item.score * 100)}%` }}</strong>

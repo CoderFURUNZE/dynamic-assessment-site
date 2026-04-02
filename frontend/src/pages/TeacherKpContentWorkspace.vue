@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import type { Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -100,7 +100,10 @@ const router = useRouter();
 const loading = ref(false);
 const saving = ref(false);
 const relationSaving = ref(false);
-const activeSection = ref<SectionKey>("basic");
+const kpMetaDialogOpen = ref(false);
+const activeSection = ref<SectionKey>("learning");
+const contentMainRef = ref<HTMLElement | null>(null);
+const contentMetaRef = ref<HTMLElement | null>(null);
 
 const kp = ref<KpInfo | null>(null);
 const resources = ref<ResourceItem[]>([]);
@@ -291,6 +294,74 @@ const sectionCards = computed(() => {
     },
   ];
 });
+
+const workspaceCards = computed(() => sectionCards.value.filter((item) => item.key !== "check"));
+const basicChecklistItems = computed(() =>
+  checklistItems.value.filter((item) => ["code", "title", "chapter", "description", "ability", "literacy"].includes(item.key)),
+);
+const sidebarChecklistItems = computed(() => {
+  const missing = checklistItems.value.filter((item) => !item.done);
+  const done = checklistItems.value.filter((item) => item.done);
+  return [...missing, ...done].slice(0, 6);
+});
+const basicInfoRows = computed(() => [
+  {
+    key: "code",
+    badge: "基础字段",
+    title: "知识点编码",
+    value: kpForm.code.trim() || "未填写知识点编码",
+    detail: kpForm.code.trim() ? "当前已配置编码，可继续维护名称、分类与描述。" : "建议先补充唯一编码，便于图谱与题库关联。",
+  },
+  {
+    key: "title",
+    badge: "基础字段",
+    title: "知识点名称",
+    value: kpForm.title.trim() || "未填写知识点名称",
+    detail: kpForm.title.trim() ? "当前名称已配置。" : "建议补充清晰名称，便于教师端识别与学生端展示。",
+  },
+  {
+    key: "chapter",
+    badge: "分类信息",
+    title: "所属分类",
+    value: kpForm.chapter.trim() || "未选择所属分类",
+    detail: kpForm.chapter.trim() ? "当前已归属到对应章节或分类。" : "建议补充分组信息，避免知识点孤立。",
+  },
+  {
+    key: "knowledge_tag",
+    badge: "教学目标",
+    title: "知识目标",
+    value: kpForm.knowledge_tag.trim() || "未填写知识目标",
+    detail: kpForm.knowledge_tag.trim() ? "当前已定义知识目标。" : "建议补充学生应掌握的核心目标。",
+  },
+  {
+    key: "ability_tag",
+    badge: "能力标签",
+    title: "能力标签",
+    value: kpForm.ability_tag.trim() || "未配置能力标签",
+    detail: kpForm.ability_tag.trim() ? "当前已配置能力标签。" : "建议补充能力维度，便于后续动态评价。",
+  },
+  {
+    key: "literacy_tag",
+    badge: "素养标签",
+    title: "素养标签",
+    value: kpForm.literacy_tag.trim() || "未配置素养标签",
+    detail: kpForm.literacy_tag.trim() ? "当前已配置素养标签。" : "建议补充素养标签，支撑反馈展示。",
+  },
+  {
+    key: "difficulty",
+    badge: "难度信息",
+    title: "难度与重要度",
+    value: `难度 ${Math.round(kpForm.difficulty * 100)}% · 重要度 ${Math.round(kpForm.importance * 100)}%`,
+    detail: "用于区分知识点学习难度与教学优先级。",
+  },
+  {
+    key: "description",
+    badge: "学习说明",
+    title: "知识点描述",
+    value: kpForm.description.trim() || "未填写知识点描述",
+    detail: kpForm.description.trim() ? "当前已补充学习说明。" : "建议说明学生学什么、为什么学、如何学。",
+  },
+]);
 
 const graphLinkQuery = computed(() => ({
   subject: subject.value || undefined,
@@ -560,7 +631,7 @@ function openStudentPreview() {
 }
 
 async function saveAndBack() {
-  const ok = await saveKpMeta();
+  const ok = await saveKpMeta({ redirectAfterCreate: false });
   if (ok) goBack();
 }
 
@@ -970,9 +1041,16 @@ async function removeRelation(edgeId: number) {
 
 function jumpToSection(section: SectionKey) {
   activeSection.value = section;
+  nextTick(() => {
+    contentMainRef.value?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
-async function saveKpMeta() {
+function openKpMetaEditor() {
+  kpMetaDialogOpen.value = true;
+}
+
+async function saveKpMeta(options: { redirectAfterCreate?: boolean } = {}) {
   saving.value = true;
   try {
     const payload = {
@@ -1000,7 +1078,7 @@ async function saveKpMeta() {
       const res = await api.post("/admin/kps", payload);
       const newId = Number(res.data?.id || 0);
       ElMessage.success("知识点已创建");
-      if (newId > 0) {
+      if (newId > 0 && options.redirectAfterCreate !== false) {
         router.replace({
           path: `/teacher/kp-content/${newId}`,
           query: {
@@ -1009,7 +1087,7 @@ async function saveKpMeta() {
             from: "graph-workspace",
           },
         });
-      } else {
+      } else if (newId > 0) {
         await loadData();
       }
       return true;
@@ -1075,12 +1153,14 @@ watch(
           </div>
         </div>
         <div class="content-topbar__actions">
-          <el-button :loading="saving" @click="saveKpMeta">保存基础信息</el-button>
+          <el-button :loading="saving" @click="createMode ? saveKpMeta() : openKpMetaEditor()">
+            {{ createMode ? "保存基础信息" : "编辑基础信息" }}
+          </el-button>
           <el-button type="primary" :loading="saving" @click="saveAndBack">保存并返回图谱</el-button>
         </div>
       </header>
 
-      <section class="content-meta panel-shell">
+      <section v-if="createMode" ref="contentMetaRef" class="content-meta panel-shell">
         <div class="content-meta__head">
           <div>
             <h3>{{ createMode ? "创建知识点" : "基础信息" }}</h3>
@@ -1106,7 +1186,14 @@ watch(
       </section>
 
       <section class="content-summary" aria-label="配置概览">
-        <div class="summary-card" v-for="card in sectionCards" :key="card.key">
+        <button
+          v-for="card in workspaceCards"
+          :key="card.key"
+          type="button"
+          class="summary-card"
+          :class="{ 'summary-card--active': activeSection === card.key }"
+          @click="jumpToSection(card.key)"
+        >
           <div class="summary-card__icon" :class="`summary-card__icon--${card.key}`" aria-hidden="true">
             <el-icon :size="22"><component :is="card.icon" /></el-icon>
           </div>
@@ -1115,7 +1202,7 @@ watch(
             <strong class="summary-card__value">{{ card.count }}</strong>
             <small class="summary-card__desc">{{ card.desc }}</small>
           </div>
-        </div>
+        </button>
       </section>
 
       <section v-if="createMode" class="content-create-empty panel-shell">
@@ -1123,28 +1210,9 @@ watch(
         <span>创建成功后，这个页面会继续解锁学习资源、练习题库、图谱关系和配置检查四个分区。</span>
       </section>
 
-      <div v-if="!createMode" class="content-layout">
-        <aside class="content-nav panel-shell" aria-label="内容分区">
-          <button
-            v-for="card in sectionCards"
-            :key="card.key"
-            type="button"
-            class="content-nav__item"
-            :class="{ active: activeSection === card.key }"
-            @click="activeSection = card.key"
-          >
-            <div class="content-nav__item-head">
-              <span class="content-nav__icon-wrap" :class="{ active: activeSection === card.key }">
-                <el-icon :size="18"><component :is="card.icon" /></el-icon>
-              </span>
-              <strong>{{ card.title }}</strong>
-              <span class="content-nav__count">{{ card.count }}</span>
-            </div>
-          </button>
-        </aside>
-
-        <main class="content-main">
-          <template v-if="activeSection === 'basic'">
+      <div v-if="!createMode" class="content-workbench">
+        <main ref="contentMainRef" class="content-main">
+          <template v-if="false && activeSection === 'basic'">
             <section class="content-card panel-shell">
               <div class="content-card__head">
                 <div>
@@ -1156,7 +1224,46 @@ watch(
                   <el-button @click="activeSection = 'learning'">继续配置资源</el-button>
                 </div>
               </div>
-              <div class="content-check-grid">
+              <div class="basic-overview">
+                <article class="basic-hero">
+                  <span class="basic-hero__eyebrow">当前知识点</span>
+                  <strong>{{ kpForm.title || "请先完善知识点编码和名称" }}</strong>
+                  <p>{{ kpForm.description || "先定义这个知识点的范围、学习目标和使用说明，后续的资源、练习、关系与预览配置都会基于这里展开。" }}</p>
+                  <div class="basic-hero__metrics">
+                    <span>编码 {{ kpForm.code || "待填写" }}</span>
+                    <span>分类 {{ kpForm.chapter || "待填写" }}</span>
+                    <span>难度 {{ Math.round(kpForm.difficulty * 100) }}%</span>
+                    <span>重要度 {{ Math.round(kpForm.importance * 100) }}%</span>
+                  </div>
+                </article>
+                <article class="basic-side-card">
+                  <div class="basic-side-card__head">
+                    <strong>基础信息检查</strong>
+                    <span>{{ basicChecklistItems.filter((item) => item.done).length }}/{{ basicChecklistItems.length }}</span>
+                  </div>
+                  <div class="basic-side-card__list">
+                    <div v-for="item in basicChecklistItems" :key="item.key" class="basic-side-card__item" :class="{ done: item.done }">
+                      <strong>{{ item.label }}</strong>
+                      <span>{{ item.detail }}</span>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <div class="basic-tags-grid">
+                <article class="basic-info-card">
+                  <span>知识目标</span>
+                  <strong>{{ kpForm.knowledge_tag || "建议补充明确的知识目标" }}</strong>
+                </article>
+                <article class="basic-info-card">
+                  <span>能力标签</span>
+                  <strong>{{ kpForm.ability_tag || "建议补充能力标签" }}</strong>
+                </article>
+                <article class="basic-info-card">
+                  <span>素养标签</span>
+                  <strong>{{ kpForm.literacy_tag || "建议补充素养标签" }}</strong>
+                </article>
+              </div>
+              <div v-if="false" class="content-check-grid">
                 <article class="check-card">
                   <span>编码</span>
                   <strong>{{ kpForm.code || "未填写" }}</strong>
@@ -1174,7 +1281,7 @@ watch(
                   <strong>{{ Math.round(kpForm.difficulty * 100) }}% / {{ Math.round(kpForm.importance * 100) }}%</strong>
                 </article>
               </div>
-              <div class="content-tags-panel">
+              <div v-if="false" class="content-tags-panel">
                 <div class="content-tags-panel__group">
                   <span>知识目标</span>
                   <div class="content-tags"><span class="content-chip">{{ kpForm.knowledge_tag || "未填写知识目标" }}</span></div>
@@ -1189,6 +1296,35 @@ watch(
                 </div>
               </div>
               <div class="content-empty">{{ kpForm.description || "建议补充知识点描述，方便学生端理解学习目标和学习方式。" }}</div>
+            </section>
+          </template>
+
+          <template v-else-if="activeSection === 'basic'">
+            <section class="content-card panel-shell">
+              <div class="content-card__head">
+                <div>
+                  <h3>基础信息</h3>
+                  <p>以下按列表查看当前知识点的基础配置。需要修改时，回到上方表单统一编辑。</p>
+                </div>
+                <div class="content-card__head-actions">
+                  <el-button :loading="saving" @click="saveKpMeta">保存基础信息</el-button>
+                  <el-button @click="openKpMetaEditor">编辑基础信息</el-button>
+                </div>
+              </div>
+              <div class="content-list">
+                <div v-for="item in basicInfoRows" :key="item.key" class="content-item basic-record">
+                  <div class="content-item__body">
+                    <div class="content-item__meta">
+                      <div class="content-badge">{{ item.badge }}</div>
+                    </div>
+                    <strong>{{ item.title }}：{{ item.value }}</strong>
+                    <span>{{ item.detail }}</span>
+                  </div>
+                  <div class="content-item__actions">
+                    <el-button size="small" @click="openKpMetaEditor">编辑</el-button>
+                  </div>
+                </div>
+              </div>
             </section>
           </template>
 
@@ -1207,7 +1343,7 @@ watch(
               <div v-if="learningResources.length === 0 && recommendResources.length === 0" class="content-empty">还没有学习资源或推荐拓展</div>
               <el-tabs v-else v-model="teacherResourceView" class="teacher-resource-tabs">
                 <el-tab-pane label="全部资源一览" name="all">
-                  <div class="content-list content-list--scroll">
+                  <div class="content-list">
                     <div v-for="item in [...allLearningResourcesSorted, ...recommendResources]" :key="`${item.category}-${item.id}`" class="content-item">
                       <div class="content-item__body">
                         <div class="content-item__meta">
@@ -1436,7 +1572,7 @@ watch(
             </section>
           </template>
 
-          <template v-else-if="activeSection === 'check'">
+          <template v-else-if="false && activeSection === 'check'">
             <section class="content-card panel-shell">
               <div class="content-card__head">
                 <div>
@@ -1465,7 +1601,7 @@ watch(
                 <article v-for="item in checklistItems" :key="item.key" class="check-list__item" :class="{ done: item.done }">
                   <div class="check-list__copy">
                     <strong>{{ item.label }}</strong>
-                    <span>{{ item.detail }}</span>
+                    <span>{{ item.done ? item.detail : "寰呰ˉ鍏?" }}</span>
                   </div>
                   <div class="check-list__actions">
                     <span class="check-list__status">{{ item.done ? "已完成" : "待补充" }}</span>
@@ -1482,8 +1618,86 @@ watch(
             </section>
           </template>
         </main>
+
+        <aside class="content-check-panel panel-shell" aria-label="发布前检查">
+          <div class="content-check-panel__head">
+            <div>
+              <strong>发布前检查</strong>
+              <span>完成后再进入学生端预览</span>
+            </div>
+            <el-button size="small" @click="openStudentPreview">学生端预览</el-button>
+          </div>
+
+          <div class="compact-score-card">
+            <div>
+              <span class="compact-score-card__label">当前完整度</span>
+              <strong class="compact-score-card__value">{{ completenessScore }}%</strong>
+            </div>
+            <p class="compact-score-card__text">
+              {{ missingChecklistItems.length === 0 ? "当前已满足学生端预览条件" : `还有 ${missingChecklistItems.length} 项待补充` }}
+            </p>
+          </div>
+
+          <div v-if="false" class="check-overview check-overview--stacked">
+            <div class="check-overview__score">
+              <span>当前完整度</span>
+              <strong>{{ completenessScore }}%</strong>
+            </div>
+            <div class="check-overview__summary">
+              <strong>{{ missingChecklistItems.length === 0 ? "这个知识点已经可以进入学生端使用" : "还有以下配置项待补充" }}</strong>
+              <span v-if="missingChecklistItems.length === 0">基础信息、学习资源、练习题和图谱关系都已配置完成。</span>
+              <span v-else>{{ missingChecklistItems.map((item) => item.label).join("、") }}</span>
+            </div>
+          </div>
+
+          <div class="check-list check-list--compact">
+            <article v-for="item in sidebarChecklistItems" :key="item.key" class="check-list__item" :class="{ done: item.done }">
+              <div class="check-list__copy">
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.detail }}</span>
+              </div>
+              <div class="check-list__actions">
+                <span class="check-list__status">{{ item.done ? "已完成" : "待补充" }}</span>
+                <el-button
+                  v-if="!item.done"
+                  size="small"
+                  @click="jumpToSection(item.key === 'relation' ? 'relation' : item.key === 'learning' || item.key === 'recommend' ? 'learning' : item.key === 'practice' || item.key === 'practiceAssigned' ? 'practice' : 'basic')"
+                >
+                  去处理
+                </el-button>
+              </div>
+            </article>
+          </div>
+
+          <div class="content-check-panel__footer">
+            <el-button :loading="saving" @click="saveKpMeta">保存基础信息</el-button>
+            <el-button type="primary" :loading="saving" @click="saveAndBack">保存并返回图谱</el-button>
+          </div>
+        </aside>
       </div>
     </div>
+
+    <el-dialog v-model="kpMetaDialogOpen" title="编辑基础信息" width="980px">
+      <div class="meta-dialog-body">
+        <div class="content-meta__grid meta-dialog-grid">
+          <el-form-item label="知识点编码"><el-input v-model="kpForm.code" placeholder="例如 OS-04" /></el-form-item>
+          <el-form-item label="知识点名称"><el-input v-model="kpForm.title" placeholder="例如 同步与互斥" /></el-form-item>
+          <el-form-item label="所属分类"><el-input v-model="kpForm.chapter" placeholder="例如 进程管理" /></el-form-item>
+          <el-form-item label="知识目标"><el-input v-model="kpForm.knowledge_tag" placeholder="例如 临界区、信号量" /></el-form-item>
+          <el-form-item label="能力标签"><el-input v-model="kpForm.ability_tag" placeholder="例如 逻辑推理,系统分析" /></el-form-item>
+          <el-form-item label="素养标签"><el-input v-model="kpForm.literacy_tag" placeholder="例如 主动学习,规范意识" /></el-form-item>
+          <el-form-item label="重要度"><el-input-number v-model="kpForm.importance" :min="0" :max="1" :step="0.05" /></el-form-item>
+          <el-form-item label="理解难度"><el-input-number v-model="kpForm.difficulty" :min="0" :max="1" :step="0.05" /></el-form-item>
+          <el-form-item class="content-meta__full" label="知识点描述">
+            <el-input v-model="kpForm.description" type="textarea" :rows="4" placeholder="说明学生学什么、为什么重要、建议如何学习" />
+          </el-form-item>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="kpMetaDialogOpen = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="saveKpMeta().then((ok) => { if (ok) kpMetaDialogOpen = false; })">保存基础信息</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog
       v-model="resourceDialogOpen"
@@ -1679,16 +1893,17 @@ watch(
 
 <style scoped>
 .teacher-content-page {
-  min-height: 100vh;
-  background: var(--app-bg);
-  padding: 20px;
+  min-height: 0;
+  background: transparent;
+  padding: 0 0 24px;
 }
 
 .teacher-content-page__inner {
-  max-width: 1500px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   display: grid;
-  gap: 16px;
+  gap: 20px;
+  padding-bottom: 8px;
 }
 
 .content-breadcrumb-wrap {
@@ -1721,19 +1936,20 @@ watch(
 }
 
 .panel-shell {
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
   border: 1px solid var(--app-border);
-  border-radius: 20px;
-  box-shadow: var(--app-shadow-soft);
+  border-radius: 22px;
+  box-shadow: 0 12px 30px rgba(31, 47, 68, 0.06);
 }
 
 .content-topbar {
   min-height: 96px;
-  padding: 20px 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  padding: 22px 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 18px;
+  background: linear-gradient(135deg, #eef4ff 0%, #f5fbf7 52%, #ffffff 100%);
 }
 
 .content-topbar__actions {
@@ -1741,6 +1957,7 @@ watch(
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .content-topbar__left {
@@ -1751,6 +1968,8 @@ watch(
 }
 
 .content-topbar__titles {
+  display: grid;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -1770,10 +1989,11 @@ watch(
 
 .content-title {
   margin: 4px 0 0;
-  font-size: 26px;
+  font-size: 24px;
   line-height: 1.25;
-  color: #1f2d3d;
+  color: #11284a;
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
 
 .content-subtitle {
@@ -1816,8 +2036,8 @@ watch(
 
 .content-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .content-meta {
@@ -1836,7 +2056,7 @@ watch(
 .content-meta__head h3 {
   margin: 0;
   font-size: 18px;
-  color: #1f2f44;
+  color: #18304f;
 }
 
 .content-meta__head p {
@@ -1873,26 +2093,37 @@ watch(
 }
 
 .summary-card {
-  background: #ffffff;
+  appearance: none;
+  width: 100%;
+  min-height: 116px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1px solid var(--app-border);
   border-radius: 18px;
-  padding: 16px 18px;
+  padding: 16px;
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  box-shadow: var(--app-shadow-soft);
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 22px rgba(31, 47, 68, 0.05);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  text-align: left;
 }
 
 .summary-card:hover {
   border-color: color-mix(in srgb, var(--app-primary) 22%, var(--app-border));
-  box-shadow: 0 14px 36px rgba(31, 47, 68, 0.06);
+  box-shadow: 0 12px 30px rgba(31, 47, 68, 0.08);
+}
+
+.summary-card--active {
+  border-color: rgba(47, 111, 237, 0.42);
+  box-shadow: 0 16px 36px rgba(47, 111, 237, 0.16);
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .summary-card__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -1930,13 +2161,13 @@ watch(
 }
 
 .summary-card__label {
-  font-size: 13px;
+  font-size: 12px;
   color: #75879f;
   font-weight: 700;
 }
 
 .summary-card__value {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 800;
   color: #233854;
   line-height: 1.1;
@@ -1944,100 +2175,66 @@ watch(
 }
 
 .summary-card__desc {
-  display: none;
-}
-
-.content-layout {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 18px;
-}
-
-.content-nav {
-  padding: 16px 14px 18px;
-  display: grid;
-  gap: 10px;
-  align-content: start;
-}
-
-.content-nav__hint {
-  display: none;
-}
-
-.content-nav__item {
-  border: 1px solid var(--app-border);
-  border-radius: 16px;
-  background: #fcfdff;
-  color: #4a5d77;
-  text-align: left;
-  padding: 14px 14px 12px;
-  cursor: pointer;
-  display: grid;
-  gap: 8px;
-  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-}
-
-.content-nav__item:hover {
-  border-color: #c8d7e7;
-  background: #ffffff;
-}
-
-.content-nav__item-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-}
-
-.content-nav__item-head strong {
-  font-size: 15px;
-  flex: 1;
-  min-width: 0;
-  line-height: 1.3;
-}
-
-.content-nav__icon-wrap {
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  background: #ffffff;
-  border: 1px solid #dbe4ef;
-  display: grid;
-  place-items: center;
-  color: #5c7cb2;
-  flex-shrink: 0;
-}
-
-.content-nav__count {
+  display: block;
+  color: #7d8ea4;
   font-size: 12px;
-  font-weight: 800;
-  color: var(--app-primary);
-  background: color-mix(in srgb, var(--app-primary) 10%, transparent);
-  padding: 3px 9px;
-  border-radius: 999px;
+  line-height: 1.5;
 }
 
-.content-nav__item small {
-  display: none;
-}
-
-.content-nav__item.active {
-  background: linear-gradient(165deg, #f5f9ff 0%, #eef4fc 100%);
-  border-color: color-mix(in srgb, var(--app-primary) 35%, var(--app-border));
-  box-shadow: 0 8px 22px rgba(47, 111, 237, 0.08);
-  color: #39506d;
-}
-
-.content-nav__item.active .content-nav__icon-wrap {
-  background: color-mix(in srgb, var(--app-primary) 12%, #ffffff);
-  border-color: color-mix(in srgb, var(--app-primary) 45%, #dbe4ef);
-  color: var(--app-primary);
+.content-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: 16px;
+  align-items: start;
 }
 
 .content-main {
   display: grid;
   gap: 18px;
   align-content: start;
+  min-width: 0;
+}
+
+.content-check-panel {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+}
+
+.content-check-panel__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.content-check-panel__head strong {
+  display: block;
+  font-size: 15px;
+  color: #223754;
+}
+
+.content-check-panel__head span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #71849b;
+  line-height: 1.6;
+}
+
+.check-overview--stacked {
+  grid-template-columns: 1fr;
+}
+
+.content-check-panel__footer {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .content-card__head-actions {
@@ -2049,7 +2246,7 @@ watch(
 .content-card {
   padding: 22px;
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .content-card__head {
@@ -2062,12 +2259,157 @@ watch(
 
 .content-card__head h3 {
   margin: 0;
-  font-size: 24px;
-  color: #223754;
+  font-size: 23px;
+  color: #18304f;
 }
 
 .content-card__head p {
-  display: none;
+  display: block;
+  margin: 8px 0 0;
+  color: #6c7d95;
+  line-height: 1.65;
+  max-width: 72ch;
+}
+
+.basic-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.95fr);
+  gap: 16px;
+}
+
+.basic-hero,
+.basic-side-card,
+.basic-info-card,
+.compact-score-card {
+  border: 1px solid #dfe7f1;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+}
+
+.basic-hero {
+  padding: 24px;
+  display: grid;
+  gap: 14px;
+  background: linear-gradient(135deg, #edf4ff 0%, #f8fbff 55%, #ffffff 100%);
+}
+
+.basic-hero__eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #7090b6;
+}
+
+.basic-hero strong {
+  font-size: 28px;
+  line-height: 1.15;
+  color: #17314f;
+  letter-spacing: -0.03em;
+}
+
+.basic-hero p {
+  margin: 0;
+  color: #627694;
+  line-height: 1.8;
+  font-size: 14px;
+}
+
+.basic-hero__metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.basic-hero__metrics span {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid #d7e3f1;
+  color: #365270;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.basic-side-card {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.basic-side-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.basic-side-card__head strong {
+  color: #1f3451;
+  font-size: 16px;
+}
+
+.basic-side-card__head span {
+  min-width: 44px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #2f6fed;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.basic-side-card__list {
+  display: grid;
+  gap: 10px;
+}
+
+.basic-side-card__item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #e3eaf3;
+  background: #fbfcff;
+  display: grid;
+  gap: 4px;
+}
+
+.basic-side-card__item.done {
+  background: #f1faf5;
+  border-color: #cfe6d6;
+}
+
+.basic-side-card__item strong {
+  color: #213652;
+  font-size: 13px;
+}
+
+.basic-side-card__item span {
+  color: #73849a;
+  font-size: 12px;
+}
+
+.basic-tags-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.basic-info-card {
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.basic-info-card span {
+  color: #7a8ba2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.basic-info-card strong {
+  color: #213652;
+  font-size: 16px;
+  line-height: 1.6;
 }
 
 .content-empty {
@@ -2089,7 +2431,7 @@ watch(
   padding: 16px 18px;
   border: 1px solid var(--app-border);
   border-radius: 16px;
-  background: #fcfdff;
+  background: #ffffff;
   display: grid;
   gap: 6px;
 }
@@ -2141,10 +2483,40 @@ watch(
   gap: 10px;
 }
 
+.compact-score-card {
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  background: linear-gradient(135deg, #f1f6ff 0%, #ffffff 100%);
+}
+
+.compact-score-card__label {
+  display: block;
+  color: #73849a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.compact-score-card__value {
+  display: block;
+  margin-top: 4px;
+  color: #17314f;
+  font-size: 36px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.compact-score-card__text {
+  margin: 0;
+  color: #627694;
+  line-height: 1.7;
+  font-size: 13px;
+}
+
 .content-list--scroll {
-  max-height: 520px;
-  overflow-y: auto;
-  padding-right: 6px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .teacher-resource-tabs :deep(.el-tabs__header) {
@@ -2159,8 +2531,8 @@ watch(
 .content-group {
   border: 1px solid #dce5f0;
   border-radius: 18px;
-  background: #fafcff;
-  padding: 14px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f7faff 100%);
+  padding: 16px;
   display: grid;
   gap: 12px;
 }
@@ -2186,7 +2558,7 @@ watch(
 .content-item {
   border: 1px solid var(--app-border);
   border-radius: 16px;
-  background: #fcfdff;
+  background: #ffffff;
   padding: 16px 18px;
   display: flex;
   justify-content: space-between;
@@ -2227,6 +2599,14 @@ watch(
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
+}
+
+.basic-record .content-item__body strong {
+  line-height: 1.55;
+}
+
+.basic-record .content-item__body span {
+  max-width: 72ch;
 }
 
 .teacher-content-page :deep(.resource-dropdown-danger) {
@@ -2312,6 +2692,15 @@ watch(
   border-top: 1px solid #e7edf5;
   padding: 16px 24px 18px;
   background: #fff;
+}
+
+.meta-dialog-body {
+  padding: 24px 28px 8px;
+  background: #ffffff;
+}
+
+.meta-dialog-grid {
+  gap: 14px 16px;
 }
 
 .resource-upload-dialog__layout {
@@ -2704,6 +3093,10 @@ watch(
   gap: 10px;
 }
 
+.check-list--compact {
+  gap: 8px;
+}
+
 .check-list__item {
   border: 1px solid var(--app-border);
   border-radius: 16px;
@@ -2713,6 +3106,11 @@ watch(
   justify-content: space-between;
   gap: 14px;
   align-items: center;
+}
+
+.check-list--compact .check-list__item {
+  padding: 10px 12px;
+  border-radius: 14px;
 }
 
 .check-list__item.done {
@@ -2734,9 +3132,17 @@ watch(
   font-size: 13px;
 }
 
+.check-list--compact .check-list__copy strong {
+  font-size: 13px;
+}
+
+.check-list--compact .check-list__copy span {
+  font-size: 12px;
+}
+
 .check-list__actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -2747,18 +3153,32 @@ watch(
 }
 
 @media (max-width: 1120px) {
+  .content-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .content-topbar__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .content-summary,
   .content-check-grid,
-  .relation-grid {
+  .relation-grid,
+  .basic-tags-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .content-layout {
+  .content-workbench {
     grid-template-columns: 1fr;
   }
 
   .content-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: static;
+  }
+
+  .content-check-panel {
+    position: static;
   }
 
   .resource-upload-dialog__layout {
@@ -2771,7 +3191,8 @@ watch(
   }
 
   .relation-create,
-  .check-overview {
+  .check-overview,
+  .basic-overview {
     grid-template-columns: 1fr;
   }
 
@@ -2780,12 +3201,13 @@ watch(
 @media (max-width: 768px) {
   .content-summary,
   .content-check-grid,
-  .relation-grid {
+  .relation-grid,
+  .basic-tags-grid {
     grid-template-columns: 1fr;
   }
 
   .content-topbar {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     align-items: flex-start;
   }
 
@@ -2829,7 +3251,7 @@ watch(
     grid-template-columns: 1fr;
   }
 
-  .content-nav {
+  .content-workbench {
     grid-template-columns: 1fr;
   }
 

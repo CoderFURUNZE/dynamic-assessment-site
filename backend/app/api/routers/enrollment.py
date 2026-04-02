@@ -55,7 +55,20 @@ def _course_open_status(course: Course, enrolled_count: int) -> str:
     return CourseEnrollStatus.open.value
 
 
+def _course_accepting_review(course: Course | None) -> bool:
+    if course is None or not bool(course.active):
+        return False
+    lifecycle_raw = course.lifecycle_status
+    lifecycle = lifecycle_raw.value if isinstance(lifecycle_raw, CourseLifecycleStatus) else str(lifecycle_raw or "")
+    return lifecycle == CourseLifecycleStatus.active.value
+
+
 def _assert_student_course_access(session: Session, student_id: int, course_id: int) -> None:
+    course = session.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status_code=404, detail="课程不存在")
+    if not _course_active_for_student_join(course):
+        raise HTTPException(status_code=403, detail="当前课程已结课或未在学习周期内，暂时无法进入课程学习")
     enrollment = session.exec(
         select(Enrollment).where(
             Enrollment.student_id == student_id,
@@ -78,7 +91,11 @@ def list_enrollable_courses(
     session: Session = Depends(get_session),
     user=Depends(require_role(UserRole.student)),
 ):
-    courses = session.exec(select(Course).where(Course.active == True).order_by(Course.created_at.desc())).all()  # noqa: E712
+    courses = [
+        course
+        for course in session.exec(select(Course).where(Course.active == True).order_by(Course.created_at.desc())).all()  # noqa: E712
+        if _course_active_for_student_join(course)
+    ]
     teacher_ids = [int(item.teacher_id) for item in courses if item.teacher_id is not None]
     teacher_map = {}
     if teacher_ids:
@@ -221,6 +238,8 @@ def apply_course(
     course = session.get(Course, course_id)
     if course is None or not bool(course.active):
         raise HTTPException(status_code=404, detail="课程不存在")
+    if not _course_active_for_student_join(course):
+        raise HTTPException(status_code=400, detail="课程当前不在报名周期内（未开课、已结课或暂不开放）")
     existing = session.exec(
         select(CourseApplication).where(CourseApplication.course_id == course_id, CourseApplication.student_id == user.id)
     ).first()
@@ -418,6 +437,8 @@ def approve_application(
     course = session.get(Course, app.course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="课程不存在")
+    if not _course_accepting_review(course):
+        raise HTTPException(status_code=400, detail="当前课程已归档或未开课，不能继续通过报名申请")
     if int(course.teacher_id or 0) != int(user.id):
         raise HTTPException(status_code=403, detail="你只能审核自己课程的报名")
     if app.status != ApplicationStatus.pending:

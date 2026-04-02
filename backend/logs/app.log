@@ -379,3 +379,36 @@
 2026-03-30 06:54:57,526 INFO app.audit actor=admin role=admin action=course_delete detail=id=3 code=CN
 2026-03-30 06:55:01,046 INFO app.audit actor=admin role=admin action=course_delete detail=id=2 code=DS
 2026-03-30 07:14:46,647 INFO app.audit actor=teacher1 role=teacher action=stage_internal_summary_apply detail=course_id=1 stage_id=1 success=9 include_video=True include_practice=True include_mastery=True
+2026-04-02 14:34:40,762 INFO app.audit actor=teacher1 role=teacher action=kp_delete detail=kp_id=42
+2026-04-02 14:34:40,888 INFO app.audit actor=teacher1 role=teacher action=kp_delete detail=kp_id=43
+2026-04-02 14:53:43,420 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=5 stage_id=1
+2026-04-02 14:53:43,658 INFO app.audit actor=teacher1 role=teacher action=stage_internal_summary_apply detail=course_id=5 stage_id=1 success=3 include_video=True include_practice=True include_mastery=True
+2026-04-02 14:58:18,020 INFO app.audit actor=teacher1 role=teacher action=stage_internal_behavior_apply detail=course_id=5 stage_id=1 success=4
+2026-04-02 14:59:28,242 INFO app.audit actor=teacher1 role=teacher action=stage_internal_behavior_apply detail=course_id=5 stage_id=1 success=4
+2026-04-02 15:20:11,881 INFO app.audit actor=teacher1 role=teacher action=final_score_confirm detail=user_id=3 subject=测试课程 confirmed_score=44
+2026-04-02 15:20:48,729 INFO app.audit actor=teacher1 role=teacher action=stage_feedback_save detail=user_id=3 stage_id=1
+2026-04-02 15:41:44,175 INFO app.audit actor=teacher1 role=teacher action=final_score_confirm detail=user_id=4 subject=测试课程 confirmed_score=60
+2026-04-02 15:54:57,231 INFO app.audit actor=admin role=admin action=course_create detail=code=DELTEST1775116497 title=删除校验课程1775116497 teacher_id=2
+2026-04-02 16:00:15,894 INFO app.audit actor=admin role=admin action=course_create detail=code=DELTEST1775116815 title=删除校验课程1775116815 teacher_id=2
+2026-04-02 16:01:36,771 INFO app.audit actor=admin role=admin action=course_create detail=code=DELTEST1775116896 title=删除校验课程1775116896 teacher_id=2
+2026-04-02 16:02:01,000 INFO app.audit actor=admin role=admin action=course_create detail=code=DELPASS1775116920 title=删除通过课程1775116920 teacher_id=2
+2026-04-02 16:02:01,069 INFO app.audit actor=admin role=admin action=course_delete detail=id=9 code=DELPASS1775116920
+2026-04-02 16:04:35,755 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:04:35,902 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:04:36,058 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:05:19,720 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:05:19,822 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:05:19,874 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=5 stage_id=2
+2026-04-02 16:05:19,927 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:07:41,861 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:07:41,934 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:07:42,024 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=5 stage_id=3
+2026-04-02 16:07:42,076 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:08:47,339 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:08:47,474 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:08:47,569 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:14:58,897 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:14:59,122 INFO app.audit actor=teacher1 role=teacher action=final_score_confirm detail=user_id=3 subject=测试课程 confirmed_score=44
+2026-04-02 16:14:59,170 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:19:08,737 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-02 16:19:08,894 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2

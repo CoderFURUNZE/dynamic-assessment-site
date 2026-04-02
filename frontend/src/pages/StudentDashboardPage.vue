@@ -130,7 +130,7 @@ function studentQuery(extra: Record<string, string | undefined> = {}) {
 
 async function loadCourses() {
   try {
-    const endpoint = isStudent.value ? "/graph/available-courses" : "/graph/courses";
+    const endpoint = "/graph/courses";
     const data = await api.get(endpoint);
     courses.value = (data.data ?? []).map((item: any) => ({
       id: Number(item.id),
@@ -145,7 +145,11 @@ async function loadCourses() {
 }
 
 async function loadKps() {
-  if (!subject.value) return;
+  if (!subject.value) {
+    kps.value = [];
+    currentKpId.value = null;
+    return;
+  }
   try {
     const data = await getWithCache("/graph/kps", { subject: subject.value, grade: grade.value });
     kps.value = data ?? [];
@@ -155,6 +159,8 @@ async function loadKps() {
     }
     if (!currentKpId.value && kps.value.length) currentKpId.value = kps.value[0].id;
   } catch (e: any) {
+    kps.value = [];
+    currentKpId.value = null;
     if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "加载知识点失败");
   }

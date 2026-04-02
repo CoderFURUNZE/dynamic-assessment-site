@@ -522,6 +522,33 @@ watch(
   color: #6f809f;
 }
 
+.panel-header-row :deep(.el-button),
+.dimension-content :deep(.el-form .el-button) {
+  border-radius: 999px !important;
+  border: 1px solid #d7e4f5 !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #274263 !important;
+  font-weight: 700;
+  box-shadow: none !important;
+}
+
+.panel-header-row :deep(.el-button:hover),
+.dimension-content :deep(.el-form .el-button:hover) {
+  border-color: #9fbef3 !important;
+  background: #f8fbff !important;
+  background-image: none !important;
+  color: #214d8f !important;
+}
+
+.dimension-content :deep(.el-form .el-button--primary),
+.dimension-content :deep(.el-form .el-button--success) {
+  border-color: #b8cdf3 !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #2e5ea8 !important;
+}
+
 @media (max-width: 1280px) {
   .dimension-layout {
     grid-template-columns: 1fr;

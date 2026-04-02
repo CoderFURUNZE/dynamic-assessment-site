@@ -4,7 +4,6 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api, getWithCache } from "../api";
 import KnowledgeGraphWorkspace from "../components/KnowledgeGraphWorkspace.vue";
-import { getRole } from "../token";
 import { resolveStudentSubject, saveStudentSubject } from "../utils/studentCourse";
 
 type Course = { id: number; code: string; title: string };
@@ -35,9 +34,6 @@ type PathData = {
 const route = useRoute();
 const router = useRouter();
 
-const role = computed(() => getRole() || "");
-const isStandaloneWorkspace = computed(() => Boolean(route.meta?.standaloneWorkspace));
-
 const courses = ref<Course[]>([]);
 const subject = ref("");
 const grade = ref("通用");
@@ -54,6 +50,7 @@ const workspaceState = ref<WorkspaceState>({
   selectedCategory: null,
 });
 
+const isStandaloneWorkspace = computed(() => Boolean(route.meta?.standaloneWorkspace));
 const currentCourse = computed(() => courses.value.find((item) => item.title === subject.value) ?? null);
 const currentKp = computed(() => kps.value.find((item) => item.id === currentKpId.value) ?? null);
 const selectedLabel = computed(() => {
@@ -61,7 +58,8 @@ const selectedLabel = computed(() => {
   if (workspaceState.value.selectedCategory) return workspaceState.value.selectedCategory;
   return "未选择";
 });
-const recommendationLabel = computed(() => reco.value?.target_kp?.title || "无");
+const recommendationLabel = computed(() => reco.value?.target_kp?.title || "暂无");
+
 const graphPathHint = computed(() => {
   if (!pathInfo.value) return null;
   return {
@@ -72,6 +70,7 @@ const graphPathHint = computed(() => {
     path_summary: pathInfo.value.path_summary || "",
   };
 });
+
 const graphRecoHint = computed(() => {
   if (!reco.value?.target_kp?.id) return null;
   return {
@@ -83,16 +82,16 @@ const graphRecoHint = computed(() => {
   };
 });
 
-const summaryCards = computed(() => [
-  { label: "知识点", value: String(workspaceState.value.kpCount || kps.value.length) },
-  { label: "分类", value: String(workspaceState.value.categoryCount) },
-  { label: "已选", value: selectedLabel.value },
-  { label: "推荐", value: recommendationLabel.value },
-]);
+function resetWorkspaceState() {
+  kps.value = [];
+  currentKpId.value = null;
+  reco.value = null;
+  pathInfo.value = null;
+}
 
 function syncQuery() {
+  saveStudentSubject(subject.value);
   const preview = String(route.query.preview || "");
-  if (subject.value && role.value === "student") saveStudentSubject(subject.value);
   router.replace({
     path: "/student/graph-workspace",
     query: {
@@ -105,16 +104,24 @@ function syncQuery() {
 
 async function loadCourses() {
   try {
-    const endpoint = role.value === "student" ? "/graph/available-courses" : "/graph/courses";
-    const res = await api.get(endpoint);
+    const res = await api.get("/graph/courses");
     const raw = res.data ?? [];
     courses.value = raw.map((item: any) => ({
       id: Number(item.id),
       code: String(item.code || ""),
       title: String(item.title || ""),
     }));
-    subject.value = resolveStudentSubject(String(route.query.subject || ""), subject.value, courses.value);
+    const routeSubject = String(route.query.subject || "").trim();
+    const titles = new Set(courses.value.map((item) => item.title));
+    const nextSubject = routeSubject && !titles.has(routeSubject)
+      ? ""
+      : resolveStudentSubject(routeSubject, subject.value, courses.value);
+    subject.value = nextSubject;
+    if (!nextSubject) {
+      resetWorkspaceState();
+    }
   } catch (e: any) {
+    resetWorkspaceState();
     if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "加载课程失败");
   }
@@ -122,8 +129,7 @@ async function loadCourses() {
 
 async function loadKps() {
   if (!subject.value) {
-    kps.value = [];
-    currentKpId.value = null;
+    resetWorkspaceState();
     return;
   }
   try {
@@ -132,6 +138,7 @@ async function loadKps() {
     const routeKp = Number(route.query.kp || 0);
     currentKpId.value = routeKp && kps.value.some((item) => item.id === routeKp) ? routeKp : (kps.value[0]?.id ?? null);
   } catch (e: any) {
+    resetWorkspaceState();
     if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "加载知识点失败");
   }
@@ -194,38 +201,28 @@ function handleStateChange(payload: WorkspaceState) {
   workspaceState.value = payload;
 }
 
-function goBack() {
-  router.push({ path: "/student/dashboard", query: { ...route.query } });
-}
-
 watch(
-  () => route.query,
-  async (query) => {
-    const nextSubject = String(query.subject || "");
-    if (nextSubject && nextSubject !== subject.value) {
-      subject.value = nextSubject;
+  () => route.query.subject,
+  async (value) => {
+    const next = String(value || "").trim();
+    if (next && next !== subject.value) {
+      subject.value = next;
+      await loadCourses();
       await loadKps();
-    }
-    const nextKp = Number(query.kp || 0);
-    if (nextKp && kps.value.some((item) => item.id === nextKp)) {
-      currentKpId.value = nextKp;
+      await loadRecommendation();
+      await loadPathInfo();
     }
   },
 );
 
 watch(
-  () => route.query.subject,
-  (value) => {
-    const next = String(value || "").trim();
-    if (next && next !== subject.value) subject.value = next;
-  }
+  currentKpId,
+  async (value, oldValue) => {
+    if (value === oldValue) return;
+    await loadRecommendation();
+    await loadPathInfo();
+  },
 );
-
-watch(currentKpId, async (value, oldValue) => {
-  if (value === oldValue) return;
-  await loadRecommendation();
-  await loadPathInfo();
-});
 
 onMounted(refreshWorkspace);
 </script>
@@ -236,14 +233,14 @@ onMounted(refreshWorkspace);
       <div class="graph-page__toolbar-copy">
         <span class="graph-page__eyebrow">Knowledge Graph</span>
         <h1>知识图谱</h1>
-        <p>{{ currentCourse?.title || "当前课程" }}</p>
+        <p>{{ currentCourse?.title || "当前没有可学习课程" }}</p>
       </div>
 
       <div class="graph-page__toolbar-actions">
-        <el-select v-model="subject" class="graph-page__select" placeholder="选择课程" @change="handleCourseChange">
+        <el-select v-model="subject" class="graph-page__select" placeholder="选择课程" @change="handleCourseChange" :disabled="courses.length === 0">
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
-        <button class="graph-page__ghost-btn" type="button" @click="refreshWorkspace">刷新</button>
+        <button class="graph-page__toolbar-btn" type="button" @click="refreshWorkspace">刷新</button>
       </div>
     </section>
 
@@ -286,7 +283,7 @@ onMounted(refreshWorkspace);
   justify-content: space-between;
   gap: 14px;
   padding: 14px 18px;
-  background: linear-gradient(135deg, #eef4ff 0%, #f5fbf7 52%, #ffffff 100%);
+  background: #ffffff;
 }
 
 .graph-page__toolbar-copy {
@@ -328,16 +325,41 @@ onMounted(refreshWorkspace);
   width: 240px;
 }
 
-.graph-page__ghost-btn {
+.graph-page__toolbar-actions :deep(.el-select__wrapper) {
   min-height: 42px;
-  padding: 0 16px;
-  border-radius: 14px;
-  border: 1px solid var(--app-border);
-  background: rgba(255, 255, 255, 0.92);
-  color: #31527f;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 1px #d7e4f5 inset !important;
+}
+
+.graph-page__toolbar-actions :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #7ea9f6 inset, 0 0 0 3px rgba(87, 133, 231, 0.12) !important;
+}
+
+.graph-page__toolbar-actions :deep(.el-select__placeholder),
+.graph-page__toolbar-actions :deep(.el-select__selected-item),
+.graph-page__toolbar-actions :deep(.el-select__caret) {
+  color: #5a6f8f !important;
+}
+
+.graph-page__toolbar-btn {
+  min-width: 118px;
+  min-height: 42px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid #d7e4f5;
+  background: #ffffff;
+  color: #274263;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
+}
+
+.graph-page__toolbar-btn:hover,
+.graph-page__toolbar-btn:focus-visible {
+  border-color: #9fbef3;
+  background: #f8fbff;
+  color: #214d8f;
 }
 
 .graph-page__workspace {
