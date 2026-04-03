@@ -21,6 +21,7 @@ except ModuleNotFoundError as exc:
 
 def init_db() -> None:
     SQLModel.metadata.create_all(engine)
+    _drop_legacy_interview_tables()
     _ensure_portrait_indicator_source_values()
     _ensure_resource_type_values()
     _ensure_relation_type_values()
@@ -44,6 +45,15 @@ def init_db() -> None:
 
 def _is_postgres() -> bool:
     return engine.dialect.name.lower().startswith("postgres")
+
+
+def _drop_legacy_interview_tables() -> None:
+    for table_name in ("interviewanswer", "interviewsession"):
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+        except Exception:
+            pass
 
 
 def _ensure_columns(table_name: str, columns: dict[str, str]) -> None:

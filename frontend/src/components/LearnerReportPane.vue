@@ -159,6 +159,21 @@ type ProfileData = {
       is_high_order: boolean;
     }>;
   };
+  latest_recommendation?: {
+    target_kp_title?: string;
+    source_kp_title?: string;
+    reason_summary?: string;
+    created_at?: string;
+  };
+  evaluation_explain?: {
+    summary?: string;
+    current_stage_title?: string;
+    current_trend_label?: string;
+    explain_cards?: Array<{ key: string; label: string; score: number; score_label: string; explain: string }>;
+    next_actions?: string[];
+    teacher_feedback?: string;
+    term_reason_summary?: string;
+  };
 };
 
 const props = defineProps<{ subject: string; grade: string; reloadKey?: number }>();
@@ -215,6 +230,8 @@ const behaviorTimeline = computed(() => ((profile.value as any)?.behavior_timeli
 const recentPracticeRecords = computed(() => ((profile.value as any)?.recent_practice_records ?? []) as Array<any>);
 const recentQuizRecords = computed(() => ((profile.value as any)?.recent_quiz_records ?? []) as Array<any>);
 const recentVideoRecords = computed(() => ((profile.value as any)?.recent_video_records ?? []) as Array<any>);
+const evaluationExplain = computed(() => profile.value?.evaluation_explain ?? null);
+const latestRecommendation = computed(() => profile.value?.latest_recommendation ?? null);
 
 function bloomLevelLabel(level: string) {
   const map: Record<string, string> = {
@@ -430,6 +447,36 @@ watch(
 
     <div v-if="profile" class="report-grid">
       <LearnerReportHero class="report-grid__hero" :profile="profile" :current-stage="currentStage" :has-stage-model="hasStageModel" />
+
+      <section v-if="evaluationExplain" class="config-board report-grid__hero">
+        <div class="board-title">评价解释与下一步</div>
+        <div class="config-list">
+          <div v-if="evaluationExplain.summary" class="config-item config-item--stack">
+            <div class="config-item__title">本次评价说明</div>
+            <div class="config-item__hint">{{ evaluationExplain.summary }}</div>
+          </div>
+          <div v-if="evaluationExplain.explain_cards?.length" class="behavior-overview-grid">
+            <div v-for="item in evaluationExplain.explain_cards" :key="item.key" class="config-item config-item--stack">
+              <div class="config-item__meta">
+                <span>{{ item.label }}</span>
+                <strong>{{ Math.round(Number(item.score || 0) * 100) }}%</strong>
+              </div>
+              <div class="config-item__hint">{{ item.explain }}</div>
+              <div class="config-item__hint">状态：{{ item.score_label }}</div>
+            </div>
+          </div>
+          <div v-if="latestRecommendation?.target_kp_title" class="config-item config-item--stack">
+            <div class="config-item__title">推荐学习目标</div>
+            <div class="config-item__hint">
+              建议优先学习“{{ latestRecommendation.target_kp_title }}”
+              <span v-if="latestRecommendation.reason_summary">，原因：{{ latestRecommendation.reason_summary }}</span>
+            </div>
+          </div>
+          <div v-if="evaluationExplain.next_actions?.length" class="advice-list">
+            <div v-for="item in evaluationExplain.next_actions" :key="item" class="advice-item">{{ item }}</div>
+          </div>
+        </div>
+      </section>
 
 <section class="dimension-board">
         <div class="board-title">核心维度</div>

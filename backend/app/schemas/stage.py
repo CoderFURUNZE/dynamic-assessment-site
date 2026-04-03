@@ -70,3 +70,4 @@ class StageImportResultOut(BaseModel):
     affected_indicators: list[str] = []
     recalculated_users: int = 0
     next_action: str = ""
+    import_summary: dict = {}

@@ -169,39 +169,48 @@ def _is_course_learning_available(course: Course | None) -> bool:
 
 
 def _assert_student_subject_access(session: Session, user_id: int, subject: str) -> None:
-    """学生端按课程名（与知识点 subject 对齐）校验是否有权查看图谱；已选课/同班/审核通过者优先于「是否已开课」。"""
-    course = session.exec(select(Course).where(Course.title == subject).order_by(Course.created_at.desc())).first()
-    if course is None or course.id is None:
-        raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
-    if not _is_course_learning_available(course):
-        raise HTTPException(status_code=403, detail="当前课程已结课或未在学习周期内，暂时无法进入课程学习")
-    enrollment = session.exec(
-        select(Enrollment).where(
-            Enrollment.student_id == user_id,
-            Enrollment.course_id == int(course.id),
-            Enrollment.status == EnrollmentStatus.active,
-        )
-    ).first()
-    if enrollment is not None:
-        return
+    """???????????????????????????????????????"""
+    normalized_subject = str(subject or "").strip()
+    courses = [
+        course
+        for course in session.exec(select(Course).order_by(Course.created_at.desc())).all()
+        if str(course.title or "").strip() == normalized_subject
+    ]
+    if not courses:
+        raise HTTPException(status_code=403, detail="???????????????????")
+
     student = session.get(User, user_id)
-    if student is not None and str(student.class_name or "").strip() and str(course.target_class or "").strip():
-        if str(student.class_name).strip() == str(course.target_class).strip():
+    has_unavailable_course = False
+    for course in courses:
+        if course.id is None:
+            continue
+        enrollment = session.exec(
+            select(Enrollment).where(
+                Enrollment.student_id == user_id,
+                Enrollment.course_id == int(course.id),
+                Enrollment.status == EnrollmentStatus.active,
+            )
+        ).first()
+        if enrollment is not None:
             return
-    app_ids = {
-        int(item.id)
-        for item in session.exec(
-            select(CourseApplication).where(
+        if student is not None and str(student.class_name or "").strip() and str(course.target_class or "").strip():
+            if str(student.class_name).strip() == str(course.target_class).strip():
+                return
+        approved = session.exec(
+            select(CourseApplication.id).where(
                 CourseApplication.student_id == user_id,
                 CourseApplication.course_id == int(course.id),
                 CourseApplication.status == ApplicationStatus.approved,
             )
-        ).all()
-        if item.id is not None
-    }
-    if app_ids:
-        return
-    raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
+        ).first()
+        if approved is not None:
+            return
+        if not _is_course_learning_available(course):
+            has_unavailable_course = True
+
+    if has_unavailable_course:
+        raise HTTPException(status_code=403, detail="??????????????????????????")
+    raise HTTPException(status_code=403, detail="???????????????????")
 
 
 def _chapter_layout_map(session: Session, subject: str, grade: str) -> dict[str, dict[str, float]]:

@@ -25,6 +25,9 @@ const AdminUsersPage = () => import("./pages/AdminUsersPage.vue");
 const AdminTeachersPage = () => import("./pages/AdminTeachersPage.vue");
 const AdminDimensionsPage = () => import("./pages/AdminDimensionsPage.vue");
 const AdminPersonaRulesPage = () => import("./pages/AdminPersonaRulesPage.vue");
+const AdminConfigPage = () => import("./pages/AdminConfigPage.vue");
+const AdminAuditPage = () => import("./pages/AdminAuditPage.vue");
+const AdminExtensionsPage = () => import("./pages/AdminExtensionsPage.vue");
 
 const TeacherWorkspacePage = () => import("./pages/TeacherCoursesPage.vue");
 const TeacherGraphWorkspacePage = () => import("./pages/TeacherGraphWorkspace.vue");
@@ -34,6 +37,7 @@ const TeacherReviewWorkspacePage = () => import("./pages/TeacherReviewWorkspaceP
 const TeacherKpContentWorkspacePage = () => import("./pages/TeacherKpContentWorkspace.vue");
 const TeacherResourceDetailPage = () => import("./pages/TeacherResourceDetail.vue");
 const TeacherKpPreviewPage = () => import("./pages/StudentKpContentWorkspace.vue");
+const TeacherExtensionsPage = () => import("./pages/TeacherExtensionsPage.vue");
 
 const StartPage = () => import("./pages/Start.vue");
 const LoginPage = () => import("./pages/Login.vue");
@@ -101,6 +105,26 @@ router.addRoute({
   component: StudentReportPage,
   meta: { title: "学习报告" },
 });
+router.addRoute({
+  path: "/admin/config",
+  component: AdminConfigPage,
+  meta: { title: "系统配置" },
+});
+router.addRoute({
+  path: "/admin/audit",
+  component: AdminAuditPage,
+  meta: { title: "审计日志" },
+});
+router.addRoute({
+  path: "/admin/extensions",
+  component: AdminExtensionsPage,
+  meta: { title: "扩展与答辩" },
+});
+router.addRoute({
+  path: "/teacher/extensions",
+  component: TeacherExtensionsPage,
+  meta: { title: "扩展与答辩" },
+});
 [
   "/student/kp-content/:kpId",
   "/student/kp-content/:kpId/practice",
@@ -115,7 +139,6 @@ router.addRoute({
   });
 });
 [
-  "/student/interview",
   "/student/resource",
   "/student/quiz",
   "/student/practice",
@@ -266,11 +289,14 @@ router.beforeEach((to) => {
       const allowedAdminPaths = new Set([
         "/admin",
         "/admin/dashboard",
+        "/admin/audit",
         "/admin/basic/courses",
         "/admin/basic/users",
         "/admin/basic/teachers",
         "/admin/evaluation/dimensions",
         "/admin/evaluation/persona",
+        "/admin/config",
+        "/admin/extensions",
       ]);
       if (!allowedAdminPaths.has(to.path)) return "/admin/dashboard";
     }

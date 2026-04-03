@@ -8,6 +8,11 @@ router = APIRouter(prefix="/extensions", tags=["extensions"])
 @router.get("/overview")
 def extension_overview(_user=Depends(get_current_user)):
     return {
+        "version_scope": {
+            "current_version": "V1",
+            "positioning": "当前版本聚焦课程过程记录、阶段评价、学习画像、教师反馈和学生报告闭环。",
+            "not_in_scope": ["多元智能问卷正式版", "自评与互评正式版", "图谱截图识别建图"],
+        },
         "features": [
             {
                 "key": "multiple_intelligence",
@@ -90,5 +95,10 @@ def methodology_overview(_user=Depends(get_current_user)):
                 "scenario": "暂无推荐结果",
                 "advice": "先选择当前知识点并生成学习建议，系统会返回推荐依据和补救路径。",
             },
+        ],
+        "delivery_notes": [
+            "答辩时优先演示主线闭环，不把占位能力作为已完成能力陈述。",
+            "扩展功能页用于解释版本边界、后续计划和系统可扩展性。",
+            "当前系统强调真实渲染与真实接口联调，不使用纯前端假数据包装演示。",
         ],
     }

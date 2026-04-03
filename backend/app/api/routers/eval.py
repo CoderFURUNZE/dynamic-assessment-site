@@ -76,6 +76,16 @@ def _signal_level(value: float, *, warn_low: float | None = None, warn_high: flo
     return "attention"
 
 
+def _label_from_score(value: float) -> str:
+    if value >= 0.85:
+        return "优势"
+    if value >= 0.65:
+        return "稳定"
+    if value >= 0.45:
+        return "待加强"
+    return "薄弱"
+
+
 def _build_persona_signals(
     *,
     persona_label: str,
@@ -449,6 +459,62 @@ def profile(
         {"event_type": key, "count": count}
         for key, count in sorted(event_counter.items(), key=lambda item: item[1], reverse=True)[:10]
     ]
+    latest_recommendation = recommendation_rows_30d[0] if recommendation_rows_30d else None
+    latest_recommendation_payload = {}
+    if latest_recommendation is not None:
+        target_kp = session.get(KnowledgePoint, int(latest_recommendation.target_kp_id))
+        source_kp = session.get(KnowledgePoint, int(latest_recommendation.source_kp_id))
+        latest_recommendation_payload = {
+            "target_kp_id": int(latest_recommendation.target_kp_id),
+            "target_kp_title": target_kp.title if target_kp is not None else "",
+            "source_kp_id": int(latest_recommendation.source_kp_id),
+            "source_kp_title": source_kp.title if source_kp is not None else "",
+            "reason_summary": latest_recommendation.reason_summary,
+            "created_at": latest_recommendation.created_at.isoformat(),
+        }
+    explain_cards = [
+        {
+            "key": "engagement",
+            "label": "学习投入",
+            "score": round(float(snapshot.engagement), 4),
+            "score_label": _label_from_score(float(snapshot.engagement)),
+            "explain": "主要来自登录频率、学习时长、资源完成度和连续学习情况。",
+        },
+        {
+            "key": "achievement",
+            "label": "学习成效",
+            "score": round(float(snapshot.achievement), 4),
+            "score_label": _label_from_score(float(snapshot.achievement)),
+            "explain": "主要来自练习正确率、小测结果以及掌握度增长。",
+        },
+        {
+            "key": "course_mastery",
+            "label": "课程掌握",
+            "score": round(float(snapshot.course_mastery), 4),
+            "score_label": _label_from_score(float(snapshot.course_mastery)),
+            "explain": "反映当前课程知识点整体掌握水平，是动态评价的重要基础项。",
+        },
+        {
+            "key": "risk",
+            "label": "风险信号",
+            "score": round(float(snapshot.risk), 4),
+            "score_label": "关注" if float(snapshot.risk) >= 0.48 else "可控",
+            "explain": "主要观察拖延、错误连续出现、学习中断等风险迹象。",
+        },
+    ]
+    next_actions: list[str] = []
+    if feedback is not None and feedback.comment.strip():
+        next_actions.append(f"教师建议：{feedback.comment.strip()}")
+    if latest_recommendation_payload.get("target_kp_title"):
+        next_actions.append(
+            f"优先处理推荐知识点“{latest_recommendation_payload['target_kp_title']}”，原因：{latest_recommendation_payload.get('reason_summary') or '当前为系统推荐目标'}"
+        )
+    if weak_points:
+        weak_titles = [kp.title for kp in kps if kp.id is not None and int(kp.id) in set(weak_points[:3])]
+        if weak_titles:
+            next_actions.append("先补薄弱知识点：" + "、".join(weak_titles))
+    if not next_actions:
+        next_actions.append("当前结果较稳定，建议继续按课程阶段推进并保持练习频率。")
     return ProfileOut(
         user_id=user.id,
         course_id=int(current_stage.course_id) if current_stage is not None else int(course.id) if course and course.id is not None else None,
@@ -607,6 +673,20 @@ def profile(
             for row in video_rows_30d[:30]
             if row.id is not None
         ],
+        latest_recommendation=latest_recommendation_payload,
+        evaluation_explain={
+            "summary": (
+                current_stage.reason_summary
+                if current_stage is not None and current_stage.reason_summary
+                else snapshot.reason_summary
+            ),
+            "current_stage_title": current_stage.stage_title if current_stage is not None else "",
+            "current_trend_label": current_stage.trend_label if current_stage is not None else "",
+            "explain_cards": explain_cards,
+            "next_actions": next_actions[:4],
+            "teacher_feedback": feedback.comment if feedback is not None else "",
+            "term_reason_summary": str((portrait_summary.get("term_summary") or {}).get("final_reason_summary") or ""),
+        },
     )
 
 

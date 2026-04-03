@@ -257,6 +257,39 @@ def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
+def _build_import_summary(
+    *,
+    course: Course,
+    stage: CourseStage,
+    metric_type: str,
+    total_rows: int,
+    success_rows: int,
+    failed_rows: int,
+    recalculated_users: int,
+    source_mode: str,
+) -> dict[str, object]:
+    success_rate = (float(success_rows) / float(total_rows)) if total_rows else 0.0
+    quality_status = "excellent" if failed_rows == 0 else "warning" if success_rate >= 0.8 else "risk"
+    return {
+        "course_id": int(course.id) if course.id is not None else None,
+        "course_title": course.title,
+        "stage_id": int(stage.id) if stage.id is not None else None,
+        "stage_title": stage.title,
+        "stage_order": int(stage.stage_order),
+        "metric_type": metric_type,
+        "source_mode": source_mode,
+        "success_rate": round(success_rate, 4),
+        "quality_status": quality_status,
+        "recalculated_at": datetime.utcnow().isoformat(),
+        "recalculation_scope": f"已按当前阶段重算 {recalculated_users} 名学生的阶段画像与动态评价",
+        "quality_hint": (
+            "本次数据质量良好，可直接进入学生分析或学习报告查看结果。"
+            if failed_rows == 0
+            else "本次仍有失败记录，建议先根据错误提示修正后再补导一次。"
+        ),
+    }
+
+
 def _risk_level(dynamic_score: float) -> str:
     value = float(dynamic_score or 0.0)
     if value >= 0.85:
@@ -1548,6 +1581,115 @@ def apply_internal_behavior_summary(
         affected_indicators=["学习动机与态度", "协作能力与社交网络", "自主调节与专注度"],
         recalculated_users=recalculated_users,
         next_action="系统行为事件已导入到当前阶段画像，后续可继续叠加线下补充数据并再次重算。",
+    )
+
+
+@router.post("/one-click-import", response_model=StageImportResultOut)
+def one_click_stage_import(
+    course_id: int = Form(...),
+    stage_id: int = Form(...),
+    include_video: bool = Form(True),
+    include_practice: bool = Form(True),
+    include_mastery: bool = Form(True),
+    include_behavior: bool = Form(True),
+    session: Session = Depends(get_session),
+    user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
+):
+    course = _get_course_or_403(session, user, course_id)
+    stage = _get_stage_or_403(session, user, stage_id)
+    _assert_course_stage_editable(course)
+    if stage.course_id != course_id:
+        raise HTTPException(status_code=400, detail="stage does not belong to the course")
+    if not (include_video or include_practice or include_mastery or include_behavior):
+        raise HTTPException(status_code=400, detail="at least one import source must be enabled")
+
+    total_rows = 0
+    success_rows = 0
+    failed_rows = 0
+    batch_ids: list[int] = []
+    recalculated_users = 0
+    affected_dimensions: list[str] = []
+    affected_indicators: list[str] = []
+
+    if include_video or include_practice or include_mastery:
+        batch, summary_recalculated = _apply_internal_stage_rows(
+            session,
+            course=course,
+            stage=stage,
+            user=user,
+            include_video=include_video,
+            include_practice=include_practice,
+            include_mastery=include_mastery,
+        )
+        total_rows += int(batch.total_rows)
+        success_rows += int(batch.success_rows)
+        failed_rows += int(batch.failed_rows)
+        recalculated_users = max(recalculated_users, summary_recalculated)
+        if batch.id is not None:
+            batch_ids.append(int(batch.id))
+        affected_dimensions.extend(["learning_process", "knowledge_cognition", "emotion_social"])
+        if include_video:
+            affected_indicators.append("video_learning")
+        if include_practice:
+            affected_indicators.append("practice_performance")
+        if include_mastery:
+            affected_indicators.append("mastery_progress")
+
+    if include_behavior:
+        behavior_batch, behavior_recalculated = _apply_behavior_stage_rows(
+            session,
+            course=course,
+            stage=stage,
+            user=user,
+        )
+        total_rows += int(behavior_batch.total_rows)
+        success_rows += int(behavior_batch.success_rows)
+        failed_rows += int(behavior_batch.failed_rows)
+        recalculated_users = max(recalculated_users, behavior_recalculated)
+        if behavior_batch.id is not None:
+            batch_ids.append(int(behavior_batch.id))
+        affected_dimensions.extend(["learning_process", "emotion_social"])
+        affected_indicators.extend(["motivation_attitude", "collaboration_social", "self_regulation"])
+
+    unique_dimensions = list(dict.fromkeys(affected_dimensions))
+    unique_indicators = list(dict.fromkeys(affected_indicators))
+    latest_batch_id = batch_ids[-1] if batch_ids else 0
+    _log_action(
+        session,
+        user,
+        "stage_one_click_import",
+        "course_id=%s stage_id=%s include_video=%s include_practice=%s include_mastery=%s include_behavior=%s total=%s"
+        % (course_id, stage_id, include_video, include_practice, include_mastery, include_behavior, success_rows),
+    )
+    import_summary = _build_import_summary(
+        course=course,
+        stage=stage,
+        metric_type="one_click_auto",
+        total_rows=total_rows,
+        success_rows=success_rows,
+        failed_rows=failed_rows,
+        recalculated_users=recalculated_users,
+        source_mode="one_click_auto",
+    )
+    import_summary["batch_ids"] = batch_ids
+    import_summary["enabled_sources"] = {
+        "video": include_video,
+        "practice": include_practice,
+        "mastery": include_mastery,
+        "behavior": include_behavior,
+    }
+    return StageImportResultOut(
+        batch_id=latest_batch_id,
+        metric_type="one_click_auto",
+        total_rows=total_rows,
+        success_rows=success_rows,
+        failed_rows=failed_rows,
+        errors=[],
+        affected_dimensions=unique_dimensions,
+        affected_indicators=unique_indicators,
+        recalculated_users=recalculated_users,
+        next_action="One-click import completed. The current stage has been refreshed with system summary data and behavior signals.",
+        import_summary=import_summary,
     )
 
 

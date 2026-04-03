@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routers import admin, auth, content, enrollment, eval, extensions, graph, interview, notes, portrait_dimensions, practice, reco, stages
+from app.api.routers import admin, auth, content, enrollment, eval, extensions, graph, notes, portrait_dimensions, practice, reco, stages
 from app.core.config import settings
 from app.core.logging import init_logging
 from app.db.bootstrap import bootstrap_defaults
@@ -47,7 +47,6 @@ def create_app() -> FastAPI:
     api.include_router(stages.router)
     api.include_router(portrait_dimensions.router)
     api.include_router(admin.router)
-    api.include_router(interview.router)
     app.mount(settings.api_prefix, api)
     return app
 

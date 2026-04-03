@@ -412,3 +412,125 @@
 2026-04-02 16:14:59,170 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
 2026-04-02 16:19:08,737 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
 2026-04-02 16:19:08,894 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=TEST-JOIN teacher_id=2
+2026-04-03 08:59:03,068 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_085901 role=student
+2026-04-03 08:59:03,165 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E085901 title=E2E????085901 teacher_id=2
+2026-04-03 09:01:31,664 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_090130 role=student
+2026-04-03 09:01:31,735 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E090130 title=测试课程 teacher_id=2
+2026-04-03 09:12:39,134 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_091237 role=student
+2026-04-03 09:12:39,203 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E091237 title=测试课程 teacher_id=2
+2026-04-03 09:42:44,831 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_094243 role=student
+2026-04-03 09:42:44,889 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E094243 title=测试课程 teacher_id=2
+2026-04-03 10:20:04,187 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_102002 role=student
+2026-04-03 10:20:04,307 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E102002 title=测试课程 teacher_id=2
+2026-04-03 10:22:36,823 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_102235 role=student
+2026-04-03 10:22:36,875 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E102235 title=测试课程 teacher_id=2
+2026-04-03 14:08:47,276 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_140846 role=student
+2026-04-03 14:08:47,341 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E140846 title=测试课程 teacher_id=2
+2026-04-03 14:42:10,451 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_144208 role=student
+2026-04-03 14:42:10,582 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E144208 title=测试课程 teacher_id=2
+2026-04-03 14:42:11,034 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=17 stage_id=4
+2026-04-03 14:46:37,640 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_144636 role=student
+2026-04-03 14:46:37,707 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E144636 title=测试课程 teacher_id=2
+2026-04-03 14:46:37,778 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=18 stage_id=5
+2026-04-03 14:46:38,495 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=18 stage_id=5 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 14:48:06,650 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_144805 role=student
+2026-04-03 14:48:06,709 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E144805 title=测试课程 teacher_id=2
+2026-04-03 14:48:06,781 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=19 stage_id=6
+2026-04-03 14:48:07,365 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=19 stage_id=6 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 15:04:47,784 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_150446 role=student
+2026-04-03 15:04:47,847 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E150446 title=测试课程 teacher_id=2
+2026-04-03 15:04:47,913 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=20 stage_id=7
+2026-04-03 15:04:48,604 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=20 stage_id=7 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 15:22:12,649 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_152211 role=student
+2026-04-03 15:22:12,761 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E152211 title=测试课程 teacher_id=2
+2026-04-03 15:22:12,861 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=21 stage_id=8
+2026-04-03 15:22:13,578 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=21 stage_id=8 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 15:51:32,989 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_155131 role=student
+2026-04-03 15:55:01,850 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_155500 role=student
+2026-04-03 15:55:02,185 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 15:55:02,509 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 15:55:02,587 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E155500 title=测试课程 teacher_id=2
+2026-04-03 15:55:02,714 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=22 stage_id=9
+2026-04-03 15:55:03,482 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=22 stage_id=9 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 15:55:10,547 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_155509 role=student
+2026-04-03 15:55:10,854 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 15:55:11,152 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 15:55:11,204 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E155509 title=测试课程 teacher_id=2
+2026-04-03 15:55:11,267 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=23 stage_id=10
+2026-04-03 15:55:11,851 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=23 stage_id=10 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:01:15,168 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_160113 role=student
+2026-04-03 16:04:22,230 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_160420 role=student
+2026-04-03 16:04:22,612 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 16:04:22,925 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 16:04:23,018 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E160420 title=测试课程 teacher_id=2
+2026-04-03 16:04:23,102 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=24 stage_id=11
+2026-04-03 16:04:23,848 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=24 stage_id=11 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:04:36,264 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_160435 role=student
+2026-04-03 16:04:36,593 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 16:04:36,892 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 16:04:36,965 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E160435 title=测试课程 teacher_id=2
+2026-04-03 16:04:37,039 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=25 stage_id=12
+2026-04-03 16:04:37,715 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=25 stage_id=12 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:12:16,509 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_161215 role=student
+2026-04-03 16:12:16,608 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EI161215 title=测试课程-IMPORT teacher_id=2
+2026-04-03 16:12:17,053 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 16:12:17,771 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 16:12:17,849 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E161215 title=测试课程 teacher_id=2
+2026-04-03 16:12:17,941 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=27 stage_id=13
+2026-04-03 16:12:18,989 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=27 stage_id=13 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:12:33,409 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_161232 role=student
+2026-04-03 16:12:33,490 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EI161232 title=测试课程-IMPORT teacher_id=2
+2026-04-03 16:12:33,953 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 16:12:34,634 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 16:12:34,686 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E161232 title=测试课程 teacher_id=2
+2026-04-03 16:12:34,759 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=29 stage_id=14
+2026-04-03 16:12:35,487 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=29 stage_id=14 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:22:10,736 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_162209 role=student
+2026-04-03 16:22:10,830 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EI162209 title=测试课程-IMPORT teacher_id=2
+2026-04-03 16:22:11,225 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 16:22:11,922 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 16:22:11,979 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E162209 title=测试课程 teacher_id=2
+2026-04-03 16:22:12,054 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=31 stage_id=15
+2026-04-03 16:22:12,918 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=31 stage_id=15 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:23:41,345 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_162340 role=student
+2026-04-03 16:23:41,433 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EI162340 title=测试课程-IMPORT teacher_id=2
+2026-04-03 16:23:41,784 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 16:23:42,429 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 16:23:42,477 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E162340 title=测试课程 teacher_id=2
+2026-04-03 16:23:42,556 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=33 stage_id=16
+2026-04-03 16:23:43,248 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=33 stage_id=16 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:35:48,706 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_163547 role=student
+2026-04-03 16:35:48,789 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EI163547 title=测试课程-IMPORT teacher_id=2
+2026-04-03 16:35:49,182 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 16:35:49,862 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 16:35:49,942 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E163547 title=测试课程 teacher_id=2
+2026-04-03 16:35:50,041 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=35 stage_id=17
+2026-04-03 16:35:50,788 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=35 stage_id=17 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:43:28,052 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_164326 role=student
+2026-04-03 16:43:28,192 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EI164326 title=测试课程-IMPORT teacher_id=2
+2026-04-03 16:43:28,724 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 16:43:29,563 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 16:43:29,643 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E164326 title=测试课程 teacher_id=2
+2026-04-03 16:43:29,732 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=37 stage_id=18
+2026-04-03 16:43:30,603 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=37 stage_id=18 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:55:04,404 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_dyn_student_165502 role=student
+2026-04-03 16:55:04,530 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EDYN165502 title=测试课程 teacher_id=2
+2026-04-03 16:55:04,646 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=38 stage_id=19
+2026-04-03 16:55:05,714 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=38 stage_id=19 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:55:06,233 INFO app.audit actor=teacher1 role=teacher action=stage_feedback_save detail=user_id=50 stage_id=19
+2026-04-03 16:58:19,574 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_dyn_student_165818 role=student
+2026-04-03 16:58:19,641 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EDYN165818 title=测试课程 teacher_id=2
+2026-04-03 16:58:19,707 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=39 stage_id=20
+2026-04-03 16:58:20,327 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=39 stage_id=20 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 16:58:20,543 INFO app.audit actor=teacher1 role=teacher action=stage_feedback_save detail=user_id=51 stage_id=20
+2026-04-03 17:02:08,429 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_170207 role=student
+2026-04-03 17:02:08,507 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EI170207 title=测试课程-IMPORT teacher_id=2
+2026-04-03 17:02:08,885 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-03 17:02:09,554 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-03 17:02:09,613 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E170207 title=测试课程 teacher_id=2
+2026-04-03 17:02:09,690 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=41 stage_id=21
+2026-04-03 17:02:10,362 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=41 stage_id=21 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-03 17:04:01,539 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_dynfix_student_170400 role=student
+2026-04-03 17:04:01,631 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EDFIX170400 title=测试课程 teacher_id=2
+2026-04-03 17:04:01,726 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=42 stage_id=22
+2026-04-03 17:04:02,406 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=42 stage_id=22 include_video=True include_practice=True include_mastery=True include_behavior=True total=3

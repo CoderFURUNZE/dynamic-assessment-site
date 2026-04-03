@@ -67,6 +67,15 @@ export const appNavigation: Record<"student" | "teacher" | "admin", AppNavItem[]
       ],
     },
     {
+      key: "teacher-extra-group",
+      label: "扩展说明",
+      path: "/teacher/extensions",
+      icon: Setting,
+      children: [
+        { key: "teacher-extensions", label: "扩展与答辩", path: "/teacher/extensions" },
+      ],
+    },
+    {
       key: "teacher-review-group",
       label: "审核与评分",
       path: "/teacher/review?tab=enrollment",
@@ -85,6 +94,7 @@ export const appNavigation: Record<"student" | "teacher" | "admin", AppNavItem[]
       icon: Histogram,
       children: [
         { key: "admin-dashboard", label: "总览首页", path: "/admin/dashboard" },
+        { key: "admin-audit", label: "审计日志", path: "/admin/audit" },
       ],
     },
     {
@@ -106,6 +116,8 @@ export const appNavigation: Record<"student" | "teacher" | "admin", AppNavItem[]
       children: [
         { key: "admin-dimensions", label: "维度指标", path: "/admin/evaluation/dimensions" },
         { key: "admin-persona", label: "画像规则", path: "/admin/evaluation/persona" },
+        { key: "admin-config", label: "系统配置", path: "/admin/config" },
+        { key: "admin-extensions", label: "扩展与答辩", path: "/admin/extensions" },
       ],
     },
   ],

@@ -138,6 +138,8 @@ class ProfileOut(BaseModel):
     recent_practice_records: list[dict] = []
     recent_quiz_records: list[dict] = []
     recent_video_records: list[dict] = []
+    latest_recommendation: dict = {}
+    evaluation_explain: dict = {}
 
 
 class MasteryMapItem(BaseModel):

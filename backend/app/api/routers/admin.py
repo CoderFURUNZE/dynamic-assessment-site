@@ -51,8 +51,6 @@ from app.db.models import (
     ExpressionEvent,
     StageImportBatch,
     StageImportRecord,
-    InterviewAnswer,
-    InterviewSession,
     StageEvaluationSnapshot,
     TeacherFinalScoreConfirmation,
     TeacherPortraitIndicatorInput,
@@ -85,6 +83,8 @@ from app.schemas.admin import (
     AdminPracticeReportOut,
     AuditLogOut,
     TeacherFinalScoreConfirmIn,
+    UserImportPreviewOut,
+    UserImportResultOut,
     UserOut,
     UserUpdateIn,
 )
@@ -123,6 +123,11 @@ from app.services.kp_tagging import auto_tag_knowledge_points
 router = APIRouter(prefix="/admin", tags=["admin"])
 logger = logging.getLogger("app.audit")
 
+try:
+    from openpyxl import load_workbook
+except Exception:  # pragma: no cover - dependency guard
+    load_workbook = None
+
 
 def _log_action(session: Session | None, user: User | None, action: str, detail: str = "") -> None:
     if user is None:
@@ -148,6 +153,167 @@ def _log_action(session: Session | None, user: User | None, action: str, detail:
         if session is not None:
             session.rollback()
         logger.info("action=%s detail=%s", action, detail)
+
+
+USER_IMPORT_FIELD_ALIASES: dict[str, list[str]] = {
+    "username": ["用户名", "账号"],
+    "password": ["密码", "初始密码"],
+    "full_name": ["姓名", "教师姓名", "学生姓名"],
+    "student_no": ["学号", "工号", "编号"],
+    "class_name": ["班级", "所属班级", "行政班"],
+    "phone": ["手机号", "电话", "手机"],
+    "active": ["状态", "是否启用", "启用"],
+}
+
+
+def _normalize_user_import_row(row: dict[str, str]) -> dict[str, str]:
+    normalized = {str(key).strip(): "" if value is None else str(value).strip() for key, value in row.items()}
+    for canonical, aliases in USER_IMPORT_FIELD_ALIASES.items():
+        if canonical in normalized and normalized[canonical]:
+            continue
+        for alias in aliases:
+            if alias in normalized and normalized[alias]:
+                normalized[canonical] = normalized[alias]
+                break
+    return normalized
+
+
+def _user_rows_from_upload(file: UploadFile, payload: bytes) -> list[dict[str, str]]:
+    name = (file.filename or "").lower()
+    if name.endswith(".csv") or name.endswith(".txt"):
+        text = payload.decode("utf-8-sig")
+        reader = csv.DictReader(StringIO(text))
+        return [_normalize_user_import_row(row) for row in reader]
+    if name.endswith(".xlsx"):
+        if load_workbook is None:
+            raise HTTPException(status_code=400, detail="xlsx import requires openpyxl")
+        wb = load_workbook(BytesIO(payload), data_only=True)
+        ws = wb.active
+        values = list(ws.iter_rows(values_only=True))
+        if not values:
+            return []
+        headers = [str(item).strip() if item is not None else "" for item in values[0]]
+        rows: list[dict[str, str]] = []
+        for value_row in values[1:]:
+            item: dict[str, str] = {}
+            for idx, header in enumerate(headers):
+                if not header:
+                    continue
+                cell = value_row[idx] if idx < len(value_row) else ""
+                item[header] = "" if cell is None else str(cell).strip()
+            rows.append(_normalize_user_import_row(item))
+        return rows
+    raise HTTPException(status_code=400, detail="Only .csv and .xlsx files are supported")
+
+
+def _to_active_flag(raw_value: str | None) -> bool:
+    raw = str(raw_value or "").strip().lower()
+    if not raw:
+        return True
+    return raw in {"1", "true", "yes", "y", "启用", "active", "enabled"}
+
+
+def _user_import_template_csv(role: str) -> str:
+    if role == UserRole.teacher.value:
+        rows = [
+            "username,password,full_name,student_no,class_name,phone,active",
+            "teacher_demo,Temp1234,张老师,T0001,教研组A,13800138000,true",
+        ]
+    else:
+        rows = [
+            "username,password,full_name,student_no,class_name,phone,active",
+            "student_demo,Temp1234,张同学,20260001,软件工程1班,13800138001,true",
+        ]
+    return "\n".join(rows) + "\n"
+
+
+def _preview_user_import_rows(
+    *,
+    session: Session,
+    role_value: str,
+    rows: list[dict[str, str]],
+) -> UserImportPreviewOut:
+    required_fields = ["username", "password", "full_name"]
+    detected_fields = sorted({key for row in rows for key in row.keys() if key})
+    warnings: list[str] = []
+    errors: list[str] = []
+    valid_rows = 0
+    seen_usernames: set[str] = set()
+    seen_phones: set[str] = set()
+    matched_courses: list[dict] = []
+
+    missing_required = [field for field in required_fields if field not in detected_fields]
+    if missing_required:
+        warnings.append(f"缺少模板字段：{', '.join(missing_required)}")
+
+    for index, row in enumerate(rows, start=2):
+        username = (row.get("username") or "").strip()
+        password = (row.get("password") or "").strip()
+        full_name = (row.get("full_name") or "").strip()
+        phone = (row.get("phone") or "").strip()
+        row_errors: list[str] = []
+
+        if not username:
+            row_errors.append("username is required")
+        if not full_name:
+            row_errors.append("full_name is required")
+        existing = session.exec(select(User).where(User.username == username)).first() if username else None
+        if existing is None and not password:
+            row_errors.append("password is required for new user")
+        if username:
+            if username in seen_usernames:
+                row_errors.append(f"duplicate username in file: {username}")
+            seen_usernames.add(username)
+        if phone:
+            phone_owner = session.exec(select(User).where(User.phone == phone)).first()
+            if phone_owner is not None and (existing is None or int(phone_owner.id) != int(existing.id)):
+                row_errors.append(f"phone already exists: {phone}")
+            if phone in seen_phones:
+                row_errors.append(f"duplicate phone in file: {phone}")
+            seen_phones.add(phone)
+
+        if row_errors:
+            errors.append(f"row {index}: {'; '.join(row_errors)}")
+        else:
+            valid_rows += 1
+
+    if role_value == UserRole.teacher.value:
+        warnings.append("教师导入会统一写入 teacher 角色，已有同名账号会被更新。")
+    else:
+        warnings.append("学生导入会统一写入 student 角色，已有同名账号会被更新。")
+        class_names = sorted({(row.get("class_name") or "").strip() for row in rows if (row.get("class_name") or "").strip()})
+        if class_names:
+            courses = session.exec(
+                select(Course).where(
+                    Course.active == True,  # noqa: E712
+                    Course.lifecycle_status == CourseLifecycleStatus.active,
+                    Course.target_class.in_(class_names),
+                )
+            ).all()
+            matched_courses = [
+                {
+                    "course_id": int(course.id),
+                    "course_title": course.title,
+                    "course_code": course.code,
+                    "target_class": course.target_class,
+                }
+                for course in courses
+                if course.id is not None
+            ]
+            if matched_courses:
+                warnings.append(f"检测到 {len(matched_courses)} 门课程将按班级自动分配学生。")
+
+    return UserImportPreviewOut(
+        role=role_value,
+        total_rows=len(rows),
+        valid_rows=valid_rows,
+        invalid_rows=max(0, len(rows) - valid_rows),
+        required_fields=required_fields,
+        detected_fields=detected_fields,
+        matched_courses=matched_courses,
+        warnings=warnings[:20],
+        errors=errors[:20],
+    )
 
 
 def _bilibili_embed_url(*, bvid: str, page: int) -> str:
@@ -220,6 +386,55 @@ def _sync_course_class_enrollments(session: Session, course: Course) -> None:
         session.commit()
 
 
+def _sync_student_class_enrollments_for_user(session: Session, user: User) -> int:
+    if user.id is None or user.role != UserRole.student or not bool(user.active):
+        return 0
+    target_class = str(user.class_name or "").strip()
+    if not target_class:
+        return 0
+    courses = session.exec(
+        select(Course).where(
+            Course.active == True,  # noqa: E712
+            Course.lifecycle_status == CourseLifecycleStatus.active,
+            Course.target_class == target_class,
+        )
+    ).all()
+    if not courses:
+        return 0
+    course_ids = [int(course.id) for course in courses if course.id is not None]
+    existing_rows = session.exec(
+        select(Enrollment).where(
+            Enrollment.student_id == int(user.id),
+            Enrollment.course_id.in_(course_ids),
+        )
+    ).all()
+    existing_map = {int(item.course_id): item for item in existing_rows if item.course_id is not None}
+    created_or_reactivated = 0
+    for course in courses:
+        if course.id is None:
+            continue
+        course_id = int(course.id)
+        existing = existing_map.get(course_id)
+        if existing is None:
+            session.add(
+                Enrollment(
+                    student_id=int(user.id),
+                    course_id=course_id,
+                    application_id=None,
+                    status=EnrollmentStatus.active,
+                )
+            )
+            created_or_reactivated += 1
+            continue
+        if existing.status != EnrollmentStatus.active:
+            existing.status = EnrollmentStatus.active
+            session.add(existing)
+            created_or_reactivated += 1
+    if created_or_reactivated:
+        session.commit()
+    return created_or_reactivated
+
+
 def _snapshot_for_user(session: Session, *, user_id: int, subject: str, grade: str):
     snapshot = get_latest_profile_snapshot(session, user_id=user_id, subject=subject, grade=grade)
     if snapshot is None:
@@ -234,8 +449,33 @@ def _snapshot_for_user(session: Session, *, user_id: int, subject: str, grade: s
     return snapshot
 
 
-def _resolve_course_for_subject(session: Session, *, subject: str) -> Course | None:
-    return session.exec(select(Course).where(Course.title == subject)).first()
+def _resolve_course_for_subject(
+    session: Session,
+    *,
+    subject: str,
+    grade: str | None = None,
+    admin: User | None = None,
+) -> Course | None:
+    stmt = select(Course).where(Course.title == subject)
+    if admin is not None and admin.role == UserRole.teacher:
+        stmt = stmt.where(Course.teacher_id == admin.id)
+    if grade:
+        stmt = (
+            stmt.join(CourseStage, CourseStage.course_id == Course.id)
+            .where(
+                CourseStage.subject == subject,
+                CourseStage.grade == grade,
+            )
+            .distinct()
+        )
+    stmt = stmt.order_by(Course.active.desc(), Course.id.desc())
+    course = session.exec(stmt).first()
+    if course is not None or not grade:
+        return course
+    fallback = select(Course).where(Course.title == subject)
+    if admin is not None and admin.role == UserRole.teacher:
+        fallback = fallback.where(Course.teacher_id == admin.id)
+    return session.exec(fallback.order_by(Course.active.desc(), Course.id.desc())).first()
 
 
 def _check_teacher_subject_access(*, admin: User, course: Course | None) -> None:
@@ -1174,8 +1414,137 @@ def create_user(
     )
     session.add(user)
     session.commit()
+    session.refresh(user)
+    if user.role == UserRole.student:
+        _sync_student_class_enrollments_for_user(session, user)
     _log_action(session, _admin, "user_create", f"username={username} role={role}")
     return {"ok": True, "user_id": user.id}
+
+
+@router.get("/users/import-template")
+def download_user_import_template(
+    role: str = UserRole.student.value,
+    _admin=Depends(require_role(UserRole.admin)),
+):
+    role_value = str(role or UserRole.student.value).strip().lower()
+    if role_value not in {UserRole.student.value, UserRole.teacher.value}:
+        raise HTTPException(status_code=400, detail="role must be student or teacher")
+    content = _user_import_template_csv(role_value)
+    filename = f"{role_value}_import_template.csv"
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/users/import", response_model=UserImportResultOut)
+def import_users(
+    role: str = Form(UserRole.student.value),
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    admin=Depends(require_role(UserRole.admin)),
+):
+    role_value = str(role or UserRole.student.value).strip().lower()
+    if role_value not in {UserRole.student.value, UserRole.teacher.value}:
+        raise HTTPException(status_code=400, detail="role must be student or teacher")
+
+    payload = file.file.read()
+    rows = _user_rows_from_upload(file, payload)
+    total_rows = len(rows)
+    success_rows = 0
+    failed_rows = 0
+    created_rows = 0
+    updated_rows = 0
+    auto_enrolled_rows = 0
+    errors: list[str] = []
+
+    for index, row in enumerate(rows, start=2):
+        username = (row.get("username") or "").strip()
+        password = (row.get("password") or "").strip()
+        phone = (row.get("phone") or "").strip() or None
+        try:
+            if not username:
+                raise ValueError("username is required")
+            existing = session.exec(select(User).where(User.username == username)).first()
+            phone_owner = session.exec(select(User).where(User.phone == phone)).first() if phone else None
+            if phone_owner is not None and (existing is None or int(phone_owner.id) != int(existing.id)):
+                raise ValueError(f"phone already exists: {phone}")
+
+            if existing is None:
+                if not password:
+                    raise ValueError("password is required for new user")
+                user = User(
+                    username=username,
+                    password_hash=hash_password(password),
+                    role=UserRole(role_value),
+                    active=_to_active_flag(row.get("active")),
+                    full_name=(row.get("full_name") or "").strip(),
+                    student_no=(row.get("student_no") or "").strip(),
+                    class_name=(row.get("class_name") or "").strip(),
+                    phone=phone,
+                )
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+                if user.role == UserRole.student:
+                    auto_enrolled_rows += _sync_student_class_enrollments_for_user(session, user)
+                created_rows += 1
+            else:
+                existing.role = UserRole(role_value)
+                existing.active = _to_active_flag(row.get("active")) if (row.get("active") or "").strip() else bool(existing.active)
+                if row.get("full_name") is not None:
+                    existing.full_name = (row.get("full_name") or "").strip()
+                if row.get("student_no") is not None:
+                    existing.student_no = (row.get("student_no") or "").strip()
+                if row.get("class_name") is not None:
+                    existing.class_name = (row.get("class_name") or "").strip()
+                existing.phone = phone
+                if password:
+                    existing.password_hash = hash_password(password)
+                session.add(existing)
+                session.commit()
+                session.refresh(existing)
+                if existing.role == UserRole.student:
+                    auto_enrolled_rows += _sync_student_class_enrollments_for_user(session, existing)
+                updated_rows += 1
+            success_rows += 1
+        except Exception as exc:
+            session.rollback()
+            failed_rows += 1
+            errors.append(f"row {index}: {exc}")
+
+    _log_action(
+        session,
+        admin,
+        "user_import",
+        f"role={role_value} total={total_rows} success={success_rows} failed={failed_rows}",
+    )
+    return UserImportResultOut(
+        role=role_value,
+        total_rows=total_rows,
+        success_rows=success_rows,
+        failed_rows=failed_rows,
+        created_rows=created_rows,
+        updated_rows=updated_rows,
+        auto_enrolled_rows=auto_enrolled_rows,
+        errors=errors[:20],
+    )
+
+
+@router.post("/users/import/preview", response_model=UserImportPreviewOut)
+def preview_user_import(
+    role: str = Form(UserRole.student.value),
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    _admin=Depends(require_role(UserRole.admin)),
+):
+    role_value = str(role or UserRole.student.value).strip().lower()
+    if role_value not in {UserRole.student.value, UserRole.teacher.value}:
+        raise HTTPException(status_code=400, detail="role must be student or teacher")
+    payload = file.file.read()
+    rows = _user_rows_from_upload(file, payload)
+    return _preview_user_import_rows(session=session, role_value=role_value, rows=rows)
 
 
 @router.get("/courses")
@@ -1476,6 +1845,8 @@ def update_user(
     session.add(u)
     session.commit()
     session.refresh(u)
+    if u.role == UserRole.student:
+        _sync_student_class_enrollments_for_user(session, u)
     _log_action(session, _admin, "user_update", f"user_id={user_id}")
     return UserOut(
         id=u.id,
@@ -1729,28 +2100,17 @@ def delete_kp(
         for qid in session.exec(select(Quiz.id).where(Quiz.kp_id == kp_id)).all()
         if qid is not None
     ]
-    interview_session_ids = [
-        int(sid)
-        for sid in session.exec(select(InterviewSession.id).where(InterviewSession.kp_id == kp_id)).all()
-        if sid is not None
-    ]
-
     try:
         # 与题目、测验相关
         if question_ids:
             session.exec(delete(PracticeAttempt).where(PracticeAttempt.question_id.in_(question_ids)))
             session.exec(delete(ReviewSchedule).where(ReviewSchedule.question_id.in_(question_ids)))
             session.exec(delete(KpQuestionAssignment).where(KpQuestionAssignment.question_id.in_(question_ids)))
-            session.exec(delete(InterviewAnswer).where(InterviewAnswer.question_id.in_(question_ids)))
             session.exec(delete(Question).where(Question.id.in_(question_ids)))
         if quiz_ids:
             session.exec(delete(QuizAttempt).where(QuizAttempt.quiz_id.in_(quiz_ids)))
             session.exec(delete(QuizItem).where(QuizItem.quiz_id.in_(quiz_ids)))
             session.exec(delete(Quiz).where(Quiz.id.in_(quiz_ids)))
-        if interview_session_ids:
-            session.exec(delete(InterviewAnswer).where(InterviewAnswer.session_id.in_(interview_session_ids)))
-            session.exec(delete(InterviewSession).where(InterviewSession.id.in_(interview_session_ids)))
-
         # 与知识点直接关联
         session.exec(delete(KnowledgeEdge).where((KnowledgeEdge.prereq_id == kp_id) | (KnowledgeEdge.next_id == kp_id)))
         session.exec(delete(LearningResource).where(LearningResource.kp_id == kp_id))
@@ -1763,7 +2123,6 @@ def delete_kp(
         session.exec(delete(Note).where(Note.kp_id == kp_id))
         session.exec(delete(VideoProgress).where(VideoProgress.kp_id == kp_id))
         session.exec(delete(KpQuestionAssignment).where(KpQuestionAssignment.kp_id == kp_id))
-        session.exec(delete(InterviewAnswer).where(InterviewAnswer.kp_id == kp_id))
         session.exec(delete(StageImportRecord).where(StageImportRecord.kp_id == kp_id))
         session.exec(delete(LearningBehaviorEvent).where(LearningBehaviorEvent.kp_id == kp_id))
         session.exec(delete(RecommendationLog).where((RecommendationLog.source_kp_id == kp_id) | (RecommendationLog.target_kp_id == kp_id)))
@@ -1787,7 +2146,7 @@ def graph_kp_coverage(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     """各知识点挂载资源数、题库题数、任务数、是否配置小测（教师端图谱缺省提示）。"""
-    course = _resolve_course_for_subject(session, subject=subject)
+    course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(admin=admin, course=course)
     kps = session.exec(
         select(KnowledgePoint)
@@ -1857,7 +2216,7 @@ def graph_export(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     """导出当前课程（subject+grade）下的知识点、知识边、章节边。"""
-    course = _resolve_course_for_subject(session, subject=subject)
+    course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(admin=admin, course=course)
     format = (format or "json").strip().lower()
     if format not in {"json", "csv"}:
@@ -3608,7 +3967,7 @@ def list_persona_students(
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = _resolve_course_for_subject(session, subject=subject)
+    course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(admin=admin, course=course)
     students = session.exec(select(User).where(User.role == UserRole.student).order_by(User.id)).all()
     items = []
@@ -3720,7 +4079,7 @@ def get_stage_feedback(
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = _resolve_course_for_subject(session, subject=subject)
+    course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(admin=admin, course=course)
     row = get_stage_teacher_feedback(session, user_id=user_id, subject=subject, grade=grade, stage_id=stage_id)
     if row is None:
@@ -3744,7 +4103,7 @@ def get_stage_feedback_history(
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = _resolve_course_for_subject(session, subject=subject)
+    course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(admin=admin, course=course)
 
     rows = session.exec(
@@ -3842,10 +4201,27 @@ def analytics_overview(
         subject = subject or first_kp.subject
         grade = grade or first_kp.grade
 
-    course = _resolve_course_for_subject(session, subject=subject)
+    course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(admin=admin, course=course)
 
-    students = session.exec(select(User).where(User.role == UserRole.student).order_by(User.id)).all()
+    student_stmt = select(User).where(User.role == UserRole.student)
+    if course is not None and course.id is not None:
+        active_student_ids = _active_course_student_ids(session, course_id=int(course.id))
+        if not active_student_ids:
+            return AdminAnalyticsOut(
+                subject=subject,
+                grade=grade,
+                total_students=0,
+                persona_distribution=[],
+                stage_summary=[],
+                latest_stage=None,
+                risk_students=[],
+                weak_kps=[],
+                progress_ranking=[],
+                ability_practice_cohort={},
+            )
+        student_stmt = student_stmt.where(User.id.in_(active_student_ids))
+    students = session.exec(student_stmt.order_by(User.id)).all()
     student_ids = [int(item.id) for item in students if item.id is not None]
     snapshots = [
         _snapshot_for_user(session, user_id=int(student.id), subject=subject, grade=grade)
@@ -4007,7 +4383,7 @@ def analytics_student_detail(
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = _resolve_course_for_subject(session, subject=subject)
+    course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(admin=admin, course=course)
     return _build_student_detail_payload(
         session,
@@ -4025,7 +4401,7 @@ def list_final_score_students(
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = _resolve_course_for_subject(session, subject=subject)
+    course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(admin=admin, course=course)
     student_stmt = select(User).where(User.role == UserRole.student)
     if course is not None and course.id is not None:
@@ -4075,7 +4451,7 @@ def final_score_detail(
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = _resolve_course_for_subject(session, subject=subject)
+    course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(admin=admin, course=course)
     if course is not None and course.id is not None:
         active_student_ids = set(_active_course_student_ids(session, course_id=int(course.id)))
@@ -4096,7 +4472,7 @@ def confirm_final_score(
     session: Session = Depends(get_session),
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    course = _resolve_course_for_subject(session, subject=payload.subject)
+    course = _resolve_course_for_subject(session, subject=payload.subject, grade=payload.grade, admin=admin)
     if course is None or course.id is None:
         raise HTTPException(status_code=404, detail="课程不存在")
     _check_teacher_subject_access(admin=admin, course=course)

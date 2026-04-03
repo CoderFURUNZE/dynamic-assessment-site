@@ -508,31 +508,6 @@ class KpQuestionAssignment(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("kp_id", "question_id"),)
 
 
-class InterviewSession(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id", index=True)
-    subject: str = Field(index=True)
-    grade: str = Field(index=True)
-    kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
-    duration_minutes: int = 15
-    total_questions: int = 0
-    question_ids_json: str = "[]"
-    completed: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    completed_at: Optional[datetime] = Field(default=None, index=True)
-
-
-class InterviewAnswer(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    session_id: int = Field(foreign_key="interviewsession.id", index=True)
-    question_id: int = Field(foreign_key="question.id", index=True)
-    kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
-    answer: str
-    correct: bool
-    rationale: str = ""
-    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-
-
 class AuditLog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     actor: str = Field(index=True)

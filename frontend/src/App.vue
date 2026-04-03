@@ -84,13 +84,17 @@ const activeNavKey = computed(() => {
     if (tab === "final") return "teacher-review-final";
     return "teacher-review-enrollment";
   }
+  if (route.path.startsWith("/teacher/extensions")) return "teacher-extensions";
 
   if (route.path.startsWith("/admin/dashboard")) return "admin-dashboard";
+  if (route.path.startsWith("/admin/audit")) return "admin-audit";
   if (route.path.startsWith("/admin/basic/courses")) return "admin-courses";
   if (route.path.startsWith("/admin/basic/users")) return "admin-users";
   if (route.path.startsWith("/admin/basic/teachers")) return "admin-teachers";
   if (route.path.startsWith("/admin/evaluation/dimensions")) return "admin-dimensions";
   if (route.path.startsWith("/admin/evaluation/persona")) return "admin-persona";
+  if (route.path.startsWith("/admin/config")) return "admin-config";
+  if (route.path.startsWith("/admin/extensions")) return "admin-extensions";
   return "";
 });
 

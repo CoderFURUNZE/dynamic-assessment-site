@@ -8,8 +8,8 @@ from app.core.security import ALGORITHM
 from app.db.models import (
     ApplicationStatus,
     Course,
-    CourseLifecycleStatus,
     CourseApplication,
+    CourseLifecycleStatus,
     Enrollment,
     EnrollmentStatus,
     KnowledgePoint,
@@ -45,18 +45,16 @@ def require_role(*roles: UserRole):
     def _inner(request: Request, user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-        # 管理员端职责收口：管理员不可直接访问课程内容管理接口
+        # Limit a small set of teacher-owned content APIs for admin accounts.
         if user.role == UserRole.admin:
             path = request.url.path
             admin_content_prefixes = (
-                "/api/admin/kps",
                 "/api/admin/edges",
-                "/api/admin/questions",
                 "/api/admin/kp-resources",
                 "/api/admin/kp-tasks",
-                "/api/admin/seed",
                 "/api/admin/practice/report",
-                "/api/admin/audit",
+                "/api/admin/questions",
+                "/api/admin/seed",
             )
             if path.startswith(admin_content_prefixes):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin cannot access course-content APIs")
@@ -82,43 +80,56 @@ def _is_course_learning_available(course: Course | None) -> bool:
 
 
 def assert_student_subject_access(session: Session, user_id: int, subject: str) -> None:
-    course = session.exec(select(Course).where(Course.title == subject).order_by(Course.created_at.desc())).first()
-    if course is None or course.id is None:
-        raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
-
-    enrollment = session.exec(
-        select(Enrollment).where(
-            Enrollment.student_id == user_id,
-            Enrollment.course_id == int(course.id),
-            Enrollment.status == EnrollmentStatus.active,
-        )
-    ).first()
-    if enrollment is not None:
-        return
+    normalized_subject = str(subject or "").strip()
+    courses = [
+        course
+        for course in session.exec(select(Course).order_by(Course.created_at.desc())).all()
+        if str(course.title or "").strip() == normalized_subject
+    ]
+    if not courses:
+        raise HTTPException(status_code=403, detail="浣犲皻鏈€氳繃璇ヨ绋嬪鏍革紝鏆傛椂鏃犳硶杩涘叆璇剧▼")
 
     student = session.get(User, user_id)
-    if student is not None and str(student.class_name or "").strip() and str(course.target_class or "").strip():
-        if str(student.class_name).strip() == str(course.target_class).strip():
+    has_closed_course = False
+    for course in courses:
+        if course.id is None:
+            continue
+
+        enrollment = session.exec(
+            select(Enrollment).where(
+                Enrollment.student_id == user_id,
+                Enrollment.course_id == int(course.id),
+                Enrollment.status == EnrollmentStatus.active,
+            )
+        ).first()
+        if enrollment is not None:
             return
 
-    approved = session.exec(
-        select(CourseApplication.id).where(
-            CourseApplication.student_id == user_id,
-            CourseApplication.course_id == int(course.id),
-            CourseApplication.status == ApplicationStatus.approved,
-        )
-    ).first()
-    if approved is not None:
-        return
+        if student is not None and str(student.class_name or "").strip() and str(course.target_class or "").strip():
+            if str(student.class_name).strip() == str(course.target_class).strip():
+                return
 
-    if not _is_course_learning_available(course):
-        raise HTTPException(status_code=403, detail="课程尚未开课，暂无法学习")
-    raise HTTPException(status_code=403, detail="你尚未通过该课程审核，暂时无法进入课程")
+        approved = session.exec(
+            select(CourseApplication.id).where(
+                CourseApplication.student_id == user_id,
+                CourseApplication.course_id == int(course.id),
+                CourseApplication.status == ApplicationStatus.approved,
+            )
+        ).first()
+        if approved is not None:
+            return
+
+        if not _is_course_learning_available(course):
+            has_closed_course = True
+
+    if has_closed_course:
+        raise HTTPException(status_code=403, detail="璇剧▼灏氭湭寮€璇撅紝鏆傛棤娉曞涔?")
+    raise HTTPException(status_code=403, detail="浣犲皻鏈€氳繃璇ヨ绋嬪鏍革紝鏆傛椂鏃犳硶杩涘叆璇剧▼")
 
 
 def assert_student_kp_access(session: Session, user_id: int, kp_id: int) -> KnowledgePoint:
     kp = session.get(KnowledgePoint, kp_id)
     if kp is None:
-        raise HTTPException(status_code=404, detail="知识点不存在")
+        raise HTTPException(status_code=404, detail="鐭ヨ瘑鐐逛笉瀛樺湪")
     assert_student_subject_access(session, user_id, kp.subject)
     return kp

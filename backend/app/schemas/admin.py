@@ -25,6 +25,29 @@ class UserUpdateIn(BaseModel):
     phone: str | None = None
 
 
+class UserImportResultOut(BaseModel):
+    role: str
+    total_rows: int
+    success_rows: int
+    failed_rows: int
+    created_rows: int
+    updated_rows: int
+    auto_enrolled_rows: int = 0
+    errors: list[str] = []
+
+
+class UserImportPreviewOut(BaseModel):
+    role: str
+    total_rows: int
+    valid_rows: int
+    invalid_rows: int
+    required_fields: list[str] = []
+    detected_fields: list[str] = []
+    matched_courses: list[dict] = []
+    warnings: list[str] = []
+    errors: list[str] = []
+
+
 class QuestionOut(BaseModel):
     id: int
     kp_id: int
