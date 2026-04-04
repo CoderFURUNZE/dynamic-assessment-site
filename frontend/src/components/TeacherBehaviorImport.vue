@@ -76,7 +76,7 @@ watch(() => [props.courseId, props.stageId], () => { refresh(); }, { immediate: 
     <template #header>
       <div class="behavior-header">
         <div class="behavior-header__main">
-          <div class="behavior-header__eyebrow">Behavior Import</div>
+          <div class="behavior-header__eyebrow">行为汇总导入</div>
           <div class="behavior-title">系统行为汇总</div>
           <div class="behavior-subtitle">汇总系统自动采集的行为事件与注意力信号，作为当前阶段动态评价和画像计算的补充输入。</div>
         </div>
@@ -127,25 +127,121 @@ watch(() => [props.courseId, props.stageId], () => { refresh(); }, { immediate: 
 </template>
 
 <style scoped>
-.behavior-card { margin-top: 16px; border-radius: 20px; border: 1px solid rgba(148,163,184,.16); background: radial-gradient(circle at top right, rgba(79,140,255,.08), transparent 32%), linear-gradient(180deg, rgba(10,17,28,.98), rgba(12,20,34,.995)); box-shadow: 0 20px 50px rgba(2,8,20,.2); }
-.behavior-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.behavior-header__main { display: grid; gap: 6px; }
-.behavior-header__eyebrow { color: #8fb7ff; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
-.behavior-title { color: #f8fbff; font-size: 20px; font-weight: 700; }
-.behavior-subtitle { max-width: 720px; color: rgba(223,233,242,.82); line-height: 1.7; }
-.behavior-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.behavior-banner { margin-bottom: 16px; padding: 16px 18px; border-radius: 18px; border: 1px solid rgba(143,183,255,.18); background: rgba(18,31,51,.72); display: grid; gap: 6px; }
-.behavior-banner__title { color: #f8fbff; font-size: 16px; font-weight: 700; }
-.behavior-banner__meta { color: rgba(223,233,242,.82); line-height: 1.7; }
-.behavior-overview { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
-.behavior-overview__card { padding: 16px 18px; border-radius: 18px; border: 1px solid rgba(143,183,255,.12); background: rgba(14,24,40,.82); display: grid; gap: 6px; }
-.behavior-overview__card span,.behavior-result__item span { font-size: 12px; color: rgba(223,233,242,.72); }
-.behavior-overview__card strong,.behavior-result__item strong { color: #f8fbff; font-size: 22px; line-height: 1.5; }
-.behavior-overview__card small { color: rgba(223,233,242,.68); line-height: 1.6; }
-.behavior-table__title { margin-bottom: 10px; color: #f8fbff; font-size: 16px; font-weight: 700; }
-.behavior-table__surface { border-radius: 18px; overflow: hidden; border: 1px solid rgba(143,183,255,.12); }
-.behavior-result { margin-top: 16px; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
-.behavior-result__item { padding: 16px 18px; border-radius: 18px; border: 1px solid rgba(143,183,255,.12); background: rgba(14,24,40,.82); display: grid; gap: 6px; }
-.behavior-result__item--full { grid-column: span 4; }
-@media (max-width: 1100px) { .behavior-overview,.behavior-result { grid-template-columns: 1fr 1fr; } .behavior-result__item--full { grid-column: span 2; } }
+.behavior-card {
+  margin-top: 16px;
+  border-radius: 24px;
+  border: 1px solid #dfe7f2;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  box-shadow: 0 14px 34px rgba(29, 53, 87, 0.05);
+}
+.behavior-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.behavior-header__main,
+.behavior-overview__card,
+.behavior-result__item {
+  display: grid;
+  gap: 6px;
+}
+.behavior-header__eyebrow {
+  color: #4a73b8;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+.behavior-title {
+  color: #20344f;
+  font-size: 20px;
+  font-weight: 800;
+}
+.behavior-subtitle {
+  max-width: 720px;
+  color: #61758f;
+  line-height: 1.75;
+}
+.behavior-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.behavior-banner {
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid #dbe6f4;
+  background: linear-gradient(135deg, #ffffff 0%, #edf4ff 100%);
+  display: grid;
+  gap: 6px;
+}
+.behavior-banner__title {
+  color: #20344f;
+  font-size: 16px;
+  font-weight: 700;
+}
+.behavior-banner__meta {
+  color: #61758f;
+  line-height: 1.7;
+}
+.behavior-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.behavior-overview__card,
+.behavior-result__item {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid #dfe7f2;
+  background: #f9fbff;
+}
+.behavior-overview__card span,
+.behavior-result__item span {
+  font-size: 12px;
+  color: #7488a0;
+}
+.behavior-overview__card strong,
+.behavior-result__item strong {
+  color: #20344f;
+  font-size: 22px;
+  line-height: 1.4;
+}
+.behavior-overview__card small {
+  color: #61758f;
+  line-height: 1.6;
+}
+.behavior-table__title {
+  margin-bottom: 10px;
+  color: #20344f;
+  font-size: 16px;
+  font-weight: 700;
+}
+.behavior-table__surface {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid #dfe7f2;
+}
+.behavior-result {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.behavior-result__item--full {
+  grid-column: span 4;
+}
+@media (max-width: 1100px) {
+  .behavior-overview,
+  .behavior-result {
+    grid-template-columns: 1fr 1fr;
+  }
+  .behavior-result__item--full {
+    grid-column: span 2;
+  }
+}
 </style>

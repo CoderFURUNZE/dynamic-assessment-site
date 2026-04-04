@@ -534,3 +534,10 @@
 2026-04-03 17:04:01,631 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EDFIX170400 title=测试课程 teacher_id=2
 2026-04-03 17:04:01,726 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=42 stage_id=22
 2026-04-03 17:04:02,406 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=42 stage_id=22 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-04 10:01:55,728 INFO app.audit actor=admin role=admin action=user_create detail=username=e2e_student_100154 role=student
+2026-04-04 10:01:55,808 INFO app.audit actor=admin role=admin action=course_create detail=code=E2EI100154 title=测试课程-IMPORT teacher_id=2
+2026-04-04 10:01:56,186 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=1 success=1 failed=0
+2026-04-04 10:01:56,833 INFO app.audit actor=admin role=admin action=user_import detail=role=teacher total=1 success=1 failed=0
+2026-04-04 10:01:56,891 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E100154 title=测试课程 teacher_id=2
+2026-04-04 10:01:56,986 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=44 stage_id=23
+2026-04-04 10:01:57,683 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=44 stage_id=23 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
