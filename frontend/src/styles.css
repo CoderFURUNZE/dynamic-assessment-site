@@ -224,9 +224,22 @@ video {
   background: var(--app-gradient-surface);
   border-radius: var(--app-radius);
   border: 1px solid color-mix(in srgb, var(--app-border) 85%, transparent);
-  padding: 32px;
+  padding: 24px;
   box-shadow: var(--app-shadow-soft);
+  position: relative;
+  overflow: hidden;
   transition: border-color var(--app-duration) var(--app-ease-out), box-shadow var(--app-duration) var(--app-ease-out);
+}
+
+.edu-panel::before,
+.panel-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(74, 132, 255, 0.26), rgba(107, 197, 255, 0.04) 48%, transparent 82%);
+  pointer-events: none;
 }
 
 .edu-panel:hover {
@@ -236,20 +249,21 @@ video {
 
 /* 鏍囬鏍峰紡澧炲己 */
 .edu-header {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .edu-header__title {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.025em;
   color: var(--app-text-main);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .edu-header__desc {
-  font-size: 16px;
+  font-size: 14px;
   color: var(--app-text-soft);
+  max-width: 760px;
 }
 
 /* 缁熻鍗＄墖缃戞牸鍗囩骇 */
@@ -325,9 +339,10 @@ video {
 }
 
 .el-button:not(.el-button--primary):hover {
-  color: var(--app-primary-deep);
-  border-color: color-mix(in srgb, var(--app-primary) 35%, #ffffff);
-  background: color-mix(in srgb, var(--app-primary-soft) 55%, #ffffff);
+  color: #ffffff;
+  border-color: #5d8dff;
+  background: #6a97ff;
+  box-shadow: 0 12px 24px rgba(76, 122, 206, 0.24);
 }
 
 /* 琛ㄥ崟鎺т欢鍗囩骇 */
@@ -378,10 +393,13 @@ video {
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius);
   box-shadow: var(--app-shadow-soft);
+  position: relative;
+  overflow: hidden;
 }
 
 .panel-card:hover {
   border-color: color-mix(in srgb, var(--app-primary) 12%, var(--app-border));
+  box-shadow: 0 14px 28px rgba(87, 116, 166, 0.11), 0 4px 12px rgba(15, 23, 42, 0.05);
 }
 
 .el-card.panel-card {
@@ -416,6 +434,37 @@ video {
 
 .el-table {
   background: rgba(255, 255, 255, 0.9) !important;
+}
+
+.el-empty {
+  padding: 20px 0;
+}
+
+.el-empty__image {
+  opacity: 0.72;
+}
+
+.el-empty__description p {
+  color: var(--app-text-soft);
+  font-weight: 600;
+}
+
+.el-statistic__content-value,
+.el-descriptions__label,
+.el-form-item__label {
+  color: var(--app-text-main);
+}
+
+.el-form-item__label {
+  font-weight: 700;
+}
+
+.el-descriptions,
+.el-statistic,
+.el-tabs__nav-wrap,
+.el-pagination,
+.el-alert {
+  border-radius: 16px;
 }
 
 .el-table th.el-table__cell,
@@ -475,10 +524,11 @@ video {
 }
 
 .admin-shell-actions .el-button-group .el-button:hover {
-  color: var(--app-primary-deep) !important;
-  border-color: color-mix(in srgb, var(--app-primary) 35%, #ffffff) !important;
-  background: color-mix(in srgb, var(--app-primary-soft) 55%, #ffffff) !important;
+  color: #ffffff !important;
+  border-color: #5d8dff !important;
+  background: #6a97ff !important;
   background-image: none !important;
+  box-shadow: 0 12px 24px rgba(76, 122, 206, 0.24) !important;
 }
 
 .admin-shell-actions .el-button-group .el-button--primary {
@@ -490,10 +540,11 @@ video {
 }
 
 .admin-shell-actions .el-button-group .el-button--primary:hover {
-  color: #214d8f !important;
-  border-color: #9fbef3 !important;
-  background: #f8fbff !important;
+  color: #ffffff !important;
+  border-color: #5d8dff !important;
+  background: #6a97ff !important;
   background-image: none !important;
+  box-shadow: 0 12px 24px rgba(76, 122, 206, 0.24) !important;
 }
 
 .admin-shell-panel {
@@ -513,10 +564,12 @@ video {
 
 .hint-button__inner:hover,
 .hint-button__inner:focus-visible {
-  border-color: #9fbef3 !important;
-  background: #f8fbff !important;
+  border-color: #5d8dff !important;
+  background: #6a97ff !important;
   background-image: none !important;
-  color: #214d8f !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(76, 122, 206, 0.28) !important;
+  transform: translateY(-1px);
 }
 
 .hint-button__inner.el-button--primary,
@@ -867,14 +920,8 @@ video {
   transform: translateY(-1px);
 }
 
-/* prompt cleanup: hide tooltip/popover text and placeholder hints globally */
-.el-tooltip__popper,
-.app-tooltip-popper {
-  display: none !important;
-}
-
 input::placeholder,
 textarea::placeholder {
-  color: transparent !important;
-  opacity: 0 !important;
+  color: #8ea0b8 !important;
+  opacity: 1 !important;
 }

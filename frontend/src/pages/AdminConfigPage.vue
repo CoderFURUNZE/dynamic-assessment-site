@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import AdminIntroHero from "../components/AdminIntroHero.vue";
 
 type Course = { id: number; title: string; code: string };
 
@@ -80,21 +81,16 @@ onMounted(async () => {
 
 <template>
   <div class="admin-config-page" v-loading="loading">
-    <section class="hero panel-card">
-      <div>
-        <p class="eyebrow">Admin Config</p>
-        <h1>系统配置</h1>
-        <p>这里直接维护动态评价参数、窗口配置和画像规则，改完即可通过真实接口保存。</p>
-      </div>
-      <div class="hero-actions">
+    <AdminIntroHero eyebrow="评价配置" title="系统配置" pill="参数配置" description="直接维护动态评价参数、评价窗口和画像规则，改动后可以通过真实接口立即保存。">
+      <template #actions>
         <el-select v-model="subject" placeholder="选择课程" style="width: 220px">
           <el-option v-for="item in courses" :key="item.id" :label="item.title" :value="item.title" />
         </el-select>
         <el-input v-model="grade" placeholder="层级" style="width: 140px" />
         <el-button @click="loadConfig">刷新</el-button>
         <el-button type="primary" :loading="saving" @click="saveConfig">保存配置</el-button>
-      </div>
-    </section>
+      </template>
+    </AdminIntroHero>
 
     <section class="grid">
       <el-card shadow="never" class="panel-card">
@@ -126,12 +122,20 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.admin-config-page { display: grid; gap: 20px; }
-.hero { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.eyebrow { margin: 0 0 8px; font-size: 12px; font-weight: 800; color: #6b7d91; text-transform: uppercase; }
-h1 { margin: 0; font-size: 28px; color: #1f2d3d; }
-p { color: #62748a; line-height: 1.7; }
-.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-.grid { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+.admin-config-page {
+  display: grid;
+  gap: 20px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

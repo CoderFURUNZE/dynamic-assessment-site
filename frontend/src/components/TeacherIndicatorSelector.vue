@@ -34,27 +34,40 @@ const props = defineProps<{
 const loading = ref(false);
 const saving = ref(false);
 const items = ref<DimensionItem[]>([]);
+const selectedDimensionId = ref<number | null>(null);
 
 const enabledCount = computed(() =>
   items.value.reduce((sum, dim) => sum + dim.indicators.filter((item) => item.enabled).length, 0)
 );
-const dimensionWeightSummary = computed(() =>
-  items.value.map((dim) => {
-    const enabledIndicators = dim.indicators.filter((indicator) => indicator.active && indicator.enabled);
-    const total = enabledIndicators.reduce((sum, indicator) => sum + Number(indicator.weight || 0), 0);
-    return {
-      id: dim.id,
-      title: dim.title,
-      enabledCount: enabledIndicators.length,
-      total,
-    };
-  })
+
+const selectedDimension = computed(
+  () => items.value.find((item) => item.id === selectedDimensionId.value) ?? items.value[0] ?? null
 );
+
+const selectedDimensionSummary = computed(() => {
+  const dimension = selectedDimension.value;
+  if (!dimension) return { enabledCount: 0, total: 0 };
+  const enabledIndicators = dimension.indicators.filter((indicator) => indicator.active && indicator.enabled);
+  return {
+    enabledCount: enabledIndicators.length,
+    total: enabledIndicators.reduce((sum, indicator) => sum + Number(indicator.weight || 0), 0),
+  };
+});
+
+function ensureSelectedDimension() {
+  if (!items.value.length) {
+    selectedDimensionId.value = null;
+    return;
+  }
+  if (!items.value.some((item) => item.id === selectedDimensionId.value)) {
+    selectedDimensionId.value = items.value[0].id;
+  }
+}
 
 function sourceTypeLabel(sourceType: string) {
   if (sourceType === "auto") return "系统自动";
   if (sourceType === "imported") return "阶段导入";
-  if (sourceType === "teacher") return "老师填写";
+  if (sourceType === "teacher") return "老师补充";
   if (sourceType === "questionnaire") return "学生补充";
   return sourceType;
 }
@@ -62,6 +75,7 @@ function sourceTypeLabel(sourceType: string) {
 async function loadSelection() {
   if (!props.courseId) {
     items.value = [];
+    selectedDimensionId.value = null;
     return;
   }
   loading.value = true;
@@ -71,6 +85,7 @@ async function loadSelection() {
       ...dim,
       indicators: (dim.indicators ?? []).map((indicator) => ({ ...indicator })),
     }));
+    ensureSelectedDimension();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载课程评价项失败");
   } finally {
@@ -101,142 +116,123 @@ async function saveSelection() {
   }
 }
 
-watch(() => props.courseId, loadSelection, { immediate: true });
+watch(
+  () => props.courseId,
+  () => {
+    selectedDimensionId.value = null;
+    loadSelection();
+  },
+  { immediate: true }
+);
+
+watch(
+  items,
+  () => {
+    ensureSelectedDimension();
+  },
+  { deep: true }
+);
+
 onMounted(loadSelection);
 </script>
 
 <template>
-  <el-card class="panel-card indicator-shell" shadow="never" v-loading="loading">
-    <template #header>
-      <div class="indicator-header">
-        <div>
-          <div class="indicator-header__kicker">Course Indicator Setup</div>
-          <div class="indicator-header__title">这门课看哪些内容</div>
-          <div class="indicator-header__subtitle">
-            先勾选这门课真正会用到的评价项。后面系统会按这些评价项生成学生学习情况。
-          </div>
-        </div>
-        <div class="indicator-header__meta">
-          <div class="indicator-metric">
-            <span class="indicator-metric__label">当前课程</span>
-            <strong>{{ subject || '未选择课程' }}</strong>
-          </div>
-          <div class="indicator-metric">
-            <span class="indicator-metric__label">已选内容</span>
-            <strong>{{ enabledCount }}</strong>
-          </div>
-          <div class="indicator-metric">
-            <span class="indicator-metric__label">一级维度</span>
-            <strong>{{ items.length }}</strong>
-          </div>
-          <el-button type="primary" :loading="saving" @click="saveSelection">保存设置</el-button>
-        </div>
-      </div>
-    </template>
-
+  <div class="indicator-shell" v-loading="loading">
     <div v-if="!courseId" class="indicator-empty">
       <el-empty description="请先在页面顶部选择一门课程" :image-size="88" />
       <div class="indicator-tip-inline">
         <span>提示</span>
-        <HoverTip content="先选课程，再勾选这门课要看的内容。保存后，后面的阶段数据和学生学习情况才会按这些内容计算。" />
+        <HoverTip content="先选择课程，再勾选这门课真正要看的内容。保存后，后面的阶段数据和学生学习情况才会按这些内容计算。" />
       </div>
     </div>
-    <div v-else class="indicator-list">
-      <div class="indicator-tip-inline">
-        <span>勾选说明</span>
-        <HoverTip content="只勾选这门课真正会用到的内容。系统拿得到数据的内容，后面才更容易算出结果。" />
-      </div>
-      <el-card v-for="dimension in items" :key="dimension.id" class="indicator-card" shadow="never">
-        <template #header>
-          <div class="indicator-card__header">
-            <div>
-              <div class="indicator-card__code">{{ dimension.code }}</div>
-              <div class="indicator-card__title">{{ dimension.title }}</div>
-              <div class="indicator-card__desc">{{ dimension.description || '还没写说明' }}</div>
-            </div>
-            <div class="indicator-card__sum">
-              总和 {{ (dimensionWeightSummary.find((item) => item.id === dimension.id)?.total ?? 0).toFixed(2) }}
-            </div>
-          </div>
-        </template>
 
-        <div class="indicator-grid">
-          <div v-for="indicator in dimension.indicators" :key="indicator.id" class="indicator-item">
-            <div class="indicator-item__main">
-              <el-checkbox v-model="indicator.enabled" :disabled="!indicator.active">
-                <span class="indicator-item__title">{{ indicator.title }}</span>
-              </el-checkbox>
-              <div class="indicator-item__meta">
-                <span>{{ indicator.code }}</span>
-                <span>{{ sourceTypeLabel(indicator.source_type) }}</span>
+    <div v-else class="indicator-master-wrap">
+      <div class="indicator-master">
+        <aside class="indicator-master__sidebar">
+          <div
+            v-for="dimension in items"
+            :key="dimension.id"
+            class="dimension-card"
+            :class="{ 'is-active': selectedDimension?.id === dimension.id }"
+            @click="selectedDimensionId = dimension.id"
+          >
+            <div class="dimension-card__title">{{ dimension.title }}</div>
+          </div>
+        </aside>
+
+        <section class="indicator-master__detail">
+          <div class="indicator-detail-header">
+            <div>
+              <div class="indicator-detail-header__title">评价维度大类与细类</div>
+              <div class="indicator-detail-header__meta">
+                {{ selectedDimension ? `${selectedDimension.title}，默认展示该大类下的细项` : "先从左侧选择一个一级维度" }}
               </div>
-              <div class="indicator-item__desc">{{ indicator.description || '还没写说明' }}</div>
-            </div>
-            <div class="indicator-item__side">
-              <span class="indicator-item__weight-label">比重</span>
-              <el-input-number v-model="indicator.weight" :min="0" :max="1" :step="0.05" size="small" />
             </div>
           </div>
-        </div>
-      </el-card>
+
+          <el-empty
+            v-if="!selectedDimension"
+            description="当前没有可配置的一级维度"
+            :image-size="72"
+          />
+
+          <div v-else class="indicator-list">
+            <article
+              v-for="indicator in selectedDimension.indicators"
+              :key="indicator.id"
+              class="indicator-list__item"
+              :class="{ 'is-disabled': !indicator.active }"
+            >
+              <div class="indicator-list__main">
+                <div class="indicator-list__title-row">
+                  <el-checkbox v-model="indicator.enabled" :disabled="!indicator.active" size="large">
+                    <span class="indicator-list__title">{{ indicator.title }}</span>
+                  </el-checkbox>
+                  <span class="indicator-list__code">{{ indicator.code }}</span>
+                </div>
+                <p class="indicator-list__desc">{{ indicator.description || "还没写说明" }}</p>
+              </div>
+
+              <div class="indicator-list__meta">
+                <span class="indicator-list__pill indicator-list__pill--source">
+                  {{ sourceTypeLabel(indicator.source_type) }}
+                </span>
+                <span class="indicator-list__pill indicator-list__pill--weight">
+                  权重 {{ Number(indicator.weight || 0).toFixed(2) }}
+                </span>
+                <span
+                  class="indicator-list__pill"
+                  :class="indicator.active ? 'indicator-list__pill--active' : 'indicator-list__pill--inactive'"
+                >
+                  {{ indicator.active ? "使用中" : "未启用" }}
+                </span>
+                <div class="indicator-weight-editor">
+                  <span class="indicator-weight-editor__label">比重</span>
+                  <el-input-number
+                    v-model="indicator.weight"
+                    :min="0"
+                    :max="1"
+                    :step="0.05"
+                    size="small"
+                    :disabled="!indicator.active"
+                  />
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
     </div>
-  </el-card>
+  </div>
 </template>
 
 <style scoped>
-.indicator-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
+.indicator-shell {
+  padding: 0;
 }
 
-.indicator-header__kicker {
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: #6d8fc3;
-  font-weight: 800;
-}
-
-.indicator-header__title {
-  margin-top: 6px;
-  font-size: 24px;
-  font-weight: 800;
-  color: #22395b;
-}
-
-.indicator-header__subtitle {
-  margin-top: 8px;
-  max-width: 760px;
-  color: #6f809f;
-  line-height: 1.7;
-}
-
-.indicator-header__meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.indicator-metric {
-  min-width: 120px;
-  border: 1px solid rgba(109, 146, 211, 0.28);
-  border-radius: 18px;
-  padding: 12px 14px;
-  background: rgba(244, 248, 255, 0.9);
-}
-
-.indicator-metric__label {
-  display: block;
-  color: #8090aa;
-  font-size: 12px;
-}
-
-.indicator-list {
-  display: grid;
-  gap: 16px;
+.indicator-shell :deep(.el-card__body) {
+  padding-top: 0;
 }
 
 .indicator-empty {
@@ -244,103 +240,259 @@ onMounted(loadSelection);
   gap: 14px;
 }
 
-.indicator-tip-inline {
+.indicator-master-wrap {
+  padding: 18px;
+  border: 1px solid #d7e4f5;
+  border-radius: 28px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 14px 30px rgba(109, 146, 211, 0.1);
+}
+
+.indicator-master {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 18px;
+  padding: 20px;
+}
+
+.indicator-master__sidebar {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.dimension-card {
+  min-height: 86px;
+  border: 1px solid #dbe5f1;
+  border-radius: 20px;
+  background: #ffffff;
+  padding: 18px 18px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dimension-card:hover {
+  border-color: #aac6f7;
+  box-shadow: 0 10px 20px rgba(93, 131, 192, 0.08);
+}
+
+.dimension-card.is-active {
+  border-color: #c8dfbc;
+  background: linear-gradient(180deg, #f4fbef 0%, #eef8e7 100%);
+  box-shadow: 0 12px 24px rgba(116, 154, 92, 0.12);
+}
+
+.dimension-card__title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #22395b;
+  line-height: 1.5;
+}
+
+.indicator-master__detail {
+  min-width: 0;
+}
+
+.indicator-detail-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 2px 0 16px;
+  border-bottom: 1px solid #dbe5f1;
+}
+
+.indicator-detail-header__title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1f3960;
+}
+
+.indicator-detail-header__meta {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6f809f;
+}
+
+.summary-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: #637995;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #d7e4f5;
+  background: #f7faff;
+  color: #355b97;
   font-size: 13px;
   font-weight: 700;
 }
 
-.indicator-card {
-  border-radius: 24px;
+.indicator-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
 }
 
-.indicator-card__code {
-  font-size: 12px;
+.indicator-list__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 18px 20px;
+  border: 1px solid #dbe5f1;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  box-shadow: 0 10px 24px rgba(87, 116, 166, 0.08);
+}
+
+.indicator-list__item.is-disabled {
+  opacity: 0.72;
+}
+
+.indicator-list__main {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.indicator-list__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.indicator-list__title {
+  font-size: 18px;
   font-weight: 700;
-  color: #6d8fc3;
-}
-
-.indicator-card__title {
-  margin-top: 6px;
-  font-size: 20px;
-  font-weight: 800;
   color: #22395b;
 }
 
-.indicator-card__desc {
-  margin-top: 6px;
-  color: #7283a1;
-}
-
-.indicator-card__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.indicator-card__sum {
-  padding: 6px 12px;
+.indicator-list__code {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
   border-radius: 999px;
-  background: #edf4ff;
-  color: #355b97;
+  background: #f3f7ff;
+  color: #6f809f;
   font-size: 12px;
   font-weight: 700;
 }
 
-.indicator-grid {
-  display: grid;
-  gap: 12px;
+.indicator-list__desc {
+  margin: 0;
+  color: #5f7188;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
-.indicator-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 140px;
-  gap: 12px;
-  border: 1px solid rgba(109, 146, 211, 0.24);
-  border-radius: 18px;
-  padding: 14px 16px;
-  background: linear-gradient(180deg, rgba(247, 250, 255, 0.98), rgba(240, 246, 255, 0.98));
+.indicator-list__meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.indicator-item__title {
+.indicator-list__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #d7e4f5;
+  background: #ffffff;
+  color: #4d617d;
+  font-size: 13px;
   font-weight: 700;
-  color: #233b5c;
 }
 
-.indicator-item__meta,
-.indicator-item__desc,
-.indicator-item__weight-label {
+.indicator-list__pill--source {
+  background: #f6f9ff;
+  color: #46638c;
+}
+
+.indicator-list__pill--weight {
+  background: #f9fbff;
+  color: #3b6487;
+}
+
+.indicator-list__pill--active {
+  border-color: #c8dfbc;
+  background: #f0f9eb;
+  color: #48643d;
+}
+
+.indicator-list__pill--inactive {
+  border-color: #e4e9f1;
+  background: #f7f9fc;
+  color: #7a889f;
+}
+
+.indicator-weight-editor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 6px;
+  min-height: 32px;
+}
+
+.indicator-weight-editor__label {
   color: #7b8ba5;
   font-size: 13px;
+  font-weight: 700;
 }
 
-.indicator-item__meta {
-  display: flex;
-  gap: 10px;
-  margin-top: 6px;
+.indicator-weight-editor :deep(.el-input-number) {
+  width: 124px;
 }
 
-.indicator-item__desc {
-  margin-top: 8px;
-  line-height: 1.6;
-}
-
-.indicator-item__side {
-  display: grid;
-  align-content: center;
-  justify-items: start;
-  gap: 8px;
+.indicator-weight-editor :deep(.el-input-number__decrease),
+.indicator-weight-editor :deep(.el-input-number__increase),
+.indicator-weight-editor :deep(.el-input__wrapper) {
+  min-height: 32px;
 }
 
 @media (max-width: 1100px) {
-  .indicator-header,
-  .indicator-item {
+  .indicator-master {
     grid-template-columns: 1fr;
-    display: grid;
+  }
+
+  .indicator-master__sidebar {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .indicator-list__item {
+    grid-template-columns: 1fr;
+  }
+
+  .indicator-list__meta,
+  .indicator-detail-header {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .indicator-toolbar {
+    justify-content: flex-start;
+  }
+
+  .indicator-toolbar__meta {
+    width: 100%;
+  }
+
+  .indicator-metric {
+    min-width: calc(50% - 6px);
+  }
+
+  .indicator-weight-editor {
+    width: 100%;
+    justify-content: space-between;
+    padding-left: 0;
   }
 }
 </style>

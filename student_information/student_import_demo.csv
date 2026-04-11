@@ -1,0 +1,13 @@
+username,password,full_name,student_no,class_name,phone,active
+student_liangchen,Temp1234,梁晨,20263001,计科2301,13800138101,true
+student_zhouyi,Temp1234,周怡,20263002,计科2301,13800138102,true
+student_hezhen,Temp1234,何臻,20263003,计科2301,13800138103,true
+student_suxin,Temp1234,苏昕,20263004,计科2302,13800138104,true
+student_luyao,Temp1234,陆遥,20263005,计科2302,13800138105,true
+student_yuqing,Temp1234,余晴,20263006,计科2302,13800138106,true
+student_gaofei,Temp1234,高斐,20263007,计科2303,13800138107,true
+student_qiaomu,Temp1234,乔牧,20263008,计科2303,13800138108,true
+student_pengran,Temp1234,彭然,20263009,网工2301,13800138109,true
+student_tanglin,Temp1234,唐霖,20263010,网工2301,13800138110,true
+student_jiangnan,Temp1234,江楠,20263011,网工2301,13800138111,true
+student_shenyi,Temp1234,沈屹,20263012,计科2301,13800138112,true

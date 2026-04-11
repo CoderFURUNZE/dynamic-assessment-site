@@ -9,10 +9,12 @@ from app.db.models import (
     ApplicationStatus,
     Course,
     CourseApplication,
+    CourseTeacherActivation,
     CourseLifecycleStatus,
     Enrollment,
     EnrollmentStatus,
     KnowledgePoint,
+    TeacherCourseStatus,
     User,
     UserRole,
 )
@@ -30,8 +32,8 @@ def get_current_user(
         username: str | None = payload.get("sub")
         if not username:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    except JWTError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
 
     user = session.exec(select(User).where(User.username == username)).first()
     if user is None:
@@ -45,7 +47,6 @@ def require_role(*roles: UserRole):
     def _inner(request: Request, user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
-        # Limit a small set of teacher-owned content APIs for admin accounts.
         if user.role == UserRole.admin:
             path = request.url.path
             admin_content_prefixes = (
@@ -57,7 +58,10 @@ def require_role(*roles: UserRole):
                 "/api/admin/seed",
             )
             if path.startswith(admin_content_prefixes):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin cannot access course-content APIs")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin cannot access course-content APIs",
+                )
         return user
 
     return _inner
@@ -74,9 +78,7 @@ def _is_course_learning_available(course: Course | None) -> bool:
     if course is None:
         return False
     lifecycle = _course_lifecycle_value(course)
-    if not bool(course.active) or lifecycle != CourseLifecycleStatus.active.value:
-        return False
-    return True
+    return bool(course.active) and lifecycle == CourseLifecycleStatus.active.value
 
 
 def assert_student_subject_access(session: Session, user_id: int, subject: str) -> None:
@@ -87,7 +89,7 @@ def assert_student_subject_access(session: Session, user_id: int, subject: str) 
         if str(course.title or "").strip() == normalized_subject
     ]
     if not courses:
-        raise HTTPException(status_code=403, detail="浣犲皻鏈€氳繃璇ヨ绋嬪鏍革紝鏆傛椂鏃犳硶杩涘叆璇剧▼")
+        raise HTTPException(status_code=403, detail="当前账号尚未加入这门课程，暂时无法进入课程学习")
 
     student = session.get(User, user_id)
     has_closed_course = False
@@ -102,10 +104,10 @@ def assert_student_subject_access(session: Session, user_id: int, subject: str) 
                 Enrollment.status == EnrollmentStatus.active,
             )
         ).first()
-        if enrollment is not None:
+        if enrollment is not None and is_course_open_for_students(session, course):
             return
 
-        if student is not None and str(student.class_name or "").strip() and str(course.target_class or "").strip():
+        if student is not None and str(student.class_name or "").strip() and str(course.target_class or "").strip() and is_course_open_for_students(session, course):
             if str(student.class_name).strip() == str(course.target_class).strip():
                 return
 
@@ -116,20 +118,66 @@ def assert_student_subject_access(session: Session, user_id: int, subject: str) 
                 CourseApplication.status == ApplicationStatus.approved,
             )
         ).first()
-        if approved is not None:
+        if approved is not None and is_course_open_for_students(session, course):
             return
 
-        if not _is_course_learning_available(course):
+        if not is_course_open_for_students(session, course):
             has_closed_course = True
 
     if has_closed_course:
-        raise HTTPException(status_code=403, detail="璇剧▼灏氭湭寮€璇撅紝鏆傛棤娉曞涔?")
-    raise HTTPException(status_code=403, detail="浣犲皻鏈€氳繃璇ヨ绋嬪鏍革紝鏆傛椂鏃犳硶杩涘叆璇剧▼")
+        raise HTTPException(status_code=403, detail="课程尚未开放学习，暂时无法进入")
+    raise HTTPException(status_code=403, detail="当前账号尚未加入这门课程，暂时无法进入课程学习")
 
 
 def assert_student_kp_access(session: Session, user_id: int, kp_id: int) -> KnowledgePoint:
     kp = session.get(KnowledgePoint, kp_id)
     if kp is None:
-        raise HTTPException(status_code=404, detail="鐭ヨ瘑鐐逛笉瀛樺湪")
+        raise HTTPException(status_code=404, detail="知识点不存在")
     assert_student_subject_access(session, user_id, kp.subject)
     return kp
+
+
+def get_teacher_activated_course_ids(session: Session, teacher_id: int) -> set[int]:
+    rows = session.exec(
+        select(CourseTeacherActivation.course_id).where(
+            CourseTeacherActivation.teacher_id == teacher_id,
+        )
+    ).all()
+    return {int(row) for row in rows if row is not None}
+
+
+def get_teacher_course_activation_map(session: Session, teacher_id: int) -> dict[int, CourseTeacherActivation]:
+    rows = session.exec(
+        select(CourseTeacherActivation).where(
+            CourseTeacherActivation.teacher_id == teacher_id,
+        )
+    ).all()
+    return {
+        int(row.course_id): row
+        for row in rows
+        if row.course_id is not None
+    }
+
+
+def course_has_teaching_teacher(session: Session, course_id: int) -> bool:
+    row = session.exec(
+        select(CourseTeacherActivation.id).where(
+            CourseTeacherActivation.course_id == course_id,
+            CourseTeacherActivation.teaching_status == TeacherCourseStatus.teaching,
+        )
+    ).first()
+    return row is not None
+
+
+def is_course_open_for_students(session: Session, course: Course | None) -> bool:
+    if not _is_course_learning_available(course):
+        return False
+    if course is None or course.id is None:
+        return False
+    return course_has_teaching_teacher(session, int(course.id))
+
+
+def teacher_has_course_access(session: Session, teacher_id: int, course: Course | None) -> bool:
+    if course is None or course.id is None:
+        return False
+    return int(course.id) in get_teacher_activated_course_ids(session, int(teacher_id))

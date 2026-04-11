@@ -1,32 +1,29 @@
+<script setup lang="ts">
+import AdminIntroHero from "../components/AdminIntroHero.vue";
+import AdminDimensionManager from "../components/AdminDimensionManager.vue";
+</script>
+
 <template>
-  <div class="edu-page admin-shell-page">
-    <header class="edu-header admin-shell-header">
-      <div class="edu-header__left">
-        <h1 class="edu-header__title">指标池管理</h1>
-        <p class="edu-header__desc">统一维护一级维度与二级指标，为画像评估提供稳定口径。</p>
-      </div>
-      <div class="edu-header__actions admin-shell-actions">
-        <el-button-group>
-          <el-button @click="router.push('/admin/dashboard')">概览</el-button>
-          <el-button @click="router.push('/admin/basic/courses')">课程</el-button>
-          <el-button @click="router.push('/admin/basic/users')">用户</el-button>
-          <el-button @click="router.push('/admin/basic/teachers')">老师</el-button>
-          <el-button type="primary" @click="router.push('/admin/evaluation/dimensions')">指标池</el-button>
-          <el-button @click="router.push('/admin/evaluation/persona')">画像规则</el-button>
-        </el-button-group>
-      </div>
-    </header>
-    <section class="edu-panel admin-shell-panel">
+  <div class="admin-dimensions-page">
+    <AdminIntroHero eyebrow="评价配置" title="维度指标" pill="指标池" description="统一维护一级维度和二级指标，为动态评价和画像分析提供稳定的指标口径。" />
+
+    <section class="admin-dimensions-page__panel">
       <AdminDimensionManager />
     </section>
   </div>
 </template>
 
-<script setup lang="ts">
-import { useRouter } from "vue-router";
-import AdminDimensionManager from "../components/AdminDimensionManager.vue";
+<style scoped>
+.admin-dimensions-page {
+  display: grid;
+  gap: 20px;
+}
 
-const router = useRouter();
-</script>
-
-<style scoped></style>
+.admin-dimensions-page__panel {
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid #e3ebf5;
+  background: #fff;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.05);
+}
+</style>

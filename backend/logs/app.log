@@ -541,3 +541,91 @@
 2026-04-04 10:01:56,891 INFO app.audit actor=admin role=admin action=course_create detail=code=E2E100154 title=测试课程 teacher_id=2
 2026-04-04 10:01:56,986 INFO app.audit actor=teacher1 role=teacher action=course_stage_create detail=course_id=44 stage_id=23
 2026-04-04 10:01:57,683 INFO app.audit actor=teacher1 role=teacher action=stage_one_click_import detail=course_id=44 stage_id=23 include_video=True include_practice=True include_mastery=True include_behavior=True total=3
+2026-04-04 16:01:36,779 INFO httpx HTTP Request: POST http://testserver/api/auth/login "HTTP/1.1 200 OK"
+2026-04-04 16:06:58,567 INFO httpx HTTP Request: POST http://testserver/api/auth/login "HTTP/1.1 200 OK"
+2026-04-04 16:06:58,627 INFO httpx HTTP Request: GET http://testserver/api/admin/analytics/overview "HTTP/1.1 500 Internal Server Error"
+2026-04-04 16:06:58,661 INFO httpx HTTP Request: POST http://testserver/api/auth/login "HTTP/1.1 200 OK"
+2026-04-04 16:06:58,680 INFO httpx HTTP Request: GET http://testserver/api/eval/profile "HTTP/1.1 422 Unprocessable Entity"
+2026-04-04 16:06:58,768 INFO httpx HTTP Request: POST http://testserver/api/auth/login "HTTP/1.1 200 OK"
+2026-04-04 16:06:58,800 INFO httpx HTTP Request: GET http://testserver/api/graph/courses "HTTP/1.1 200 OK"
+2026-04-04 16:06:58,819 INFO httpx HTTP Request: GET http://testserver/api/stages/courses/4 "HTTP/1.1 500 Internal Server Error"
+2026-04-04 16:07:27,438 INFO httpx HTTP Request: POST http://testserver/api/auth/login "HTTP/1.1 200 OK"
+2026-04-04 16:07:27,452 INFO httpx HTTP Request: POST http://testserver/api/auth/login "HTTP/1.1 200 OK"
+2026-04-04 16:07:27,457 INFO httpx HTTP Request: GET http://testserver/api/graph/courses "HTTP/1.1 200 OK"
+2026-04-04 16:13:56,178 INFO httpx HTTP Request: POST http://testserver/api/auth/login "HTTP/1.1 200 OK"
+2026-04-04 16:13:56,199 INFO httpx HTTP Request: POST http://testserver/api/auth/login "HTTP/1.1 200 OK"
+2026-04-05 09:47:29,802 INFO app.audit actor=admin role=admin action=user_update detail=user_id=2
+2026-04-05 09:47:30,344 INFO app.audit actor=admin role=admin action=user_update detail=user_id=2
+2026-04-05 20:30:40,894 INFO app.audit actor=admin role=admin action=course_update detail=id=4 code=CO teacher_id=2
+2026-04-05 20:30:44,555 INFO app.audit actor=admin role=admin action=course_update detail=id=4 code=CO teacher_id=2
+2026-04-05 20:30:48,298 INFO app.audit actor=admin role=admin action=course_update detail=id=4 code=CO teacher_id=2
+2026-04-05 20:40:53,097 INFO app.audit actor=admin role=admin action=user_import detail=role=student total=12 success=12 failed=0
+2026-04-05 21:07:42,961 INFO app.audit actor=admin role=admin action=persona_recalculate detail=subject=计算机网络 grade=通用 count=17
+2026-04-07 14:09:50,069 INFO app.audit actor=admin role=admin action=persona_rule_update detail=subject=计算机网络 grade=通用
+2026-04-07 16:18:38,539 INFO app.audit actor=admin role=admin action=persona_rule_update detail=subject=计算机网络 grade=通用
+2026-04-07 16:21:16,068 INFO app.audit actor=admin role=admin action=persona_rule_update detail=subject=计算机网络 grade=通用
+2026-04-07 16:21:17,594 INFO app.audit actor=admin role=admin action=persona_rule_update detail=subject=计算机网络 grade=通用
+2026-04-07 16:23:54,279 INFO app.audit actor=admin role=admin action=persona_rule_update detail=subject=计算机网络 grade=通用
+2026-04-07 16:55:04,950 INFO app.audit actor=admin role=admin action=persona_rule_update detail=subject=计算机网络 grade=通用
+2026-04-07 16:55:11,755 INFO app.audit actor=admin role=admin action=persona_rule_update detail=subject=操作系统 grade=通用
+2026-04-07 20:31:42,449 INFO app.audit actor=admin role=admin action=course_update detail=id=4 code=CO teacher_id=2
+2026-04-07 20:31:54,630 INFO app.audit actor=admin role=admin action=course_update detail=id=4 code=CO teacher_id=2
+2026-04-07 20:32:11,710 INFO app.audit actor=admin role=admin action=course_update detail=id=4 code=CO teacher_id=2
+2026-04-07 20:45:58,782 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=OS teacher_id=2
+2026-04-07 20:55:53,186 INFO app.audit actor=admin role=admin action=course_update detail=id=4 code=CO teacher_id=2
+2026-04-08 08:28:37,619 INFO app.audit actor=admin role=admin action=course_update detail=id=4 code=CO teacher_id=2
+2026-04-08 09:46:14,667 INFO app.audit actor=admin role=admin action=user_create detail=username=teacher_multi_2 role=teacher
+2026-04-08 09:47:11,878 INFO app.audit actor=admin role=admin action=course_create detail=code=MTACT title=???????? teacher_id=None
+2026-04-08 10:04:09,934 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=MTACT teacher_id=2
+2026-04-08 10:04:16,419 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=MTACT teacher_id=2
+2026-04-08 10:04:25,720 INFO app.audit actor=admin role=admin action=course_update detail=id=5 code=MTACT teacher_id=2
+2026-04-08 10:05:04,903 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=OS teacher_id=2
+2026-04-08 10:05:05,497 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=OS teacher_id=2
+2026-04-08 10:05:06,006 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=OS teacher_id=2
+2026-04-08 11:24:48,881 INFO app.audit actor=admin role=admin action=course_create detail=code=MTACT2 title=??????????
+2026-04-08 11:24:48,999 INFO app.audit actor=admin role=admin action=course_update detail=id=6 code=MTACT2
+2026-04-08 11:24:49,919 INFO app.audit actor=admin role=admin action=course_delete detail=id=6 code=MTACT2
+2026-04-08 11:26:57,219 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=OS
+2026-04-08 11:27:13,516 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=OS
+2026-04-08 11:27:42,962 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=OS
+2026-04-08 12:10:03,434 INFO app.audit actor=admin role=admin action=course_create detail=code=TBSTATB title=??B?????
+2026-04-08 12:13:55,151 INFO app.audit actor=admin role=admin action=course_create detail=code=TB2B6B1F title=??B?????
+2026-04-08 12:36:46,919 INFO app.audit actor=admin role=admin action=course_create detail=code=TB7E427B title=??B?????
+2026-04-08 12:37:37,386 INFO app.audit actor=admin role=admin action=course_create detail=code=TBDD3EB8 title=??B?????
+2026-04-08 12:38:30,796 INFO httpx HTTP Request: POST http://testserver/api/auth/login/student "HTTP/1.1 200 OK"
+2026-04-08 12:47:03,540 INFO app.audit actor=admin role=admin action=course_create detail=code=TB6DF933 title=??B?????
+2026-04-08 13:01:07,586 INFO app.audit actor=admin role=admin action=course_update detail=id=10 code=TBDD3EB8
+2026-04-08 13:01:08,946 INFO app.audit actor=admin role=admin action=course_update detail=id=10 code=TBDD3EB8
+2026-04-08 13:01:10,929 INFO app.audit actor=admin role=admin action=course_update detail=id=4 code=CO
+2026-04-08 13:02:53,282 INFO app.audit actor=admin role=admin action=user_create detail=username=teacher2 role=teacher
+2026-04-08 13:04:29,138 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=OS
+2026-04-08 13:05:42,038 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=OS
+2026-04-08 14:49:20,510 INFO app.audit actor=admin role=admin action=course_delete detail=id=9 code=TB7E427B
+2026-04-08 15:32:50,458 INFO app.audit actor=admin role=admin action=course_create detail=code=OPEN20260408073250 title=??????-20260408073250
+2026-04-08 15:32:50,508 INFO app.audit actor=admin role=admin action=course_create detail=code=DRAFT20260408073250 title=??????-20260408073250
+2026-04-08 15:32:50,566 INFO app.audit actor=admin role=admin action=course_create detail=code=DEL20260408073250 title=??????-20260408073250
+2026-04-08 15:32:51,138 INFO app.audit actor=admin role=admin action=course_delete detail=id=14 code=DEL20260408073250
+2026-04-08 15:46:48,647 INFO app.audit actor=admin role=admin action=course_create detail=code=OPEN20260408074648 title=??????-20260408074648
+2026-04-08 15:46:48,749 INFO app.audit actor=admin role=admin action=course_create detail=code=DRAFT20260408074648 title=??????-20260408074648
+2026-04-08 15:46:48,828 INFO app.audit actor=admin role=admin action=course_create detail=code=DEL20260408074648 title=??????-20260408074648
+2026-04-08 15:46:49,368 INFO app.audit actor=admin role=admin action=course_delete detail=id=17 code=DEL20260408074648
+2026-04-08 15:52:23,128 INFO app.audit actor=admin role=admin action=course_update detail=id=10 code=TBDD3EB8
+2026-04-08 15:52:24,579 INFO app.audit actor=admin role=admin action=course_update detail=id=8 code=TB2B6B1F
+2026-04-08 15:52:26,506 INFO app.audit actor=admin role=admin action=course_update detail=id=7 code=TBSTATB
+2026-04-08 15:52:34,129 INFO app.audit actor=admin role=admin action=course_update detail=id=10 code=TBDD3EB8
+2026-04-08 15:52:35,281 INFO app.audit actor=admin role=admin action=course_update detail=id=10 code=TBDD3EB8
+2026-04-08 15:53:02,864 INFO app.audit actor=admin role=admin action=course_update detail=id=10 code=TBDD3EB8
+2026-04-08 16:21:33,159 INFO app.audit actor=admin role=admin action=course_delete detail=id=10 code=TBDD3EB8
+2026-04-08 16:27:45,816 INFO app.audit actor=admin role=admin action=course_delete detail=id=8 code=TB2B6B1F
+2026-04-08 16:27:45,899 INFO app.audit actor=admin role=admin action=course_delete detail=id=7 code=TBSTATB
+2026-04-08 17:14:23,063 INFO app.audit actor=admin role=admin action=course_create detail=code=MATH title=高等数学
+2026-04-08 17:50:16,630 INFO app.audit actor=admin role=admin action=course_create detail=code=ASSIGNT1 title=???????
+2026-04-08 17:50:17,396 INFO app.audit actor=admin role=admin action=course_delete detail=id=24 code=ASSIGNT1
+2026-04-08 18:08:08,037 INFO app.audit actor=admin role=admin action=course_update detail=id=23 code=MATH
+2026-04-08 18:13:52,332 INFO app.audit actor=admin role=admin action=course_update detail=id=23 code=MATH
+2026-04-08 18:27:12,847 INFO app.audit actor=admin role=admin action=course_update detail=id=23 code=MATH
+2026-04-09 09:31:23,903 INFO app.audit actor=admin role=admin action=user_update detail=user_id=20
+2026-04-09 09:31:32,892 INFO app.audit actor=admin role=admin action=user_delete detail=user_id=22 username=teacher_delete_test
+2026-04-09 09:31:40,063 INFO app.audit actor=admin role=admin action=user_update detail=user_id=20
+2026-04-09 10:01:25,541 INFO app.audit actor=admin role=admin action=user_update detail=user_id=20
+2026-04-09 10:05:04,797 INFO app.audit actor=admin role=admin action=course_delete detail=id=23 code=MATH

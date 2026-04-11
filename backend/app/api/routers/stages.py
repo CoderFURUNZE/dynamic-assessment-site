@@ -10,6 +10,8 @@ from sqlmodel import Session, select
 from sqlalchemy import or_
 
 from app.api.deps import require_role
+from app.api.routers import stage_support
+from app.api.routers import stage_routes_basic
 from app.db.models import (
     AuditLog,
     Course,
@@ -51,6 +53,7 @@ except Exception:  # pragma: no cover - dependency guard
 
 router = APIRouter(prefix="/stages", tags=["stages"])
 logger = logging.getLogger("app.audit")
+router.include_router(stage_routes_basic.router)
 
 
 STAGE_IMPORT_GUIDES: dict[StageMetricType, dict[str, object]] = {
@@ -123,42 +126,15 @@ IMPORT_FIELD_ALIASES: dict[str, list[str]] = {
 
 
 def _log_action(session: Session, user: User, action: str, detail: str = "") -> None:
-    try:
-        logger.info("actor=%s role=%s action=%s detail=%s", user.username, user.role.value, action, detail)
-        session.add(AuditLog(actor=user.username, role=user.role.value, action=action, detail=detail))
-        session.commit()
-    except Exception:
-        logger.info("action=%s detail=%s", action, detail)
+    stage_support.log_action(session, user, action, detail)
 
 
 def _parse_dt(value: str | None) -> datetime | None:
-    raw = (value or "").strip()
-    if not raw:
-        return None
-    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
-        try:
-            return datetime.strptime(raw, fmt)
-        except ValueError:
-            continue
-    try:
-        return datetime.fromisoformat(raw)
-    except ValueError as exc:
-        raise ValueError(f"invalid datetime: {raw}") from exc
+    return stage_support.parse_dt(value)
 
 
 def _course_out(stage: CourseStage) -> CourseStageOut:
-    return CourseStageOut(
-        id=int(stage.id),
-        course_id=stage.course_id,
-        subject=stage.subject,
-        grade=stage.grade,
-        title=stage.title,
-        stage_order=stage.stage_order,
-        starts_at=stage.starts_at.isoformat() if stage.starts_at else None,
-        ends_at=stage.ends_at.isoformat() if stage.ends_at else None,
-        description=stage.description,
-        created_at=stage.created_at.isoformat(),
-    )
+    return stage_support.course_out(stage)
 
 
 def _metric_type_value(value: StageMetricType | str) -> str:
@@ -166,12 +142,7 @@ def _metric_type_value(value: StageMetricType | str) -> str:
 
 
 def _get_course_or_403(session: Session, user: User, course_id: int) -> Course:
-    course = session.get(Course, course_id)
-    if course is None:
-        raise HTTPException(status_code=404, detail="Course not found")
-    if user.role == UserRole.teacher and course.teacher_id != user.id:
-        raise HTTPException(status_code=403, detail="No permission for this course")
-    return course
+    return stage_support.get_course_or_403(session, user, course_id)
 
 
 def _assert_course_stage_editable(course: Course) -> None:
@@ -181,71 +152,23 @@ def _assert_course_stage_editable(course: Course) -> None:
 
 
 def _get_stage_or_403(session: Session, user: User, stage_id: int) -> CourseStage:
-    stage = session.get(CourseStage, stage_id)
-    if stage is None:
-        raise HTTPException(status_code=404, detail="Stage not found")
-    _get_course_or_403(session, user, stage.course_id)
-    return stage
+    return stage_support.get_stage_or_403(session, user, stage_id)
 
 
 def _find_user(session: Session, row: dict[str, str]) -> User:
-    username = (row.get("username") or "").strip()
-    student_no = (row.get("student_no") or "").strip()
-    user = None
-    if username:
-        user = session.exec(select(User).where(User.username == username)).first()
-    elif student_no:
-        user = session.exec(select(User).where(User.student_no == student_no)).first()
-    if user is None:
-        raise ValueError("student not found by username/student_no")
-    return user
+    return stage_support.find_user(session, row)
 
 
 def _find_kp(session: Session, *, subject: str, grade: str, row: dict[str, str]) -> KnowledgePoint | None:
-    kp_id = (row.get("kp_id") or "").strip()
-    kp_code = (row.get("kp_code") or "").strip()
-    if kp_id:
-        kp = session.get(KnowledgePoint, int(kp_id))
-        if kp is None:
-            raise ValueError(f"kp_id not found: {kp_id}")
-        return kp
-    if kp_code:
-        kp = session.exec(
-            select(KnowledgePoint).where(
-                KnowledgePoint.code == kp_code,
-                KnowledgePoint.subject == subject,
-                KnowledgePoint.grade == grade,
-            )
-        ).first()
-        if kp is None:
-            raise ValueError(f"kp_code not found: {kp_code}")
-        return kp
-    return None
+    return stage_support.find_kp(session, subject=subject, grade=grade, row=row)
 
 
 def _to_float(value: str | None, *, default: float = 0.0) -> float:
-    raw = (value or "").strip()
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except ValueError as exc:
-        raise ValueError(f"invalid numeric value: {raw}") from exc
+    return stage_support.to_float(value, default=default)
 
 
 def _to_ratio(value: str | None) -> float:
-    raw = (value or "").strip()
-    if not raw:
-        return 0.0
-    if raw.endswith("%"):
-        raw = raw[:-1].strip()
-    try:
-        ratio = float(raw)
-    except ValueError as exc:
-        raise ValueError(f"invalid ratio value: {raw}") from exc
-    if ratio > 1.0 and ratio <= 100.0:
-        ratio = ratio / 100.0
-    return max(0.0, min(1.0, ratio))
+    return stage_support.to_ratio(value)
 
 
 def _to_bool(value: str | None) -> bool:
@@ -1146,7 +1069,7 @@ def list_stages(
     rows = session.exec(
         select(CourseStage).where(CourseStage.course_id == course_id).order_by(CourseStage.stage_order, CourseStage.id)
     ).all()
-    return [_course_out(row) for row in rows]
+    return [stage_support.course_out(row) for row in rows]
 
 
 @router.post("/courses/{course_id}", response_model=CourseStageOut)
@@ -1167,8 +1090,8 @@ def create_stage(
     if exists is not None:
         raise HTTPException(status_code=400, detail="stage_order already exists in this course")
     try:
-        starts_at = _parse_dt(payload.starts_at)
-        ends_at = _parse_dt(payload.ends_at)
+        starts_at = stage_support.parse_dt(payload.starts_at)
+        ends_at = stage_support.parse_dt(payload.ends_at)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     stage = CourseStage(
@@ -1184,8 +1107,8 @@ def create_stage(
     session.add(stage)
     session.commit()
     session.refresh(stage)
-    _log_action(session, user, "course_stage_create", f"course_id={course_id} stage_id={stage.id}")
-    return _course_out(stage)
+    stage_support.log_action(session, user, "course_stage_create", f"course_id={course_id} stage_id={stage.id}")
+    return stage_support.course_out(stage)
 
 
 @router.put("/{stage_id}", response_model=CourseStageOut)
@@ -1219,9 +1142,9 @@ def update_stage(
         stage.stage_order = order_value
     try:
         if payload.starts_at is not None:
-            stage.starts_at = _parse_dt(payload.starts_at)
+            stage.starts_at = stage_support.parse_dt(payload.starts_at)
         if payload.ends_at is not None:
-            stage.ends_at = _parse_dt(payload.ends_at)
+            stage.ends_at = stage_support.parse_dt(payload.ends_at)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if payload.description is not None:
@@ -1229,8 +1152,8 @@ def update_stage(
     session.add(stage)
     session.commit()
     session.refresh(stage)
-    _log_action(session, user, "course_stage_update", f"stage_id={stage_id}")
-    return _course_out(stage)
+    stage_support.log_action(session, user, "course_stage_update", f"stage_id={stage_id}")
+    return stage_support.course_out(stage)
 
 
 @router.delete("/{stage_id}")
@@ -1247,7 +1170,7 @@ def delete_stage(
         raise HTTPException(status_code=400, detail="Stage already has imported data and cannot be deleted")
     session.delete(stage)
     session.commit()
-    _log_action(session, user, "course_stage_delete", f"stage_id={stage_id}")
+    stage_support.log_action(session, user, "course_stage_delete", f"stage_id={stage_id}")
     return {"ok": True}
 
 
@@ -1262,7 +1185,7 @@ def download_template(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid metric_type") from exc
     return Response(
-        content="\ufeff" + _template_csv(metric),
+        content="\ufeff" + stage_support.template_csv(metric),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="stage_template_{metric.value}.csv"'},
     )
@@ -1273,7 +1196,7 @@ def list_metric_guides(
     user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     _ = user
-    return [_metric_guide(metric) for metric in StageMetricType]
+    return [stage_support.metric_guide(metric) for metric in StageMetricType]
 
 
 @router.get("/imports", response_model=list[StageImportBatchOut])
@@ -1525,7 +1448,7 @@ def apply_internal_stage_summary(
         affected_indicators.append("练习表现")
     if include_mastery:
         affected_indicators.append("掌握与推荐推进")
-    _log_action(
+    stage_support.log_action(
         session,
         user,
         "stage_internal_summary_apply",
@@ -1564,7 +1487,7 @@ def apply_internal_behavior_summary(
         stage=stage,
         user=user,
     )
-    _log_action(
+    stage_support.log_action(
         session,
         user,
         "stage_internal_behavior_apply",
@@ -1654,14 +1577,14 @@ def one_click_stage_import(
     unique_dimensions = list(dict.fromkeys(affected_dimensions))
     unique_indicators = list(dict.fromkeys(affected_indicators))
     latest_batch_id = batch_ids[-1] if batch_ids else 0
-    _log_action(
+    stage_support.log_action(
         session,
         user,
         "stage_one_click_import",
         "course_id=%s stage_id=%s include_video=%s include_practice=%s include_mastery=%s include_behavior=%s total=%s"
         % (course_id, stage_id, include_video, include_practice, include_mastery, include_behavior, success_rows),
     )
-    import_summary = _build_import_summary(
+    import_summary = stage_support.build_import_summary(
         course=course,
         stage=stage,
         metric_type="one_click_auto",
@@ -1712,7 +1635,7 @@ def upload_stage_data(
         raise HTTPException(status_code=400, detail="Invalid metric_type") from exc
 
     payload = file.file.read()
-    rows = _rows_from_upload(file, payload)
+    rows = stage_support.rows_from_upload(file, payload)
     batch = StageImportBatch(
         course_id=course_id,
         stage_id=stage_id,
@@ -1732,15 +1655,15 @@ def upload_stage_data(
     affected_user_ids: set[int] = set()
     for index, row in enumerate(rows, start=2):
         try:
-            student = _find_user(session, row)
-            kp = _find_kp(session, subject=stage.subject, grade=stage.grade, row=row)
-            score_value = _to_float(row.get("score"), default=0.0)
-            completion_value = _to_ratio(row.get("completion_ratio") or row.get("completion_value"))
-            duration_minutes = _to_float(row.get("duration_minutes") or row.get("watched_minutes"), default=0.0)
-            attendance_value = _to_float(row.get("attendance_value"), default=0.0)
+            student = stage_support.find_user(session, row)
+            kp = stage_support.find_kp(session, subject=stage.subject, grade=stage.grade, row=row)
+            score_value = stage_support.to_float(row.get("score"), default=0.0)
+            completion_value = stage_support.to_ratio(row.get("completion_ratio") or row.get("completion_value"))
+            duration_minutes = stage_support.to_float(row.get("duration_minutes") or row.get("watched_minutes"), default=0.0)
+            attendance_value = stage_support.to_float(row.get("attendance_value"), default=0.0)
             if metric == StageMetricType.attendance and not row.get("attendance_value"):
                 attendance_value = 1.0 if (row.get("status") or "").strip().lower() in {"present", "attended", "on_time"} else 0.0
-            happened_at = _parse_dt(row.get("happened_at")) or datetime.utcnow()
+            happened_at = stage_support.parse_dt(row.get("happened_at")) or datetime.utcnow()
             record = StageImportRecord(
                 batch_id=int(batch.id),
                 course_id=course_id,
@@ -1754,7 +1677,7 @@ def upload_stage_data(
                 completion_value=completion_value,
                 duration_minutes=duration_minutes,
                 attendance_value=attendance_value,
-                submitted_on_time=_to_bool(row.get("submitted_on_time")),
+                submitted_on_time=stage_support.to_bool(row.get("submitted_on_time")),
                 status=(row.get("status") or "").strip(),
                 note=(row.get("note") or "").strip(),
                 happened_at=happened_at,
@@ -1786,7 +1709,7 @@ def upload_stage_data(
             batch.error_json = json.dumps(errors[:20], ensure_ascii=False)
             session.add(batch)
             session.commit()
-    _log_action(
+    stage_support.log_action(
         session,
         user,
         "stage_data_import",

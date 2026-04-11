@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 from sqlmodel import Session, select
 
-from app.api.deps import require_role
+from app.api.deps import require_role, teacher_has_course_access
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.models import (
@@ -21,6 +21,8 @@ from app.db.models import (
     ChapterEdge,
     Course,
     CourseApplication,
+    CourseCompletionRecord,
+    CourseTeacherActivation,
     CoursePortraitIndicatorSelection,
     CoursePrerequisite,
     CourseStage,
@@ -55,6 +57,7 @@ from app.db.models import (
     TeacherFinalScoreConfirmation,
     TeacherPortraitIndicatorInput,
     StageTeacherFeedback,
+    TeacherCourseStatus,
     User,
     UserRole,
     VideoProgress,
@@ -457,8 +460,6 @@ def _resolve_course_for_subject(
     admin: User | None = None,
 ) -> Course | None:
     stmt = select(Course).where(Course.title == subject)
-    if admin is not None and admin.role == UserRole.teacher:
-        stmt = stmt.where(Course.teacher_id == admin.id)
     if grade:
         stmt = (
             stmt.join(CourseStage, CourseStage.course_id == Course.id)
@@ -469,17 +470,31 @@ def _resolve_course_for_subject(
             .distinct()
         )
     stmt = stmt.order_by(Course.active.desc(), Course.id.desc())
-    course = session.exec(stmt).first()
+    rows = session.exec(stmt).all()
+    course = next(
+        (
+            item
+            for item in rows
+            if admin is None or admin.role != UserRole.teacher or teacher_has_course_access(session, int(admin.id), item)
+        ),
+        None,
+    )
     if course is not None or not grade:
         return course
     fallback = select(Course).where(Course.title == subject)
-    if admin is not None and admin.role == UserRole.teacher:
-        fallback = fallback.where(Course.teacher_id == admin.id)
-    return session.exec(fallback.order_by(Course.active.desc(), Course.id.desc())).first()
+    fallback_rows = session.exec(fallback.order_by(Course.active.desc(), Course.id.desc())).all()
+    return next(
+        (
+            item
+            for item in fallback_rows
+            if admin is None or admin.role != UserRole.teacher or teacher_has_course_access(session, int(admin.id), item)
+        ),
+        None,
+    )
 
 
-def _check_teacher_subject_access(*, admin: User, course: Course | None) -> None:
-    if admin.role == UserRole.teacher and course is not None and course.teacher_id != admin.id:
+def _check_teacher_subject_access(*, session: Session, admin: User, course: Course | None) -> None:
+    if admin.role == UserRole.teacher and course is not None and not teacher_has_course_access(session, int(admin.id), course):
         raise HTTPException(status_code=403, detail="No permission for this subject")
 
 
@@ -521,6 +536,38 @@ def _course_delete_blockers(session: Session, *, course_id: int, subject: str) -
         ),
     ]
     return [f"{label}{int(count)}条" for label, count in checks if int(count or 0) > 0]
+
+
+def _purge_course_related_rows(session: Session, *, course_id: int) -> None:
+    session.exec(delete(TeacherPortraitIndicatorInput).where(TeacherPortraitIndicatorInput.course_id == course_id))
+    session.exec(delete(StageTeacherFeedback).where(StageTeacherFeedback.course_id == course_id))
+    session.exec(delete(StageEvaluationSnapshot).where(StageEvaluationSnapshot.course_id == course_id))
+    session.exec(delete(StageImportRecord).where(StageImportRecord.course_id == course_id))
+    session.exec(delete(StageImportBatch).where(StageImportBatch.course_id == course_id))
+    session.exec(delete(TeacherFinalScoreConfirmation).where(TeacherFinalScoreConfirmation.course_id == course_id))
+    session.exec(
+        delete(QuestionnairePortraitIndicatorInput).where(
+            QuestionnairePortraitIndicatorInput.course_id == course_id
+        )
+    )
+    session.exec(
+        delete(CoursePortraitIndicatorSelection).where(CoursePortraitIndicatorSelection.course_id == course_id)
+    )
+    session.exec(delete(LearningBehaviorEvent).where(LearningBehaviorEvent.course_id == course_id))
+    session.exec(delete(CourseCompletionRecord).where(CourseCompletionRecord.course_id == course_id))
+    session.exec(delete(CourseApplication).where(CourseApplication.course_id == course_id))
+    session.exec(delete(Enrollment).where(Enrollment.course_id == course_id))
+    session.exec(
+        delete(CoursePrerequisite).where(
+            or_(
+                CoursePrerequisite.course_id == course_id,
+                CoursePrerequisite.prerequisite_course_id == course_id,
+            )
+        )
+    )
+    session.exec(delete(CourseTeacherActivation).where(CourseTeacherActivation.course_id == course_id))
+    session.exec(delete(CourseStage).where(CourseStage.course_id == course_id))
+    session.flush()
 
 
 def _build_student_detail_payload(
@@ -882,7 +929,7 @@ def _relation_type_value(value) -> str:
     return RelationType.prerequisite.value
 
 
-def _course_to_out(course: Course) -> CourseOut:
+def _course_to_out(course: Course, *, teacher_name: str = "") -> CourseOut:
     return CourseOut(
         id=int(course.id or 0),
         code=course.code,
@@ -891,13 +938,8 @@ def _course_to_out(course: Course) -> CourseOut:
         active=bool(course.active),
         lifecycle_status=course.lifecycle_status.value if hasattr(course.lifecycle_status, "value") else str(course.lifecycle_status or "draft"),
         teacher_id=int(course.teacher_id) if course.teacher_id is not None else None,
-        target_class=str(course.target_class or ""),
-        max_students=int(course.max_students or 200),
-        start_at=course.start_at,
-        end_at=course.end_at,
+        teacher_name=teacher_name,
         archived_at=course.archived_at,
-        apply_deadline=course.apply_deadline,
-        enroll_status=course.enroll_status.value if hasattr(course.enroll_status, "value") else str(course.enroll_status),
     )
 
 
@@ -1561,7 +1603,50 @@ def list_courses(
         q = q.where(or_(Course.code.like(like), Course.title.like(like), Course.description.like(like)))
     total = session.exec(select(func.count()).select_from(q.subquery())).one()
     items = session.exec(q.order_by(Course.created_at.desc()).offset((page - 1) * page_size).limit(page_size)).all()
-    return {"items": [_course_to_out(i) for i in items], "total": total}
+    course_ids = [int(item.id) for item in items if item.id is not None]
+    activation_map: dict[int, list[CourseTeacherActivation]] = {}
+    teacher_name_map: dict[int, str] = {}
+    if course_ids:
+        activation_rows = session.exec(
+            select(CourseTeacherActivation).where(CourseTeacherActivation.course_id.in_(course_ids))
+        ).all()
+        activation_map = {course_id: [] for course_id in course_ids}
+        teacher_ids = set()
+        for item in items:
+            if item.teacher_id is not None:
+                teacher_ids.add(int(item.teacher_id))
+        for row in activation_rows:
+            activation_map.setdefault(int(row.course_id), []).append(row)
+            teacher_ids.add(int(row.teacher_id))
+        if teacher_ids:
+            teacher_rows = session.exec(select(User).where(User.id.in_(teacher_ids))).all()
+            teacher_name_map = {int(row.id): row.full_name or row.username for row in teacher_rows if row.id is not None}
+
+    payload_items = []
+    for item in items:
+        assigned_teacher_name = teacher_name_map.get(int(item.teacher_id or 0), "") if item.teacher_id is not None else ""
+        base = _course_to_out(item, teacher_name=assigned_teacher_name).model_dump()
+        activations = activation_map.get(int(item.id or 0), [])
+        teaching_names = [
+            teacher_name_map.get(int(row.teacher_id), f"教师{row.teacher_id}")
+            for row in activations
+            if row.teaching_status == TeacherCourseStatus.teaching
+        ]
+        finished_names = [
+            teacher_name_map.get(int(row.teacher_id), f"教师{row.teacher_id}")
+            for row in activations
+            if row.teaching_status == TeacherCourseStatus.finished
+        ]
+        base.update(
+            {
+                "teaching_teacher_count": len(teaching_names),
+                "finished_teacher_count": len(finished_names),
+                "teaching_teacher_names": teaching_names,
+                "finished_teacher_names": finished_names,
+            }
+        )
+        payload_items.append(base)
+    return {"items": payload_items, "total": total}
 
 
 @router.post("/courses", response_model=CourseOut)
@@ -1582,10 +1667,6 @@ def create_course(
         lifecycle_status = CourseLifecycleStatus(str(payload.lifecycle_status or "draft").strip().lower())
     except ValueError:
         raise HTTPException(status_code=400, detail="无效的课程生命周期状态")
-    try:
-        enroll_status = CourseEnrollStatus(str(payload.enroll_status or "open").strip().lower())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="无效的报名开放状态")
     course = Course(
         code=code,
         title=title,
@@ -1593,20 +1674,17 @@ def create_course(
         active=bool(payload.active),
         lifecycle_status=lifecycle_status,
         teacher_id=teacher_id,
-        target_class=str(payload.target_class or "").strip(),
-        max_students=max(1, int(payload.max_students or 200)),
-        start_at=payload.start_at,
-        end_at=payload.end_at,
         archived_at=datetime.utcnow() if lifecycle_status == CourseLifecycleStatus.archived else None,
-        apply_deadline=payload.apply_deadline,
-        enroll_status=enroll_status,
     )
     session.add(course)
     session.commit()
     session.refresh(course)
-    _sync_course_class_enrollments(session, course)
-    _log_action(session, admin, "course_create", f"code={code} title={title} teacher_id={teacher_id}")
-    return _course_to_out(course)
+    _log_action(session, admin, "course_create", f"code={code} title={title}")
+    teacher_name = ""
+    if teacher_id is not None:
+        teacher = session.get(User, teacher_id)
+        teacher_name = teacher.full_name or teacher.username if teacher is not None else ""
+    return _course_to_out(course, teacher_name=teacher_name)
 
 
 @router.put("/courses/{course_id}", response_model=CourseOut)
@@ -1647,31 +1725,19 @@ def update_course(
         elif course.lifecycle_status == CourseLifecycleStatus.active:
             course.archived_at = None
             course.active = True
-    if payload.max_students is not None:
-        course.max_students = max(1, int(payload.max_students))
-    if payload.target_class is not None:
-        course.target_class = str(payload.target_class).strip()
-    if payload.start_at is not None:
-        course.start_at = payload.start_at
-    if payload.end_at is not None:
-        course.end_at = payload.end_at
     if payload.archived_at is not None:
         course.archived_at = payload.archived_at
-    if payload.apply_deadline is not None:
-        course.apply_deadline = payload.apply_deadline
-    if payload.enroll_status is not None:
-        try:
-            course.enroll_status = CourseEnrollStatus(str(payload.enroll_status).strip().lower())
-        except ValueError:
-            raise HTTPException(status_code=400, detail="无效的报名开放状态")
     if payload.teacher_id is not None:
         course.teacher_id = _ensure_teacher_id(session, payload.teacher_id)
     session.add(course)
     session.commit()
     session.refresh(course)
-    _sync_course_class_enrollments(session, course)
-    _log_action(session, admin, "course_update", f"id={course_id} code={course.code} teacher_id={course.teacher_id}")
-    return _course_to_out(course)
+    _log_action(session, admin, "course_update", f"id={course_id} code={course.code}")
+    teacher_name = ""
+    if course.teacher_id is not None:
+        teacher = session.get(User, int(course.teacher_id))
+        teacher_name = teacher.full_name or teacher.username if teacher is not None else ""
+    return _course_to_out(course, teacher_name=teacher_name)
 
 
 @router.delete("/courses/{course_id}")
@@ -1683,9 +1749,16 @@ def delete_course(
     course = session.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
-    blockers = _course_delete_blockers(session, course_id=course_id, subject=course.title)
-    if blockers:
-        raise HTTPException(status_code=400, detail=f"课程已有关联数据，不能删除：{'、'.join(blockers)}")
+    activation_rows = session.exec(
+        select(CourseTeacherActivation).where(CourseTeacherActivation.course_id == course_id)
+    ).all()
+    if any(row.teaching_status != TeacherCourseStatus.finished for row in activation_rows):
+        teacher_ids = [int(row.teacher_id) for row in activation_rows if row.teaching_status != TeacherCourseStatus.finished]
+        teacher_rows = session.exec(select(User).where(User.id.in_(teacher_ids))).all() if teacher_ids else []
+        teacher_names = [row.full_name or row.username for row in teacher_rows]
+        teacher_suffix = f"：{ '、'.join(teacher_names) }" if teacher_names else ""
+        raise HTTPException(status_code=400, detail=f"仍有教师未结课，当前课程不能删除{teacher_suffix}")
+    _purge_course_related_rows(session, course_id=course_id)
     session.delete(course)
     session.commit()
     _log_action(session, admin, "course_delete", f"id={course_id} code={course.code}")
@@ -2147,7 +2220,7 @@ def graph_kp_coverage(
 ):
     """各知识点挂载资源数、题库题数、任务数、是否配置小测（教师端图谱缺省提示）。"""
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
-    _check_teacher_subject_access(admin=admin, course=course)
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
     kps = session.exec(
         select(KnowledgePoint)
         .where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)
@@ -2217,7 +2290,7 @@ def graph_export(
 ):
     """导出当前课程（subject+grade）下的知识点、知识边、章节边。"""
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
-    _check_teacher_subject_access(admin=admin, course=course)
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
     format = (format or "json").strip().lower()
     if format not in {"json", "csv"}:
         raise HTTPException(status_code=400, detail="format 须为 json 或 csv")
@@ -3778,12 +3851,23 @@ def seed_full_system(
 def audit_logs(
     page: int = 1,
     page_size: int = 20,
+    keyword: str | None = None,
     actor: str | None = None,
     action: str | None = None,
     session: Session = Depends(get_session),
     _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     stmt = select(AuditLog)
+    if keyword:
+        like = f"%{keyword.strip()}%"
+        stmt = stmt.where(
+            or_(
+                AuditLog.actor.like(like),
+                AuditLog.role.like(like),
+                AuditLog.action.like(like),
+                AuditLog.detail.like(like),
+            )
+        )
     if actor:
         stmt = stmt.where(AuditLog.actor == actor)
     if action:
@@ -3920,7 +4004,7 @@ def recalculate_persona(
     if not subject or not grade:
         raise HTTPException(status_code=400, detail="subject/grade required")
     course = session.exec(select(Course).where(Course.title == subject)).first()
-    if admin.role == UserRole.teacher and course is not None and course.teacher_id != admin.id:
+    if admin.role == UserRole.teacher and course is not None and not teacher_has_course_access(session, int(admin.id), course):
         raise HTTPException(status_code=403, detail="No permission for this subject")
     snapshots = recalculate_profiles_for_subject(
         session,
@@ -3968,7 +4052,7 @@ def list_persona_students(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
-    _check_teacher_subject_access(admin=admin, course=course)
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
     students = session.exec(select(User).where(User.role == UserRole.student).order_by(User.id)).all()
     items = []
     for student in students:
@@ -4080,7 +4164,7 @@ def get_stage_feedback(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
-    _check_teacher_subject_access(admin=admin, course=course)
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
     row = get_stage_teacher_feedback(session, user_id=user_id, subject=subject, grade=grade, stage_id=stage_id)
     if row is None:
         return None
@@ -4104,7 +4188,7 @@ def get_stage_feedback_history(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
-    _check_teacher_subject_access(admin=admin, course=course)
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
 
     rows = session.exec(
         select(StageTeacherFeedback)
@@ -4155,7 +4239,7 @@ def save_stage_feedback(
     if stage is None:
         raise HTTPException(status_code=404, detail="Stage not found")
     course = session.get(Course, stage.course_id)
-    if admin.role == UserRole.teacher and course is not None and course.teacher_id != admin.id:
+    if admin.role == UserRole.teacher and course is not None and not teacher_has_course_access(session, int(admin.id), course):
         raise HTTPException(status_code=403, detail="No permission for this subject")
     row = upsert_stage_teacher_feedback(
         session,
@@ -4197,12 +4281,23 @@ def analytics_overview(
     if not subject or not grade:
         first_kp = session.exec(select(KnowledgePoint).order_by(KnowledgePoint.id)).first()
         if first_kp is None:
-            raise HTTPException(status_code=404, detail="No knowledge point data available")
+            return AdminAnalyticsOut(
+                subject=subject or "",
+                grade=grade or "",
+                total_students=0,
+                persona_distribution=[],
+                stage_summary=[],
+                latest_stage=None,
+                risk_students=[],
+                weak_kps=[],
+                progress_ranking=[],
+                ability_practice_cohort={},
+            )
         subject = subject or first_kp.subject
         grade = grade or first_kp.grade
 
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
-    _check_teacher_subject_access(admin=admin, course=course)
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
 
     student_stmt = select(User).where(User.role == UserRole.student)
     if course is not None and course.id is not None:
@@ -4384,7 +4479,7 @@ def analytics_student_detail(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
-    _check_teacher_subject_access(admin=admin, course=course)
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
     return _build_student_detail_payload(
         session,
         user_id=user_id,
@@ -4402,7 +4497,7 @@ def list_final_score_students(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
-    _check_teacher_subject_access(admin=admin, course=course)
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
     student_stmt = select(User).where(User.role == UserRole.student)
     if course is not None and course.id is not None:
         active_student_ids = _active_course_student_ids(session, course_id=int(course.id))
@@ -4452,7 +4547,7 @@ def final_score_detail(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
-    _check_teacher_subject_access(admin=admin, course=course)
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
     if course is not None and course.id is not None:
         active_student_ids = set(_active_course_student_ids(session, course_id=int(course.id)))
         if user_id not in active_student_ids:
@@ -4475,7 +4570,7 @@ def confirm_final_score(
     course = _resolve_course_for_subject(session, subject=payload.subject, grade=payload.grade, admin=admin)
     if course is None or course.id is None:
         raise HTTPException(status_code=404, detail="课程不存在")
-    _check_teacher_subject_access(admin=admin, course=course)
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
     active_student_ids = set(_active_course_student_ids(session, course_id=int(course.id)))
     if payload.user_id not in active_student_ids:
         raise HTTPException(status_code=404, detail="Student not enrolled in this course")

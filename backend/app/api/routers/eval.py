@@ -7,6 +7,9 @@ from sqlmodel import Session, select
 from app.api.deps import assert_student_kp_access, assert_student_subject_access, get_current_user
 from app.db.models import (
     Course,
+    CourseApplication,
+    Enrollment,
+    EnrollmentStatus,
     KnowledgePoint,
     LearningBehaviorEvent,
     Mastery,
@@ -15,6 +18,8 @@ from app.db.models import (
     RecommendationLog,
     ReviewSchedule,
     VideoProgress,
+    ApplicationStatus,
+    CourseStage,
 )
 from app.db.session import get_session
 from app.schemas.eval import (
@@ -48,6 +53,48 @@ from app.services.learner_profile import (
 )
 
 router = APIRouter(prefix="/eval", tags=["eval"])
+
+
+def _resolve_student_subject_grade(session: Session, user_id: int) -> tuple[str, str]:
+    enrollments = session.exec(
+        select(Enrollment)
+        .where(Enrollment.student_id == user_id, Enrollment.status == EnrollmentStatus.active)
+        .order_by(Enrollment.enrolled_at.desc())
+    ).all()
+    course_ids = [int(item.course_id) for item in enrollments]
+    if not course_ids:
+        approved = session.exec(
+            select(CourseApplication.course_id)
+            .where(
+                CourseApplication.student_id == user_id,
+                CourseApplication.status == ApplicationStatus.approved,
+            )
+            .order_by(CourseApplication.created_at.desc())
+        ).all()
+        course_ids = [int(item) for item in approved if item is not None]
+    if not course_ids:
+        raise HTTPException(status_code=400, detail="subject and grade are required")
+
+    course = session.get(Course, course_ids[0])
+    if course is None:
+        raise HTTPException(status_code=400, detail="subject and grade are required")
+
+    stage = session.exec(
+        select(CourseStage)
+        .where(CourseStage.course_id == int(course.id))
+        .order_by(CourseStage.stage_order, CourseStage.id)
+    ).first()
+    if stage is not None and str(stage.grade or "").strip():
+        return str(course.title), str(stage.grade).strip()
+
+    kp = session.exec(
+        select(KnowledgePoint)
+        .where(KnowledgePoint.subject == course.title)
+        .order_by(KnowledgePoint.id)
+    ).first()
+    if kp is not None and str(kp.grade or "").strip():
+        return str(course.title), str(kp.grade).strip()
+    return str(course.title), "通用"
 
 
 def _risk_level_label(dynamic_score: float) -> str:
@@ -194,12 +241,17 @@ def mastery(
 
 @router.get("/profile", response_model=ProfileOut)
 def profile(
-    subject: str,
-    grade: str,
+    subject: str | None = None,
+    grade: str | None = None,
     days: int = 14,
     session: Session = Depends(get_session),
     user=Depends(get_current_user),
 ):
+    if not subject or not grade:
+        if getattr(user, "role", None) == "student":
+            subject, grade = _resolve_student_subject_grade(session, int(user.id))
+        else:
+            raise HTTPException(status_code=400, detail="subject and grade are required")
     if getattr(user, "role", None) == "student":
         assert_student_subject_access(session, int(user.id), subject)
     refresh_subject_mastery(session, user_id=user.id, subject=subject, grade=grade)

@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from "vue-router";
+﻿import { createRouter, createWebHistory } from "vue-router";
 import { getRole, getToken, getUsername } from "./token";
 
 export const router = createRouter({
@@ -24,10 +24,8 @@ const AdminCoursesPage = () => import("./pages/AdminCoursesPage.vue");
 const AdminUsersPage = () => import("./pages/AdminUsersPage.vue");
 const AdminTeachersPage = () => import("./pages/AdminTeachersPage.vue");
 const AdminDimensionsPage = () => import("./pages/AdminDimensionsPage.vue");
-const AdminPersonaRulesPage = () => import("./pages/AdminPersonaRulesPage.vue");
-const AdminConfigPage = () => import("./pages/AdminConfigPage.vue");
+const AdminPersonaStepPage = () => import("./pages/AdminPersonaStepPage.vue");
 const AdminAuditPage = () => import("./pages/AdminAuditPage.vue");
-const AdminExtensionsPage = () => import("./pages/AdminExtensionsPage.vue");
 
 const TeacherWorkspacePage = () => import("./pages/TeacherCoursesPage.vue");
 const TeacherGraphWorkspacePage = () => import("./pages/TeacherGraphWorkspace.vue");
@@ -37,7 +35,6 @@ const TeacherReviewWorkspacePage = () => import("./pages/TeacherReviewWorkspaceP
 const TeacherKpContentWorkspacePage = () => import("./pages/TeacherKpContentWorkspace.vue");
 const TeacherResourceDetailPage = () => import("./pages/TeacherResourceDetail.vue");
 const TeacherKpPreviewPage = () => import("./pages/StudentKpContentWorkspace.vue");
-const TeacherExtensionsPage = () => import("./pages/TeacherExtensionsPage.vue");
 
 const StartPage = () => import("./pages/Start.vue");
 const LoginPage = () => import("./pages/Login.vue");
@@ -75,7 +72,7 @@ router.addRoute({
 router.addRoute({
   path: "/student/dashboard",
   component: StudentDashboardPage,
-  meta: { title: "学习台" },
+  meta: { title: "学习总览" },
 });
 router.addRoute({
   path: "/student/overview",
@@ -88,7 +85,7 @@ router.addRoute({
 router.addRoute({
   path: "/student/graph-workspace",
   component: StudentGraphWorkspacePage,
-  meta: { title: "图谱学习" },
+  meta: { title: "知识图谱" },
 });
 router.addRoute({
   path: "/student/enroll",
@@ -107,23 +104,12 @@ router.addRoute({
 });
 router.addRoute({
   path: "/admin/config",
-  component: AdminConfigPage,
-  meta: { title: "系统配置" },
+  redirect: (to) => ({ path: "/admin/evaluation/persona/settings", query: to.query }),
 });
 router.addRoute({
   path: "/admin/audit",
   component: AdminAuditPage,
   meta: { title: "审计日志" },
-});
-router.addRoute({
-  path: "/admin/extensions",
-  component: AdminExtensionsPage,
-  meta: { title: "扩展与答辩" },
-});
-router.addRoute({
-  path: "/teacher/extensions",
-  component: TeacherExtensionsPage,
-  meta: { title: "扩展与答辩" },
 });
 [
   "/student/kp-content/:kpId",
@@ -177,8 +163,27 @@ router.addRoute({
 });
 router.addRoute({
   path: "/admin/evaluation/persona",
-  component: AdminPersonaRulesPage,
-  meta: { title: "画像规则" },
+  redirect: (to) => ({ path: "/admin/evaluation/persona/settings", query: to.query }),
+});
+router.addRoute({
+  path: "/admin/evaluation/persona/settings",
+  component: AdminPersonaStepPage,
+  props: { mode: "settings" },
+  meta: { title: "基础规则设置" },
+});
+router.addRoute({
+  path: "/admin/evaluation/persona/results",
+  redirect: (to) => ({ path: "/admin/evaluation/persona/settings", query: to.query }),
+});
+[
+  "/admin/evaluation/persona/context",
+  "/admin/evaluation/persona/thresholds",
+  "/admin/evaluation/persona/rules",
+].forEach((path) => {
+  router.addRoute({
+    path,
+    redirect: (to) => ({ path: "/admin/evaluation/persona/settings", query: to.query }),
+  });
 });
 [
   ["/admin/courses", "/admin/basic/courses"],
@@ -218,7 +223,7 @@ router.addRoute({
 router.addRoute({
   path: "/teacher/review",
   component: TeacherReviewWorkspacePage,
-  meta: { title: "审核与评分" },
+  meta: { title: "审核与评定" },
 });
 router.addRoute({
   path: "/teacher/resources/:resourceId",
@@ -252,7 +257,7 @@ router.addRoute({
   ["/teacher/indicators", "/teacher/evaluation?tab=indicators"],
   ["/teacher/behavior-report", "/teacher/evaluation?tab=behavior"],
   ["/teacher/analytics", "/teacher/students?tab=class"],
-  ["/teacher/profiles", "/teacher/students?tab=rules"],
+  ["/teacher/profiles", "/teacher/students?tab=results"],
   ["/teacher/enrollments", "/teacher/review?tab=enrollment"],
   ["/teacher/final-review", "/teacher/review?tab=final"],
 ].forEach(([from, to]) => {
@@ -295,8 +300,11 @@ router.beforeEach((to) => {
         "/admin/basic/teachers",
         "/admin/evaluation/dimensions",
         "/admin/evaluation/persona",
+        "/admin/evaluation/persona/context",
+        "/admin/evaluation/persona/thresholds",
+        "/admin/evaluation/persona/rules",
+        "/admin/evaluation/persona/settings",
         "/admin/config",
-        "/admin/extensions",
       ]);
       if (!allowedAdminPaths.has(to.path)) return "/admin/dashboard";
     }
@@ -324,3 +332,6 @@ router.afterEach((to) => {
   const pageTitle = String(to.meta?.title || "").trim();
   document.title = pageTitle ? `${pageTitle} | 动态评价系统` : "动态评价系统";
 });
+
+
+

@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from app.api.deps import require_role
+from app.api.deps import require_role, teacher_has_course_access
 from app.db.models import (
     Course,
     CourseStage,
@@ -40,10 +40,10 @@ def _get_course_or_404(session: Session, course_id: int) -> Course:
     return course
 
 
-def _ensure_course_permission(user: User, course: Course) -> None:
+def _ensure_course_permission(session: Session, user: User, course: Course) -> None:
     if user.role == UserRole.admin:
         return
-    if user.role == UserRole.teacher and course.teacher_id == user.id:
+    if user.role == UserRole.teacher and teacher_has_course_access(session=session, teacher_id=int(user.id), course=course):
         return
     raise HTTPException(status_code=403, detail="No permission for this course")
 
@@ -237,7 +237,7 @@ def get_course_selection(
     user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _get_course_or_404(session, course_id)
-    _ensure_course_permission(user, course)
+    _ensure_course_permission(session, user, course)
     dimensions = session.exec(select(PortraitDimension).order_by(PortraitDimension.sort_order, PortraitDimension.id)).all()
     indicators = session.exec(select(PortraitIndicator).order_by(PortraitIndicator.sort_order, PortraitIndicator.id)).all()
     selections = session.exec(
@@ -285,7 +285,7 @@ def update_course_selection(
     user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _get_course_or_404(session, course_id)
-    _ensure_course_permission(user, course)
+    _ensure_course_permission(session, user, course)
 
     existing = session.exec(
         select(CoursePortraitIndicatorSelection).where(CoursePortraitIndicatorSelection.course_id == course_id)
@@ -333,7 +333,7 @@ def get_teacher_indicator_input(
     user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _get_course_or_404(session, course_id)
-    _ensure_course_permission(user, course)
+    _ensure_course_permission(session, user, course)
     rows = _course_indicator_rows_for_teacher(session=session, course_id=course_id)
     existing = session.exec(
         select(TeacherPortraitIndicatorInput).where(
@@ -368,7 +368,7 @@ def save_teacher_indicator_input(
     user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     course = _get_course_or_404(session, course_id)
-    _ensure_course_permission(user, course)
+    _ensure_course_permission(session, user, course)
     valid_rows = _course_indicator_rows_for_teacher(session=session, course_id=course_id)
     valid_by_indicator = {int(row["indicator"].id): row for row in valid_rows}
     existing = session.exec(
@@ -433,7 +433,7 @@ def get_questionnaire_indicator_input(
     if user.role == UserRole.student and target_user_id != user.id:
         raise HTTPException(status_code=403, detail="No permission for this user")
     if user.role in {UserRole.admin, UserRole.teacher}:
-        _ensure_course_permission(user, course)
+        _ensure_course_permission(session, user, course)
 
     rows = _course_indicator_rows_for_questionnaire(session=session, course_id=course_id)
     existing = session.exec(
@@ -472,7 +472,7 @@ def save_questionnaire_indicator_input(
     if user.role == UserRole.student and target_user_id != user.id:
         raise HTTPException(status_code=403, detail="No permission for this user")
     if user.role in {UserRole.admin, UserRole.teacher}:
-        _ensure_course_permission(user, course)
+        _ensure_course_permission(session, user, course)
 
     valid_rows = _course_indicator_rows_for_questionnaire(session=session, course_id=course_id)
     valid_by_indicator = {int(row["indicator"].id): row for row in valid_rows}

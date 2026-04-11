@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from app.api.deps import get_current_user
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import create_access_token, verify_password
 from app.db.models import User, UserRole
 from app.db.session import get_session
 from app.schemas.auth import LoginRequest, Token, WechatBindRequest, WechatLoginRequest
@@ -20,28 +20,23 @@ def _normalize_phone(phone: str | None) -> str | None:
     if not value:
         return None
     if len(value) != 11:
-        raise HTTPException(status_code=400, detail="手机号格式不正确（需 11 位数字）")
+        raise HTTPException(status_code=400, detail="手机号格式不正确，需要 11 位数字")
     return value
-
-
-def _validate_password(password: str):
-    if len(password or "") < 6:
-        raise HTTPException(status_code=400, detail="密码长度至少 6 位")
 
 
 @router.post("/register")
 def register_disabled():
-    raise HTTPException(status_code=403, detail="账号统一由管理员创建，不开放自助注册")
+    raise HTTPException(status_code=403, detail="账号统一由管理员创建，暂不开放自主注册")
 
 
 @router.post("/register/student")
 def register_student_disabled():
-    raise HTTPException(status_code=403, detail="学生账号统一由管理员创建，不开放自助注册")
+    raise HTTPException(status_code=403, detail="学生账号统一由管理员创建，暂不开放自主注册")
 
 
 @router.post("/register/teacher")
 def register_teacher_disabled():
-    raise HTTPException(status_code=403, detail="教师账号统一由管理员创建，不开放自助注册")
+    raise HTTPException(status_code=403, detail="教师账号统一由管理员创建，暂不开放自主注册")
 
 
 @router.post("/login", response_model=Token)
@@ -50,7 +45,7 @@ def login(payload: LoginRequest, session: Session = Depends(get_session)):
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=400, detail="Invalid username or password")
     if not bool(user.active):
-        raise HTTPException(status_code=403, detail="账号已禁用")
+        raise HTTPException(status_code=403, detail="账号已被禁用")
     token = create_access_token(subject=user.username, role=user.role.value)
     log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return Token(access_token=token, role=user.role.value)
@@ -64,7 +59,7 @@ def login_student(payload: LoginRequest, session: Session = Depends(get_session)
     if user.role != UserRole.student:
         raise HTTPException(status_code=403, detail="Not a student account")
     if not bool(user.active):
-        raise HTTPException(status_code=403, detail="账号已禁用")
+        raise HTTPException(status_code=403, detail="账号已被禁用")
     token = create_access_token(subject=user.username, role=user.role.value)
     log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return Token(access_token=token, role=user.role.value)
@@ -78,7 +73,7 @@ def login_admin(payload: LoginRequest, session: Session = Depends(get_session)):
     if user.role not in {UserRole.admin, UserRole.teacher}:
         raise HTTPException(status_code=403, detail="Not an admin/teacher account")
     if not bool(user.active):
-        raise HTTPException(status_code=403, detail="账号已禁用")
+        raise HTTPException(status_code=403, detail="账号已被禁用")
     token = create_access_token(subject=user.username, role=user.role.value)
     log_behavior_event(session, user_id=user.id, event_type="login", commit=True)
     return Token(access_token=token, role=user.role.value)

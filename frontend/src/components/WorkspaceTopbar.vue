@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Compass } from "@element-plus/icons-vue";
+
 const props = defineProps<{
   modelValue: string;
   courses: Array<{ id: number; title: string; code?: string }>;
@@ -6,6 +8,8 @@ const props = defineProps<{
   title: string;
   subtitle?: string;
   metaText?: string;
+  icon?: any;
+  showSelect?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -22,6 +26,9 @@ function handleChange(value: string) {
 <template>
   <el-card class="panel-card workspace-topbar" shadow="never">
     <div class="workspace-topbar__content">
+      <div class="workspace-topbar__icon">
+        <el-icon><component :is="props.icon || Compass" /></el-icon>
+      </div>
       <div class="workspace-topbar__main">
         <div class="workspace-topbar__badge">{{ badge }}</div>
         <div class="workspace-topbar__title">{{ title }}</div>
@@ -29,6 +36,7 @@ function handleChange(value: string) {
 
       <div class="workspace-topbar__actions">
         <el-select
+          v-if="props.showSelect !== false"
           :model-value="modelValue"
           size="small"
           class="workspace-topbar__select"
@@ -55,21 +63,38 @@ function handleChange(value: string) {
 
 .workspace-topbar__content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   gap: 16px;
-  padding: 16px 18px 14px;
+  padding: 14px 18px 12px;
+}
+
+.workspace-topbar__icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: #3268da;
+  background: linear-gradient(135deg, rgba(74, 132, 255, 0.14) 0%, rgba(107, 197, 255, 0.14) 100%);
+  border: 1px solid #dbe6fb;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.workspace-topbar__icon :deep(svg) {
+  width: 20px;
+  height: 20px;
 }
 
 .workspace-topbar__main {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   flex: 1;
   min-width: 260px;
 }
 
 .workspace-topbar__badge {
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
   color: var(--app-ink-soft);
   font-weight: 800;
@@ -81,7 +106,7 @@ function handleChange(value: string) {
 }
 
 .workspace-topbar__title {
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.15;
   font-weight: 800;
   color: var(--app-ink);
@@ -91,7 +116,7 @@ function handleChange(value: string) {
 .workspace-topbar__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
   min-width: 0;
@@ -103,14 +128,14 @@ function handleChange(value: string) {
 }
 
 .workspace-topbar__actions :deep(.el-select__wrapper) {
-  min-height: 42px;
+  min-height: 44px;
   border-radius: 18px !important;
-  background: #ffffff !important;
-  box-shadow: 0 0 0 1px #d7e4f5 inset !important;
+  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%) !important;
+  box-shadow: 0 0 0 1px #d7e4f5 inset, 0 10px 20px rgba(80, 118, 183, 0.05) !important;
 }
 
 .workspace-topbar__actions :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 1px #7ea9f6 inset, 0 0 0 3px rgba(87, 133, 231, 0.12) !important;
+  box-shadow: 0 0 0 1px #7ea9f6 inset, 0 0 0 3px rgba(87, 133, 231, 0.12), 0 12px 24px rgba(80, 118, 183, 0.08) !important;
 }
 
 .workspace-topbar__actions :deep(.el-select__placeholder),
@@ -121,7 +146,7 @@ function handleChange(value: string) {
 
 .workspace-topbar__actions :deep(.el-button) {
   min-width: 118px;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 20px;
   border-radius: 999px !important;
   border: 1px solid #d7e4f5 !important;
@@ -159,7 +184,7 @@ function handleChange(value: string) {
 .workspace-topbar__meta {
   margin-top: 0;
   color: var(--app-ink-soft);
-  font-size: var(--app-text-xs);
+  font-size: 12px;
   padding: 10px 18px 12px;
   display: flex;
   align-items: center;
@@ -169,7 +194,7 @@ function handleChange(value: string) {
 }
 
 .workspace-topbar__meta::before {
-  content: '';
+  content: "";
   width: 4px;
   height: 4px;
   border-radius: 50%;
@@ -178,12 +203,12 @@ function handleChange(value: string) {
 
 @media (max-width: 1120px) {
   .workspace-topbar__content {
-    grid-template-columns: 1fr;
+    grid-template-columns: auto 1fr;
     padding: 14px 16px 12px;
   }
-  
+
   .workspace-topbar__title {
-    font-size: 20px;
+    font-size: 19px;
   }
 
   .workspace-topbar__select {
@@ -205,11 +230,11 @@ function handleChange(value: string) {
     padding: 12px 14px 10px;
     gap: 12px;
   }
-  
+
   .workspace-topbar__title {
-    font-size: 18px;
+    font-size: 17px;
   }
-  
+
   .workspace-topbar__meta {
     padding: 8px 14px 10px;
   }

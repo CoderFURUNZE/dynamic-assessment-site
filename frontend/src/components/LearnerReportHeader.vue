@@ -11,8 +11,8 @@ const emit = defineEmits<{
 <template>
   <div class="report-header">
     <div class="report-header__main">
-      <div class="report-header__eyebrow">Learning Report</div>
-      <div class="report-title">学习报告</div>
+      <div class="report-header__eyebrow">学习报告</div>
+      <div class="report-title">按课程查看阶段结果与学习建议</div>
     </div>
     <el-button size="small" @click="emit('refresh')" :loading="loading">刷新</el-button>
   </div>
@@ -36,7 +36,6 @@ const emit = defineEmits<{
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: #6c86ab;
 }
 

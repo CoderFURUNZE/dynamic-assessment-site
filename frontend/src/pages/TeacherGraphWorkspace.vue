@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { getRole } from "../token";
+import AdminIntroHero from "../components/AdminIntroHero.vue";
 import KnowledgeGraphWorkspace from "../components/KnowledgeGraphWorkspace.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
@@ -34,6 +35,13 @@ const isReadonlyCourse = computed(() => {
     if (Number.isFinite(end) && end < Date.now()) return true;
   }
   return false;
+});
+
+const courseLifecycleLabel = computed(() => {
+  const value = String(currentCourse.value?.lifecycle_status || "draft").toLowerCase();
+  if (value === "active") return "开课中";
+  if (value === "archived") return "已归档";
+  return "待开课";
 });
 
 async function loadCourses() {
@@ -114,30 +122,40 @@ onMounted(async () => {
 
 <template>
   <div v-if="isTeacher" class="graph-page">
-    <section class="graph-page__toolbar">
-      <div class="graph-page__toolbar-copy">
-        <h1>知识图谱</h1>
-        <p>{{ currentCourse?.title || "当前课程" }}</p>
-      </div>
-      <div class="graph-page__toolbar-actions">
+    <AdminIntroHero
+      eyebrow="教师工作台"
+      title="知识图谱"
+      pill="内容建设"
+      :description="`${currentCourse?.title || '当前课程'} · 在这里维护课程知识点关系、内容入口和图谱结构。`"
+    >
+      <template #actions>
         <el-select v-model="subject" class="graph-page__select" placeholder="选择课程">
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
         <el-button class="graph-page__toolbar-btn graph-page__toolbar-btn--accent" :disabled="isReadonlyCourse" @click="createTeacherKp">新建知识点</el-button>
         <el-button class="graph-page__toolbar-btn" @click="goBack">返回工作台</el-button>
         <el-button class="graph-page__toolbar-btn graph-page__toolbar-btn--accent" @click="refreshWorkspace">刷新</el-button>
-      </div>
+      </template>
+    </AdminIntroHero>
+
+    <section class="graph-page__summary panel-card">
+      <article class="graph-page__summary-card">
+        <span>当前课程</span>
+        <strong>{{ currentCourse?.title || "未选择课程" }}</strong>
+      </article>
+      <article class="graph-page__summary-card">
+        <span>课程状态</span>
+        <strong>{{ courseLifecycleLabel }}</strong>
+      </article>
+      <article class="graph-page__summary-card">
+        <span>当前模式</span>
+        <strong>{{ isReadonlyCourse ? "只读查看" : "可继续建设" }}</strong>
+      </article>
     </section>
 
     <section class="graph-page__panel">
       <div class="graph-page__panel-body">
-        <KnowledgeGraphWorkspace
-          embedded
-          actor-mode="teacher"
-          :subject="subject"
-          :grade="grade"
-          @open-content="openTeacherKpWorkspace"
-        />
+        <KnowledgeGraphWorkspace embedded actor-mode="teacher" :subject="subject" :grade="grade" @open-content="openTeacherKpWorkspace" />
       </div>
     </section>
   </div>
@@ -151,7 +169,7 @@ onMounted(async () => {
   gap: 12px;
 }
 
-.graph-page__toolbar,
+.graph-page__summary,
 .graph-page__panel {
   border-radius: 20px;
   border: 1px solid color-mix(in srgb, var(--app-primary) 12%, var(--app-border));
@@ -159,60 +177,62 @@ onMounted(async () => {
   box-shadow: var(--app-shadow-soft);
 }
 
-.graph-page__toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-  background: #ffffff;
-}
-
-.graph-page__toolbar-copy {
+.graph-page__summary {
   display: grid;
-  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px;
 }
 
-.graph-page__toolbar-copy h1 {
-  margin: 0;
-  font-size: 24px;
-  line-height: 1.1;
-  color: #11284a;
-  letter-spacing: -0.03em;
+.graph-page__summary-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid #dce6f5;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
-.graph-page__toolbar-copy p {
-  margin: 0;
-  color: #60758f;
-  font-size: 13px;
-  line-height: 1.4;
+.graph-page__summary-card span {
+  font-size: 12px;
+  color: var(--app-text-soft);
 }
 
-.graph-page__toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.graph-page__summary-card strong {
+  font-size: 16px;
+  line-height: 1.35;
+  color: var(--app-text-main);
+}
+
+.graph-page__panel {
+  padding: 8px;
+}
+
+.graph-page__panel-body {
+  overflow: hidden;
+  min-height: calc(100dvh - 212px);
+  background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
+  border-radius: 16px;
 }
 
 .graph-page__select {
   width: 240px;
 }
 
-.graph-page__toolbar-actions :deep(.el-select__wrapper) {
+.graph-page :deep(.admin-intro-hero__actions .el-select__wrapper) {
   min-height: 42px;
   border-radius: 18px !important;
   background: #ffffff !important;
   box-shadow: 0 0 0 1px #d7e4f5 inset !important;
 }
 
-.graph-page__toolbar-actions :deep(.el-select__wrapper.is-focused) {
+.graph-page :deep(.admin-intro-hero__actions .el-select__wrapper.is-focused) {
   box-shadow: 0 0 0 1px #7ea9f6 inset, 0 0 0 3px rgba(87, 133, 231, 0.12) !important;
 }
 
-.graph-page__toolbar-actions :deep(.el-select__placeholder),
-.graph-page__toolbar-actions :deep(.el-select__selected-item),
-.graph-page__toolbar-actions :deep(.el-select__caret) {
+.graph-page :deep(.admin-intro-hero__actions .el-select__placeholder),
+.graph-page :deep(.admin-intro-hero__actions .el-select__selected-item),
+.graph-page :deep(.admin-intro-hero__actions .el-select__caret) {
   color: #5a6f8f !important;
 }
 
@@ -248,21 +268,9 @@ onMounted(async () => {
   color: #afbdd0;
 }
 
-.graph-page__panel {
-  padding: 8px;
-}
-
-.graph-page__panel-body {
-  overflow: hidden;
-  min-height: calc(100dvh - 156px);
-  background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
-  border-radius: 16px;
-}
-
-@media (max-width: 1100px) {
-  .graph-page__toolbar {
-    flex-direction: column;
-    align-items: flex-start;
+@media (max-width: 960px) {
+  .graph-page__summary {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -271,16 +279,12 @@ onMounted(async () => {
     padding: 0 8px 8px;
   }
 
-  .graph-page__toolbar-copy h1 {
-    font-size: 22px;
-  }
-
   .graph-page__select {
     width: 100%;
   }
 
   .graph-page__panel-body {
-    min-height: calc(100dvh - 176px);
+    min-height: calc(100dvh - 232px);
   }
 }
 </style>

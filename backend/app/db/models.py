@@ -4,6 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
+from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
@@ -24,6 +25,12 @@ class CourseLifecycleStatus(str, Enum):
     draft = "draft"
     active = "active"
     archived = "archived"
+
+
+class TeacherCourseStatus(str, Enum):
+    not_started = "not_started"
+    teaching = "teaching"
+    finished = "finished"
 
 
 class ApplicationStatus(str, Enum):
@@ -91,6 +98,18 @@ class Course(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     __table_args__ = (UniqueConstraint("code"),)
+
+
+class CourseTeacherActivation(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    course_id: int = Field(foreign_key="course.id", index=True)
+    teacher_id: int = Field(foreign_key="user.id", index=True)
+    teaching_status: TeacherCourseStatus = Field(default=TeacherCourseStatus.not_started, index=True)
+    activated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    finished_at: Optional[datetime] = Field(default=None, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    __table_args__ = (UniqueConstraint("course_id", "teacher_id"),)
 
 
 class Enrollment(SQLModel, table=True):
@@ -188,10 +207,10 @@ class KnowledgeEdge(SQLModel, table=True):
 
 class ChapterEdge(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    subject: str = Field(index=True)
-    grade: str = Field(index=True)
-    source_chapter: str = Field(index=True)
-    target_chapter: str = Field(index=True)
+    subject: str = Field(index=True, max_length=64)
+    grade: str = Field(index=True, max_length=64)
+    source_chapter: str = Field(index=True, max_length=128)
+    target_chapter: str = Field(index=True, max_length=128)
     relation_type: RelationType = Field(default=RelationType.related, index=True)
 
     __table_args__ = (UniqueConstraint("subject", "grade", "source_chapter", "target_chapter"),)
@@ -521,20 +540,26 @@ class LearnerPersonaRule(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     subject: str = Field(index=True)
     grade: str = Field(index=True)
-    thresholds_json: str = (
-        '{"procrastinating_e":0.4,"smart_a":0.75,"smart_f":0.75,'
-        '"diligent_e":0.75,"diligent_a":0.6,"struggling_e":0.6,"struggling_a":0.6}'
+    thresholds_json: str = Field(
+        default=(
+            '{"procrastinating_e":0.4,"smart_a":0.75,"smart_f":0.75,'
+            '"diligent_e":0.75,"diligent_a":0.6,"struggling_e":0.6,"struggling_a":0.6}'
+        ),
+        sa_column=Column(Text, nullable=False),
     )
-    weights_json: str = (
-        '{"engagement":{"learning_frequency":0.35,"study_duration":0.35,"resource_completion":0.2,"streak":0.1},'
-        '"achievement":{"practice_accuracy":0.5,"quiz_accuracy":0.3,"mastery_growth":0.2},'
-        '"efficiency":{"unit_time_accuracy":0.6,"task_completion":0.4},'
-        '"risk":{"overdue_rate":0.4,"wrong_streak":0.3,"abandonment_rate":0.3},'
-        '"dynamic":{"engagement":0.25,"achievement":0.3,"course_mastery":0.35,"stability":0.1},'
-        '"stage_dimensions":{"engagement":{"enabled":true,"weight":0.3,"metrics":{"activity_frequency":0.25,"study_duration":0.35,"completion":0.25,"attendance_participation":0.15}},'
-        '"achievement":{"enabled":true,"weight":0.35,"metrics":{"assignment_score":0.35,"quiz_score":0.35,"task_score":0.15,"stage_mastery":0.15}},'
-        '"habit":{"enabled":true,"weight":0.2,"metrics":{"on_time_rate":0.4,"attendance_rate":0.35,"continuity":0.25}},'
-        '"characteristic":{"enabled":true,"weight":0.15,"metrics":{"participation":0.35,"task_completion":0.35,"resource_initiative":0.3}}}}'
+    weights_json: str = Field(
+        default=(
+            '{"engagement":{"learning_frequency":0.35,"study_duration":0.35,"resource_completion":0.2,"streak":0.1},'
+            '"achievement":{"practice_accuracy":0.5,"quiz_accuracy":0.3,"mastery_growth":0.2},'
+            '"efficiency":{"unit_time_accuracy":0.6,"task_completion":0.4},'
+            '"risk":{"overdue_rate":0.4,"wrong_streak":0.3,"abandonment_rate":0.3},'
+            '"dynamic":{"engagement":0.25,"achievement":0.3,"course_mastery":0.35,"stability":0.1},'
+            '"stage_dimensions":{"engagement":{"enabled":true,"weight":0.3,"metrics":{"activity_frequency":0.25,"study_duration":0.35,"completion":0.25,"attendance_participation":0.15}},'
+            '"achievement":{"enabled":true,"weight":0.35,"metrics":{"assignment_score":0.35,"quiz_score":0.35,"task_score":0.15,"stage_mastery":0.15}},'
+            '"habit":{"enabled":true,"weight":0.2,"metrics":{"on_time_rate":0.4,"attendance_rate":0.35,"continuity":0.25}},'
+            '"characteristic":{"enabled":true,"weight":0.15,"metrics":{"participation":0.35,"task_completion":0.35,"resource_initiative":0.3}}}}'
+        ),
+        sa_column=Column(Text, nullable=False),
     )
     strategy_json: str = (
         '{"smart_capable":"更高难度+精讲提要","diligent":"结构化路径+阶段反馈",'
@@ -574,7 +599,7 @@ class LearnerProfileSnapshot(SQLModel, table=True):
     risk_level: str = "warning"
     override_source: str = "auto"
     reason_summary: str = ""
-    portrait_summary_json: str = "{}"
+    portrait_summary_json: str = Field(default="{}", sa_column=Column(Text, nullable=False))
     updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
@@ -599,9 +624,9 @@ class StageEvaluationSnapshot(SQLModel, table=True):
     trend_label: str = "持平"
     risk_level: str = "预警"
     reason_summary: str = ""
-    dimension_summary_json: str = "{}"
-    indicator_summary_json: str = "{}"
-    enabled_dimensions_json: str = "{}"
+    dimension_summary_json: str = Field(default="{}", sa_column=Column(Text, nullable=False))
+    indicator_summary_json: str = Field(default="{}", sa_column=Column(Text, nullable=False))
+    enabled_dimensions_json: str = Field(default="{}", sa_column=Column(Text, nullable=False))
     updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
     __table_args__ = (UniqueConstraint("user_id", "stage_id"),)
@@ -687,5 +712,5 @@ class RecommendationLog(SQLModel, table=True):
     target_kp_id: int = Field(foreign_key="knowledgepoint.id", index=True)
     persona_type: PersonaType = Field(index=True)
     reason_summary: str = ""
-    payload_json: str = "{}"
+    payload_json: str = Field(default="{}", sa_column=Column(Text, nullable=False))
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)

@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ArrowLeft, Expand, Fold, Monitor, SwitchButton, User } from "@element-plus/icons-vue";
+import { ArrowLeft, Calendar, Expand, Fold, Monitor, SwitchButton, User } from "@element-plus/icons-vue";
 import { clearToken, getRole } from "./token";
 import { appNavigation, type AppNavItem } from "./layouts/appNavigation";
 import { buildTeacherSubjectQuery, getSavedTeacherSubject } from "./utils/teacherCourse";
@@ -35,6 +35,8 @@ const isStudentPreview = computed(
     && (role.value === "admin" || role.value === "teacher")
     && String(route.query.preview || "") === "1",
 );
+const canOpenPreview = computed(() => routeGroup.value === "admin" && isAdmin.value);
+const canReturnToAdmin = computed(() => routeGroup.value === "student" && isStudentPreview.value && isAdmin.value);
 
 const currentNavTree = computed<AppNavItem[]>(() => {
   if (routeGroup.value === "student" || routeGroup.value === "teacher" || routeGroup.value === "admin") {
@@ -77,6 +79,7 @@ const activeNavKey = computed(() => {
     const tab = String(route.query.tab || "class");
     if (tab === "detail") return "teacher-students-detail";
     if (tab === "rules") return "teacher-students-rules";
+    if (tab === "results") return "teacher-students-results";
     return "teacher-students-class";
   }
   if (route.path.startsWith("/teacher/review")) {
@@ -84,7 +87,6 @@ const activeNavKey = computed(() => {
     if (tab === "final") return "teacher-review-final";
     return "teacher-review-enrollment";
   }
-  if (route.path.startsWith("/teacher/extensions")) return "teacher-extensions";
 
   if (route.path.startsWith("/admin/dashboard")) return "admin-dashboard";
   if (route.path.startsWith("/admin/audit")) return "admin-audit";
@@ -92,14 +94,22 @@ const activeNavKey = computed(() => {
   if (route.path.startsWith("/admin/basic/users")) return "admin-users";
   if (route.path.startsWith("/admin/basic/teachers")) return "admin-teachers";
   if (route.path.startsWith("/admin/evaluation/dimensions")) return "admin-dimensions";
-  if (route.path.startsWith("/admin/evaluation/persona")) return "admin-persona";
-  if (route.path.startsWith("/admin/config")) return "admin-config";
-  if (route.path.startsWith("/admin/extensions")) return "admin-extensions";
+  if (route.path.startsWith("/admin/evaluation/persona/settings")) return "admin-persona-settings";
   return "";
 });
 
 const currentSection = computed(() => currentNavTree.value.find((item) => item.children?.some((child) => child.key === activeNavKey.value)) ?? null);
 const currentNavItem = computed(() => currentSection.value?.children?.find((item) => item.key === activeNavKey.value) ?? null);
+const currentTitleIcon = computed(() => currentNavItem.value?.icon || currentSection.value?.icon || Calendar);
+const roleLabel = computed(() =>
+  isStudentPreview.value
+    ? "学生预览"
+    : routeGroup.value === "admin"
+      ? "管理员"
+      : routeGroup.value === "teacher"
+        ? "教师"
+        : "学生",
+);
 
 const pageTitle = computed(() => {
   if (route.path.startsWith("/student/kp-content/")) return "知识点学习";
@@ -126,6 +136,10 @@ function toggleSidebar() {
 
 function openPreview() {
   router.push({ path: "/student/dashboard", query: { ...route.query, preview: "1" } });
+}
+
+function returnToAdmin() {
+  router.push("/admin/dashboard");
 }
 
 function navigateTo(target: string) {
@@ -202,18 +216,6 @@ function goBackToMain() {
 
         <nav class="pro-menu">
           <section v-for="section in currentNavTree" :key="section.key" class="pro-menu__section">
-            <button
-              class="pro-menu__item pro-menu__item--section"
-              :class="{ active: currentSection?.key === section.key }"
-              @click="navigateTo(section.path)"
-            >
-              <el-icon v-if="section.icon" class="pro-menu__icon"><component :is="section.icon" /></el-icon>
-              <div v-if="!sidebarCollapsed" class="pro-menu__section-text">
-                <strong>{{ section.label }}</strong>
-                <span>{{ section.children?.length || 0 }} 个功能</span>
-              </div>
-            </button>
-
             <div v-if="section.children && !sidebarCollapsed" class="pro-menu__children">
               <button
                 v-for="item in section.children"
@@ -222,6 +224,7 @@ function goBackToMain() {
                 :class="{ active: activeNavKey === item.key }"
                 @click="navigateTo(item.path)"
               >
+                <el-icon v-if="item.icon" class="pro-menu__child-icon"><component :is="item.icon" /></el-icon>
                 <span>{{ item.label }}</span>
               </button>
             </div>
@@ -235,45 +238,44 @@ function goBackToMain() {
             <button class="pro-icon-btn" @click="toggleSidebar">
               <el-icon><component :is="sidebarCollapsed ? Expand : Fold" /></el-icon>
             </button>
+            <div class="pro-header__badge">
+              <el-icon><component :is="currentTitleIcon" /></el-icon>
+            </div>
             <div class="pro-header__title">
-              <span class="pro-header__eyebrow">{{ pageSection }}</span>
               <strong>{{ pageTitle }}</strong>
             </div>
           </div>
 
           <div class="pro-header__right">
-            <el-tag round size="small" :type="isStudentPreview ? 'warning' : 'info'">
-              {{
-                isStudentPreview
-                  ? "学生预览"
-                  : routeGroup === "admin"
-                    ? "管理员"
-                    : routeGroup === "teacher"
-                      ? "教师"
-                      : "学生"
-              }}
-            </el-tag>
+            <div class="pro-role-chip">
+              <span class="pro-role-chip__dot"></span>
+              <span>{{ roleLabel }}</span>
+            </div>
 
-            <el-tooltip
-              v-if="(routeGroup === 'admin' && isAdmin) || (routeGroup === 'teacher' && isTeacher)"
-              content="预览学生端"
-              placement="bottom"
-            >
+            <el-tooltip v-if="canOpenPreview" content="预览学生端" placement="bottom">
               <button class="pro-icon-btn" @click="openPreview">
                 <el-icon><Monitor /></el-icon>
               </button>
             </el-tooltip>
 
-            <el-dropdown trigger="click">
-              <button class="pro-icon-btn">
-                <el-icon><User /></el-icon>
+            <el-tooltip v-if="canReturnToAdmin" content="返回管理员端" placement="bottom">
+              <button class="pro-icon-btn" @click="returnToAdmin">
+                <el-icon><ArrowLeft /></el-icon>
               </button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item @click="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+            </el-tooltip>
+
+            <el-tooltip content="账号菜单" placement="bottom">
+              <el-dropdown trigger="click">
+                <button class="pro-icon-btn">
+                  <el-icon><User /></el-icon>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item @click="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </el-tooltip>
           </div>
         </header>
 
@@ -319,13 +321,14 @@ function goBackToMain() {
 .pro-sider {
   position: fixed;
   inset: 0 auto 0 0;
-  width: 248px;
+  width: 220px;
   display: flex;
   flex-direction: column;
   padding: 18px 14px;
   background:
-    radial-gradient(circle at top left, rgba(88, 146, 255, 0.18), transparent 22%),
-    linear-gradient(180deg, #10233a 0%, #173451 58%, #1d4468 100%);
+    radial-gradient(circle at top left, rgba(111, 182, 255, 0.26), transparent 22%),
+    radial-gradient(circle at bottom left, rgba(88, 146, 255, 0.14), transparent 28%),
+    linear-gradient(180deg, #10233a 0%, #173451 54%, #21486d 100%);
   color: #d7e4f5;
   box-shadow: 18px 0 40px rgba(15, 34, 62, 0.16);
   z-index: 1100;
@@ -384,23 +387,17 @@ function goBackToMain() {
   display: grid;
   gap: 8px;
   margin-bottom: 14px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
 }
 
 .pro-menu__children {
   display: grid;
-  gap: 6px;
-  padding-left: 14px;
-  position: relative;
-}
-
-.pro-menu__children::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 2px;
-  bottom: 2px;
-  width: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  grid-template-columns: 1fr;
+  gap: 8px;
+  justify-items: center;
 }
 
 .pro-menu__item {
@@ -424,49 +421,34 @@ function goBackToMain() {
   box-shadow: inset 0 0 0 1px rgba(162, 205, 255, 0.22);
 }
 
-.pro-menu__item--section {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  text-align: left;
-}
-
-.pro-menu__section-text {
-  display: grid;
-  gap: 2px;
-}
-
-.pro-menu__section-text strong {
-  font-size: 14px;
-  color: inherit;
-}
-
-.pro-menu__section-text span {
-  font-size: 11px;
-  color: rgba(215, 228, 245, 0.64);
-}
-
 .pro-menu__item--child {
-  width: 100%;
-  min-height: 36px;
-  padding: 0 14px;
+  width: calc(100% - 28px);
+  min-height: 44px;
+  padding: 0 12px;
   font-size: 13px;
   font-weight: 600;
-  text-align: left;
-  border-radius: 10px;
+  text-align: center;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .pro-menu__icon {
   font-size: 16px;
 }
 
+.pro-menu__child-icon {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
 .pro-main {
   min-height: 100vh;
-  margin-left: 248px;
+  margin-left: 220px;
   display: flex;
   flex-direction: column;
   transition: margin-left 0.22s ease;
@@ -499,8 +481,8 @@ function goBackToMain() {
 }
 
 .pro-header__title {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
 }
 
 .pro-header__title strong {
@@ -509,9 +491,16 @@ function goBackToMain() {
   color: #1f2d3d;
 }
 
-.pro-header__eyebrow {
-  font-size: 12px;
-  color: #7d8da1;
+.pro-header__badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(204, 220, 245, 0.95);
+  background: linear-gradient(135deg, rgba(72, 127, 245, 0.12) 0%, rgba(111, 193, 255, 0.14) 100%);
+  color: #3268da;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
 }
 
 .pro-icon-btn {
@@ -533,12 +522,34 @@ function goBackToMain() {
   color: #2f5ea4;
 }
 
+.pro-role-chip {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(211, 223, 242, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.98) 100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #4f6278;
+}
+
+.pro-role-chip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #4a84ff 0%, #6bc5ff 100%);
+  box-shadow: 0 0 0 5px rgba(74, 132, 255, 0.12);
+}
+
 .pro-content {
   flex: 1;
   min-height: 0;
   padding: 24px;
   overflow: auto;
-  background: transparent;
+  background: radial-gradient(circle at top right, rgba(111, 193, 255, 0.08), transparent 24%), transparent;
 }
 
 .pro-standalone-back {

@@ -280,6 +280,7 @@ onMounted(async () => {
           <header class="edu-panel__header student-dashboard__panel-header">
             <div>
               <h2 class="edu-panel__title">当前知识点</h2>
+              <p class="student-dashboard__panel-note">先看当前学习点，再决定是否切换到推荐内容。</p>
             </div>
             <el-tag round type="info">{{ profile?.persona_label || "学习中" }}</el-tag>
           </header>
@@ -302,8 +303,19 @@ onMounted(async () => {
               <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
             </el-select>
           </div>
-          <el-empty v-else description="" />
+          <el-empty v-else description="当前课程暂时没有可学习的知识点" />
         </section>
+      </section>
+
+      <section class="student-dashboard__actions-grid">
+        <button class="student-dashboard__action-card" type="button" @click="openCurrentLearning()">
+          <span>继续学习</span>
+          <strong>{{ currentKp ? currentKp.title : "进入当前知识点" }}</strong>
+        </button>
+        <button class="student-dashboard__action-card" type="button" @click="openCurrentLearning(recommendedTarget?.id || null)">
+          <span>推荐入口</span>
+          <strong>{{ recommendedTarget ? recommendedTarget.title : "暂时没有推荐知识点" }}</strong>
+        </button>
       </section>
 
       <section class="student-dashboard__quick-grid">
@@ -331,16 +343,43 @@ onMounted(async () => {
     </template>
 
     <section v-else class="edu-panel preview-mode">
-      <header class="edu-panel__header">
-        <h2 class="edu-panel__title">预览模式</h2>
-      </header>
-      <div class="preview-controls">
-        <el-select v-model="subject" placeholder="选择课程" @change="onCourseChange">
-          <el-option v-for="c in courses" :key="c.id" :label="c.title" :value="c.title" />
-        </el-select>
-        <el-select v-model="currentKpId" placeholder="选择知识点" @change="onKpChange">
-          <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
-        </el-select>
+      <div class="preview-mode__hero">
+        <div class="preview-mode__copy">
+          <span class="preview-mode__eyebrow">学生端预览</span>
+          <h2 class="edu-panel__title">先选课程，再定位知识点</h2>
+          <p>用于管理员快速查看学生端学习内容与页面状态，不影响真实学生操作。</p>
+        </div>
+
+        <div class="preview-mode__summary">
+          <article class="preview-mode__summary-card">
+            <span>当前课程</span>
+            <strong>{{ subject || "未选择" }}</strong>
+          </article>
+          <article class="preview-mode__summary-card">
+            <span>知识点数量</span>
+            <strong>{{ kps.length }}</strong>
+          </article>
+          <article class="preview-mode__summary-card">
+            <span>当前知识点</span>
+            <strong>{{ currentKp ? currentKp.title : "未选择" }}</strong>
+            <small v-if="currentKp">{{ currentKp.code }}</small>
+          </article>
+        </div>
+      </div>
+
+      <div class="preview-mode__selectors">
+        <div class="preview-mode__field">
+          <label class="preview-mode__label">预览课程</label>
+          <el-select v-model="subject" placeholder="请选择课程" @change="onCourseChange">
+            <el-option v-for="c in courses" :key="c.id" :label="c.title" :value="c.title" />
+          </el-select>
+        </div>
+        <div class="preview-mode__field">
+          <label class="preview-mode__label">预览知识点</label>
+          <el-select v-model="currentKpId" placeholder="请选择知识点" @change="onKpChange">
+            <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
+          </el-select>
+        </div>
       </div>
     </section>
   </div>
@@ -441,6 +480,13 @@ onMounted(async () => {
   align-items: flex-start;
 }
 
+.student-dashboard__panel-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--app-text-soft);
+}
+
 .student-dashboard__kp-card {
   display: grid;
   gap: 14px;
@@ -481,6 +527,42 @@ onMounted(async () => {
   color: var(--app-text-soft);
 }
 
+.student-dashboard__actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.student-dashboard__action-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  text-align: left;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 18%, var(--app-border));
+  background: linear-gradient(135deg, #f3f8ff 0%, #ffffff 100%);
+  color: inherit;
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.student-dashboard__action-card span {
+  font-size: 12px;
+  color: var(--app-text-soft);
+}
+
+.student-dashboard__action-card strong {
+  font-size: 16px;
+  line-height: 1.35;
+  color: var(--app-text-main);
+}
+
+.student-dashboard__action-card:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--app-primary) 32%, var(--app-border));
+  box-shadow: 0 14px 26px rgba(79, 140, 255, 0.12);
+}
+
 .student-dashboard__progress-box {
   display: grid;
   gap: 8px;
@@ -506,10 +588,112 @@ onMounted(async () => {
   color: var(--app-text-main);
 }
 
+.preview-mode {
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+  border-radius: 28px;
+  border: 1px solid #d9e6f7;
+  background:
+    radial-gradient(circle at top right, rgba(79, 140, 255, 0.12), transparent 28%),
+    linear-gradient(135deg, #f2f7ff 0%, #f8fbff 52%, #ffffff 100%);
+  box-shadow: 0 20px 42px rgba(24, 51, 92, 0.08);
+}
+
+.preview-mode__hero {
+  display: grid;
+  gap: 18px;
+}
+
+.preview-mode__copy {
+  display: grid;
+  gap: 8px;
+}
+
+.preview-mode__eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(79, 140, 255, 0.1);
+  color: #3566b8;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.preview-mode__copy p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--app-text-soft);
+  line-height: 1.7;
+}
+
+.preview-mode__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.preview-mode__summary-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid #dce7f5;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.preview-mode__summary-card span,
+.preview-mode__summary-card small {
+  color: var(--app-text-soft);
+  font-size: 12px;
+}
+
+.preview-mode__summary-card strong {
+  color: var(--app-text-main);
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.preview-mode__selectors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid #dce7f5;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.preview-mode__field {
+  display: grid;
+  gap: 10px;
+}
+
+.preview-mode__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #4c6488;
+}
+
+.preview-mode__field :deep(.el-select) {
+  width: 100%;
+}
+
+.preview-mode__field :deep(.el-input__wrapper) {
+  min-height: 46px;
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px #d6e3f5 inset !important;
+}
+
 @media (max-width: 1100px) {
   .student-dashboard__stats,
   .student-dashboard__main-grid,
-  .student-dashboard__quick-grid {
+  .student-dashboard__actions-grid,
+  .student-dashboard__quick-grid,
+  .preview-mode__summary,
+  .preview-mode__selectors {
     grid-template-columns: 1fr;
   }
 }
@@ -517,6 +701,10 @@ onMounted(async () => {
 @media (max-width: 720px) {
   .student-dashboard__hero {
     padding: 18px;
+  }
+
+  .preview-mode {
+    padding: 20px;
   }
 }
 </style>

@@ -19,13 +19,13 @@ const emit = defineEmits<{
   <div class="detail-header">
     <div class="detail-header__main">
       <span class="detail-header__eyebrow">学生详情</span>
-      <div class="detail-title">按学生切换查看画像、阶段和学习记录</div>
+      <div class="detail-title">按学生切换查看画像、阶段变化和学习记录</div>
     </div>
     <div class="detail-actions">
       <div class="detail-actions__meta">共 {{ students.length }} 名学生</div>
       <el-select
         :model-value="selectedUserId"
-        placeholder=""
+        placeholder="请选择学生"
         style="width: 300px"
         filterable
         @update:model-value="(value) => emit('update:selectedUserId', value as number | null)"
@@ -49,25 +49,32 @@ const emit = defineEmits<{
   align-items: flex-start;
   flex-wrap: wrap;
 }
-.detail-header__main { display: grid; gap: 6px; }
+
+.detail-header__main {
+  display: grid;
+  gap: 6px;
+}
+
 .detail-header__eyebrow {
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--app-primary-deep);
 }
+
 .detail-title {
   font-size: 20px;
   font-weight: 700;
   color: var(--app-ink);
 }
+
 .detail-actions {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
+
 .detail-actions__meta {
   padding: 0 12px;
   min-height: 38px;

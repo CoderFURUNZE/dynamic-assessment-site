@@ -4,10 +4,18 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from app.api.deps import get_current_user
+from app.api.deps import (
+    course_has_teaching_teacher,
+    get_current_user,
+    get_teacher_activated_course_ids,
+    get_teacher_course_activation_map,
+    is_course_open_for_students,
+    teacher_has_course_access,
+)
 from app.db.models import (
     ApplicationStatus,
     Course,
+    CourseTeacherActivation,
     CourseLifecycleStatus,
     EvalConfig,
     CourseApplication,
@@ -30,6 +38,7 @@ from app.db.models import (
     User,
     UserRole,
     EnrollmentStatus,
+    TeacherCourseStatus,
 )
 from app.db.session import get_session
 from app.schemas.graph import (
@@ -168,6 +177,13 @@ def _is_course_learning_available(course: Course | None) -> bool:
     return True
 
 
+def _is_course_platform_open(course: Course | None) -> bool:
+    if course is None:
+        return False
+    lifecycle = _course_lifecycle_value(course)
+    return bool(course.active) and lifecycle == CourseLifecycleStatus.active.value
+
+
 def _assert_student_subject_access(session: Session, user_id: int, subject: str) -> None:
     """???????????????????????????????????????"""
     normalized_subject = str(subject or "").strip()
@@ -205,7 +221,7 @@ def _assert_student_subject_access(session: Session, user_id: int, subject: str)
         ).first()
         if approved is not None:
             return
-        if not _is_course_learning_available(course):
+        if not is_course_open_for_students(session, course):
             has_unavailable_course = True
 
     if has_unavailable_course:
@@ -273,7 +289,10 @@ def list_courses(
 ):
     stmt = select(Course).order_by(Course.created_at.desc())
     if user.role == UserRole.teacher:
-        stmt = stmt.where(Course.teacher_id == user.id)
+        activated_ids = get_teacher_activated_course_ids(session, int(user.id))
+        if not activated_ids:
+            return []
+        stmt = stmt.where(Course.id.in_(activated_ids))
     elif user.role == UserRole.student:
         enrolled_rows = session.exec(
             select(Enrollment).where(
@@ -296,19 +315,7 @@ def list_courses(
             return []
         stmt = stmt.where(Course.id.in_(set(enrolled_course_ids)))
     courses = session.exec(stmt).all()
-    teacher_ids = [int(course.teacher_id) for course in courses if course.teacher_id is not None]
-    teacher_map = {}
-    if teacher_ids:
-        teachers = session.exec(select(User).where(User.id.in_(teacher_ids))).all()
-        teacher_map = {
-            int(teacher.id): teacher.full_name or teacher.username
-            for teacher in teachers
-            if teacher.id is not None
-        }
-    return [
-        _course_payload(c, teacher_name=teacher_map.get(int(c.teacher_id)) if c.teacher_id is not None else "")
-        for c in courses
-    ]
+    return [_course_payload(c, teacher_name="") for c in courses]
 
 
 @router.get("/teacher/course-catalog")
@@ -319,23 +326,32 @@ def list_teacher_course_catalog(
     if user.role != UserRole.teacher:
         raise HTTPException(status_code=403, detail="Only teachers can browse course catalog")
     courses = session.exec(select(Course).order_by(Course.created_at.desc())).all()
+    activation_map = get_teacher_course_activation_map(session, int(user.id))
     rows = []
     for course in courses:
-        owner_id = int(course.teacher_id) if course.teacher_id is not None else None
+        course_id = int(course.id) if course.id is not None else None
+        activation = activation_map.get(course_id) if course_id is not None else None
+        platform_available = _is_course_platform_open(course)
+        assigned_teacher_id = int(course.teacher_id) if course.teacher_id is not None else None
+        if activation is None and (not platform_available or assigned_teacher_id != int(user.id)):
+            continue
+        teaching_status = (
+            activation.teaching_status.value
+            if activation is not None and hasattr(activation.teaching_status, "value")
+            else str(getattr(activation, "teaching_status", "") or "")
+        ) or None
+        is_activated = activation is not None
         rows.append(
             {
                 **_course_payload(course),
-                "activated": owner_id == int(user.id),
-                "can_activate": _is_course_learning_available(course) and (owner_id is None or owner_id == int(user.id)),
-                "activation_status": (
-                    "已激活"
-                    if owner_id == int(user.id)
-                    else "课程未进入开课状态"
-                    if not _is_course_learning_available(course)
-                    else "已被其他老师激活"
-                    if owner_id is not None
-                    else "待激活"
-                ),
+                "activated": is_activated,
+                "platform_status": _course_lifecycle_value(course),
+                "teaching_status": teaching_status,
+                "can_activate": platform_available and assigned_teacher_id == int(user.id) and not is_activated,
+                "can_start": False,
+                "can_finish": is_activated and teaching_status == TeacherCourseStatus.teaching.value,
+                "can_exit": is_activated and teaching_status == TeacherCourseStatus.finished.value,
+                "has_teaching_teacher": course_has_teaching_teacher(session, course_id) if course_id is not None else False,
             }
         )
     return {"items": rows}
@@ -352,15 +368,110 @@ def activate_teacher_course(
     course = session.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="课程不存在")
-    if not _is_course_learning_available(course):
-        raise HTTPException(status_code=400, detail="课程尚未开课，不能激活")
-    if course.teacher_id is not None and int(course.teacher_id) != int(user.id):
-        raise HTTPException(status_code=400, detail="该课程已被其他老师激活")
-    course.teacher_id = int(user.id)
-    session.add(course)
+    if not _is_course_platform_open(course):
+        raise HTTPException(status_code=400, detail="课程当前不可激活")
+    if course.teacher_id is None or int(course.teacher_id) != int(user.id):
+        raise HTTPException(status_code=403, detail="该课程未指定给当前教师，无法激活")
+    existing = session.exec(
+        select(CourseTeacherActivation).where(
+            CourseTeacherActivation.course_id == course_id,
+            CourseTeacherActivation.teacher_id == int(user.id),
+        )
+    ).first()
+    if existing is None:
+        session.add(
+            CourseTeacherActivation(
+                course_id=course_id,
+                teacher_id=int(user.id),
+                teaching_status=TeacherCourseStatus.teaching,
+                finished_at=None,
+                updated_at=datetime.utcnow(),
+            )
+        )
+    else:
+        existing.teaching_status = TeacherCourseStatus.teaching
+        existing.finished_at = None
+        existing.updated_at = datetime.utcnow()
+        session.add(existing)
     session.commit()
     session.refresh(course)
     return _course_payload(course, teacher_name=user.full_name or user.username)
+
+
+@router.post("/teacher/courses/{course_id}/start")
+def start_teacher_course(
+    course_id: int,
+    session: Session = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    if user.role != UserRole.teacher:
+        raise HTTPException(status_code=403, detail="Only teachers can start courses")
+    course = session.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status_code=404, detail="课程不存在")
+    if not _is_course_platform_open(course):
+        raise HTTPException(status_code=400, detail="课程当前不可开始")
+    activation = session.exec(
+        select(CourseTeacherActivation).where(
+            CourseTeacherActivation.course_id == course_id,
+            CourseTeacherActivation.teacher_id == int(user.id),
+        )
+    ).first()
+    if activation is None:
+        raise HTTPException(status_code=400, detail="请先激活课程")
+    activation.teaching_status = TeacherCourseStatus.teaching
+    activation.finished_at = None
+    activation.updated_at = datetime.utcnow()
+    session.add(activation)
+    session.commit()
+    return {"ok": True, "teaching_status": TeacherCourseStatus.teaching.value}
+
+
+@router.post("/teacher/courses/{course_id}/finish")
+def finish_teacher_course(
+    course_id: int,
+    session: Session = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    if user.role != UserRole.teacher:
+        raise HTTPException(status_code=403, detail="Only teachers can finish courses")
+    activation = session.exec(
+        select(CourseTeacherActivation).where(
+            CourseTeacherActivation.course_id == course_id,
+            CourseTeacherActivation.teacher_id == int(user.id),
+        )
+    ).first()
+    if activation is None:
+        raise HTTPException(status_code=400, detail="请先激活课程")
+    activation.teaching_status = TeacherCourseStatus.finished
+    activation.finished_at = datetime.utcnow()
+    activation.updated_at = datetime.utcnow()
+    session.add(activation)
+    session.commit()
+    return {"ok": True, "teaching_status": TeacherCourseStatus.finished.value}
+
+
+@router.delete("/teacher/courses/{course_id}/activation")
+def exit_teacher_course(
+    course_id: int,
+    session: Session = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    if user.role != UserRole.teacher:
+        raise HTTPException(status_code=403, detail="Only teachers can exit courses")
+    activation = session.exec(
+        select(CourseTeacherActivation).where(
+            CourseTeacherActivation.course_id == course_id,
+            CourseTeacherActivation.teacher_id == int(user.id),
+        )
+    ).first()
+    if activation is None:
+        raise HTTPException(status_code=404, detail="课程未激活")
+    if activation.teaching_status == TeacherCourseStatus.teaching:
+        raise HTTPException(status_code=400, detail="请先结束课程，再退出工作台")
+    session.delete(activation)
+    session.commit()
+    return {"ok": True}
 
 
 @router.get("/available-courses")
@@ -393,7 +504,7 @@ def list_available_courses(
                 teacher_name=teacher_map.get(int(course.teacher_id)) if course.teacher_id is not None else "",
                 enrolled=bool(app_map.get(int(course.id))),
             ),
-            "available": _is_course_learning_available(course),
+            "available": is_course_open_for_students(session, course),
         }
         for course in courses
         if course.id is not None
@@ -482,7 +593,7 @@ def list_course_students(
     course = session.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
-    if int(course.teacher_id or 0) != int(user.id):
+    if not teacher_has_course_access(session, int(user.id), course):
         raise HTTPException(status_code=403, detail="You can only manage your own course students")
     enrollments = session.exec(
         select(Enrollment).where(Enrollment.course_id == course_id, Enrollment.status == EnrollmentStatus.active)
@@ -526,7 +637,7 @@ def remove_course_student(
     course = session.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
-    if int(course.teacher_id or 0) != int(user.id):
+    if not teacher_has_course_access(session, int(user.id), course):
         raise HTTPException(status_code=403, detail="You can only manage your own course students")
     enrollment = session.exec(
         select(Enrollment).where(Enrollment.course_id == course_id, Enrollment.student_id == student_id)

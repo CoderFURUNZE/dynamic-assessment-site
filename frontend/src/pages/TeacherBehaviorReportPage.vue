@@ -3,9 +3,9 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
-import WorkspaceTopbar from "../components/WorkspaceTopbar.vue";
 import PageSectionCard from "../components/PageSectionCard.vue";
 import HintButton from "../components/HintButton.vue";
+import TeacherIntroHero from "../components/TeacherIntroHero.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
 type Course = { id: number; code: string; title: string };
@@ -285,11 +285,13 @@ onMounted(async () => {
 
 <template>
   <div class="teacher-page">
-    <WorkspaceTopbar v-model="subject" :courses="courses" badge="Teacher Behavior" title="行为画像明细" :meta-text="selectedStage ? `阶段 ${selectedStage.stage_order}. ${selectedStage.title}` : ''" @change="syncQuery">
+    <TeacherIntroHero eyebrow="阶段评价" title="结果查看" pill="行为画像">
+      <template #actions>
       <HintButton tip="回到阶段评价里的数据导入页，继续上传班级数据。" @click="router.push({ path: '/teacher/evaluation', query: { ...buildTeacherSubjectQuery(subject), tab: 'imports' } })">去数据导入</HintButton>
       <HintButton tip="导出当前阶段的行为画像明细 CSV。" @click="downloadCsv">导出 CSV</HintButton>
       <HintButton type="primary" :loading="applying" tip="将系统行为汇总写入阶段画像并重新计算。" @click="applyBehavior">一键导入并重算</HintButton>
-    </WorkspaceTopbar>
+      </template>
+    </TeacherIntroHero>
 
     <PageSectionCard eyebrow="Behavior Report" title="阶段行为画像">
       <div class="behavior-shell" v-loading="loading">

@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import QueryToolbar from "../components/QueryToolbar.vue";
+import { getRole } from "../token";
 
 type EnrollableCourse = {
   id: number;
@@ -51,6 +53,16 @@ const notices = ref<Notice[]>([]);
 const applyReasonMap = ref<Record<number, string>>({});
 const activeTab = ref<"search" | "applications" | "notifications">("search");
 const keyword = ref("");
+const isPreviewMode = computed(() => String(route.query.preview || "") === "1" && getRole() !== "student");
+
+function searchCourses() {
+  activeTab.value = "search";
+}
+
+function resetSearch() {
+  keyword.value = "";
+  activeTab.value = "search";
+}
 
 function normalizeStatus(status?: string | null) {
   return String(status || "").trim().toLowerCase();
@@ -101,6 +113,30 @@ const stats = computed(() => ({
 async function loadAll() {
   loading.value = true;
   try {
+    if (isPreviewMode.value) {
+      const courseRes = await api.get("/admin/courses", { params: { page: 1, page_size: 100 } });
+      courses.value = (courseRes.data?.items ?? []).map((item: any) => ({
+        id: Number(item.id),
+        code: String(item.code || ""),
+        title: String(item.title || ""),
+        description: String(item.description || ""),
+        teacher_name: "",
+        max_students: Number(item.max_students || 0),
+        enrolled_count: 0,
+        apply_deadline: item.apply_deadline || null,
+        enroll_status: String(item.enroll_status || ""),
+        application_status: null,
+        enrollment_mode: "manual_apply",
+        target_class: item.target_class || "",
+        lifecycle_status: item.lifecycle_status || "",
+        start_at: item.start_at || null,
+        end_at: item.end_at || null,
+      }));
+      applications.value = [];
+      notices.value = [];
+      return;
+    }
+
     const [courseRes, appRes, noticeRes] = await Promise.all([
       api.get("/enrollment/courses/enrollable"),
       api.get("/enrollment/my/applications"),
@@ -117,6 +153,10 @@ async function loadAll() {
 }
 
 async function applyCourse(course: EnrollableCourse) {
+  if (isPreviewMode.value) {
+    ElMessage.warning("当前是管理员预览学生端，不能直接提交报名申请");
+    return;
+  }
   if (course.application_status) {
     ElMessage.warning(`当前状态：${appStatusLabel(course.application_status)}`);
     return;
@@ -136,11 +176,15 @@ async function applyCourse(course: EnrollableCourse) {
 }
 
 async function markRead(noticeId: number) {
+  if (isPreviewMode.value) {
+    ElMessage.warning("当前是预览模式，不能修改通知状态");
+    return;
+  }
   try {
     await api.post(`/enrollment/my/notifications/${noticeId}/read`);
     notices.value = notices.value.map((item) => (item.id === noticeId ? { ...item, status: "READ" } : item));
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "更新通知失败");
+    ElMessage.error(e?.response?.data?.detail ?? "更新通知状态失败");
   }
 }
 
@@ -160,8 +204,8 @@ onMounted(loadAll);
     <section class="enroll-page__hero">
       <div class="enroll-page__hero-copy">
         <span class="enroll-page__eyebrow">课程加入</span>
-        <h1>先搜索课程，再看申请记录和站内通知</h1>
-        <p>这个页面只处理课程搜索、报名记录和通知，不再堆长篇说明。</p>
+        <h1>搜索课程并管理加入申请</h1>
+        <p>先选课，再查看审核状态和站内通知。</p>
       </div>
       <div class="enroll-page__hero-actions">
         <el-button @click="goBackStudy">返回学习中心</el-button>
@@ -178,11 +222,14 @@ onMounted(loadAll);
     <el-tabs v-model="activeTab" class="enroll-tabs">
       <el-tab-pane name="search" label="课程搜索">
         <section class="enroll-page__toolbar panel-card">
-          <div class="enroll-page__toolbar-group enroll-page__toolbar-group--search">
-            <span class="enroll-page__field-label">搜索课程</span>
-            <el-input v-model="keyword" size="large" placeholder="" clearable class="keyword-input" />
-            <span class="enroll-page__toolbar-note">支持课程名、课程代码、教师名检索</span>
-          </div>
+          <QueryToolbar
+            v-model="keyword"
+            placeholder="请输入课程名称、课程代码或教师姓名"
+            hint="请输入课程名称、课程代码或教师姓名"
+            input-width="520px"
+            @search="searchCourses"
+            @reset="resetSearch"
+          />
         </section>
 
         <section class="enroll-page__list">
@@ -213,14 +260,14 @@ onMounted(loadAll);
               <div class="enroll-course-card__action-row">
                 <el-input
                   v-model="applyReasonMap[course.id]"
-                  placeholder=""
-                  :disabled="!!course.application_status || normalizeStatus(course.enrollment_mode) === 'class_auto'"
+                  placeholder="可填写申请原因，例如补修、跟班学习或课程需要"
+                  :disabled="isPreviewMode || !!course.application_status || normalizeStatus(course.enrollment_mode) === 'class_auto'"
                 />
                 <el-button
                   type="primary"
                   plain
                   :loading="applying === course.id"
-                  :disabled="!!course.application_status || normalizeStatus(course.enroll_status) !== 'open' || normalizeStatus(course.enrollment_mode) === 'class_auto'"
+                  :disabled="isPreviewMode || !!course.application_status || normalizeStatus(course.enroll_status) !== 'open' || normalizeStatus(course.enrollment_mode) === 'class_auto'"
                   @click="applyCourse(course)"
                 >
                   {{ normalizeStatus(course.enrollment_mode) === 'class_auto' ? '自动关联课程' : '申请加入' }}
@@ -228,7 +275,7 @@ onMounted(loadAll);
               </div>
             </div>
           </article>
-          <el-empty v-if="filteredCourses.length === 0" description="没有匹配到课程" />
+          <el-empty v-if="filteredCourses.length === 0" description="暂时没有匹配到课程" />
         </section>
       </el-tab-pane>
 
@@ -257,7 +304,7 @@ onMounted(loadAll);
             <h3>站内通知</h3>
             <span>未读 {{ stats.unread }}</span>
           </header>
-          <div v-if="notices.length === 0" class="empty">暂无通知</div>
+          <div v-if="notices.length === 0" class="empty">暂时没有通知</div>
           <div v-else class="notice-list">
             <div v-for="notice in notices" :key="notice.id" class="notice-item">
               <div>
@@ -304,12 +351,12 @@ onMounted(loadAll);
 }
 .enroll-page__hero-copy {
   display: grid;
-  gap: 8px;
-  max-width: 760px;
+  gap: 6px;
+  max-width: 620px;
 }
 .enroll-page__eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--app-primary-deep); }
-.enroll-page__hero h1 { margin: 0; font-size: 28px; color: var(--app-text-main); line-height: 1.18; letter-spacing: -0.03em; }
-.enroll-page__hero p { margin: 0; line-height: 1.65; color: var(--app-text-soft); font-size: 14px; }
+.enroll-page__hero h1 { margin: 0; font-size: 24px; color: var(--app-text-main); line-height: 1.18; letter-spacing: -0.03em; }
+.enroll-page__hero p { margin: 0; line-height: 1.55; color: var(--app-text-soft); font-size: 13px; }
 .enroll-page__hero-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .enroll-page__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .enroll-page__stat-card { padding: 18px 20px; display: grid; gap: 8px; min-height: 96px; }
@@ -321,25 +368,6 @@ onMounted(loadAll);
   padding: 16px;
   margin-bottom: 14px;
   align-items: stretch;
-}
-.enroll-page__toolbar-group {
-  display: grid;
-  gap: 8px;
-  padding: 14px 16px;
-  border-radius: 20px;
-  border: 1px solid color-mix(in srgb, var(--app-border) 88%, #ffffff);
-  background: linear-gradient(180deg, #fbfdff 0%, #f8fbff 100%);
-}
-.enroll-page__toolbar-group--search { align-content: start; }
-.enroll-page__field-label {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: var(--app-text-main);
-}
-.enroll-page__toolbar-note {
-  font-size: 12px;
-  color: var(--app-text-soft);
 }
 .enroll-page__list, .notice-list { display: grid; gap: 12px; }
 .enroll-course-card {
@@ -392,16 +420,6 @@ onMounted(loadAll);
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-}
-.keyword-input { width: 100%; }
-.enroll-page__toolbar :deep(.el-input__wrapper) {
-  border-radius: 16px;
-  min-height: 48px;
-}
-.enroll-page__toolbar :deep(.el-button) {
-  border-radius: 16px;
-  min-height: 48px;
-  padding-inline: 18px;
 }
 .enroll-course-card__actions :deep(.el-input__wrapper) {
   border-radius: 16px;

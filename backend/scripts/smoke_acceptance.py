@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -83,12 +82,7 @@ def _expect_status(
     detail: str = "",
 ) -> bool:
     ok = code in expected
-    _add(
-        results,
-        name=name,
-        ok=ok,
-        detail=detail if detail else (f"status={code}, expected={expected}"),
-    )
+    _add(results, name=name, ok=ok, detail=detail if detail else f"status={code}, expected={expected}")
     return ok
 
 
@@ -128,21 +122,11 @@ def main() -> int:
     args = parser.parse_args()
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    output = (
-        Path(args.output)
-        if args.output
-        else Path("logs") / f"smoke_acceptance_{timestamp}.md"
-    )
-
+    output = Path(args.output) if args.output else Path("logs") / f"smoke_acceptance_{timestamp}.md"
     results: list[CheckResult] = []
 
     try:
-        code, data = _request_json(
-            method="GET",
-            base_url=args.base_url,
-            path="/health",
-            timeout=args.timeout,
-        )
+        code, data = _request_json(method="GET", base_url=args.base_url, path="/health", timeout=args.timeout)
         _expect_status(results, name="健康检查 /health", code=code)
         _add(results, name="健康返回值校验", ok=bool(isinstance(data, dict) and data.get("ok") is True), detail=f"payload={data}")
     except Exception as exc:
@@ -178,91 +162,34 @@ def main() -> int:
         print(f"[FAIL] student login failed, report -> {output}")
         return 1
 
-    for role_name, token in [
-        ("admin", admin_token),
-        ("teacher", teacher_token),
-        ("student", student_token),
-    ]:
-        code, data = _request_json(
-            method="GET",
-            base_url=args.base_url,
-            path="/api/auth/me",
-            token=token,
-            timeout=args.timeout,
-        )
+    for role_name, token in [("admin", admin_token), ("teacher", teacher_token), ("student", student_token)]:
+        code, data = _request_json(method="GET", base_url=args.base_url, path="/api/auth/me", token=token, timeout=args.timeout)
         _expect_status(results, name=f"{role_name} 获取 /api/auth/me", code=code)
-        _add(
-            results,
-            name=f"{role_name} /api/auth/me 结构",
-            ok=bool(isinstance(data, dict) and data.get("username")),
-            detail=f"payload={data}",
-        )
+        _add(results, name=f"{role_name} /api/auth/me 结构", ok=bool(isinstance(data, dict) and data.get("username")), detail=f"payload={data}")
 
-    code, _ = _request_json(
-        method="GET",
-        base_url=args.base_url,
-        path="/api/admin/courses",
-        token=teacher_token,
-        timeout=args.timeout,
-    )
+    code, _ = _request_json(method="GET", base_url=args.base_url, path="/api/admin/courses", token=teacher_token, timeout=args.timeout)
     _expect_status(results, name="教师访问管理员课程接口应被拒绝 /api/admin/courses", code=code, expected=(403,))
 
-    code, admin_courses = _request_json(
-        method="GET",
-        base_url=args.base_url,
-        path="/api/admin/courses",
-        token=admin_token,
-        timeout=args.timeout,
-    )
-    _expect_status(results, name="管理员课程管理列表 /api/admin/courses", code=code)
+    code, admin_courses = _request_json(method="GET", base_url=args.base_url, path="/api/admin/courses", token=admin_token, timeout=args.timeout)
+    _expect_status(results, name="管理员课程列表 /api/admin/courses", code=code)
 
-    code, _ = _request_json(
-        method="GET",
-        base_url=args.base_url,
-        path="/api/admin/users",
-        token=admin_token,
-        timeout=args.timeout,
-    )
+    code, _ = _request_json(method="GET", base_url=args.base_url, path="/api/admin/users", token=admin_token, timeout=args.timeout)
     _expect_status(results, name="管理员用户列表 /api/admin/users", code=code)
 
-    code, _ = _request_json(
-        method="GET",
-        base_url=args.base_url,
-        path="/api/admin/analytics/overview",
-        token=admin_token,
-        timeout=args.timeout,
-    )
+    code, _ = _request_json(method="GET", base_url=args.base_url, path="/api/admin/analytics/overview", token=admin_token, timeout=args.timeout)
     _expect_status(results, name="管理员分析总览 /api/admin/analytics/overview", code=code)
 
-    code, teacher_courses = _request_json(
-        method="GET",
-        base_url=args.base_url,
-        path="/api/graph/courses",
-        token=teacher_token,
-        timeout=args.timeout,
-    )
+    code, teacher_courses = _request_json(method="GET", base_url=args.base_url, path="/api/graph/courses", token=teacher_token, timeout=args.timeout)
     _expect_status(results, name="教师课程列表 /api/graph/courses", code=code)
 
-    code, _ = _request_json(
-        method="GET",
-        base_url=args.base_url,
-        path="/api/portrait/dimensions/tree",
-        token=teacher_token,
-        timeout=args.timeout,
-    )
+    code, _ = _request_json(method="GET", base_url=args.base_url, path="/api/portrait/dimensions/tree", token=teacher_token, timeout=args.timeout)
     _expect_status(results, name="教师维度树 /api/portrait/dimensions/tree", code=code)
 
     teacher_course_id = None
     if isinstance(teacher_courses, list) and teacher_courses:
         teacher_course_id = teacher_courses[0].get("id")
     if teacher_course_id:
-        code, _ = _request_json(
-            method="GET",
-            base_url=args.base_url,
-            path=f"/api/stages/courses/{teacher_course_id}",
-            token=teacher_token,
-            timeout=args.timeout,
-        )
+        code, _ = _request_json(method="GET", base_url=args.base_url, path=f"/api/stages/courses/{teacher_course_id}", token=teacher_token, timeout=args.timeout)
         _expect_status(results, name="教师阶段列表 /api/stages/courses/{course_id}", code=code)
         code, _ = _request_json(
             method="GET",
@@ -274,32 +201,14 @@ def main() -> int:
         )
         _expect_status(results, name="教师课程画像指标 /api/portrait/course-selection", code=code)
     else:
-        _add(
-            results,
-            name="教师阶段与课程画像检查",
-            ok=True,
-            detail="已跳过：教师账号无课程数据",
-        )
+        _add(results, name="教师阶段与课程画像检查", ok=True, detail="已跳过：教师账号无课程数据")
 
-    code, student_courses = _request_json(
-        method="GET",
-        base_url=args.base_url,
-        path="/api/graph/courses",
-        token=student_token,
-        timeout=args.timeout,
-    )
+    code, student_courses = _request_json(method="GET", base_url=args.base_url, path="/api/graph/courses", token=student_token, timeout=args.timeout)
     _expect_status(results, name="学生已选课程列表 /api/graph/courses", code=code)
 
-    code, _ = _request_json(
-        method="GET",
-        base_url=args.base_url,
-        path="/api/graph/available-courses",
-        token=student_token,
-        timeout=args.timeout,
-    )
+    code, _ = _request_json(method="GET", base_url=args.base_url, path="/api/graph/available-courses", token=student_token, timeout=args.timeout)
     _expect_status(results, name="学生可学习课程列表 /api/graph/available-courses", code=code)
 
-    # 与前端一致：图谱 subject 使用课程 title，与 KnowledgePoint.subject 对齐；年级默认「通用」
     subject = ""
     grade = "通用"
     if isinstance(student_courses, list) and student_courses:
@@ -339,12 +248,7 @@ def main() -> int:
         )
         _expect_status(results, name="学生画像 /api/eval/profile", code=code)
         has_ability = isinstance(prof, dict) and "ability_practice_stats" in prof
-        _add(
-            results,
-            name="学生画像含 ability_practice_stats",
-            ok=has_ability,
-            detail="ok" if has_ability else f"keys={list(prof.keys()) if isinstance(prof, dict) else prof}",
-        )
+        _add(results, name="学生画像含 ability_practice_stats", ok=has_ability, detail="ok" if has_ability else f"keys={list(prof.keys()) if isinstance(prof, dict) else prof}")
 
         code, data = _request_json(
             method="GET",
@@ -355,49 +259,44 @@ def main() -> int:
             timeout=args.timeout,
         )
         _expect_status(results, name="学生图谱地图 /api/graph/map", code=code)
-        kp_id = None
+
+        first_kp_id = None
         if isinstance(data, dict):
-            base = data.get("base", {})
-            kps = base.get("kps", []) if isinstance(base, dict) else []
+            kps = data.get("kps")
             if isinstance(kps, list) and kps:
-                kp_id = kps[0].get("id")
-        if kp_id:
+                first_kp_id = kps[0].get("id")
+        if first_kp_id:
             code, _ = _request_json(
                 method="GET",
                 base_url=args.base_url,
-                path=f"/api/graph/node/{kp_id}",
+                path=f"/api/graph/node/{first_kp_id}",
                 token=student_token,
                 timeout=args.timeout,
             )
             _expect_status(results, name="学生节点详情 /api/graph/node/{kp_id}", code=code)
-            code, next_data = _request_json(
+
+            code, practice_next = _request_json(
                 method="GET",
                 base_url=args.base_url,
                 path="/api/practice/next",
                 token=student_token,
-                params={"kp_id": int(kp_id)},
+                params={"kp_id": first_kp_id},
                 timeout=args.timeout,
             )
             _expect_status(results, name="练习下一题 /api/practice/next", code=code)
-            pq_ok = isinstance(next_data, dict) and ("done" in next_data)
-            _add(
-                results,
-                name="练习 next 响应结构",
-                ok=pq_ok,
-                detail="ok" if pq_ok else str(next_data)[:200],
-            )
+            next_ok = isinstance(practice_next, dict) and "question_id" in practice_next
+            _add(results, name="练习 next 响应结构", ok=next_ok, detail="ok" if next_ok else f"payload={practice_next}")
         else:
-            _add(results, name="学生节点详情检查", ok=True, detail="已跳过：当前课程无知识点")
+            _add(results, name="学生图谱节点详情与练习检查", ok=True, detail="已跳过：当前课程没有知识点数据")
     else:
-        _add(results, name="学生图谱与画像扩展检查", ok=True, detail="已跳过：系统无课程数据")
+        _add(results, name="学生画像与图谱检查", ok=True, detail="已跳过：未获取到课程主题")
 
+    _write_report(results, output)
     passed = sum(1 for item in results if item.ok)
     total = len(results)
-    _write_report(results, output)
-
     print(f"[DONE] smoke acceptance: {passed}/{total} passed")
     print(f"[REPORT] {output}")
-    return 0 if passed == total else 2
+    return 0 if passed == total else 1
 
 
 if __name__ == "__main__":

@@ -1,17 +1,16 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
+import { ArrowDown, ChatLineRound, Compass, DataAnalysis, WarningFilled } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { getRole } from "../token";
-import HoverTip from "./HoverTip.vue";
 
-const props = withDefaults(defineProps<{ subject: string; grade: string; showStudentDetailAction?: boolean; readonly?: boolean }>(), {
-  showStudentDetailAction: false,
-  readonly: false,
-});
-const emit = defineEmits<{
-  (e: "view-student", userId: number): void;
-}>();
+type PersonaStep = "all" | "settings" | "thresholds" | "rules" | "results";
+type ManagerRole = "admin" | "teacher";
+type PersonaKey = "smart_capable" | "diligent" | "struggling_persistent" | "procrastinating_risk" | "steady_progress";
+type ThresholdKey = "procrastinating_e" | "smart_a" | "smart_f" | "diligent_e" | "diligent_a" | "struggling_e" | "struggling_a";
+type DimensionKey = "engagement" | "achievement" | "habit" | "characteristic";
+type PresetKey = "steady" | "balanced" | "strict" | "custom";
 
 type PersonaStudent = {
   user_id: number;
@@ -31,24 +30,81 @@ type PersonaStudent = {
   stage_trend?: string;
 };
 
+type StageDimensionState = Record<DimensionKey, { enabled: boolean; weight: number }>;
+type StrategyState = Record<PersonaKey, string>;
+type ThresholdState = Record<ThresholdKey, number>;
+
+const props = withDefaults(
+  defineProps<{
+    subject: string;
+    grade: string;
+    showStudentDetailAction?: boolean;
+    readonly?: boolean;
+    step?: PersonaStep;
+    managerRole?: ManagerRole;
+  }>(),
+  {
+    showStudentDetailAction: false,
+    readonly: false,
+    step: "settings",
+    managerRole: "admin",
+  },
+);
+
+const emit = defineEmits<{
+  (e: "view-student", userId: number): void;
+}>();
+
+const presetOptions = [
+  { key: "steady", title: "稳妥型", desc: "先跑通系统，避免一次识别过多风险学生。", tag: "保守识别", icon: Compass },
+  { key: "balanced", title: "平衡型", desc: "适合大多数课程，兼顾识别与预警。", tag: "默认推荐", icon: DataAnalysis },
+  { key: "strict", title: "严格型", desc: "更早发现拖延、低投入和低成效学生。", tag: "提前预警", icon: WarningFilled },
+] as const;
+
+const personaOptions = [
+  { label: "聪明能干型", value: "smart_capable" },
+  { label: "踏实学习型", value: "diligent" },
+  { label: "困难坚持型", value: "struggling_persistent" },
+  { label: "拖延风险型", value: "procrastinating_risk" },
+  { label: "平稳发展型", value: "steady_progress" },
+] as const;
+
+const dimensionOptions = [
+  { key: "engagement", label: "学习投入" },
+  { key: "achievement", label: "学习成效" },
+  { key: "habit", label: "学习习惯" },
+  { key: "characteristic", label: "学习特征" },
+] as const;
+
 const loading = ref(false);
 const saving = ref(false);
+const recalculating = ref(false);
 const students = ref<PersonaStudent[]>([]);
+const selectedPreset = ref<PresetKey>("balanced");
+const strategiesEditing = ref(false);
+const rulesConfigExpanded = ref(false);
 const weightText = ref("");
-const stageDimensions = reactive<Record<string, { enabled: boolean; weight: number }>>({
+const resultKeyword = ref("");
+const resultPersonaFilter = ref("all");
+const resultRiskFilter = ref("all");
+const selectedOverride = reactive<Record<number, string>>({});
+
+const stageDimensions = reactive<StageDimensionState>({
   engagement: { enabled: true, weight: 0.3 },
   achievement: { enabled: true, weight: 0.35 },
   habit: { enabled: true, weight: 0.2 },
   characteristic: { enabled: true, weight: 0.15 },
 });
-const strategies = reactive<Record<string, string>>({
-  smart_capable: "",
-  diligent: "",
-  struggling_persistent: "",
-  procrastinating_risk: "",
-  steady_progress: "",
+
+const strategies = reactive<StrategyState>({
+  smart_capable: "更高难度+精讲提要",
+  diligent: "结构化路径+阶段反馈",
+  struggling_persistent: "补救前置点+低阶练习",
+  procrastinating_risk: "最短任务链+提醒",
+  steady_progress: "标准推荐",
 });
-const thresholds = reactive({
+
+const thresholds = reactive<ThresholdState>({
   procrastinating_e: 0.4,
   smart_a: 0.75,
   smart_f: 0.75,
@@ -57,376 +113,892 @@ const thresholds = reactive({
   struggling_e: 0.6,
   struggling_a: 0.6,
 });
-const selectedOverride = reactive<Record<number, string>>({});
 
-const personaOptions = [
-  { label: "聪明能干型", value: "smart_capable" },
-  { label: "踏实学习型", value: "diligent" },
-  { label: "困难坚持型", value: "struggling_persistent" },
-  { label: "拖延风险型", value: "procrastinating_risk" },
-  { label: "平稳发展型", value: "steady_progress" },
-];
-const dimensionOptions = [
-  { key: "engagement", label: "学习投入" },
-  { key: "achievement", label: "学习成效" },
-  { key: "habit", label: "学习习惯" },
-  { key: "characteristic", label: "学习特征" },
-];
-
-const riskyCount = computed(() => students.value.filter((item) => item.risk_level === "风险").length);
-const canManage = computed(() => getRole() === "admin" && !props.readonly);
+const showRulesStep = computed(() => props.step === "all" || props.step === "settings" || props.step === "rules");
+const showResultsStep = computed(() => props.step === "all" || props.step === "results");
+const showPresetStep = computed(() => props.step === "all" || props.step === "settings");
+const canManage = computed(() => getRole() === props.managerRole && !props.readonly);
 const isReadonlyView = computed(() => !canManage.value);
+const saveActionLabel = computed(() => (props.managerRole === "teacher" ? "保存课程规则" : "保存模板"));
+const enabledDimensionCount = computed(() => dimensionOptions.filter((item) => stageDimensions[item.key].enabled).length);
+const enabledDimensionWeightTotal = computed(() => Number(dimensionOptions.filter((item) => stageDimensions[item.key].enabled).reduce((sum, item) => sum + Number(stageDimensions[item.key].weight || 0), 0).toFixed(2)));
+const isDimensionWeightValid = computed(() => enabledDimensionCount.value > 0 && Math.abs(enabledDimensionWeightTotal.value - 1) < 0.001);
+const riskyCount = computed(() => students.value.filter((item) => item.risk_level === "风险").length);
+
+const filteredStudents = computed(() => {
+  const keyword = resultKeyword.value.trim().toLowerCase();
+  return students.value.filter((item) => {
+    const matchesKeyword = !keyword || [item.username, item.full_name, item.student_no, item.class_name, item.persona_label, item.reason_summary].join(" ").toLowerCase().includes(keyword);
+    const matchesPersona = resultPersonaFilter.value === "all" || item.persona_type === resultPersonaFilter.value;
+    const matchesRisk = resultRiskFilter.value === "all" || item.risk_level === resultRiskFilter.value;
+    return matchesKeyword && matchesPersona && matchesRisk;
+  });
+});
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, Number((Number.isFinite(value) ? value : 0).toFixed(2))));
+}
+
+function normalizeStageDimensions() {
+  const enabledKeys = dimensionOptions.filter((item) => stageDimensions[item.key].enabled).map((item) => item.key);
+  if (!enabledKeys.length) {
+    stageDimensions.engagement.enabled = true;
+    stageDimensions.engagement.weight = 1;
+    return;
+  }
+  let total = enabledKeys.reduce((sum, key) => sum + Number(stageDimensions[key].weight || 0), 0);
+  if (total <= 0) {
+    const average = Number((1 / enabledKeys.length).toFixed(2));
+    enabledKeys.forEach((key, index) => {
+      stageDimensions[key].weight = index === enabledKeys.length - 1 ? clamp01(1 - average * (enabledKeys.length - 1)) : average;
+    });
+    return;
+  }
+  let allocated = 0;
+  enabledKeys.forEach((key, index) => {
+    if (index === enabledKeys.length - 1) {
+      stageDimensions[key].weight = clamp01(1 - allocated);
+      return;
+    }
+    const next = clamp01(Number(stageDimensions[key].weight || 0) / total);
+    stageDimensions[key].weight = next;
+    allocated = clamp01(allocated + next);
+  });
+}
+
+function getDimensionMax(key: DimensionKey) {
+  const otherTotal = dimensionOptions.filter((item) => item.key !== key && stageDimensions[item.key].enabled).reduce((sum, item) => sum + Number(stageDimensions[item.key].weight || 0), 0);
+  return clamp01(1 - otherTotal);
+}
+
+function updateDimensionWeight(key: DimensionKey, nextValue: number | undefined) {
+  if (!stageDimensions[key].enabled) return;
+  const max = getDimensionMax(key);
+  stageDimensions[key].weight = clamp01(Math.min(Number(nextValue ?? 0), max));
+}
+
+function toggleDimension(key: DimensionKey, enabled: boolean) {
+  stageDimensions[key].enabled = enabled;
+  if (!enabled) {
+    stageDimensions[key].weight = 0;
+  } else if (enabledDimensionCount.value <= 1) {
+    stageDimensions[key].weight = 1;
+  } else {
+    normalizeStageDimensions();
+  }
+}
+
+function fillState<T extends Record<string, any>>(target: T, source?: Record<string, any>) {
+  if (!source) return;
+  Object.keys(target).forEach((key) => {
+    if (source[key] !== undefined) target[key] = source[key];
+  });
+}
+
+function applyPresetConfig(presetKey: Exclude<PresetKey, "custom">) {
+  const presets = {
+    steady: {
+      thresholds: { procrastinating_e: 0.32, smart_a: 0.8, smart_f: 0.8, diligent_e: 0.78, diligent_a: 0.65, struggling_e: 0.55, struggling_a: 0.55 },
+      stageDimensions: {
+        engagement: { enabled: true, weight: 0.25 },
+        achievement: { enabled: true, weight: 0.4 },
+        habit: { enabled: true, weight: 0.2 },
+        characteristic: { enabled: true, weight: 0.15 },
+      },
+    },
+    balanced: {
+      thresholds: { procrastinating_e: 0.4, smart_a: 0.75, smart_f: 0.75, diligent_e: 0.75, diligent_a: 0.6, struggling_e: 0.6, struggling_a: 0.6 },
+      stageDimensions: {
+        engagement: { enabled: true, weight: 0.3 },
+        achievement: { enabled: true, weight: 0.35 },
+        habit: { enabled: true, weight: 0.2 },
+        characteristic: { enabled: true, weight: 0.15 },
+      },
+    },
+    strict: {
+      thresholds: { procrastinating_e: 0.48, smart_a: 0.7, smart_f: 0.72, diligent_e: 0.72, diligent_a: 0.58, struggling_e: 0.65, struggling_a: 0.65 },
+      stageDimensions: {
+        engagement: { enabled: true, weight: 0.35 },
+        achievement: { enabled: true, weight: 0.3 },
+        habit: { enabled: true, weight: 0.2 },
+        characteristic: { enabled: true, weight: 0.15 },
+      },
+    },
+  } as const;
+  const preset = presets[presetKey];
+  fillState(thresholds, preset.thresholds as Record<string, any>);
+  dimensionOptions.forEach((item) => {
+    stageDimensions[item.key].enabled = preset.stageDimensions[item.key].enabled;
+    stageDimensions[item.key].weight = preset.stageDimensions[item.key].weight;
+  });
+  normalizeStageDimensions();
+}
+
+function selectPreset(presetKey: Exclude<PresetKey, "custom">) {
+  if (selectedPreset.value === presetKey && rulesConfigExpanded.value) {
+    rulesConfigExpanded.value = false;
+    return;
+  }
+  selectedPreset.value = presetKey;
+  applyPresetConfig(presetKey);
+  rulesConfigExpanded.value = true;
+}
+
+function getRulesPayload() {
+  return {
+    preset: selectedPreset.value,
+    subject: props.subject,
+    grade: props.grade,
+    thresholds: { ...thresholds },
+    stage_dimensions: Object.fromEntries(dimensionOptions.map((item) => [item.key, { enabled: stageDimensions[item.key].enabled, weight: stageDimensions[item.key].enabled ? stageDimensions[item.key].weight : 0 }])) as Record<string, { enabled: boolean; weight: number }>,
+    strategies: { ...strategies },
+    weight_text: weightText.value,
+  };
+}
+
+function resolvePresetFromPayload(presetValue: unknown): PresetKey {
+  if (presetValue === "steady" || presetValue === "balanced" || presetValue === "strict" || presetValue === "custom") return presetValue;
+  return "balanced";
+}
 
 async function loadRules() {
-  const res = await api.get(
-    `/admin/persona/rules?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`
-  );
-  Object.assign(thresholds, res.data.thresholds ?? {});
-  Object.assign(strategies, res.data.strategies ?? {});
-  const weights = res.data.weights ?? {};
-  const dimensionConfig = weights.stage_dimensions ?? {};
-  for (const item of dimensionOptions) {
-    stageDimensions[item.key] = {
-      enabled: Boolean(dimensionConfig[item.key]?.enabled ?? true),
-      weight: Number(dimensionConfig[item.key]?.weight ?? stageDimensions[item.key]?.weight ?? 0),
-    };
+  loading.value = true;
+  try {
+    const res = await api.get(`/admin/persona/rules?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`);
+    const data = res.data ?? {};
+    selectedPreset.value = resolvePresetFromPayload(data.preset);
+    fillState(thresholds, data.thresholds);
+    fillState(strategies, data.strategies);
+    if (data.stage_dimensions) {
+      dimensionOptions.forEach((item) => {
+        const next = data.stage_dimensions[item.key];
+        if (next) {
+          stageDimensions[item.key].enabled = Boolean(next.enabled);
+          stageDimensions[item.key].weight = Number(next.weight ?? 0);
+        }
+      });
+    }
+    weightText.value = String(data.weight_text ?? "");
+    normalizeStageDimensions();
+    rulesConfigExpanded.value = false;
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail ?? "规则配置加载失败");
+  } finally {
+    loading.value = false;
   }
-  weightText.value = JSON.stringify(weights, null, 2);
 }
 
 async function loadStudents() {
-  const res = await api.get(
-    `/admin/persona/students?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`
-  );
-  students.value = res.data.items ?? [];
-  for (const row of students.value) {
-    selectedOverride[row.user_id] = row.persona_type;
-  }
-}
-
-async function reloadAll() {
-  if (!props.subject) return;
   loading.value = true;
   try {
-    await Promise.all([loadRules(), loadStudents()]);
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "加载画像配置失败");
+    const res = await api.get(`/admin/persona/students?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`);
+    const list = Array.isArray(res.data) ? res.data : Array.isArray(res.data?.items) ? res.data.items : [];
+    students.value = list;
+    Object.keys(selectedOverride).forEach((key) => delete selectedOverride[Number(key)]);
+    list.forEach((item: PersonaStudent) => {
+      selectedOverride[item.user_id] = item.override_source || "";
+    });
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail ?? "画像结果加载失败");
   } finally {
     loading.value = false;
   }
 }
 
 async function saveRules() {
+  if (!canManage.value) return;
+  if (!isDimensionWeightValid.value) {
+    ElMessage.error("启用维度的权重合计必须等于 1.00");
+    return;
+  }
+  saving.value = true;
   try {
-    saving.value = true;
-    const weights = JSON.parse(weightText.value || "{}");
-    weights.stage_dimensions = weights.stage_dimensions ?? {};
-    for (const item of dimensionOptions) {
-      weights.stage_dimensions[item.key] = {
-        ...(weights.stage_dimensions[item.key] ?? {}),
-        enabled: Boolean(stageDimensions[item.key]?.enabled),
-        weight: Number(stageDimensions[item.key]?.weight ?? 0),
-      };
-    }
-    weightText.value = JSON.stringify(weights, null, 2);
-    await api.put(`/admin/persona/rules?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`, {
-      thresholds,
-      weights,
-      strategies,
-    });
-    ElMessage.success("画像规则已保存");
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "规则保存失败，请检查权重 JSON 格式");
+    await api.put(`/admin/persona/rules?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`, getRulesPayload());
+    ElMessage.success(saveActionLabel.value + "成功");
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail ?? (saveActionLabel.value + "失败"));
   } finally {
     saving.value = false;
   }
 }
 
-async function recalc(refreshMastery = false) {
+async function recalculate() {
+  if (!canManage.value) return;
+  recalculating.value = true;
   try {
-    saving.value = true;
-    await api.post("/admin/persona/recalculate", {
-      subject: props.subject,
-      grade: props.grade,
-      refresh_mastery: refreshMastery,
-    });
-    ElMessage.success("已完成画像重算");
+    await api.post("/admin/persona/recalculate", { subject: props.subject, grade: props.grade });
+    ElMessage.success("重算完成");
     await loadStudents();
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "画像重算失败");
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail ?? "重算失败");
   } finally {
-    saving.value = false;
+    recalculating.value = false;
   }
 }
 
 async function saveOverride(row: PersonaStudent) {
+  if (!canManage.value) return;
   try {
     await api.put("/admin/persona/override", {
       user_id: row.user_id,
       subject: props.subject,
       grade: props.grade,
-      persona_type: selectedOverride[row.user_id],
-      note: `管理员人工覆盖：${selectedOverride[row.user_id]}`,
+      persona_type: selectedOverride[row.user_id] || null,
     });
-    ElMessage.success("已保存人工覆盖");
+    ElMessage.success("人工覆盖已保存");
     await loadStudents();
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "保存覆盖失败");
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail ?? "人工覆盖保存失败");
   }
 }
 
 async function clearOverride(row: PersonaStudent) {
+  if (!canManage.value) return;
   try {
-    await api.delete(
-      `/admin/persona/override?user_id=${row.user_id}&subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`
-    );
-    ElMessage.success("已清除人工覆盖");
+    await api.delete(`/admin/persona/override?user_id=${row.user_id}&subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`);
+    selectedOverride[row.user_id] = "";
+    ElMessage.success("已恢复系统判定");
     await loadStudents();
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "清除覆盖失败");
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail ?? "恢复系统判定失败");
   }
 }
 
+function scorePercent(value: number) {
+  const num = Number(value || 0);
+  if (Number.isNaN(num)) return "0%";
+  return `${Math.round(num * 100)}%`;
+}
+
+function riskTagType(level: string) {
+  return level === "风险" ? "danger" : "success";
+}
+
 watch(
-  () => [props.subject, props.grade],
-  () => reloadAll(),
-  { immediate: true }
+  () => [props.subject, props.grade, props.step],
+  async () => {
+    if (!props.subject || !props.grade) return;
+    await loadRules();
+    if (showResultsStep.value) {
+      await loadStudents();
+    }
+  },
+  { immediate: true },
 );
 </script>
-
 <template>
   <div class="persona-shell" v-loading="loading">
-    <el-card v-if="!isReadonlyView" class="panel-card" shadow="never">
-      <template #header>
-        <div class="persona-header">
-          <div>
-            <div class="persona-title">学习者画像规则</div>
-            <div class="persona-subtitle"></div>
-          </div>
-          <div class="persona-actions">
-            <el-button size="small" @click="reloadAll">刷新</el-button>
-            <el-button size="small" @click="recalc(false)" :loading="saving" :disabled="!canManage">重算画像</el-button>
-            <el-button size="small" type="warning" @click="recalc(true)" :loading="saving" :disabled="!canManage">重算画像+掌握度</el-button>
-            <el-button size="small" type="primary" @click="saveRules" :loading="saving" :disabled="!canManage">保存规则</el-button>
-          </div>
+    <section v-if="!isReadonlyView && (showPresetStep || showRulesStep)" class="persona-card persona-unified-card">
+      <div class="persona-step-header">
+        <div>
+          <h3 class="persona-title">规则配置</h3>
+          <p class="persona-step-header__desc">先选方案，再调整维度和策略。</p>
         </div>
-      </template>
-
-      <div class="persona-grid">
-        <section class="persona-section">
-          <div class="section-title">分型阈值</div>
-          <div class="threshold-grid">
-            <label>
-              <span>拖延阈值 E</span>
-              <el-input-number v-model="thresholds.procrastinating_e" :min="0" :max="1" :step="0.01" />
-            </label>
-            <label>
-              <span>聪明型 A</span>
-              <el-input-number v-model="thresholds.smart_a" :min="0" :max="1" :step="0.01" />
-            </label>
-            <label>
-              <span>聪明型 F</span>
-              <el-input-number v-model="thresholds.smart_f" :min="0" :max="1" :step="0.01" />
-            </label>
-            <label>
-              <span>踏实型 E</span>
-              <el-input-number v-model="thresholds.diligent_e" :min="0" :max="1" :step="0.01" />
-            </label>
-            <label>
-              <span>踏实型 A</span>
-              <el-input-number v-model="thresholds.diligent_a" :min="0" :max="1" :step="0.01" />
-            </label>
-            <label>
-              <span>困难型 E</span>
-              <el-input-number v-model="thresholds.struggling_e" :min="0" :max="1" :step="0.01" />
-            </label>
-            <label>
-              <span>困难型 A</span>
-              <el-input-number v-model="thresholds.struggling_a" :min="0" :max="1" :step="0.01" />
-            </label>
-          </div>
-        </section>
-
-        <section class="persona-section">
-          <div class="section-title">策略模板</div>
-          <div class="strategy-grid">
-            <label v-for="item in personaOptions" :key="item.value">
-              <span>{{ item.label }}</span>
-              <el-input v-model="strategies[item.value]" />
-            </label>
-          </div>
-        </section>
-
-        <section class="persona-section">
-          <div class="section-title">阶段维度配置</div>
-          <div class="dimension-grid">
-            <label v-for="item in dimensionOptions" :key="item.key" class="dimension-card">
-              <div class="dimension-card__top">
-                <span>{{ item.label }}</span>
-                <el-switch v-model="stageDimensions[item.key].enabled" />
-              </div>
-              <div class="dimension-card__bottom">
-                <span>权重</span>
-                <el-input-number v-model="stageDimensions[item.key].weight" :min="0" :max="1" :step="0.05" />
-              </div>
-            </label>
-          </div>
-        </section>
-
-        <section class="persona-section persona-section--full">
-          <div class="section-title">画像权重 JSON</div>
-          <el-input
-            v-model="weightText"
-            type="textarea"
-            :rows="10"
-            placeholder="请输入画像维度权重 JSON"
-          />
-        </section>
+        <div class="persona-action-group persona-action-group--top">
+          <el-button round @click="loadRules">刷新</el-button>
+          <el-button round type="primary" :loading="saving" :disabled="!canManage || (showRulesStep && !isDimensionWeightValid)" @click="saveRules">{{ saveActionLabel }}</el-button>
+        </div>
       </div>
-    </el-card>
 
-    <el-card v-else class="panel-card" shadow="never">
-      <template #header>
-        <div class="persona-header">
-          <div>
-            <div class="persona-title">学习者画像分析</div>
-            <div class="persona-subtitle"></div>
-          </div>
-          <div class="persona-actions">
-            <el-button size="small" @click="reloadAll">刷新</el-button>
-          </div>
+      <div v-if="showPresetStep" class="persona-block">
+        <div class="persona-block__title persona-block__title--with-icon">
+          <el-icon><Compass /></el-icon>
+          <span>规则方案选择</span>
         </div>
-      </template>
-      <div class="persona-readonly">
-        <div class="persona-tip-inline">
-          <span>提示</span>
-          <HoverTip content="画像规则由管理员维护。教师端只看学生画像、阶段变化和判定依据。" />
-        </div>
-        <div class="persona-readonly__grid">
-          <div v-for="item in dimensionOptions" :key="item.key" class="persona-readonly__card">
-            <strong>{{ item.label }}</strong>
-            <span>启用：{{ stageDimensions[item.key].enabled ? "是" : "否" }}</span>
-            <span>权重：{{ Number(stageDimensions[item.key].weight || 0).toFixed(2) }}</span>
+        <div class="persona-block__desc">先选一种判定风格，再继续配置。</div>
+        <div class="persona-preset-grid">
+          <div
+            v-for="preset in presetOptions"
+            :key="preset.key"
+            class="persona-preset-card"
+            :class="{ 'is-active': selectedPreset === preset.key }"
+            @click="selectPreset(preset.key)"
+            @keydown.enter.prevent="selectPreset(preset.key)"
+            @keydown.space.prevent="selectPreset(preset.key)"
+            role="button"
+            tabindex="0"
+          >
+            <div class="persona-preset-card__head">
+              <span class="persona-preset-card__icon">
+                <el-icon><component :is="preset.icon" /></el-icon>
+              </span>
+              <span class="persona-preset-card__tag">{{ preset.tag }}</span>
+            </div>
+            <div class="persona-preset-card__title">{{ preset.title }}</div>
+            <div class="persona-preset-card__desc">{{ preset.desc }}</div>
           </div>
         </div>
       </div>
-    </el-card>
 
-    <el-card class="panel-card" shadow="never">
-      <template #header>
-        <div class="persona-summary">
-          <div>学生画像列表</div>
-          <el-tag type="danger">风险学生 {{ riskyCount }}</el-tag>
+      <div v-if="showRulesStep" class="persona-block">
+        <div class="persona-block__header">
+          <div>
+            <div class="persona-block__title persona-block__title--with-icon">
+              <el-icon><DataAnalysis /></el-icon>
+              <span>规则与策略配置</span>
+            </div>
+            <div class="persona-block__desc">调整维度权重，并设置默认建议。</div>
+          </div>
+          <div class="persona-block__header-actions">
+            <button
+              type="button"
+              class="persona-collapse-toggle-icon"
+              @click="rulesConfigExpanded = !rulesConfigExpanded"
+              :aria-label="rulesConfigExpanded ? '收起配置' : '展开配置'"
+            >
+              <el-icon class="persona-collapse-hint__arrow" :class="{ 'is-expanded': rulesConfigExpanded }"><ArrowDown /></el-icon>
+            </button>
+            <div class="persona-config-wrap__meta">{{ enabledDimensionCount }} 个维度 / {{ personaOptions.length }} 类模板</div>
+          </div>
         </div>
-      </template>
+        <div v-if="!rulesConfigExpanded" class="persona-collapse-hint">
+          <div class="persona-collapse-hint__text">
+            <span class="persona-collapse-hint__title">当前默认收起</span>
+            <span class="persona-collapse-hint__desc">选择上方风格卡后，自动展开对应维度和策略信息。</span>
+          </div>
+        </div>
+        <transition name="persona-expand">
+          <div v-if="rulesConfigExpanded" class="persona-grid persona-grid--two">
+            <section class="persona-section">
+              <div class="section-title section-title--with-icon">
+                <el-icon><DataAnalysis /></el-icon>
+                <span>阶段维度配置</span>
+              </div>
+              <div class="section-desc">控制动态评价更看重哪一类学习表现。</div>
+              <div class="dimension-summary" :class="{ 'is-error': !isDimensionWeightValid }">
+                <span>当前启用维度 {{ enabledDimensionCount }} 个</span>
+                <span>权重合计 {{ enabledDimensionWeightTotal.toFixed(2) }} / 1.00</span>
+              </div>
+              <div class="dimension-grid">
+                <div v-for="item in dimensionOptions" :key="item.key" class="dimension-card">
+                  <div class="dimension-card__head">
+                    <div class="dimension-card__title">{{ item.label }}</div>
+                    <el-switch
+                      :model-value="stageDimensions[item.key].enabled"
+                      :disabled="!canManage"
+                      @update:model-value="(value:boolean) => { toggleDimension(item.key, value); selectedPreset = 'custom'; }"
+                    />
+                  </div>
+                  <div class="dimension-card__body">
+                    <span>权重</span>
+                    <el-input-number
+                      :model-value="stageDimensions[item.key].weight"
+                      :min="0"
+                      :max="getDimensionMax(item.key)"
+                      :step="0.05"
+                      :precision="2"
+                      :controls="true"
+                      :disabled="!canManage || !stageDimensions[item.key].enabled"
+                      @update:model-value="(value:number | undefined) => { updateDimensionWeight(item.key, value); selectedPreset = 'custom'; }"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div v-if="!isDimensionWeightValid" class="persona-tip-inline">启用维度的权重总和必须等于 1.00，系统才允许保存。</div>
+            </section>
 
-      <el-table :data="students" size="small" style="width: 100%">
-        <el-table-column prop="username" label="账号" width="130" />
-        <el-table-column prop="full_name" label="姓名" width="110" />
-        <el-table-column prop="persona_label" label="当前类型" width="140" />
-        <el-table-column prop="latest_stage_title" label="最新阶段" width="160" />
-        <el-table-column prop="stage_trend" label="阶段变化" width="100" />
-        <el-table-column prop="dynamic_score" label="动态评分" width="110">
+            <section class="persona-section">
+              <div class="persona-section__header">
+                <div>
+                  <div class="section-title section-title--with-icon">
+                    <el-icon><ChatLineRound /></el-icon>
+                    <span>策略模板</span>
+                  </div>
+                  <div class="section-desc">给不同画像准备一条默认建议。</div>
+                </div>
+                <el-button
+                  v-if="canManage"
+                  round
+                  @click="strategiesEditing = !strategiesEditing"
+                >
+                  {{ strategiesEditing ? '完成编辑' : '编辑策略' }}
+                </el-button>
+              </div>
+              <div class="strategy-list">
+                <div v-for="item in personaOptions" :key="item.value" class="strategy-item">
+                  <label>{{ item.label }}</label>
+                  <el-input
+                    v-if="strategiesEditing && canManage"
+                    v-model="strategies[item.value]"
+                    placeholder="请输入默认反馈策略"
+                    @input="selectedPreset = 'custom'"
+                  />
+                  <div v-else class="strategy-display">
+                    {{ strategies[item.value] || '未设置默认策略' }}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </transition>
+      </div>
+    </section>
+
+    <section v-if="!showResultsStep && isReadonlyView" class="persona-card persona-readonly">
+      <div class="persona-step-header">
+        <div>
+          <h3 class="persona-title">当前模板摘要</h3>
+          <p class="persona-step-header__desc">当前页面只展示平台默认模板，教师实际在课程中查看画像结果并使用这些模板。</p>
+        </div>
+      </div>
+      <div class="persona-readonly__grid">
+        <div class="persona-readonly__card">
+          <div class="persona-readonly__title">启用维度</div>
+          <div class="persona-readonly__value">{{ enabledDimensionCount }} 个</div>
+        </div>
+        <div class="persona-readonly__card">
+          <div class="persona-readonly__title">权重合计</div>
+          <div class="persona-readonly__value">{{ enabledDimensionWeightTotal.toFixed(2) }}</div>
+        </div>
+        <div class="persona-readonly__card">
+          <div class="persona-readonly__title">当前方案</div>
+          <div class="persona-readonly__value">{{ presetOptions.find((item) => item.key === selectedPreset)?.title || '平衡型' }}</div>
+        </div>
+      </div>
+    </section>
+
+    <section v-if="showResultsStep" class="persona-card">
+      <div class="persona-step-header">
+        <div>
+          <h3 class="persona-title">画像结果预览</h3>
+          <p class="persona-step-header__desc">查看当前规则下的学生画像分类、风险等级和判定依据。</p>
+        </div>
+        <div class="persona-action-group">
+          <el-button round @click="loadStudents">刷新</el-button>
+          <el-button v-if="canManage" round type="primary" :loading="recalculating" @click="recalculate">重算画像</el-button>
+        </div>
+      </div>
+      <div class="persona-result-toolbar">
+        <el-input v-model="resultKeyword" placeholder="搜索账号、姓名、学号、班级或判定依据" clearable />
+        <el-select v-model="resultPersonaFilter" placeholder="全部画像">
+          <el-option label="全部画像" value="all" />
+          <el-option v-for="item in personaOptions" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-select v-model="resultRiskFilter" placeholder="全部等级">
+          <el-option label="全部等级" value="all" />
+          <el-option label="风险" value="风险" />
+          <el-option label="普通" value="普通" />
+        </el-select>
+      </div>
+      <div class="persona-feedback-card">
+        <div>共 {{ students.length }} 名学生，筛选后 {{ filteredStudents.length }} 名</div>
+        <div>风险学生 {{ riskyCount }} 名</div>
+      </div>
+      <el-table :data="filteredStudents" border stripe>
+        <el-table-column prop="username" label="账号" min-width="110" />
+        <el-table-column prop="full_name" label="姓名" min-width="100" />
+        <el-table-column prop="persona_label" label="当前类型" min-width="130" />
+        <el-table-column prop="latest_stage_title" label="最新阶段" min-width="110" />
+        <el-table-column prop="stage_trend" label="阶段变化" min-width="110" />
+        <el-table-column label="动态评分" min-width="100">
+          <template #default="{ row }">{{ scorePercent(row.dynamic_score) }}</template>
+        </el-table-column>
+        <el-table-column label="课程掌握度" min-width="110">
+          <template #default="{ row }">{{ scorePercent(row.course_mastery) }}</template>
+        </el-table-column>
+        <el-table-column label="等级" min-width="90">
           <template #default="{ row }">
-            {{ Math.round((row.dynamic_score || 0) * 100) }}%
+            <el-tag size="small" :type="riskTagType(row.risk_level)">{{ row.risk_level || '普通' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="course_mastery" label="课程掌握度" width="120">
-          <template #default="{ row }">
-            {{ Math.round((row.course_mastery || 0) * 100) }}%
-          </template>
-        </el-table-column>
-        <el-table-column prop="risk_level" label="等级" width="90" />
-        <el-table-column prop="reason_summary" label="判定依据" min-width="220" />
-        <el-table-column v-if="props.showStudentDetailAction" label="详情" width="100">
+        <el-table-column prop="reason_summary" label="判定依据" min-width="240" show-overflow-tooltip />
+        <el-table-column v-if="showStudentDetailAction" label="详情" width="80" fixed="right">
           <template #default="{ row }">
             <el-button size="small" text type="primary" @click="emit('view-student', row.user_id)">查看</el-button>
           </template>
         </el-table-column>
-        <el-table-column v-if="canManage" label="人工覆盖" width="250">
+        <el-table-column v-if="canManage" label="人工覆盖" min-width="220" fixed="right">
           <template #default="{ row }">
             <div class="override-cell">
-              <el-select v-model="selectedOverride[row.user_id]" size="small" style="width: 140px">
+              <el-select v-model="selectedOverride[row.user_id]" placeholder="选择覆盖类型" clearable>
                 <el-option v-for="item in personaOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
-              <el-button size="small" type="primary" @click="saveOverride(row)" :disabled="!canManage">保存</el-button>
-              <el-button size="small" @click="clearOverride(row)" :disabled="!canManage || row.override_source !== 'manual'">清除</el-button>
+              <el-button size="small" type="primary" @click="saveOverride(row)">保存</el-button>
+              <el-button size="small" @click="clearOverride(row)">恢复</el-button>
             </div>
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .persona-shell {
   display: grid;
+  gap: 20px;
+}
+
+.persona-card {
+  display: grid;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid #dfe9f7;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+}
+
+.persona-unified-card {
+  gap: 24px;
+}
+
+.persona-block {
+  display: grid;
   gap: 16px;
 }
 
-.persona-header,
-.persona-summary {
+.persona-block__header {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   align-items: flex-start;
+}
+
+.persona-block__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.persona-block__title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #183153;
+}
+
+.persona-block__title--with-icon,
+.section-title--with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.persona-block__title--with-icon .el-icon,
+.section-title--with-icon .el-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #eef5ff 0%, #f8fbff 100%);
+  color: #4c78c8;
+  font-size: 16px;
+  box-shadow: 0 8px 18px rgba(116, 154, 223, 0.16);
+}
+
+.persona-block__desc {
+  color: #6b86aa;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.persona-actions-card {
+  padding: 14px 24px;
+}
+
+.persona-step-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
 }
 
 .persona-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--app-ink);
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: #183153;
 }
 
-.persona-subtitle {
-  display: none;
+.persona-step-header__desc {
+  margin: 8px 0 0;
+  color: #6b86aa;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-.persona-actions {
+.persona-action-group {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.persona-grid {
+.persona-action-group--top {
+  justify-content: flex-end;
+}
+
+.persona-preset-grid,
+.persona-threshold-cards {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+
+.persona-preset-card {
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid #dce8f7;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  animation: personaFadeUp 0.45s ease both;
+}
+
+.persona-preset-card:nth-child(2) {
+  animation-delay: 0.08s;
+}
+
+.persona-preset-card:nth-child(3) {
+  animation-delay: 0.16s;
+}
+
+.persona-preset-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 36px rgba(99, 139, 214, 0.12);
+}
+
+.persona-preset-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.persona-preset-card__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #eef5ff 0%, #f6faff 100%);
+  color: #4d77c6;
+  font-size: 18px;
+  box-shadow: 0 10px 22px rgba(118, 156, 222, 0.18);
+}
+
+.persona-preset-card__tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #f3f7ff;
+  color: #5475a7;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.persona-preset-card.is-active {
+  border-color: #77a9ff;
+  box-shadow: 0 14px 32px rgba(99, 139, 214, 0.14);
+  transform: translateY(-2px);
+}
+
+.persona-preset-card__title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #173a63;
+}
+
+.persona-preset-card__desc {
+  margin-top: 8px;
+  color: #6983a8;
+  line-height: 1.7;
+}
+
+.section-title,
+.persona-threshold-card__title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #183153;
+}
+
+.section-desc,
+.persona-threshold-card__desc,
+.persona-tip-inline {
+  margin-top: 6px;
+  color: #6b86aa;
+  line-height: 1.8;
+}
+
+.persona-config-wrap__meta,
+.persona-threshold-card__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  min-height: 38px;
+  border-radius: 999px;
+  border: 1px solid #dce8f7;
+  background: #eef5ff;
+  color: #37537d;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.persona-collapse-hint {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px dashed #cfe0f8;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f9fbff 0%, #f4f8ff 100%);
+}
+
+.persona-collapse-hint__text {
+  display: grid;
+  gap: 4px;
+}
+
+.persona-collapse-hint__title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #24466f;
+}
+
+.persona-collapse-hint__desc {
+  color: #6b86aa;
+  font-size: 13px;
+}
+
+.persona-collapse-toggle-icon {
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef5ff;
+  color: #5a7eb8;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.persona-collapse-toggle-icon:hover {
+  background: #e4efff;
+  transform: translateY(-1px);
+}
+
+.persona-collapse-hint__arrow {
+  transition: transform 0.2s ease;
+}
+
+.persona-collapse-hint__arrow.is-expanded {
+  transform: rotate(180deg);
+}
+
+.persona-grid--two {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .persona-section {
-  padding: 18px;
-  border-radius: 18px;
-  background: #f7fafc;
-  border: 1px solid #e1eaf1;
-}
-
-.persona-section--full {
-  grid-column: 1 / -1;
-}
-
-.section-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--app-ink);
-  margin-bottom: 14px;
-}
-
-.threshold-grid,
-.strategy-grid,
-.dimension-grid {
   display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #dce8f7;
+  border-radius: 24px;
+  background: #fff;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.persona-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 36px rgba(110, 144, 204, 0.08);
+}
+
+.persona-threshold-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.persona-threshold-card {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid #d8e7fb;
+  background: linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(247,251,255,0.98) 100%);
+}
+
+.persona-threshold-card.is-risk { background: linear-gradient(135deg, #fff7f4 0%, #fffdfd 100%); }
+.persona-threshold-card.is-smart { background: linear-gradient(135deg, #f5f9ff 0%, #fcfeff 100%); }
+.persona-threshold-card.is-diligent { background: linear-gradient(135deg, #f6fff7 0%, #fcfffd 100%); }
+.persona-threshold-card.is-persistent { background: linear-gradient(135deg, #fff9ef 0%, #fffdf9 100%); }
+
+.persona-threshold-card__head,
+.persona-section__header,
+.dimension-card__head,
+.dimension-card__body,
+.persona-feedback-card,
+.override-cell,
+.persona-readonly__grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
-.threshold-grid label,
-.strategy-grid label {
+.persona-threshold-card__controls {
   display: grid;
-  gap: 6px;
-  color: #5c7592;
-  font-size: 12px;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid #dce8f7;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.persona-threshold-card__section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #35557f;
+}
+
+.persona-threshold-card__fields,
+.strategy-list,
+.dimension-grid,
+.persona-readonly__grid {
+  display: grid;
+  gap: 14px;
+}
+
+.persona-threshold-field {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.persona-threshold-stepper {
+  padding: 6px;
+  border-radius: 18px;
+  background: linear-gradient(90deg, rgba(107, 145, 210, 0.12) var(--fill), rgba(241, 246, 253, 0.95) var(--fill));
+}
+
+.dimension-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f2f7ff;
+  color: #46658e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dimension-summary.is-error {
+  background: #fff4f1;
+  color: #bf5f43;
 }
 
 .dimension-grid {
@@ -434,107 +1006,178 @@ watch(
 }
 
 .dimension-card {
-  padding: 14px;
-  border-radius: 16px;
-  background: #ffffff;
-  border: 1px solid #dbe6ef;
-  display: grid;
-  gap: 12px;
-}
-
-.dimension-card__top,
-.dimension-card__bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.dimension-card__top {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--app-ink);
-}
-
-.dimension-card__bottom {
-  font-size: 12px;
-  color: #5c7592;
-}
-
-.persona-readonly {
   display: grid;
   gap: 14px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid #dce8f7;
+  background: #fff;
 }
 
-.persona-tip-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #637995;
-  font-size: 13px;
+.dimension-card__title,
+.strategy-item label,
+.persona-threshold-field span,
+.dimension-card__body span,
+.persona-readonly__title {
   font-weight: 700;
+  color: #35557f;
+}
+
+.strategy-item {
+  display: grid;
+  gap: 8px;
+}
+
+.strategy-item :deep(.el-input) {
+  width: 100%;
+}
+
+.strategy-item :deep(.el-input__wrapper) {
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: #f7fbff;
+  box-shadow: 0 0 0 1px #dce8f7 inset !important;
+}
+
+.strategy-item :deep(.el-input__inner) {
+  color: #5d7698;
+}
+
+.strategy-display {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid #dce8f7;
+  border-radius: 16px;
+  background: #f7fbff;
+  color: #5d7698;
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.persona-expand-enter-active,
+.persona-expand-leave-active {
+  overflow: hidden;
+  transition:
+    max-height 0.28s ease,
+    opacity 0.24s ease,
+    transform 0.24s ease;
+  transform-origin: top center;
+}
+
+.persona-expand-enter-from,
+.persona-expand-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-8px) scaleY(0.98);
+}
+
+.persona-expand-enter-to,
+.persona-expand-leave-from {
+  max-height: 1600px;
+  opacity: 1;
+  transform: translateY(0) scaleY(1);
+}
+
+@keyframes personaFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .persona-readonly__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .persona-readonly__card {
-  border: 1px solid #d8e6f2;
-  border-radius: 14px;
-  background: #f7fbff;
-  padding: 12px;
-  display: grid;
-  gap: 4px;
-  color: #5e7390;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid #dce8f7;
+  background: #fff;
 }
 
-.persona-readonly__card strong {
-  color: #314865;
+.persona-readonly__value {
+  margin-top: 10px;
+  font-size: 24px;
+  font-weight: 800;
+  color: #183153;
+}
+
+.persona-result-toolbar {
+  display: grid;
+  grid-template-columns: 1.4fr 220px 220px;
+  gap: 12px;
+}
+
+.persona-feedback-card {
+  padding: 14px 16px;
+  border: 1px solid #dce8f7;
+  border-radius: 18px;
+  background: #f8fbff;
+  color: #567397;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .override-cell {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+  align-items: stretch;
 }
 
-.persona-actions :deep(.el-button),
-.override-cell :deep(.el-button) {
-  border-radius: 999px !important;
-  border: 1px solid #d7e4f5 !important;
-  background: #ffffff !important;
-  background-image: none !important;
-  color: #274263 !important;
-  font-weight: 700;
-  box-shadow: none !important;
+.override-cell .el-select {
+  min-width: 120px;
 }
 
-.persona-actions :deep(.el-button:hover),
-.override-cell :deep(.el-button:hover) {
-  border-color: #9fbef3 !important;
-  background: #f8fbff !important;
-  background-image: none !important;
-  color: #214d8f !important;
+:deep(.el-input__wrapper),
+:deep(.el-select__wrapper),
+:deep(.el-textarea__inner) {
+  border-radius: 16px;
 }
 
-.persona-actions :deep(.el-button--primary),
-.persona-actions :deep(.el-button--warning),
-.override-cell :deep(.el-button--primary) {
-  border-color: #b8cdf3 !important;
-  background: #ffffff !important;
-  background-image: none !important;
-  color: #2e5ea8 !important;
+:deep(.el-input-number) {
+  width: 190px;
 }
 
-@media (max-width: 960px) {
-  .persona-grid {
+:deep(.el-input-number .el-input__wrapper) {
+  border-radius: 16px;
+}
+
+@media (max-width: 1200px) {
+  .persona-preset-grid,
+  .persona-grid--two,
+  .persona-threshold-cards,
+  .dimension-grid,
+  .persona-readonly__grid,
+  .persona-result-toolbar {
     grid-template-columns: 1fr;
   }
+}
 
-  .dimension-grid {
+@media (max-width: 768px) {
+  .persona-card {
+    padding: 18px;
+  }
+
+  .persona-step-header,
+  .persona-block__header,
+  .persona-block__header-actions,
+  .persona-action-group,
+  .persona-threshold-card__head,
+  .dimension-summary,
+  .persona-feedback-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .persona-threshold-field {
     grid-template-columns: 1fr;
   }
 }

@@ -3,6 +3,7 @@ import { computed, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import HintButton from "./HintButton.vue";
+import QueryToolbar from "./QueryToolbar.vue";
 
 type Course = {
   id: number;
@@ -11,25 +12,17 @@ type Course = {
   description: string;
   active: boolean;
   lifecycle_status?: string;
-  target_class?: string | null;
-  start_at?: string | null;
-  end_at?: string | null;
   teacher_id?: number | null;
-  max_students?: number;
-  apply_deadline?: string | null;
-  enroll_status?: string;
-};
-
-type Teacher = {
-  id: number;
-  username: string;
-  full_name: string;
-  role: string;
+  teacher_name?: string;
+  teaching_teacher_count?: number;
+  finished_teacher_count?: number;
+  teaching_teacher_names?: string[];
+  finished_teacher_names?: string[];
 };
 
 const loading = ref(false);
 const courses = ref<Course[]>([]);
-const teachers = ref<Teacher[]>([]);
+const teacherOptions = ref<Array<{ id: number; label: string }>>([]);
 const togglingIds = ref<number[]>([]);
 const page = ref(1);
 const pageSize = 15;
@@ -47,26 +40,13 @@ const form = reactive({
   description: "",
   active: true,
   lifecycle_status: "draft",
-  target_class: "",
-  start_at: "",
-  end_at: "",
   teacher_id: null as number | null,
-  max_students: 200,
-  apply_deadline: "",
-  enroll_status: "open",
 });
 
 const lifecycleOptions = [
-  { label: "待开课", value: "draft" },
-  { label: "开课中", value: "active" },
+  { label: "未开放", value: "draft" },
+  { label: "开放中", value: "active" },
   { label: "已归档", value: "archived" },
-];
-
-const enrollStatusOptions = [
-  { label: "开放报名", value: "open" },
-  { label: "名额已满", value: "full" },
-  { label: "关闭报名", value: "closed" },
-  { label: "已截止", value: "expired" },
 ];
 
 function normalizeIsoMinute(value?: string | null) {
@@ -75,28 +55,20 @@ function normalizeIsoMinute(value?: string | null) {
 }
 
 const isEdit = computed(() => Boolean(editing.value));
-const teacherNameMap = computed(() => {
-  const map = new Map<number, string>();
-  for (const item of teachers.value) map.set(item.id, item.full_name || item.username);
-  return map;
-});
 const filteredCourses = computed(() => {
   const q = keyword.value.trim().toLowerCase();
   return courses.value.filter((row) => {
-    const matchesKeyword = !q || [row.code, row.title, row.description, teacherNameMap.value.get(row.teacher_id || 0) || ""].join(" ").toLowerCase().includes(q);
+    const matchesKeyword = !q || [row.code, row.title, row.description].join(" ").toLowerCase().includes(q);
     const matchesLifecycle = lifecycleFilter.value === "all" || String(row.lifecycle_status || "draft").toLowerCase() === lifecycleFilter.value;
     return matchesKeyword && matchesLifecycle;
   });
 });
-const courseStats = computed(() => ({
-  active: courses.value.filter((item) => String(item.lifecycle_status || "draft").toLowerCase() === "active").length,
-  draft: courses.value.filter((item) => String(item.lifecycle_status || "draft").toLowerCase() === "draft").length,
-  archived: courses.value.filter((item) => String(item.lifecycle_status || "draft").toLowerCase() === "archived").length,
-}));
-
-async function loadTeachers() {
-  const res = await api.get("/admin/users?page=1&page_size=200");
-  teachers.value = (res.data.items ?? []).filter((item: Teacher) => item.role === "teacher");
+async function loadTeacherOptions() {
+  const res = await api.get("/admin/users?page=1&page_size=500&role=teacher");
+  const items = res.data.items ?? [];
+  teacherOptions.value = items
+    .filter((item: any) => item?.id)
+    .map((item: any) => ({ id: Number(item.id), label: String(item.full_name || item.username || item.id) }));
 }
 
 async function load() {
@@ -122,13 +94,7 @@ function openAdd() {
   form.description = "";
   form.active = true;
   form.lifecycle_status = "draft";
-  form.target_class = "";
-  form.start_at = "";
-  form.end_at = "";
   form.teacher_id = null;
-  form.max_students = 200;
-  form.apply_deadline = "";
-  form.enroll_status = "open";
   dialogOpen.value = true;
 }
 
@@ -140,13 +106,7 @@ function openEdit(row: Course) {
   form.description = row.description;
   form.active = row.active;
   form.lifecycle_status = row.lifecycle_status || (row.active ? "active" : "draft");
-  form.target_class = row.target_class || "";
-  form.start_at = row.start_at ? row.start_at.slice(0, 16) : "";
-  form.end_at = row.end_at ? row.end_at.slice(0, 16) : "";
   form.teacher_id = row.teacher_id ?? null;
-  form.max_students = Number(row.max_students ?? 200);
-  form.apply_deadline = row.apply_deadline ? row.apply_deadline.slice(0, 16) : "";
-  form.enroll_status = row.enroll_status || "open";
   dialogOpen.value = true;
 }
 
@@ -158,13 +118,7 @@ async function save() {
     description: form.description,
     active: form.active,
     lifecycle_status: form.lifecycle_status,
-    target_class: form.target_class.trim() || null,
-    start_at: form.start_at ? new Date(form.start_at).toISOString() : null,
-    end_at: form.end_at ? new Date(form.end_at).toISOString() : null,
-    teacher_id: form.teacher_id,
-    max_students: Math.max(1, Number(form.max_students || 1)),
-    apply_deadline: form.apply_deadline ? new Date(form.apply_deadline).toISOString() : null,
-    enroll_status: form.enroll_status,
+    teacher_id: form.teacher_id ?? null,
   };
   if (!payload.code || !payload.title) {
     ElMessage.warning("课程编码和课程名称不能为空");
@@ -174,10 +128,10 @@ async function save() {
   try {
     if (isEdit.value) {
       await api.put(`/admin/courses/${form.id}`, payload);
-      ElMessage.success("已更新课程");
+      ElMessage.success("课程已保存");
     } else {
       await api.post("/admin/courses", payload);
-      ElMessage.success("已新增课程");
+      ElMessage.success("课程已创建");
     }
     dialogOpen.value = false;
     await load();
@@ -188,8 +142,8 @@ async function save() {
         const probe = await api.get("/admin/courses", { params: { page: 1, page_size: 100, keyword: payload.code || payload.title } });
         const rows: Course[] = probe.data?.items ?? [];
         const matched = isEdit.value ? rows.find((row) => row.id === form.id) : rows.find((row) => row.code === payload.code && row.title === payload.title);
-        if (matched && matched.code === payload.code && matched.title === payload.title && normalizeIsoMinute(matched.apply_deadline) === normalizeIsoMinute(payload.apply_deadline)) {
-          ElMessage.success(isEdit.value ? "已更新课程（已自动确认）" : "已新增课程（已自动确认）");
+        if (matched && matched.code === payload.code && matched.title === payload.title) {
+          ElMessage.success(isEdit.value ? "课程已保存（已自动确认）" : "课程已创建（已自动确认）");
           dialogOpen.value = false;
           await load();
           return;
@@ -205,7 +159,7 @@ async function save() {
 async function remove(row: Course) {
   try {
     await api.delete(`/admin/courses/${row.id}`);
-    ElMessage.success("已删除");
+    ElMessage.success("课程已删除");
     await load();
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "删除失败");
@@ -225,6 +179,19 @@ function enrollStatusLabel(value?: string) {
 function lifecycleLabel(value?: string) {
   const normalized = String(value || "draft").toLowerCase();
   return lifecycleOptions.find((item) => item.value === normalized)?.label || normalized;
+}
+function lifecycleClass(value?: string) {
+  const normalized = String(value || "draft").toLowerCase();
+  if (normalized === "active") return "is-active";
+  if (normalized === "archived") return "is-archived";
+  return "is-draft";
+}
+function enrollStatusClass(value?: string) {
+  const normalized = String(value || "open").toLowerCase();
+  if (normalized === "open") return "is-open";
+  if (normalized === "full") return "is-full";
+  if (normalized === "closed") return "is-closed";
+  return "is-expired";
 }
 async function probeCourseActive(row: Course) {
   const probe = await api.get("/admin/courses", { params: { page: 1, page_size: 100, keyword: row.code || row.title || "" } });
@@ -261,63 +228,82 @@ async function toggleActive(row: Course, value: boolean) {
   }
 }
 
-Promise.all([loadTeachers(), load()]);
+function searchCourses() {
+  page.value = 1;
+  load();
+}
+
+function resetSearch() {
+  keyword.value = "";
+  lifecycleFilter.value = "all";
+  page.value = 1;
+  load();
+}
+
+Promise.all([loadTeacherOptions(), load()]);
 </script>
 
 <template>
   <el-card class="panel-card course-manager-card" shadow="never">
-    <template #header>
-      <div class="course-manager-header">
-        <div class="course-manager-header__main">
-          <div class="course-manager-header__eyebrow">Course Admin</div>
-          <div class="course-manager-header__title">课程列表与配置</div>
-          <div class="course-manager-header__desc">先筛选和定位课程，再进行编辑、启停和报名配置。</div>
-        </div>
-        <div class="course-manager-header__actions">
-          <el-input v-model="keyword" placeholder="搜索课程名称 / 编码 / 教师" class="course-manager-search" clearable />
-          <el-select v-model="lifecycleFilter" class="course-manager-filter">
-            <el-option label="全部状态" value="all" />
-            <el-option v-for="item in lifecycleOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <HintButton @click="load" :loading="loading">刷新</HintButton>
-          <HintButton type="primary" @click="openAdd">新增课程</HintButton>
+    <div class="course-table-wrap">
+      <div class="course-manager__table-header">
+        <div class="course-manager__table-title-wrap">
+          <div class="course-manager__table-title">课程列表</div>
+          <div class="course-manager__table-controls">
+            <div class="course-manager__table-query-group">
+              <QueryToolbar
+                v-model="keyword"
+                placeholder="请输入课程名称或课程编码"
+                hint="请输入课程名称或课程编码"
+                input-width="420px"
+                :show-reset="false"
+                @search="searchCourses"
+                @reset="resetSearch"
+              />
+              <HintButton class="course-manager__table-reset" @click="resetSearch">重置</HintButton>
+            </div>
+            <div class="course-manager__table-actions">
+              <el-select v-model="lifecycleFilter" class="course-manager-filter" @change="searchCourses">
+                <el-option label="全部状态" value="all" />
+                <el-option v-for="item in lifecycleOptions" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+              <HintButton @click="load" :loading="loading">刷新</HintButton>
+              <HintButton type="primary" @click="openAdd">新增课程</HintButton>
+            </div>
+          </div>
         </div>
       </div>
-    </template>
-
-    <div class="course-manager-stats">
-      <span>开课中 {{ courseStats.active }}</span>
-      <span>待开课 {{ courseStats.draft }}</span>
-      <span>已归档 {{ courseStats.archived }}</span>
-      <span>筛选后 {{ filteredCourses.length }}</span>
-    </div>
-
-    <div class="course-table-wrap">
-      <el-table :data="filteredCourses" size="small" v-loading="loading" style="width: 100%">
+        <el-table
+          :data="filteredCourses"
+          size="small"
+          v-loading="loading"
+          style="width: 100%"
+          table-layout="fixed"
+          border
+        >
         <el-table-column prop="code" label="课程编码" width="140" />
         <el-table-column label="课程信息" min-width="240">
           <template #default="{ row }">
             <div class="course-cell">
               <strong>{{ row.title }}</strong>
-              <span>{{ row.description || '暂无课程简介' }}</span>
+              <span>{{ row.description || '暂未填写课程简介' }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="教学设置" min-width="260">
+        <el-table-column label="教学设置" min-width="320">
           <template #default="{ row }">
             <div class="course-setting">
-              <span class="course-setting__item">状态：{{ lifecycleLabel(row.lifecycle_status) }}</span>
-              <span class="course-setting__item">班级：{{ row.target_class || '未设置' }}</span>
-              <span class="course-setting__item">教师：{{ row.teacher_id ? teacherNameMap.get(row.teacher_id) || `教师#${row.teacher_id}` : '未激活' }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="报名设置" min-width="220">
-          <template #default="{ row }">
-            <div class="course-setting">
-              <span class="course-setting__item">名额：{{ row.max_students ?? 200 }}</span>
-              <span class="course-setting__item">状态：{{ enrollStatusLabel(row.enroll_status) }}</span>
-              <span class="course-setting__item">截止：{{ row.apply_deadline ? row.apply_deadline.replace('T', ' ').slice(0, 16) : '未设置' }}</span>
+              <div class="course-setting__item course-setting__item--stack">
+                <span class="course-setting__label">平台状态</span>
+                <span class="course-setting__pill" :class="lifecycleClass(row.lifecycle_status)">{{ lifecycleLabel(row.lifecycle_status) }}</span>
+              </div>
+              <span class="course-setting__item">指定教师：{{ row.teacher_name || '暂未指定' }}</span>
+              <span class="course-setting__item">
+                教师授课：{{ row.teaching_teacher_count ?? 0 }} 位授课中，{{ row.finished_teacher_count ?? 0 }} 位已结课
+              </span>
+              <span v-if="(row.teaching_teacher_names?.length ?? 0) > 0" class="course-setting__item">
+                授课教师：{{ row.teaching_teacher_names?.join('、') }}
+              </span>
             </div>
           </template>
         </el-table-column>
@@ -326,7 +312,7 @@ Promise.all([loadTeachers(), load()]);
             <el-switch :model-value="row.active" :loading="isToggling(row.id)" @change="(v: boolean) => toggleActive(row, v)" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
+        <el-table-column label="操作" width="170">
           <template #default="{ row }">
             <div class="course-row-actions">
               <HintButton size="small" @click="openEdit(row)">编辑</HintButton>
@@ -345,25 +331,15 @@ Promise.all([loadTeachers(), load()]);
       <el-form label-width="90px">
         <el-form-item label="课程编码"><el-input v-model="form.code" placeholder="唯一编码，学生可凭此加入" /></el-form-item>
         <el-form-item label="课程名称"><el-input v-model="form.title" placeholder="例如：数据结构" /></el-form-item>
-        <el-form-item label="激活教师">
-          <el-select v-model="form.teacher_id" clearable placeholder="不指定，等待教师自己激活" style="width: 100%">
-            <el-option v-for="teacher in teachers" :key="teacher.id" :label="teacher.full_name || teacher.username" :value="teacher.id" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="课程简介"><el-input v-model="form.description" type="textarea" :rows="3" /></el-form-item>
-        <el-form-item label="开课状态">
+        <el-form-item label="平台状态">
           <el-select v-model="form.lifecycle_status" style="width: 100%">
             <el-option v-for="item in lifecycleOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
-        <el-form-item label="目标班级"><el-input v-model="form.target_class" placeholder="例如 计科221" /></el-form-item>
-        <el-form-item label="开始时间"><el-date-picker v-model="form.start_at" type="datetime" value-format="YYYY-MM-DDTHH:mm" format="YYYY-MM-DD HH:mm" placeholder="课程开始时间" style="width: 100%" /></el-form-item>
-        <el-form-item label="结束时间"><el-date-picker v-model="form.end_at" type="datetime" value-format="YYYY-MM-DDTHH:mm" format="YYYY-MM-DD HH:mm" placeholder="课程结束时间" style="width: 100%" /></el-form-item>
-        <el-form-item label="课程名额"><el-input-number v-model="form.max_students" :min="1" :max="9999" style="width: 100%" /></el-form-item>
-        <el-form-item label="报名截止"><el-date-picker v-model="form.apply_deadline" type="datetime" value-format="YYYY-MM-DDTHH:mm" format="YYYY-MM-DD HH:mm" placeholder="不设置则长期开放" style="width: 100%" /></el-form-item>
-        <el-form-item label="报名状态">
-          <el-select v-model="form.enroll_status" style="width: 100%">
-            <el-option v-for="item in enrollStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+        <el-form-item label="指定教师">
+          <el-select v-model="form.teacher_id" clearable filterable placeholder="请选择授课教师" style="width: 100%">
+            <el-option v-for="item in teacherOptions" :key="item.id" :label="item.label" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="启用"><el-switch v-model="form.active" /></el-form-item>
@@ -377,25 +353,224 @@ Promise.all([loadTeachers(), load()]);
 </template>
 
 <style scoped>
-.course-manager-card :deep(.el-card__body) { padding-top: 18px; }
-.course-manager-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
-.course-manager-header__main { display: grid; gap: 6px; }
-.course-manager-header__eyebrow { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 800; color: #6c86ab; }
-.course-manager-header__title { font-size: 22px; line-height: 1.2; font-weight: 800; color: #22395b; }
-.course-manager-header__desc { max-width: 520px; font-size: 13px; line-height: 1.7; color: #667d9b; }
-.course-manager-header__actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.course-manager-search { width: 240px; }
-.course-manager-filter { width: 140px; }
-.course-manager-stats { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; font-size: 13px; color: var(--app-text-soft); }
-.course-table-wrap { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; }
+.course-manager-card {
+  min-width: 0;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.course-manager-card :deep(.el-card__body) {
+  padding: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.course-manager-filter { width: 160px; }
+.course-table-wrap {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 14px 16px 16px;
+  border: 1px solid #dfe9f7;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+.course-manager__table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 12px;
+}
+.course-manager__table-title-wrap {
+  display: grid;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.course-manager__table-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.course-manager__table-query-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+.course-manager__table-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1f3556;
+}
+.course-manager__table-title-wrap :deep(.query-toolbar) {
+  flex: 1;
+  width: 100%;
+  max-width: 540px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.course-manager__table-reset {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.course-manager__table-reset :deep(.hint-button__inner) {
+  min-width: 96px;
+  min-height: 46px;
+  padding-inline: 20px;
+  border-radius: 18px;
+  font-weight: 700;
+}
+.course-manager__table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.course-manager__table-title-wrap :deep(.query-toolbar__row) {
+  align-items: center;
+}
+.course-manager__table-actions :deep(.hint-button),
+.course-manager__table-actions :deep(.el-select),
+.course-manager__table-actions :deep(.el-select .el-select__wrapper) {
+  min-height: 46px;
+}
+.course-table-wrap :deep(.el-table) {
+  border-radius: 0 !important;
+  overflow: visible;
+  border: none !important;
+  box-shadow: none !important;
+  background: #ffffff !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.course-table-wrap :deep(.el-table__inner-wrapper) {
+  border-radius: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+.course-table-wrap :deep(.el-table__header),
+.course-table-wrap :deep(.el-table__body),
+.course-table-wrap :deep(.el-table__footer) {
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+.course-table-wrap :deep(.el-scrollbar),
+.course-table-wrap :deep(.el-scrollbar__wrap),
+.course-table-wrap :deep(.el-table__body-wrapper),
+.course-table-wrap :deep(.el-table__header-wrapper) {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.course-table-wrap :deep(.el-table::before),
+.course-table-wrap :deep(.el-table--border::before),
+.course-table-wrap :deep(.el-table--border::after) {
+  display: none !important;
+}
+.course-table-wrap :deep(.el-table__border-left-patch) {
+  display: none !important;
+}
+.course-table-wrap :deep(.el-table th.el-table__cell) {
+  background: #f6faff !important;
+  color: #587394;
+  font-weight: 800;
+}
+.course-table-wrap :deep(.el-table td.el-table__cell),
+.course-table-wrap :deep(.el-table th.el-table__cell) {
+  padding-top: 16px;
+  padding-bottom: 16px;
+  border-right: 1px solid #edf3fb !important;
+  border-bottom: 1px solid #edf3fb !important;
+}
+.course-table-wrap :deep(.el-table tr td:last-child),
+.course-table-wrap :deep(.el-table tr th:last-child) {
+  border-right: none !important;
+}
+.course-table-wrap :deep(.el-table__row:last-child td.el-table__cell) {
+  border-bottom: none !important;
+}
+.course-table-wrap :deep(.el-table__row:hover > td.el-table__cell) {
+  background: #f8fbff !important;
+}
+.course-table-wrap :deep(.el-switch) {
+  --el-switch-on-color: #4a82ff;
+  --el-switch-off-color: #d5e0ef;
+}
 .course-cell { display: grid; gap: 6px; }
-.course-cell strong { color: var(--app-text-main); font-size: 15px; }
-.course-cell span, .course-setting__item { color: #667d9b; line-height: 1.6; }
+.course-cell strong { color: #1f3556; font-size: 15px; }
+.course-cell span,
+.course-setting__item {
+  color: #667d9b;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .course-setting { display: grid; gap: 6px; }
+.course-setting__item--stack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.course-setting__label {
+  color: #71839d;
+}
+.course-setting__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.course-setting__pill.is-active,
+.course-setting__pill.is-open {
+  background: #edf7ef;
+  color: #28734b;
+}
+.course-setting__pill.is-draft {
+  background: #eef4ff;
+  color: #335ea8;
+}
+.course-setting__pill.is-archived,
+.course-setting__pill.is-closed,
+.course-setting__pill.is-expired {
+  background: #f4f6f9;
+  color: #7a889d;
+}
+.course-setting__pill.is-full {
+  background: #fff4ea;
+  color: #b56d2b;
+}
 .course-row-actions { display: flex; gap: 6px; }
 .course-manager-pager { display: flex; justify-content: flex-end; margin-top: 12px; }
 @media (max-width: 768px) {
-  .course-manager-header__actions { width: 100%; }
-  .course-manager-search, .course-manager-filter { width: 100%; }
+  .course-manager-filter { width: 100%; }
+  .course-manager__table-header { flex-direction: column; align-items: flex-start; }
+  .course-manager__table-reset { width: 100%; }
+  .course-manager__table-query-group,
+  .course-manager__table-controls,
+  .course-manager__table-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .course-manager__table-title-wrap :deep(.query-toolbar) {
+    width: 100%;
+    max-width: 100%;
+  }
 }
 </style>

@@ -4,7 +4,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
-from app.api.deps import get_current_user, require_role
+from app.api.deps import (
+    get_current_user,
+    get_teacher_activated_course_ids,
+    is_course_open_for_students,
+    require_role,
+    teacher_has_course_access,
+)
 from app.db.models import (
     ApplicationStatus,
     Course,
@@ -67,7 +73,7 @@ def _assert_student_course_access(session: Session, student_id: int, course_id: 
     course = session.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="课程不存在")
-    if not _course_active_for_student_join(course):
+    if not is_course_open_for_students(session, course):
         raise HTTPException(status_code=403, detail="当前课程已结课或未在学习周期内，暂时无法进入课程学习")
     enrollment = session.exec(
         select(Enrollment).where(
@@ -382,7 +388,12 @@ def teacher_applications(
 ):
     page = max(1, page)
     page_size = max(1, min(100, page_size))
-    course_stmt = select(Course.id).where(Course.teacher_id == user.id)
+    activated_ids = get_teacher_activated_course_ids(session, int(user.id))
+    course_stmt = select(Course.id)
+    if activated_ids:
+        course_stmt = course_stmt.where((Course.teacher_id == user.id) | (Course.id.in_(activated_ids)))
+    else:
+        course_stmt = course_stmt.where(Course.teacher_id == user.id)
     if course_id is not None:
         course_stmt = course_stmt.where(Course.id == course_id)
     owned_course_ids = session.exec(course_stmt).all()
@@ -439,7 +450,7 @@ def approve_application(
         raise HTTPException(status_code=404, detail="课程不存在")
     if not _course_accepting_review(course):
         raise HTTPException(status_code=400, detail="当前课程已归档或未开课，不能继续通过报名申请")
-    if int(course.teacher_id or 0) != int(user.id):
+    if not teacher_has_course_access(session, int(user.id), course):
         raise HTTPException(status_code=403, detail="你只能审核自己课程的报名")
     if app.status != ApplicationStatus.pending:
         raise HTTPException(status_code=400, detail="该申请已处理，不能重复审核")
@@ -510,7 +521,7 @@ def reject_application(
     course = session.get(Course, app.course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="课程不存在")
-    if int(course.teacher_id or 0) != int(user.id):
+    if not teacher_has_course_access(session, int(user.id), course):
         raise HTTPException(status_code=403, detail="你只能审核自己课程的报名")
     if app.status != ApplicationStatus.pending:
         raise HTTPException(status_code=400, detail="该申请已处理，不能重复审核")

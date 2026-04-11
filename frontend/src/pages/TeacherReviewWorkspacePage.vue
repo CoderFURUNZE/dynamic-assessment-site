@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import TeacherEnrollmentReviewPage from "./TeacherEnrollmentReview.vue";
 import TeacherFinalScoreReviewPage from "./TeacherFinalScoreReview.vue";
+import AdminIntroHero from "../components/AdminIntroHero.vue";
 
 type ReviewTab = "enrollment" | "final";
 
@@ -50,27 +51,7 @@ function switchTab(tab: ReviewTab) {
 
 <template>
   <div class="review-workspace">
-    <section class="review-hero panel-card">
-      <div class="review-hero__copy">
-        <div class="review-hero__eyebrow">Teacher Review</div>
-        <h1 class="review-hero__title">审核与评分</h1>
-        <p class="review-hero__desc">
-          把课程收尾动作放到一个地方处理。先审核报名，再复核最终成绩，避免老师在多个页面之间来回切换。
-        </p>
-      </div>
-      <div class="review-hero__cards">
-        <article class="review-kpi">
-          <span>当前模块</span>
-          <strong>{{ currentTabMeta.label }}</strong>
-          <small>{{ currentTabMeta.summary }}</small>
-        </article>
-        <article class="review-kpi">
-          <span>处理顺序</span>
-          <strong>先审核，再评分</strong>
-          <small>先确认学生进入课程，再做课程末尾复核。</small>
-        </article>
-      </div>
-    </section>
+    <AdminIntroHero eyebrow="教师工作台" title="审核与评分" :pill="currentTabMeta.label" description="把课程收尾动作放到一个地方处理。先审核报名，再复核最终成绩，避免老师在多个页面之间来回切换。" />
 
     <section class="review-focus panel-card">
       <div>
@@ -102,20 +83,17 @@ function switchTab(tab: ReviewTab) {
   gap: 18px;
 }
 
-.review-hero,
 .review-focus {
   display: grid;
   gap: 18px;
   padding: 22px 24px;
 }
 
-.review-hero__copy,
 .review-focus > div:first-child {
   display: grid;
   gap: 8px;
 }
 
-.review-hero__eyebrow,
 .review-focus__label {
   font-size: 11px;
   font-weight: 800;
@@ -124,7 +102,6 @@ function switchTab(tab: ReviewTab) {
   color: var(--app-eyebrow);
 }
 
-.review-hero__title,
 .review-focus__title {
   margin: 0;
   font-size: 28px;
@@ -132,44 +109,11 @@ function switchTab(tab: ReviewTab) {
   color: var(--app-ink);
 }
 
-.review-hero__desc,
 .review-focus__desc {
   margin: 0;
   max-width: 760px;
   font-size: 13px;
   line-height: 1.8;
-  color: var(--app-ink-soft);
-}
-
-.review-hero__cards {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.review-kpi {
-  padding: 16px 18px;
-  border-radius: 18px;
-  border: 1px solid var(--app-border);
-  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
-  display: grid;
-  gap: 6px;
-}
-
-.review-kpi span {
-  font-size: 12px;
-  color: #66809a;
-}
-
-.review-kpi strong {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--app-ink);
-}
-
-.review-kpi small {
-  font-size: 12px;
-  line-height: 1.6;
   color: var(--app-ink-soft);
 }
 
@@ -214,7 +158,6 @@ function switchTab(tab: ReviewTab) {
 }
 
 @media (max-width: 960px) {
-  .review-hero__cards,
   .review-focus__actions {
     grid-template-columns: 1fr;
   }

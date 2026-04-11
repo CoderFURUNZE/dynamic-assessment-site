@@ -55,13 +55,13 @@ const resourceId = computed(() => {
 });
 
 const resourceTypeOptions = [
-  { value: "video", label: "视频资源", icon: VideoPlay, desc: "适合讲解过程、演示操作、录播课程" },
-  { value: "note", label: "文档资料", icon: Notebook, desc: "适合讲义、PDF、课堂笔记、参考文档" },
-  { value: "doc", label: "补充资料", icon: Document, desc: "适合资料包、附件、实验文档" },
-  { value: "ppt", label: "课件", icon: Document, desc: "适合课件、讲稿、课堂展示材料" },
-  { value: "example", label: "案例示例", icon: Reading, desc: "适合案例解析、实验示例、代码样例" },
-  { value: "link", label: "外部链接", icon: Link, desc: "适合网页、课程平台、外部阅读地址" },
-  { value: "book", label: "推荐书籍", icon: Reading, desc: "适合课后阅读、拓展书单、延伸学习" },
+  { value: "video", label: "视频资源", icon: VideoPlay, desc: "适合讲解过程、演示操作和录播课程。" },
+  { value: "note", label: "文档资料", icon: Notebook, desc: "适合讲义、PDF、课堂笔记和参考资料。" },
+  { value: "doc", label: "补充资料", icon: Document, desc: "适合资料包、附件和实验文档。" },
+  { value: "ppt", label: "课件", icon: Document, desc: "适合讲稿、课件和课堂展示材料。" },
+  { value: "example", label: "案例示例", icon: Reading, desc: "适合案例解析、实验示例和代码样例。" },
+  { value: "link", label: "外部链接", icon: Link, desc: "适合网页、外部平台和阅读链接。" },
+  { value: "book", label: "推荐书籍", icon: Reading, desc: "适合课后阅读和拓展书单。" },
 ];
 
 const selectedTypeMeta = computed(
@@ -72,7 +72,6 @@ const previewAvailable = computed(() => Boolean(form.url && form.url.trim()));
 
 function fillForm() {
   if (!detail.value) return;
-  form.type = detail.value.type || "note";
   form.title = detail.value.title || "";
   form.url = detail.value.original_file_url || detail.value.url || "";
   form.category = detail.value.category || "learning";
@@ -160,9 +159,9 @@ watch(resourceId, loadDetail, { immediate: true });
         <div class="resource-hero__left">
           <button class="back-button" @click="backToWorkspace">返回图谱</button>
           <div class="hero-copy">
-            <div class="hero-eyebrow">Teacher Resource Workspace</div>
-            <h1>老师资源配置</h1>
-            <p>在这里单独维护一个知识点下的资源内容。页面只保留老师最常用的配置项，减少干扰。</p>
+            <div class="hero-eyebrow">教师资源配置</div>
+            <h1>资源详情与配置</h1>
+            <p>在这里维护知识点下的资源标题、分类、说明和预览入口。</p>
           </div>
         </div>
 
@@ -190,36 +189,24 @@ watch(resourceId, loadDetail, { immediate: true });
             <strong>{{ detail.kp_title }}</strong>
           </div>
           <div class="overview-card">
-            <span>资源地址</span>
-            <strong>{{ previewAvailable ? "已配置" : "未填写" }}</strong>
+            <span>预览状态</span>
+            <strong>{{ previewAvailable ? "已配置" : "未填写地址" }}</strong>
           </div>
         </section>
 
         <section class="resource-layout">
           <aside class="resource-side">
-            <button
-              class="side-tab"
-              :class="{ active: activeTab === 'basic' }"
-              @click="activeTab = 'basic'"
-            >
+            <button class="side-tab" :class="{ active: activeTab === 'basic' }" @click="activeTab = 'basic'">
               <strong>基础信息</strong>
-              <small>改标题、类型和地址</small>
+              <small>改标题、分类、标签和地址</small>
             </button>
-            <button
-              class="side-tab"
-              :class="{ active: activeTab === 'preview' }"
-              @click="activeTab = 'preview'"
-            >
+            <button class="side-tab" :class="{ active: activeTab === 'preview' }" @click="activeTab = 'preview'">
               <strong>资源预览</strong>
-              <small>检查地址是否可用</small>
+              <small>快速检查链接和打开效果</small>
             </button>
-            <button
-              class="side-tab"
-              :class="{ active: activeTab === 'guide' }"
-              @click="activeTab = 'guide'"
-            >
+            <button class="side-tab" :class="{ active: activeTab === 'guide' }" @click="activeTab = 'guide'">
               <strong>使用说明</strong>
-              <small>告诉老师这个资源怎么配</small>
+              <small>帮助老师明确资源该怎么配</small>
             </button>
           </aside>
 
@@ -228,7 +215,7 @@ watch(resourceId, loadDetail, { immediate: true });
               <div class="panel-head">
                 <div>
                   <h3>基础信息</h3>
-                  <p>文件类型由系统识别，老师只需要维护标题、分类、标签和说明。</p>
+                  <p>系统自动识别资源类型，老师只需要维护标题、分类、标签和说明。</p>
                 </div>
                 <div class="panel-actions">
                   <el-button @click="openPreview" :disabled="!previewAvailable">预览资源</el-button>
@@ -268,10 +255,7 @@ watch(resourceId, loadDetail, { immediate: true });
                   </el-radio-group>
                 </el-form-item>
                 <el-form-item v-if="detail.source_kind === 'external'" label="资源 URL / 外部地址">
-                  <el-input
-                    v-model="form.url"
-                    placeholder="可填写视频地址、文档地址、网页链接、网盘地址等"
-                  />
+                  <el-input v-model="form.url" placeholder="可填写视频地址、文档地址、网页链接或网盘地址" />
                 </el-form-item>
                 <el-form-item label="标签">
                   <el-input v-model="form.tags" placeholder="例如：阶段一、重点、补充阅读" />
@@ -286,7 +270,7 @@ watch(resourceId, loadDetail, { immediate: true });
               <div class="panel-head">
                 <div>
                   <h3>资源预览</h3>
-                  <p>这里不做复杂播放器，只提供老师快速检查地址和跳转。</p>
+                  <p>这里不做复杂播放器，只提供老师快速检查链接和跳转。</p>
                 </div>
               </div>
 
@@ -313,26 +297,26 @@ watch(resourceId, loadDetail, { immediate: true });
               <div class="panel-head">
                 <div>
                   <h3>老师使用说明</h3>
-                  <p>把资源配置页的用途说清楚，后续答辩和交接都更方便。</p>
+                  <p>把资源配置页的用途说明清楚，后续答辩和交接都更方便。</p>
                 </div>
               </div>
 
               <div class="guide-list">
                 <div class="guide-item">
                   <strong>1. 视频资源</strong>
-                  <p>适合放讲解视频、实验演示、录播课程。学生点“去学习”后优先进入这里。</p>
+                  <p>适合放讲解视频、实验演示和录播课程，学生点击学习时优先进入这里。</p>
                 </div>
                 <div class="guide-item">
                   <strong>2. 文档资料</strong>
-                  <p>适合 PDF、讲义、课件、笔记、学习说明文档。</p>
+                  <p>适合 PDF、讲义、课件、笔记和学习说明文档。</p>
                 </div>
                 <div class="guide-item">
                   <strong>3. 外部链接</strong>
-                  <p>适合超星页面、外部网页、慕课地址、在线阅读页面。</p>
+                  <p>适合超星页面、外部网页、慕课地址和在线阅读页面。</p>
                 </div>
                 <div class="guide-item danger">
                   <strong>4. 删除资源</strong>
-                  <p>删除后学生端将无法再看到这个资源，请确认该资源不再使用再删除。</p>
+                  <p>删除后学生端将无法再看到这个资源入口，请确认不再使用再删除。</p>
                 </div>
               </div>
 

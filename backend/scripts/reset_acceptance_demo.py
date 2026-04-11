@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -12,7 +11,6 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-from app.core.config import settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.bootstrap import bootstrap_defaults  # noqa: E402
 from app.db.models import (  # noqa: E402
@@ -66,20 +64,7 @@ GRADE = "通用"
 NOW = datetime(2026, 3, 16, 12, 0, 0)
 
 
-def _resolve_sqlite_path(database_url: str) -> Path | None:
-    if not database_url.startswith("sqlite:///"):
-        return None
-    raw = database_url.removeprefix("sqlite:///")
-    path = Path(raw)
-    return (path if path.is_absolute() else (BASE_DIR / path)).resolve()
-
-
 def _reset_database() -> None:
-    db_path = _resolve_sqlite_path(settings.database_url)
-    if db_path and db_path.exists():
-        os.remove(db_path)
-        print(f"Deleted sqlite db: {db_path}")
-        return
     SQLModel.metadata.drop_all(engine)
     print("Dropped all tables.")
 

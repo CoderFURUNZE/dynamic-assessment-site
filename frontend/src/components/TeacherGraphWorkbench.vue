@@ -13,6 +13,7 @@ import {
   INITIAL_CENTER_Y,
 } from "../graph/graphLayout";
 import HoverTip from "./HoverTip.vue";
+import QueryToolbar from "./QueryToolbar.vue";
 
 type KP = {
   id: number;
@@ -28,6 +29,12 @@ type KP = {
   pos_x?: number | null;
   pos_y?: number | null;
 };
+
+function runTeacherSearch() {}
+
+function resetTeacherSearch() {
+  search.value = "";
+}
 
 type Edge = {
   id: number;
@@ -1440,11 +1447,14 @@ onBeforeUnmount(() => {
         <p class="teacher-subtitle">先找分类，再选知识点，然后补信息、连关系、进内容页。</p>
       </div>
       <div class="teacher-controls">
-        <div class="teacher-search-card">
-          <span class="teacher-search-card__label">搜索知识点</span>
-          <el-input v-model="search" placeholder="" clearable class="teacher-search" />
-          <span class="teacher-search-card__hint">按编码、标题、章节筛选节点</span>
-        </div>
+        <QueryToolbar
+          v-model="search"
+          placeholder="请输入知识点名称、编码或章节"
+          hint="请输入知识点名称、编码或章节"
+          input-width="420px"
+          @search="runTeacherSearch"
+          @reset="resetTeacherSearch"
+        />
         <el-checkbox v-model="showIncompleteOnly" size="small" border title="仅显示缺资源或缺题的知识点">仅待完善</el-checkbox>
         <el-dropdown trigger="click">
           <button type="button" class="teacher-btn">导出 ▾</button>
@@ -2022,11 +2032,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .teacher-workbench {
-  background: #f7faff;
+  background: transparent;
   overflow: hidden;
-  border-radius: 28px;
-  border: 1px solid #dfe7f1;
-  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.06);
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
 }
 
 .teacher-workbench--fullscreen {
@@ -2394,17 +2404,17 @@ onBeforeUnmount(() => {
   user-select: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   padding: var(--graph-stage-pad);
   min-width: 0;
   flex: 1;
   min-height: 0;
   max-height: 100%;
   height: 100%;
-  border-radius: 24px;
+  border-radius: 20px;
   background: #ffffff;
-  border: 1px solid #dfe7f1;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  border: 1px solid #e3ebf5;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
 }
 
 .teacher-workbench--fullscreen .teacher-stage {
@@ -2418,9 +2428,9 @@ onBeforeUnmount(() => {
   width: 100%;
   overflow: hidden;
   /* 与外层 .teacher-stage 圆角同心：内半径 = 外半径 − 内边距，避免底角“直角顶到”外框 */
-  border-radius: 20px;
-  background: #f8fbff;
-  border: 1px solid #e8eef6;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+  border: none;
   contain: layout style;
   isolation: isolate;
   transform: translateZ(0);
@@ -2849,14 +2859,14 @@ onBeforeUnmount(() => {
 
 .teacher-stage__empty {
   position: absolute;
-  inset: 12px;
+  inset: 0;
   display: grid;
   place-items: center;
   gap: 8px;
   text-align: center;
-  border: 1px dashed #dfe7f1;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.96);
+  border: none;
+  border-radius: 16px;
+  background: rgba(248, 251, 255, 0.82);
   color: #35507f;
   z-index: 3;
   pointer-events: auto;
@@ -3400,7 +3410,7 @@ onBeforeUnmount(() => {
 .teacher-workbench {
   gap: 14px;
   padding: 16px;
-  background: linear-gradient(180deg, #f7fbff 0%, #eef4fb 100%);
+  background: transparent;
 }
 
 .teacher-header,
@@ -3424,14 +3434,14 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage {
-  border-radius: 28px;
+  border-radius: 20px;
 }
 
 .teacher-stage__top {
-  padding: 14px 16px;
-  gap: 12px;
-  background: linear-gradient(135deg, #f7fbff 0%, #eef5ff 52%, #ffffff 100%);
-  border-bottom: 1px solid color-mix(in srgb, var(--app-primary) 10%, #e6eef7);
+  padding: 10px 12px 8px;
+  gap: 8px;
+  background: transparent;
+  border-bottom: none;
 }
 
 .teacher-stage__stats,

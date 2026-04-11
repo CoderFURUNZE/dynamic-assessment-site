@@ -99,9 +99,10 @@ const labelPoints = computed(() => {
 
 <template>
   <section class="radar-card">
-    <div class="radar-card__head">
-      <div>
-        <div class="radar-card__title">{{ title }}</div>
+    <div v-if="title || subtitle" class="radar-card__head">
+      <div class="radar-card__head-copy">
+        <div v-if="title" class="radar-card__title">{{ title }}</div>
+        <p v-if="subtitle" class="radar-card__subtitle">{{ subtitle }}</p>
       </div>
     </div>
 
@@ -172,10 +173,22 @@ const labelPoints = computed(() => {
   gap: 12px;
 }
 
+.radar-card__head-copy {
+  display: grid;
+  gap: 6px;
+}
+
 .radar-card__title {
   font-size: 16px;
   font-weight: 700;
   color: var(--app-ink, #24324a);
+}
+
+.radar-card__subtitle {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--app-ink-soft, #6a7b92);
 }
 
 .radar-card__body {

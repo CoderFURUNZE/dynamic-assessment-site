@@ -11,6 +11,7 @@ import {
   INITIAL_CENTER_Y,
 } from "../graph/graphLayout";
 import HoverTip from "./HoverTip.vue";
+import QueryToolbar from "./QueryToolbar.vue";
 
 type GraphKp = {
   id: number;
@@ -26,6 +27,12 @@ type GraphKp = {
   pos_x?: number | null;
   pos_y?: number | null;
 };
+
+function runWorkspaceSearch() {}
+
+function resetWorkspaceSearch() {
+  search.value = "";
+}
 
 type GraphEdge = {
   prereq_id: number;
@@ -1379,12 +1386,22 @@ onBeforeUnmount(() => {
     <div v-if="!props.embedded" class="workspace-header">
       <div class="workspace-heading">
         <h1 class="workspace-title">课程知识图谱</h1>
-        <p class="workspace-subtitle">学习通风格重构：左侧章节导航、中部图谱舞台、右侧学习卡片；视觉主题与本系统保持一致。</p>
+        <p class="workspace-subtitle">左侧查看章节与筛选，中部浏览知识图谱，右侧查看当前知识点的学习信息。</p>
       </div>
       <div class="workspace-controls">
-        <el-input v-model="search" placeholder="搜索知识点" clearable class="workspace-search" />
-        <button class="workspace-btn" @click="fitVisibleToViewport">适应画布</button>
-        <button class="workspace-btn" @click="resetViewport">重置画布</button>
+        <QueryToolbar
+          v-model="search"
+          placeholder="请输入知识点名称、编码或章节"
+          hint="请输入知识点名称、编码或章节"
+          input-width="420px"
+          @search="runWorkspaceSearch"
+          @reset="resetWorkspaceSearch"
+        >
+          <template #extras>
+            <button class="workspace-btn" @click="fitVisibleToViewport">适应画布</button>
+            <button class="workspace-btn" @click="resetViewport">重置画布</button>
+          </template>
+        </QueryToolbar>
       </div>
     </div>
 

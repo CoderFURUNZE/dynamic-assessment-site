@@ -1,36 +1,29 @@
-from sqlmodel import Session, SQLModel, create_engine
 from sqlalchemy import inspect, text
+from sqlmodel import SQLModel, Session, create_engine
 
 from app.core.config import settings
 
-connect_args = {}
-if settings.database_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
 
 try:
-    engine = create_engine(settings.database_url, echo=False, connect_args=connect_args)
+    engine = create_engine(settings.database_url, echo=False)
 except ModuleNotFoundError as exc:
-    if "psycopg2" in str(exc) and settings.database_url.startswith("postgresql"):
+    if "pymysql" in str(exc) and settings.database_url.lower().startswith("mysql"):
         raise RuntimeError(
-            "PostgreSQL 连接依赖未安装：psycopg2-binary。\n"
-            "请先在 backend 环境中执行：pip install -r requirements.txt\n"
-            "然后再启动后端或运行初始化脚本。"
+            "MySQL 连接依赖未安装：pymysql。\n"
+            "请先在 backend 环境中执行：pip install -r requirements.txt"
         ) from exc
     raise
 
 
 def init_db() -> None:
-    SQLModel.metadata.create_all(engine)
+    _create_tables_safely()
     _drop_legacy_interview_tables()
-    _ensure_portrait_indicator_source_values()
-    _ensure_resource_type_values()
-    _ensure_relation_type_values()
     _ensure_user_columns()
     _ensure_kp_practice_total_column()
     _ensure_question_meta_columns()
     _ensure_practice_attempt_columns()
     _ensure_course_columns()
-    _ensure_legacy_course_teacher_assignment()
+    _ensure_course_teacher_activation_columns()
     _ensure_knowledgepoint_columns()
     _ensure_knowledgeedge_columns()
     _ensure_mastery_columns()
@@ -43,8 +36,20 @@ def init_db() -> None:
     _normalize_legacy_status_values()
 
 
-def _is_postgres() -> bool:
-    return engine.dialect.name.lower().startswith("postgres")
+def _create_tables_safely() -> None:
+    for table in SQLModel.metadata.sorted_tables:
+        try:
+            table.create(bind=engine, checkfirst=True)
+        except Exception:
+            pass
+
+
+def _quoted_table_name(table_name: str) -> str:
+    return f"`{table_name}`"
+
+
+def _text_cast(column_name: str) -> str:
+    return f"CAST({column_name} AS CHAR)"
 
 
 def _drop_legacy_interview_tables() -> None:
@@ -65,82 +70,20 @@ def _ensure_columns(table_name: str, columns: dict[str, str]) -> None:
     missing = {name: ddl for name, ddl in columns.items() if name not in existing}
     if not missing:
         return
+    quoted_name = _quoted_table_name(table_name)
     for ddl in missing.values():
         try:
             with engine.begin() as conn:
-                # Quote table identifiers to support reserved names like "user".
-                conn.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN {ddl}'))
-        except Exception:
-            # Best-effort compatibility migration: keep progressing even if a
-            # single column DDL fails, so other missing columns can still be added.
-            pass
-
-
-def _ensure_portrait_indicator_source_values() -> None:
-    if not _is_postgres():
-        return
-    statements = [
-        "ALTER TYPE portraitindicatorsourcetype ADD VALUE IF NOT EXISTS 'imported'",
-    ]
-    for stmt in statements:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(stmt))
-        except Exception:
-            pass
-
-
-def _ensure_resource_type_values() -> None:
-    if not _is_postgres():
-        return
-    statements = [
-        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'pdf'",
-        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'doc'",
-        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'docx'",
-        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'ppt'",
-        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'pptx'",
-        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'image'",
-        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'link'",
-        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'book'",
-        "ALTER TYPE resourcetype ADD VALUE IF NOT EXISTS 'recommend_book'",
-    ]
-    for stmt in statements:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(stmt))
-        except Exception:
-            pass
-
-
-def _ensure_relation_type_values() -> None:
-    if not _is_postgres():
-        return
-    statements = [
-        "ALTER TYPE relationtype ADD VALUE IF NOT EXISTS 'support'",
-        "ALTER TYPE relationtype ADD VALUE IF NOT EXISTS 'contains'",
-    ]
-    for stmt in statements:
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(stmt))
+                conn.execute(text(f"ALTER TABLE {quoted_name} ADD COLUMN {ddl}"))
         except Exception:
             pass
 
 
 def _ensure_user_columns() -> None:
-    active_default = "active BOOLEAN DEFAULT TRUE" if _is_postgres() else "active BOOLEAN DEFAULT 1"
-    _ensure_columns(
-        "user",
-        {
-            "active": active_default,
-        },
-    )
+    _ensure_columns("user", {"active": "active BOOLEAN DEFAULT 1"})
     try:
         with engine.begin() as conn:
-            if _is_postgres():
-                conn.execute(text('UPDATE "user" SET active=TRUE WHERE active IS NULL'))
-            else:
-                conn.execute(text('UPDATE "user" SET active=1 WHERE active IS NULL'))
+            conn.execute(text(f"UPDATE {_quoted_table_name('user')} SET active=1 WHERE active IS NULL"))
     except Exception:
         pass
 
@@ -157,7 +100,6 @@ def _ensure_kp_practice_total_column() -> None:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE knowledgepoint ADD COLUMN practice_total INTEGER"))
     except Exception:
-        # Best-effort; ignore if the column was added by another process.
         pass
 
 
@@ -195,7 +137,6 @@ def _ensure_practice_attempt_columns() -> None:
 
 
 def _ensure_course_columns() -> None:
-    apply_deadline_type = "TIMESTAMP" if _is_postgres() else "DATETIME"
     _ensure_columns(
         "course",
         {
@@ -203,10 +144,10 @@ def _ensure_course_columns() -> None:
             "teacher_id": "teacher_id INTEGER",
             "target_class": "target_class TEXT DEFAULT ''",
             "max_students": "max_students INTEGER DEFAULT 200",
-            "start_at": f"start_at {apply_deadline_type}",
-            "end_at": f"end_at {apply_deadline_type}",
-            "archived_at": f"archived_at {apply_deadline_type}",
-            "apply_deadline": f"apply_deadline {apply_deadline_type}",
+            "start_at": "start_at DATETIME",
+            "end_at": "end_at DATETIME",
+            "archived_at": "archived_at DATETIME",
+            "apply_deadline": "apply_deadline DATETIME",
             "enroll_status": "enroll_status TEXT DEFAULT 'open'",
         },
     )
@@ -214,21 +155,33 @@ def _ensure_course_columns() -> None:
         with engine.begin() as conn:
             conn.execute(text("UPDATE course SET lifecycle_status='draft' WHERE lifecycle_status IS NULL"))
             conn.execute(text("UPDATE course SET target_class='' WHERE target_class IS NULL"))
+        pass
     except Exception:
         pass
 
 
-def _ensure_legacy_course_teacher_assignment() -> None:
-    # Legacy seed data predates teacher ownership. If there is exactly one
-    # teacher user, assign any unowned courses to that teacher so teacher-side
-    # course management remains usable after schema upgrades.
+def _clear_legacy_course_teacher_assignment() -> None:
     try:
         with engine.begin() as conn:
-            teachers = conn.execute(text("SELECT id FROM \"user\" WHERE role='teacher' ORDER BY id")).fetchall()
-            if len(teachers) != 1:
-                return
-            teacher_id = int(teachers[0][0])
-            conn.execute(text("UPDATE course SET teacher_id=:teacher_id WHERE teacher_id IS NULL"), {"teacher_id": teacher_id})
+            conn.execute(text("UPDATE course SET teacher_id=NULL WHERE teacher_id IS NOT NULL"))
+    except Exception:
+        pass
+
+
+def _ensure_course_teacher_activation_columns() -> None:
+    _ensure_columns(
+        "courseteacheractivation",
+        {
+            "teaching_status": "teaching_status VARCHAR(32) DEFAULT 'not_started'",
+            "finished_at": "finished_at DATETIME",
+            "updated_at": "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP",
+        },
+    )
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE courseteacheractivation SET teaching_status='teaching' WHERE teaching_status IS NULL OR teaching_status='' OR teaching_status='not_started'"))
+            conn.execute(text("UPDATE courseteacheractivation SET updated_at=activated_at WHERE updated_at IS NULL"))
+        pass
     except Exception:
         pass
 
@@ -250,12 +203,7 @@ def _ensure_knowledgepoint_columns() -> None:
 
 
 def _ensure_knowledgeedge_columns() -> None:
-    _ensure_columns(
-        "knowledgeedge",
-        {
-            "relation_type": "relation_type TEXT DEFAULT 'prerequisite'",
-        },
-    )
+    _ensure_columns("knowledgeedge", {"relation_type": "relation_type TEXT DEFAULT 'prerequisite'"})
     try:
         with engine.begin() as conn:
             conn.execute(text("UPDATE knowledgeedge SET relation_type='prerequisite' WHERE relation_type IS NULL"))
@@ -284,8 +232,6 @@ def _ensure_mastery_columns() -> None:
 
 
 def _ensure_learning_resource_columns() -> None:
-    timestamp_type = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP" if _is_postgres() else "DATETIME"
-    bool_default = "extension_mismatch BOOLEAN DEFAULT FALSE" if _is_postgres() else "extension_mismatch BOOLEAN DEFAULT 0"
     _ensure_columns(
         "learningresource",
         {
@@ -302,10 +248,10 @@ def _ensure_learning_resource_columns() -> None:
             "converted_preview_url": "converted_preview_url TEXT DEFAULT ''",
             "original_file_url": "original_file_url TEXT DEFAULT ''",
             "file_size_bytes": "file_size_bytes INTEGER DEFAULT 0",
-            "extension_mismatch": bool_default,
+            "extension_mismatch": "extension_mismatch BOOLEAN DEFAULT 0",
             "source_kind": "source_kind TEXT DEFAULT 'external'",
-            "created_at": f"created_at {timestamp_type}",
-            "updated_at": f"updated_at {timestamp_type}",
+            "created_at": "created_at DATETIME DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP",
         },
     )
     try:
@@ -315,9 +261,7 @@ def _ensure_learning_resource_columns() -> None:
             conn.execute(text("UPDATE learningresource SET preview_status='ready' WHERE preview_status IS NULL"))
             conn.execute(text("UPDATE learningresource SET source_kind='external' WHERE source_kind IS NULL"))
             conn.execute(text("UPDATE learningresource SET updated_at=CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
-        if not _is_postgres():
-            with engine.begin() as conn:
-                conn.execute(text("UPDATE learningresource SET created_at=CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+            conn.execute(text("UPDATE learningresource SET created_at=CURRENT_TIMESTAMP WHERE created_at IS NULL"))
     except Exception:
         pass
 
@@ -335,22 +279,11 @@ def _ensure_stage_snapshot_columns() -> None:
 
 
 def _ensure_profile_snapshot_columns() -> None:
-    _ensure_columns(
-        "learnerprofilesnapshot",
-        {
-            "portrait_summary_json": "portrait_summary_json TEXT DEFAULT '{}'",
-        },
-    )
+    _ensure_columns("learnerprofilesnapshot", {"portrait_summary_json": "portrait_summary_json TEXT DEFAULT '{}'"})
 
 
 def _ensure_enrollment_columns() -> None:
-    _ensure_columns(
-        "enrollment",
-        {
-            "application_id": "application_id INTEGER",
-            "status": "status TEXT DEFAULT 'active'",
-        },
-    )
+    _ensure_columns("enrollment", {"application_id": "application_id INTEGER", "status": "status TEXT DEFAULT 'active'"})
     try:
         with engine.begin() as conn:
             conn.execute(text("UPDATE enrollment SET status='active' WHERE status IS NULL OR status='enrolled'"))
@@ -359,12 +292,7 @@ def _ensure_enrollment_columns() -> None:
 
 
 def _ensure_evalconfig_graph_layout_column() -> None:
-    _ensure_columns(
-        "evalconfig",
-        {
-            "graph_layout_json": "graph_layout_json TEXT DEFAULT ''",
-        },
-    )
+    _ensure_columns("evalconfig", {"graph_layout_json": "graph_layout_json TEXT DEFAULT ''"})
 
 
 def _ensure_final_score_confirmation_columns() -> None:
@@ -384,29 +312,21 @@ def _ensure_final_score_confirmation_columns() -> None:
 
 
 def _normalize_legacy_status_values() -> None:
-    # Compatibility migration for legacy uppercase status values.
-    # Existing DB may store OPEN/ACTIVE/UNREAD..., while current enums use lowercase.
+    enroll_status_expr = _text_cast("enroll_status")
+    enrollment_status_expr = _text_cast("status")
+    notification_status_expr = _text_cast("status")
     statements = [
-        # course.enroll_status is TEXT in legacy DBs.
-        "UPDATE course SET enroll_status = LOWER(enroll_status::text) "
-        "WHERE enroll_status::text IN ('OPEN','FULL','CLOSED','EXPIRED')",
-        # enrollment.status may be enum or text depending on historical schema.
-        "UPDATE enrollment SET status = 'active' "
-        "WHERE status::text IN ('ACTIVE','enrolled')",
-        "UPDATE enrollment SET status = 'cancelled' "
-        "WHERE status::text IN ('CANCELLED')",
-        # coursenotification.status may be enum or text depending on historical schema.
-        "UPDATE coursenotification SET status = 'unread' "
-        "WHERE status::text IN ('UNREAD')",
-        "UPDATE coursenotification SET status = 'read' "
-        "WHERE status::text IN ('READ')",
+        f"UPDATE course SET enroll_status = LOWER({enroll_status_expr}) WHERE {enroll_status_expr} IN ('OPEN','FULL','CLOSED','EXPIRED')",
+        f"UPDATE enrollment SET status = 'active' WHERE {enrollment_status_expr} IN ('ACTIVE','enrolled')",
+        f"UPDATE enrollment SET status = 'cancelled' WHERE {enrollment_status_expr} IN ('CANCELLED')",
+        f"UPDATE coursenotification SET status = 'unread' WHERE {notification_status_expr} IN ('UNREAD')",
+        f"UPDATE coursenotification SET status = 'read' WHERE {notification_status_expr} IN ('READ')",
     ]
     for stmt in statements:
         try:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
         except Exception:
-            # Best-effort compatibility fix.
             pass
 
 

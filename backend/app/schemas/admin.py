@@ -170,13 +170,8 @@ class CourseOut(BaseModel):
     active: bool
     lifecycle_status: str = "draft"
     teacher_id: int | None = None
-    target_class: str = ""
-    max_students: int = 200
-    start_at: datetime | None = None
-    end_at: datetime | None = None
+    teacher_name: str = ""
     archived_at: datetime | None = None
-    apply_deadline: datetime | None = None
-    enroll_status: str = "open"
 
 
 class CourseIn(BaseModel):
@@ -186,12 +181,6 @@ class CourseIn(BaseModel):
     active: bool = True
     lifecycle_status: str = "draft"
     teacher_id: int | None = None
-    target_class: str = ""
-    max_students: int = 200
-    start_at: datetime | None = None
-    end_at: datetime | None = None
-    apply_deadline: datetime | None = None
-    enroll_status: str = "open"
 
 
 class CourseUpdateIn(BaseModel):
@@ -201,13 +190,7 @@ class CourseUpdateIn(BaseModel):
     active: bool | None = None
     lifecycle_status: str | None = None
     teacher_id: int | None = None
-    target_class: str | None = None
-    max_students: int | None = None
-    start_at: datetime | None = None
-    end_at: datetime | None = None
     archived_at: datetime | None = None
-    apply_deadline: datetime | None = None
-    enroll_status: str | None = None
 
 
 class PersonaRuleOut(BaseModel):

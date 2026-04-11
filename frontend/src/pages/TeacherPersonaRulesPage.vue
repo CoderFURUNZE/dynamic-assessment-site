@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
+import AdminPersonaManager from "../components/AdminPersonaManager.vue";
+import PageSectionCard from "../components/PageSectionCard.vue";
 import TeacherIntroHero from "../components/TeacherIntroHero.vue";
-import TeacherStageManager from "../components/TeacherStageManager.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
 type Course = { id: number; code: string; title: string };
@@ -14,10 +15,6 @@ const router = useRouter();
 const subject = ref("");
 const grade = ref("通用");
 const courses = ref<Course[]>([]);
-
-const selectedCourseId = computed<number | null>(
-  () => courses.value.find((item) => item.title === subject.value)?.id ?? null,
-);
 
 async function loadCourses() {
   try {
@@ -29,12 +26,9 @@ async function loadCourses() {
   }
 }
 
-function syncQuery(nextSubject?: string) {
-  if (typeof nextSubject === "string") {
-    subject.value = nextSubject;
-  }
+function syncQuery() {
   saveTeacherSubject(subject.value);
-  router.replace({ path: "/teacher/stages", query: buildTeacherSubjectQuery(subject.value) });
+  router.replace({ path: "/teacher/students", query: { ...buildTeacherSubjectQuery(subject.value), tab: "rules" } });
 }
 
 watch(subject, () => syncQuery());
@@ -51,14 +45,20 @@ onMounted(loadCourses);
 
 <template>
   <div class="teacher-page">
-    <TeacherIntroHero eyebrow="阶段评价" title="阶段设置" pill="阶段设置" />
-    <TeacherStageManager
-      :course-id="selectedCourseId"
-      :subject="subject"
-      :grade="grade"
-      :courses="courses"
-      @subject-change="syncQuery"
+    <TeacherIntroHero
+      eyebrow="学生分析"
+      title="课程画像规则"
+      pill="教师配置"
     />
+
+    <PageSectionCard eyebrow="课程规则" title="课程画像规则">
+      <AdminPersonaManager
+        :subject="subject"
+        :grade="grade"
+        manager-role="teacher"
+        step="settings"
+      />
+    </PageSectionCard>
   </div>
 </template>
 
