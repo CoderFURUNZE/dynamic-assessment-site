@@ -318,10 +318,10 @@ onMounted(loadCatalog);
 
 .teacher-courses-page__panel,
 .teacher-courses-page__stat-card {
-  border-radius: 24px;
+  border-radius: 28px;
   border: 1px solid #e3ebf5;
-  background: #fff;
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.05);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--app-shadow);
 }
 
 .teacher-courses-page__refresh-btn,
@@ -361,7 +361,7 @@ onMounted(loadCatalog);
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 18px;
+  padding: 20px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
@@ -373,7 +373,7 @@ onMounted(loadCatalog);
 
 .teacher-courses-page__stat-card.is-active {
   border-color: #8eb7f7;
-  box-shadow: 0 16px 34px rgba(65, 116, 207, 0.12);
+  box-shadow: var(--app-shadow-lg);
 }
 
 .teacher-courses-page__stat-icon {
@@ -409,7 +409,7 @@ onMounted(loadCatalog);
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 20px;
+  padding: 22px 24px;
   border-bottom: 1px solid #edf2f7;
 }
 
@@ -430,18 +430,19 @@ onMounted(loadCatalog);
 .teacher-courses-page__card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  padding: 18px 20px 20px;
+  gap: 16px;
+  padding: 22px 24px 24px;
 }
 
 .teacher-course-card {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 18px;
-  border-radius: 18px;
+  padding: 22px;
+  border-radius: 24px;
   border: 1px solid #e6edf5;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .teacher-course-card__top {

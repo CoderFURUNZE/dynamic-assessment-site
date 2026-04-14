@@ -55,10 +55,10 @@ function handleChange(value: string) {
 
 <style scoped>
 .workspace-topbar {
-  border-radius: var(--app-radius);
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-soft);
-  background: #ffffff;
+  border-radius: 28px;
+  border: 3px solid #1f2937;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  background: linear-gradient(180deg, #fff8ef 0%, #fffdf8 100%);
   overflow: hidden;
 }
 
@@ -76,9 +76,9 @@ function handleChange(value: string) {
   border-radius: 16px;
   display: grid;
   place-items: center;
-  color: #3268da;
-  background: linear-gradient(135deg, rgba(74, 132, 255, 0.14) 0%, rgba(107, 197, 255, 0.14) 100%);
-  border: 1px solid #dbe6fb;
+  color: #355070;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
@@ -95,29 +95,29 @@ function handleChange(value: string) {
 }
 
 .workspace-topbar__badge {
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
-  color: var(--app-ink-soft);
+  color: #1f2937;
   font-weight: 800;
-  background: color-mix(in srgb, var(--app-primary) 8%, transparent);
-  padding: 4px 10px;
+  background: #d7f9a8;
+  padding: 5px 10px;
   border-radius: 999px;
   width: fit-content;
-  border: 1px solid var(--app-border);
+  border: 0;
 }
 
 .workspace-topbar__title {
-  font-size: 20px;
-  line-height: 1.15;
+  font-size: 24px;
+  line-height: 1.1;
   font-weight: 800;
-  color: var(--app-ink);
-  letter-spacing: -0.01em;
+  color: #16355c;
+  letter-spacing: -0.03em;
 }
 
 .workspace-topbar__subtitle {
   font-size: 13px;
   line-height: 1.6;
-  color: #617897;
+  color: #60758f;
 }
 
 .workspace-topbar__actions {
@@ -137,8 +137,8 @@ function handleChange(value: string) {
 .workspace-topbar__actions :deep(.el-select__wrapper) {
   min-height: 44px;
   border-radius: 18px !important;
-  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%) !important;
-  box-shadow: 0 0 0 1px #d7e4f5 inset, 0 10px 20px rgba(80, 118, 183, 0.05) !important;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%) !important;
+  box-shadow: 0 0 0 1.5px #c6d8ef inset !important;
 }
 
 .workspace-topbar__actions :deep(.el-select__wrapper.is-focused) {
@@ -156,7 +156,7 @@ function handleChange(value: string) {
   min-height: 44px;
   padding: 0 20px;
   border-radius: 999px !important;
-  border: 1px solid #d7e4f5 !important;
+  border: 1.5px solid #c6d8ef !important;
   background: #ffffff !important;
   background-image: none !important;
   color: #274263 !important;
@@ -174,10 +174,10 @@ function handleChange(value: string) {
 }
 
 .workspace-topbar__actions :deep(.el-button--primary) {
-  border-color: #b8cdf3 !important;
-  background: #ffffff !important;
+  border-color: #96b6e2 !important;
+  background: linear-gradient(180deg, #eef5ff 0%, #ffffff 100%) !important;
   background-image: none !important;
-  color: #2e5ea8 !important;
+  color: #16355c !important;
 }
 
 .workspace-topbar__actions :deep(.el-button.is-disabled),
@@ -190,14 +190,14 @@ function handleChange(value: string) {
 
 .workspace-topbar__meta {
   margin-top: 0;
-  color: var(--app-ink-soft);
+  color: #60758f;
   font-size: 12px;
   padding: 10px 18px 12px;
   display: flex;
   align-items: center;
   gap: var(--app-space-2);
-  border-top: 1px solid var(--app-border);
-  background: color-mix(in srgb, var(--app-primary-tint) 45%, var(--app-card));
+  border-top: 1px solid #cfe0f5;
+  background: linear-gradient(180deg, #f5f9ff 0%, #f8fbff 100%);
 }
 
 .workspace-topbar__meta::before {

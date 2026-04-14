@@ -45,6 +45,12 @@ const currentNavTree = computed<AppNavItem[]>(() => {
   return [];
 });
 
+const studentNavItems = computed<AppNavItem[]>(() =>
+  routeGroup.value === "student"
+    ? currentNavTree.value.flatMap((section) => section.children ?? [])
+    : [],
+);
+
 function parseTarget(target: string) {
   const [path, rawQuery] = target.split("?");
   const query: Record<string, string> = {};
@@ -182,6 +188,9 @@ function goBackToMain() {
       'pro-shell--auth': isAuthPage,
       'pro-shell--standalone': isStandaloneWorkspace,
       'pro-shell--collapsed': sidebarCollapsed,
+      'pro-shell--student': routeGroup === 'student',
+      'pro-shell--teacher': routeGroup === 'teacher',
+      'pro-shell--admin': routeGroup === 'admin',
     }"
   >
     <template v-if="isStandaloneWorkspace">
@@ -202,6 +211,66 @@ function goBackToMain() {
           </transition>
         </router-view>
       </main>
+    </template>
+
+    <template v-else-if="routeGroup === 'student'">
+      <section class="student-shell">
+        <header class="student-shell__header">
+          <div class="student-shell__brand" @click="router.push('/student/dashboard')">
+            <div class="student-shell__logo">DA</div>
+            <div class="student-shell__brand-copy">
+              <strong>动态评价系统</strong>
+              <span>Student Learning Space</span>
+            </div>
+          </div>
+
+          <nav class="student-shell__nav">
+            <button
+              v-for="item in studentNavItems"
+              :key="item.key"
+              class="student-shell__nav-item"
+              :class="{ active: activeNavKey === item.key }"
+              @click="navigateTo(item.path)"
+            >
+              {{ item.label }}
+            </button>
+          </nav>
+
+          <div class="student-shell__actions">
+            <div class="pro-role-chip">
+              <span class="pro-role-chip__dot"></span>
+              <span>{{ roleLabel }}</span>
+            </div>
+
+            <el-tooltip v-if="canReturnToAdmin" content="返回管理员端" placement="bottom">
+              <button class="pro-icon-btn" @click="returnToAdmin">
+                <el-icon><ArrowLeft /></el-icon>
+              </button>
+            </el-tooltip>
+
+            <el-tooltip content="账号菜单" placement="bottom">
+              <el-dropdown trigger="click">
+                <button class="pro-icon-btn">
+                  <el-icon><User /></el-icon>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item @click="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </el-tooltip>
+          </div>
+        </header>
+
+        <main class="student-shell__content">
+          <router-view v-slot="{ Component }">
+            <transition name="page-fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </main>
+      </section>
     </template>
 
     <template v-else>
@@ -242,6 +311,7 @@ function goBackToMain() {
               <el-icon><component :is="currentTitleIcon" /></el-icon>
             </div>
             <div class="pro-header__title">
+              <span>{{ pageSection }}</span>
               <strong>{{ pageTitle }}</strong>
             </div>
           </div>
@@ -302,6 +372,27 @@ function goBackToMain() {
   background: var(--app-gradient-page);
 }
 
+.pro-shell--student {
+  background:
+    radial-gradient(circle at top left, rgba(180, 224, 255, 0.26), transparent 20%),
+    radial-gradient(circle at bottom right, rgba(178, 232, 220, 0.18), transparent 22%),
+    #f9f1e8;
+}
+
+.pro-shell--teacher {
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 22%),
+    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.08), transparent 18%),
+    linear-gradient(180deg, #eef4ff 0%, #f7faff 100%);
+}
+
+.pro-shell--admin {
+  background:
+    radial-gradient(circle at top left, rgba(124, 58, 237, 0.12), transparent 22%),
+    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.1), transparent 18%),
+    linear-gradient(180deg, #f5f3ff 0%, #faf7ff 100%);
+}
+
 .pro-shell--standalone {
   min-height: 100dvh;
   max-height: 100dvh;
@@ -313,6 +404,96 @@ function goBackToMain() {
   min-height: 100vh;
 }
 
+.student-shell {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 18px 18px 28px;
+}
+
+.student-shell__header {
+  position: sticky;
+  top: 14px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 18px;
+  border-radius: 28px;
+  background: rgba(255, 253, 249, 0.92);
+  border: 3px solid #1f2937;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+}
+
+.student-shell__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.student-shell__logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: #ffd8cf;
+  border: 1.5px solid #c6d8ef;
+  font-family: "Fredoka", "Nunito", sans-serif;
+  font-weight: 700;
+  color: #1d2433;
+}
+
+.student-shell__brand-copy {
+  display: grid;
+}
+
+.student-shell__brand-copy strong {
+  color: #1d2433;
+  font-family: "Fredoka", "Nunito", sans-serif;
+  font-size: 16px;
+}
+
+.student-shell__brand-copy span {
+  color: #6d7483;
+  font-size: 11px;
+}
+
+.student-shell__nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.student-shell__nav-item {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1.5px solid #c6d8ef;
+  background: #ffffff;
+  font: inherit;
+  font-weight: 800;
+  color: #445f7e;
+  cursor: pointer;
+}
+
+.student-shell__nav-item.active {
+  background: #eaf8d3;
+  color: #16355c;
+}
+
+.student-shell__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.student-shell__content {
+  padding-top: 20px;
+}
+
 .pro-standalone {
   height: 100dvh;
   overflow: hidden;
@@ -320,19 +501,48 @@ function goBackToMain() {
 
 .pro-sider {
   position: fixed;
-  inset: 0 auto 0 0;
+  inset: 14px auto 14px 14px;
   width: 220px;
   display: flex;
   flex-direction: column;
   padding: 18px 14px;
   background:
-    radial-gradient(circle at top left, rgba(111, 182, 255, 0.26), transparent 22%),
-    radial-gradient(circle at bottom left, rgba(88, 146, 255, 0.14), transparent 28%),
-    linear-gradient(180deg, #10233a 0%, #173451 54%, #21486d 100%);
-  color: #d7e4f5;
-  box-shadow: 18px 0 40px rgba(15, 34, 62, 0.16);
+    radial-gradient(circle at top left, rgba(96, 165, 250, 0.24), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(34, 197, 94, 0.14), transparent 28%),
+    linear-gradient(180deg, #0f1f40 0%, #173269 54%, #1d4d8f 100%);
+  color: #d9e6fb;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  box-shadow: 0 24px 54px rgba(15, 23, 42, 0.2);
   z-index: 1100;
-  transition: width 0.22s ease;
+  transition: width 0.22s ease, inset 0.22s ease;
+}
+
+.pro-shell--student .pro-sider {
+  background: #fffdf9;
+  color: #1d2433;
+  border: 2px solid #1d2433;
+  box-shadow: 8px 8px 0 #1d2433;
+}
+
+.pro-shell--student .pro-brand {
+  border-bottom-color: rgba(29, 36, 51, 0.12);
+}
+
+.pro-shell--student .pro-brand__logo {
+  background: #ffd8cf;
+  color: #1d2433;
+  border: 1.5px solid #1d2433;
+  box-shadow: 4px 4px 0 #1d2433;
+}
+
+.pro-shell--student .pro-brand__text strong {
+  color: #1d2433;
+  font-family: "Fredoka", "Nunito", sans-serif;
+}
+
+.pro-shell--student .pro-brand__text span {
+  color: #6d7483;
 }
 
 .pro-shell--collapsed .pro-sider {
@@ -343,22 +553,22 @@ function goBackToMain() {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 10px 18px;
-  margin-bottom: 16px;
+  padding: 10px 10px 18px;
+  margin-bottom: 18px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .pro-brand__logo {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #4a84ff 0%, #6bc5ff 100%);
-  color: #fff;
+  background: linear-gradient(135deg, #ffffff 0%, #dbeafe 100%);
+  color: var(--app-primary-deep);
   font-weight: 800;
-  box-shadow: 0 16px 28px rgba(74, 132, 255, 0.28);
+  box-shadow: 0 18px 28px rgba(15, 23, 42, 0.18);
 }
 
 .pro-brand__text {
@@ -367,13 +577,13 @@ function goBackToMain() {
 }
 
 .pro-brand__text strong {
-  font-size: 16px;
+  font-size: 17px;
   color: #fff;
 }
 
 .pro-brand__text span {
   font-size: 12px;
-  color: rgba(215, 228, 245, 0.72);
+  color: rgba(217, 230, 251, 0.72);
 }
 
 .pro-menu {
@@ -386,7 +596,7 @@ function goBackToMain() {
 .pro-menu__section {
   display: grid;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
   padding: 0;
   border-radius: 0;
   background: transparent;
@@ -401,11 +611,11 @@ function goBackToMain() {
 }
 
 .pro-menu__item {
-  min-height: 42px;
+  min-height: 44px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 16px;
   background: transparent;
-  color: rgba(215, 228, 245, 0.82);
+  color: rgba(217, 230, 251, 0.84);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -415,26 +625,47 @@ function goBackToMain() {
   color: #fff;
 }
 
+.pro-shell--student .pro-menu__item {
+  color: #465064;
+}
+
+.pro-shell--student .pro-menu__item:hover {
+  background: #dff3ff;
+  color: #1d2433;
+}
+
 .pro-menu__item.active {
-  background: linear-gradient(90deg, rgba(74, 132, 255, 0.28) 0%, rgba(107, 197, 255, 0.18) 100%);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0%, rgba(96, 165, 250, 0.22) 100%);
   color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(162, 205, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.26);
+}
+
+.pro-shell--student .pro-menu__item.active {
+  background: #c8f7bb;
+  color: #1d2433;
+  box-shadow: inset 0 0 0 1.5px #1d2433;
 }
 
 .pro-menu__item--child {
   width: calc(100% - 28px);
-  min-height: 44px;
-  padding: 0 12px;
+  min-height: 46px;
+  padding: 0 14px;
   font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  border-radius: 14px;
+  font-weight: 700;
+  text-align: left;
+  border-radius: 16px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 10px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pro-shell--student .pro-menu__item--child {
+  background: #ffffff;
+  border: 1.5px solid #1d2433;
+  box-shadow: 3px 3px 0 #1d2433;
 }
 
 .pro-menu__icon {
@@ -448,29 +679,46 @@ function goBackToMain() {
 
 .pro-main {
   min-height: 100vh;
-  margin-left: 220px;
+  margin-left: 248px;
   display: flex;
   flex-direction: column;
   transition: margin-left 0.22s ease;
 }
 
 .pro-shell--collapsed .pro-main {
-  margin-left: 88px;
+  margin-left: 116px;
 }
 
 .pro-header {
   position: sticky;
-  top: 0;
+  top: 14px;
   z-index: 1000;
-  height: 72px;
+  min-height: 78px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 251, 255, 0.94) 100%);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(211, 223, 242, 0.9);
-  box-shadow: 0 8px 24px rgba(87, 116, 166, 0.07);
+  margin: 14px 14px 0 0;
+  padding: 14px 22px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(203, 215, 235, 0.84);
+  border-radius: 24px;
+  box-shadow: var(--app-shadow);
+}
+
+.pro-shell--student .pro-header {
+  background: rgba(255, 253, 249, 0.92);
+  border: 2px solid #1d2433;
+  box-shadow: 8px 8px 0 #1d2433;
+}
+
+.pro-shell--teacher .pro-header {
+  border-color: rgba(147, 197, 253, 0.9);
+}
+
+.pro-shell--admin .pro-header {
+  border-color: rgba(196, 181, 253, 0.9);
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .pro-header__left,
@@ -482,38 +730,78 @@ function goBackToMain() {
 
 .pro-header__title {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.pro-header__title span {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-eyebrow);
+}
+
+.pro-shell--student .pro-header__title span,
+.pro-shell--student .pro-header__title strong {
+  font-family: "Fredoka", "Nunito", sans-serif;
 }
 
 .pro-header__title strong {
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.2;
   color: #1f2d3d;
 }
 
 .pro-header__badge {
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 18px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(204, 220, 245, 0.95);
-  background: linear-gradient(135deg, rgba(72, 127, 245, 0.12) 0%, rgba(111, 193, 255, 0.14) 100%);
-  color: #3268da;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(191, 219, 254, 0.95);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14) 0%, rgba(56, 189, 248, 0.16) 100%);
+  color: var(--app-primary-deep);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.pro-shell--student .pro-header__badge {
+  border: 1.5px solid #1d2433;
+  background: #dff3ff;
+  color: #1d2433;
+  box-shadow: 3px 3px 0 #1d2433;
+}
+
+.pro-shell--admin .pro-header__badge {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.14) 0%, rgba(167, 139, 250, 0.16) 100%);
+  color: #6d28d9;
 }
 
 .pro-icon-btn {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(211, 223, 242, 0.95);
+  border-radius: 14px;
+  border: 1px solid rgba(203, 215, 235, 0.95);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.98) 100%);
   color: #526274;
   display: grid;
   place-items: center;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.pro-shell--student .pro-icon-btn {
+  border: 1.5px solid #1d2433;
+  background: #ffffff;
+  color: #1d2433;
+  box-shadow: 3px 3px 0 #1d2433;
+}
+
+.pro-shell--student .pro-icon-btn:hover {
+  background: #dff3ff;
+  color: #1d2433;
 }
 
 .pro-icon-btn:hover {
@@ -526,7 +814,7 @@ function goBackToMain() {
   min-height: 38px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid rgba(211, 223, 242, 0.95);
+  border: 1px solid rgba(203, 215, 235, 0.95);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.98) 100%);
   display: inline-flex;
   align-items: center;
@@ -536,20 +824,38 @@ function goBackToMain() {
   color: #4f6278;
 }
 
+.pro-shell--student .pro-role-chip {
+  border: 1.5px solid #1d2433;
+  background: #ffffff;
+  color: #1d2433;
+  box-shadow: 3px 3px 0 #1d2433;
+}
+
+.pro-shell--admin .pro-role-chip__dot {
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  box-shadow: 0 0 0 5px rgba(124, 58, 237, 0.12);
+}
+
 .pro-role-chip__dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #4a84ff 0%, #6bc5ff 100%);
-  box-shadow: 0 0 0 5px rgba(74, 132, 255, 0.12);
+  background: linear-gradient(135deg, #2563eb 0%, #22c55e 100%);
+  box-shadow: 0 0 0 5px rgba(37, 99, 235, 0.12);
 }
 
 .pro-content {
   flex: 1;
   min-height: 0;
-  padding: 24px;
+  padding: 24px 14px 24px 0;
   overflow: auto;
   background: radial-gradient(circle at top right, rgba(111, 193, 255, 0.08), transparent 24%), transparent;
+}
+
+.pro-shell--student .pro-content {
+  background:
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.42), transparent 26%),
+    transparent;
 }
 
 .pro-standalone-back {
@@ -588,11 +894,12 @@ function goBackToMain() {
 
 @media (max-width: 1100px) {
   .pro-sider {
+    inset: 12px auto 12px 12px;
     width: 88px;
   }
 
   .pro-main {
-    margin-left: 88px;
+    margin-left: 116px;
   }
 
   .pro-brand__text,
@@ -603,16 +910,35 @@ function goBackToMain() {
 }
 
 @media (max-width: 760px) {
+  .student-shell {
+    padding: 12px 12px 24px;
+  }
+
+  .student-shell__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .student-shell__nav,
+  .student-shell__actions {
+    width: 100%;
+  }
+
+  .pro-sider {
+    inset: 12px auto 12px 12px;
+  }
+
   .pro-header {
     height: auto;
     min-height: 72px;
+    margin: 12px 12px 0 0;
     padding: 14px 16px;
     align-items: flex-start;
     flex-direction: column;
   }
 
   .pro-content {
-    padding: 16px;
+    padding: 16px 12px 16px 0;
   }
 }
 </style>

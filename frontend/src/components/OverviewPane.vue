@@ -186,7 +186,7 @@ watch(
 </script>
 
 <template>
-  <el-card class="panel-card">
+  <el-card class="panel-card overview-shell" shadow="never">
     <template #header>
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
         <div>
@@ -531,6 +531,51 @@ watch(
 </template>
 
 <style scoped>
+.overview-shell {
+  overflow: hidden;
+  border-radius: 28px;
+  border: 2px solid #1f2937;
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
+}
+
+.overview-shell :deep(.el-card__header) {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #cfe0f5;
+  background: linear-gradient(180deg, #f5f9ff 0%, #f8fbff 100%);
+}
+
+.overview-shell :deep(.el-card__body) {
+  padding: 16px;
+}
+
+.overview-shell :deep(.el-radio-button__inner) {
+  border-radius: 999px;
+  border: 1.5px solid #c6d8ef;
+  background: #f8fbff;
+  color: #4c6787;
+  padding: 6px 12px;
+}
+
+.overview-shell :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: #e8f1ff;
+  border-color: #96b6e2;
+  color: #1f3a5c;
+  box-shadow: 0 8px 14px rgba(31, 41, 55, 0.08);
+}
+
+.overview-shell :deep(.el-button) {
+  border-radius: 999px !important;
+  border: 1.5px solid #c6d8ef !important;
+}
+
+.overview-shell :deep(.el-card) {
+  border-radius: 22px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
 .overview-tip-inline {
   display: inline-flex;
   align-items: center;

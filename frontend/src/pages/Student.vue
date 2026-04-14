@@ -438,21 +438,21 @@ onMounted(async () => {
               </header>
               <div class="quick-actions">
                 <button class="action-card primary" @click="openGraphWorkspace" :disabled="!kps.length">
-                  <div class="action-icon">🧭</div>
+                  <div class="action-icon">图谱</div>
                   <div class="action-text">
                     <strong>进入知识图谱学习页</strong>
                     <span>跳转新页面，查看图谱关系、掌握度与学习入口</span>
                   </div>
                 </button>
                 <button class="action-card" @click="router.push({ path: '/student/report', query: studentQuery({ subject: subject || undefined }) })">
-                  <div class="action-icon">📊</div>
+                  <div class="action-icon">报告</div>
                   <div class="action-text">
                     <strong>学习报告</strong>
                     <span>进度与能力画像</span>
                   </div>
                 </button>
                 <button class="action-card" @click="router.push({ path: '/student/questionnaire', query: studentQuery({ subject: subject || undefined }) })">
-                  <div class="action-icon">📝</div>
+                  <div class="action-icon">问卷</div>
                   <div class="action-text">
                     <strong>填写问卷</strong>
                     <span>反馈用于优化推荐</span>
@@ -562,10 +562,10 @@ onMounted(async () => {
   flex-shrink: 0;
   margin-bottom: 16px;
   padding: 14px 16px;
-  border-radius: var(--app-radius);
-  border: 1px solid var(--app-border);
-  background: #fffbf5;
-  box-shadow: var(--app-shadow-soft);
+  border-radius: 28px;
+  border: 2px solid #1f2937;
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
 }
 .student-ability-strip__head {
   display: grid;
@@ -601,10 +601,10 @@ onMounted(async () => {
   flex-shrink: 0;
   margin-bottom: 16px;
   padding: 16px 18px;
-  border-radius: var(--app-radius);
-  border: 1px solid var(--app-border);
-  background: color-mix(in srgb, var(--app-primary-soft) 40%, var(--app-card));
-  box-shadow: var(--app-shadow-soft);
+  border-radius: 28px;
+  border: 2px solid #1f2937;
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
 }
 .student-persona-card__head {
   display: flex;
@@ -619,7 +619,7 @@ onMounted(async () => {
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--app-eyebrow);
+  color: #16355c;
 }
 .student-persona-card__intro,
 .student-persona-card__reason {
@@ -630,9 +630,9 @@ onMounted(async () => {
 }
 .student-persona-card__reason {
   padding: 10px 12px;
-  border-radius: var(--app-radius-sm);
-  background: var(--app-card);
-  border: 1px solid var(--app-border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
   color: var(--app-ink);
 }
 .student-breakdown-mini {
@@ -736,31 +736,44 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: var(--app-space-3);
-  padding: var(--app-space-3);
-  border-radius: var(--app-radius-sm);
-  border: 1px solid var(--app-border);
-  background: var(--app-card);
+  padding: 18px 20px;
+  border-radius: 24px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   cursor: pointer;
   transition: border-color var(--app-duration) var(--app-ease-out),
     background var(--app-duration) var(--app-ease-out),
     transform var(--app-duration) var(--app-ease-out);
   text-align: left;
-  box-shadow: var(--app-shadow-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .action-card:hover:not(:disabled) {
-  border-color: var(--app-primary);
-  background: var(--app-bg);
-  transform: translateX(4px);
+  border-color: #96b6e2;
+  background: #eef5ff;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 18px rgba(31, 41, 55, 0.08);
 }
 
 .action-card.primary {
-  background: linear-gradient(135deg, var(--app-primary-soft) 0%, color-mix(in srgb, var(--app-primary) 14%, white) 100%);
-  border-color: color-mix(in srgb, var(--app-primary) 35%, var(--app-border-hover));
+  border-color: #96b6e2;
+  background: linear-gradient(180deg, #eef5ff 0%, #ffffff 100%);
 }
 
 .action-icon {
-  font-size: 20px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1.5px solid #c6d8ef;
+  background: #f8fbff;
+  color: #355070;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 
 .action-text strong {
@@ -794,8 +807,9 @@ onMounted(async () => {
 
 .kp-progress-box {
   padding: 12px;
-  background: var(--app-bg);
-  border-radius: 10px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border-radius: 18px;
+  border: 1.5px solid #c6d8ef;
 }
 
 .reco-content {
@@ -818,9 +832,9 @@ onMounted(async () => {
 
 .reco-highlight {
   padding: 16px;
-  border-radius: var(--app-radius-sm);
-  border: 1px solid var(--app-border);
-  background: var(--app-bg);
+  border-radius: 20px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   flex: 1;
 }
 

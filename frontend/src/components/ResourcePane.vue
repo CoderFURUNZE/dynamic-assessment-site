@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <el-card>
+  <el-card class="resource-shell" shadow="never">
     <template #header>学习资源</template>
     <div v-if="!kpId">
       <el-text type="info">请选择知识点</el-text>
@@ -485,12 +485,55 @@ onBeforeUnmount(() => {
   gap: 16px;
 }
 
+.resource-shell {
+  overflow: hidden;
+  border-radius: 28px;
+  border: 2px solid #1f2937;
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
+}
+
+.resource-shell :deep(.el-card__header) {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #cfe0f5;
+  background: linear-gradient(180deg, #f5f9ff 0%, #f8fbff 100%);
+  font-weight: 800;
+  color: #16355c;
+}
+
+.resource-shell :deep(.el-card__body) {
+  padding: 16px;
+}
+
 .resource-pane__tabs {
   margin-bottom: 4px;
 }
 
 .resource-pane__tabs :deep(.el-tabs__header) {
   margin-bottom: 12px;
+}
+
+.resource-pane__tabs :deep(.el-tabs__nav-wrap)::after,
+.resource-pane__tabs :deep(.el-tabs__active-bar) {
+  display: none;
+}
+
+.resource-pane__tabs :deep(.el-tabs__item) {
+  min-height: 42px;
+  border-radius: 999px;
+  border: 1.5px solid #c6d8ef;
+  background: #f8fbff;
+  color: #4c6787;
+  padding: 6px 16px;
+  margin-right: 8px;
+  transition: all 0.2s ease;
+}
+
+.resource-pane__tabs :deep(.el-tabs__item.is-active) {
+  background: #e8f1ff;
+  border-color: #96b6e2;
+  color: #1f3a5c;
+  box-shadow: 0 8px 14px rgba(31, 41, 55, 0.08);
 }
 
 .resource-pane__group-list--flat {
@@ -542,20 +585,23 @@ onBeforeUnmount(() => {
 }
 
 .resource-pane__resource {
-  border: 1px solid #dce6f2;
-  border-radius: 14px;
-  background: #ffffff;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   padding: 14px;
   display: grid;
   gap: 8px;
   text-align: left;
   cursor: pointer;
   transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  min-width: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .resource-pane__resource.active {
-  border-color: #7ea7f0;
-  box-shadow: 0 10px 24px rgba(77, 116, 183, 0.12);
+  border-color: #96b6e2;
+  background: #eef5ff;
+  box-shadow: 0 10px 18px rgba(31, 41, 55, 0.08);
   transform: translateY(-1px);
 }
 
@@ -571,6 +617,7 @@ onBeforeUnmount(() => {
 .resource-pane__resource strong {
   color: #223654;
   font-size: 15px;
+  overflow-wrap: anywhere;
 }
 
 .resource-pane__resource p {
@@ -581,10 +628,12 @@ onBeforeUnmount(() => {
 }
 
 .resource-pane__preview {
-  border: 1px solid var(--app-border);
-  border-radius: 18px;
-  background: #ffffff;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   padding: 16px;
+  min-width: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .resource-tip-inline {

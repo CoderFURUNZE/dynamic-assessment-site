@@ -24,10 +24,10 @@ import AdminIntroHero from "../components/AdminIntroHero.vue";
 }
 
 .admin-dashboard-page__panel {
-  padding: 24px;
-  border-radius: 24px;
-  background: #fff;
+  padding: 26px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid #e3ebf5;
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--app-shadow);
 }
 </style>

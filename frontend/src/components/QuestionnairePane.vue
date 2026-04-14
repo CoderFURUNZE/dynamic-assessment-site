@@ -308,11 +308,30 @@ watch(
 </template>
 
 <style scoped>
+.questionnaire-pane {
+  overflow: hidden;
+  border-radius: 28px;
+  border: 2px solid #1f2937;
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
+}
+
+.questionnaire-pane :deep(.el-card__header) {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #cfe0f5;
+  background: linear-gradient(180deg, #f5f9ff 0%, #f8fbff 100%);
+}
+
+.questionnaire-pane :deep(.el-card__body) {
+  padding: 16px;
+}
+
 .questionnaire-pane__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .questionnaire-pane__title {
@@ -352,27 +371,33 @@ watch(
 }
 
 .questionnaire-summary {
-  border: 1px solid #dce6f2;
-  border-radius: 16px;
-  padding: 12px;
-  background: #f7fbff;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 22px;
+  padding: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   display: grid;
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .questionnaire-summary__cards {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+  min-width: 0;
 }
 
 .questionnaire-summary__card {
-  border: 1px solid #e1eaf4;
-  border-radius: 12px;
-  background: #fff;
-  padding: 10px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  padding: 12px 14px;
   display: grid;
   gap: 4px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .questionnaire-summary__card span {
@@ -383,13 +408,17 @@ watch(
 .questionnaire-summary__card strong {
   font-size: 16px;
   color: #2a456b;
+  overflow-wrap: anywhere;
 }
 
 .questionnaire-summary__chart {
-  border: 1px solid #e1eaf4;
-  border-radius: 12px;
-  background: #fff;
-  padding: 10px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  padding: 12px 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .questionnaire-summary__title {
@@ -436,10 +465,13 @@ watch(
 }
 
 .questionnaire-group {
-  border: 1px solid var(--app-border);
-  border-radius: 16px;
-  padding: 12px;
-  background: #fcfdff;
+  border: 2px solid #1f2937;
+  border-radius: 26px;
+  padding: 16px;
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .questionnaire-group__title {
@@ -455,12 +487,15 @@ watch(
 }
 
 .questionnaire-item {
-  border: 1px solid var(--app-border);
-  border-radius: 14px;
-  padding: 10px;
-  background: #fff;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 20px;
+  padding: 12px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   display: grid;
   gap: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .questionnaire-item__head {
@@ -470,6 +505,11 @@ watch(
   gap: 10px;
   color: #476182;
   font-size: 12px;
+  min-width: 0;
+}
+
+.questionnaire-item__head strong {
+  overflow-wrap: anywhere;
 }
 
 .questionnaire-item__question-title {
@@ -484,17 +524,21 @@ watch(
 }
 
 .question-row {
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
-  padding: 8px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 16px;
+  padding: 10px;
   display: grid;
   gap: 6px;
-  background: #fcfdff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .question-row__text {
   font-size: 12px;
   color: #2d486d;
+  overflow-wrap: anywhere;
 }
 
 .questionnaire-item__score-row {
@@ -515,6 +559,36 @@ watch(
 .questionnaire-pane__actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.questionnaire-pane :deep(.el-radio-group) {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.questionnaire-pane :deep(.el-radio-button__inner) {
+  border-radius: 999px;
+  border: 1.5px solid #c6d8ef;
+  background: #f8fbff;
+  color: #4f6988;
+  font-size: 12px;
+  padding: 6px 12px;
+  transition: all 0.2s ease;
+}
+
+.questionnaire-pane :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: #e8f1ff;
+  border-color: #96b6e2;
+  color: #1f3a5c;
+  box-shadow: 0 6px 10px rgba(31, 41, 55, 0.08);
+}
+
+.questionnaire-pane :deep(.el-textarea__inner) {
+  border-radius: 16px;
+  border: 1.5px solid #c6d8ef;
+  background: #f8fbff;
+  color: #1f2937;
+  box-shadow: none;
 }
 
 @media (max-width: 1100px) {

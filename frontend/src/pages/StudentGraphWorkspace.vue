@@ -314,12 +314,14 @@ onMounted(refreshWorkspace);
       </div>
     </section>
 
-    <section class="graph-page__overview">
-      <article v-for="item in graphOverviewCards" :key="item.label" class="graph-page__overview-card">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <small>{{ item.hint }}</small>
-      </article>
+    <section class="graph-page__overview-shell">
+      <div class="graph-page__overview">
+        <article v-for="item in graphOverviewCards" :key="item.label" class="graph-page__overview-card">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <small>{{ item.hint }}</small>
+        </article>
+      </div>
     </section>
 
     <section class="graph-page__content">
@@ -391,66 +393,85 @@ onMounted(refreshWorkspace);
 .graph-page {
   min-height: calc(100dvh - 96px);
   display: grid;
-  gap: 14px;
+  gap: 16px;
+  min-width: 0;
 }
 
 .graph-page__toolbar,
+.graph-page__overview-shell,
 .graph-page__workspace,
 .graph-page__overview-card,
 .graph-page__side-panel {
-  border-radius: 24px;
-  border: 1px solid color-mix(in srgb, var(--app-primary) 14%, var(--app-border));
-  background: #ffffff;
-  box-shadow: var(--app-shadow-soft);
+  border-radius: 32px;
+  border: 3px solid #1f2937;
+  background: #fffdf8;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .graph-page__toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 14px 18px;
-  background: #ffffff;
+  gap: 18px;
+  padding: 24px 26px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.32), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
 }
 
 .graph-page__toolbar-copy {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   max-width: 60ch;
+  min-width: 0;
 }
 
 .graph-page__eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #d7f9a8;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #5a7db7;
+  color: #1f2937;
 }
 
 .graph-page__toolbar-copy h1 {
   margin: 0;
-  font-size: clamp(22px, 3vw, 30px);
-  line-height: 1.1;
-  color: #11284a;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  color: #16355c;
+  overflow-wrap: anywhere;
 }
 
 .graph-page__toolbar-copy p {
   margin: 0;
   color: #60758f;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
 .graph-page__toolbar-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 14px;
+  min-width: 0;
 }
 
 .graph-page__toolbar-meta span {
   font-size: 12px;
-  font-weight: 700;
-  color: #60758f;
+  font-weight: 800;
+  color: #46617f;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #f5f9ff;
+  border: 1.5px solid #cfe0f5;
 }
 
 .graph-page__toolbar-actions {
@@ -458,17 +479,19 @@ onMounted(refreshWorkspace);
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .graph-page__select {
   width: 240px;
+  max-width: 100%;
 }
 
 .graph-page__toolbar-actions :deep(.el-select__wrapper) {
-  min-height: 42px;
+  min-height: 48px;
   border-radius: 18px !important;
-  background: #ffffff !important;
-  box-shadow: 0 0 0 1px #d7e4f5 inset !important;
+  background: #f8fbff !important;
+  box-shadow: 0 0 0 1.5px #c6d8ef inset !important;
 }
 
 .graph-page__toolbar-actions :deep(.el-select__wrapper.is-focused) {
@@ -483,47 +506,71 @@ onMounted(refreshWorkspace);
 
 .graph-page__toolbar-btn {
   min-width: 118px;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 20px;
   border-radius: 999px;
-  border: 1px solid #d7e4f5;
+  border: 2px solid #c6d8ef;
   background: #ffffff;
   color: #274263;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  box-shadow: 0 6px 16px rgba(31, 41, 55, 0.06);
 }
 
 .graph-page__toolbar-btn:hover,
 .graph-page__toolbar-btn:focus-visible {
+  transform: translateY(-1px);
   border-color: #9fbef3;
   background: #f8fbff;
   color: #214d8f;
 }
 
 .graph-page__toolbar-btn--primary {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: #ffffff;
+  background: linear-gradient(135deg, #eaf8d3 0%, #ffffff 100%);
+  border-color: #c6d8ef;
+  color: #16355c;
 }
 
 .graph-page__toolbar-btn--primary:hover,
 .graph-page__toolbar-btn--primary:focus-visible {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #ffffff;
+  background: linear-gradient(135deg, #dff3c6 0%, #f7fbff 100%);
+  border-color: #bfd4ef;
+  color: #16355c;
 }
 
 .graph-page__overview {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+  min-width: 0;
+}
+
+.graph-page__overview-shell {
+  padding: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.24), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
 }
 
 .graph-page__overview-card {
   display: grid;
   gap: 8px;
-  padding: 16px 18px;
+  padding: 18px 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1.5px solid #c6d8ef;
+  border-radius: 24px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.graph-page__overview-card:hover {
+  transform: translateY(-2px);
+  border-color: #9fbef3;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 12px 22px rgba(31, 41, 55, 0.08);
 }
 
 .graph-page__overview-card span,
@@ -539,6 +586,7 @@ onMounted(refreshWorkspace);
   font-size: 24px;
   line-height: 1.1;
   color: #0f172a;
+  overflow-wrap: anywhere;
 }
 
 .graph-page__overview-card small {
@@ -550,15 +598,19 @@ onMounted(refreshWorkspace);
 .graph-page__content {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 16px;
+  gap: 18px;
   align-items: start;
+  min-width: 0;
 }
 
 .graph-page__workspace {
   overflow: hidden;
   min-height: min(82vh, 1000px);
-  padding: 10px;
-  background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
+  padding: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.24), transparent 24%),
+    linear-gradient(180deg, #f9fbff 0%, #f4f8fd 100%);
+  min-width: 0;
 }
 
 .graph-page__side {
@@ -568,9 +620,12 @@ onMounted(refreshWorkspace);
 .graph-page__side-panel {
   display: grid;
   gap: 16px;
-  padding: 18px;
+  padding: 20px;
   position: sticky;
   top: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.24), transparent 24%),
+    linear-gradient(180deg, #fffdfb 0%, #fbfdff 100%);
 }
 
 .graph-page__side-head {
@@ -583,8 +638,10 @@ onMounted(refreshWorkspace);
   width: fit-content;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(79, 140, 255, 0.1);
-  color: #3566b8;
+  background: #eef5ff;
+  color: #355070;
+  border: 1.5px solid #cfe0f5;
+  font-weight: 800;
 }
 
 .graph-page__side-head h3 {
@@ -592,6 +649,7 @@ onMounted(refreshWorkspace);
   font-size: 24px;
   line-height: 1.25;
   color: #0f172a;
+  overflow-wrap: anywhere;
 }
 
 .graph-page__side-head p,
@@ -605,11 +663,13 @@ onMounted(refreshWorkspace);
 
 .graph-page__focus-card {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   padding: 18px;
-  border-radius: 20px;
-  border: 1px solid color-mix(in srgb, var(--app-primary) 18%, var(--app-border));
+  border-radius: 24px;
+  border: 1.5px solid #c6d8ef;
   background: linear-gradient(135deg, #eef4ff 0%, #ffffff 100%);
+  min-width: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .graph-page__focus-card strong,
@@ -617,6 +677,7 @@ onMounted(refreshWorkspace);
   font-size: 18px;
   line-height: 1.4;
   color: #0f172a;
+  overflow-wrap: anywhere;
 }
 
 .graph-page__focus-code {
@@ -625,7 +686,7 @@ onMounted(refreshWorkspace);
   padding: 6px 12px;
   border-radius: 999px;
   background: #ffffff;
-  border: 1px solid #dce7f5;
+  border: 1px solid #cfe0f5;
 }
 
 .graph-page__side-list {
@@ -637,9 +698,20 @@ onMounted(refreshWorkspace);
   display: grid;
   gap: 6px;
   padding: 16px 18px;
-  border-radius: 18px;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
+  border-radius: 22px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  min-width: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.graph-page__side-item:hover {
+  transform: translateY(-2px);
+  border-color: #9fbef3;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 12px 22px rgba(31, 41, 55, 0.08);
 }
 
 .graph-page__side-actions {
@@ -650,19 +722,27 @@ onMounted(refreshWorkspace);
 .graph-page__side-btn {
   min-height: 42px;
   padding: 0 18px;
-  border-radius: 12px;
-  border: 1px solid #d7e4f5;
+  border-radius: 999px;
+  border: 2px solid #c6d8ef;
   background: #ffffff;
   color: #274263;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  box-shadow: 0 6px 16px rgba(31, 41, 55, 0.06);
 }
 
 .graph-page__side-btn--primary {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: #ffffff;
+  background: linear-gradient(135deg, #eaf8d3 0%, #ffffff 100%);
+  border-color: #c6d8ef;
+  color: #16355c;
+}
+
+.graph-page__side-btn:hover,
+.graph-page__side-btn:focus-visible {
+  transform: translateY(-1px);
+  border-color: #9fbef3;
 }
 
 @media (max-width: 1100px) {

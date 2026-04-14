@@ -4,6 +4,7 @@ import zhCn from "element-plus/es/locale/lang/zh-cn";
 import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import "element-plus/dist/index.css";
+import "./fonts.css";
 import "./styles.css";
 
 import App from "./App.vue";

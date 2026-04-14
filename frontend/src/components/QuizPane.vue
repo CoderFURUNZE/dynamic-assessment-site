@@ -714,10 +714,10 @@ watch(
 
 <style scoped>
 .quiz-card {
-  border-radius: var(--app-radius);
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow);
-  background: var(--app-card);
+  border-radius: 28px;
+  border: 2px solid #1f2937;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
   overflow: hidden;
 }
 
@@ -734,15 +734,20 @@ watch(
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 800;
-  color: #6d87ac;
+  color: #1f2937;
+  display: inline-flex;
+  width: fit-content;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #d7f9a8;
 }
 
 .quiz-card__title {
   margin-top: 8px;
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1.2;
   font-weight: 800;
-  color: #22395b;
+  color: #16355c;
 }
 
 .quiz-card__caption {
@@ -752,16 +757,39 @@ watch(
   color: #667d9b;
 }
 
-.el-card__header {
+.quiz-card :deep(.el-card__header) {
   font-weight: 600;
   font-size: 16px;
-  color: var(--app-ink);
-  border-bottom: 1px solid var(--app-border);
-  background: var(--app-bg-alt);
+  color: #16355c;
+  border-bottom: 1px solid #cfe0f5;
+  background: linear-gradient(180deg, #f5f9ff 0%, #f8fbff 100%);
 }
 
-.el-card__body {
+.quiz-card :deep(.el-card__body) {
   padding: 20px;
+}
+
+.quiz-card :deep(.el-tabs__nav-wrap)::after,
+.quiz-card :deep(.el-tabs__active-bar) {
+  display: none;
+}
+
+.quiz-card :deep(.el-tabs__item) {
+  min-height: 42px;
+  border-radius: 999px;
+  border: 1.5px solid #c6d8ef;
+  background: #f8fbff;
+  color: #4c6787;
+  padding: 6px 16px;
+  margin-right: 8px;
+  transition: all 0.2s ease;
+}
+
+.quiz-card :deep(.el-tabs__item.is-active) {
+  background: #e8f1ff;
+  border-color: #96b6e2;
+  color: #1f3a5c;
+  box-shadow: 0 8px 14px rgba(31, 41, 55, 0.08);
 }
 
 .empty-state {
@@ -817,9 +845,10 @@ watch(
   display: grid;
   gap: 18px;
   padding: 20px;
-  border-radius: var(--app-radius);
-  background: #ffffff;
-  border: 1px solid #dce6f4;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .wrong-practice-indicator {
@@ -863,10 +892,10 @@ watch(
 .option-item {
   margin-right: 0;
   padding: 14px 16px;
-  border-radius: 12px;
+  border-radius: 16px;
   transition: all 0.2s ease;
-  border: 1px solid #d8e3f5;
-  background: #ffffff;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   line-height: 1.6;
   width: 100%;
 }
@@ -888,9 +917,9 @@ watch(
 
 .blank-answer-wrap {
   padding: 14px;
-  border-radius: 12px;
-  border: 1px solid #d8e3f5;
-  background: #ffffff;
+  border-radius: 16px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .self-report-container {
@@ -900,9 +929,9 @@ watch(
   flex-wrap: wrap;
   margin: 4px 0;
   padding: 14px 16px;
-  border-radius: 12px;
-  background: #fbfcfe;
-  border: 1px solid #dce6f6;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
 }
 
 .self-report-label {
@@ -945,10 +974,11 @@ watch(
 }
 
 .stat-card {
-  border-radius: 14px;
-  border: 1px solid #dbe6f4;
-  background: #ffffff;
+  border-radius: 18px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   padding: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .stat-label {
@@ -969,9 +999,10 @@ watch(
 
 .section-card {
   padding: 18px;
-  border-radius: 16px;
-  border: 1px solid #dde7f4;
-  background: #ffffff;
+  border-radius: 22px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .section-header {
@@ -995,9 +1026,9 @@ watch(
   flex-wrap: wrap;
   margin-bottom: 16px;
   padding: 14px;
-  background: #fbfcfe;
-  border-radius: 12px;
-  border: 1px solid #dce6f6;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border-radius: 16px;
+  border: 1.5px solid #c6d8ef;
 }
 
 .wrong-container,
@@ -1013,9 +1044,9 @@ watch(
 
 .question-item {
   padding: 16px;
-  border-radius: 14px;
-  border: 1px solid #dde7f4;
-  background: #ffffff;
+  border-radius: 18px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .answer-info {
@@ -1025,7 +1056,7 @@ watch(
 }
 
 @media (max-width: 768px) {
-  .el-card__body {
+  .quiz-card :deep(.el-card__body) {
     padding: 16px;
   }
 

@@ -3576,38 +3576,49 @@ onBeforeUnmount(() => {
 }
 
 .workspace-shell {
-  gap: 14px;
-  padding: 16px;
-  background: linear-gradient(180deg, #f7fbff 0%, #eef4fb 100%);
+  gap: 16px;
+  padding: 12px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.18), transparent 24%),
+    linear-gradient(180deg, #fffdf8 0%, #f4f8fd 100%);
 }
 
 .workspace-header,
 .workspace-sidebar,
 .workspace-stage,
 .workspace-drawer {
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #dbe5f1;
-  box-shadow: var(--app-shadow-soft);
+  background: rgba(255, 255, 255, 0.96);
+  border: 2px solid #1f2937;
+  box-shadow: 6px 6px 0 rgba(31, 41, 55, 0.1);
 }
 
 .workspace-header {
   border-radius: 28px;
   padding: 18px 20px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.24), transparent 24%),
+    linear-gradient(180deg, #fffdf8 0%, #fbfdff 100%);
 }
 
 .workspace-sidebar {
   border-radius: 28px;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .workspace-stage {
   border-radius: 28px;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
 }
 
 .workspace-stage__top {
-  padding: 14px 16px;
+  padding: 16px 18px;
   gap: 12px;
-  background: rgba(255, 255, 255, 0.78);
-  border-bottom: 1px solid #e6eef7;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.2), transparent 24%),
+    rgba(255, 255, 255, 0.84);
+  border-bottom: 1.5px solid #d8e5f6;
 }
 
 .workspace-stage__stats,
@@ -3616,12 +3627,13 @@ onBeforeUnmount(() => {
 }
 
 .workspace-stage__pill {
-  min-height: 32px;
+  min-height: 34px;
   padding: 0 12px;
   border-radius: 999px;
   background: #f5f9ff;
-  border-color: #d8e5f6;
+  border: 1.5px solid #d8e5f6;
   color: #35507f;
+  font-weight: 800;
 }
 
 .workspace-stage__learn-btn,
@@ -3640,9 +3652,11 @@ onBeforeUnmount(() => {
 .workspace-stage__menu button {
   min-height: 34px;
   padding-inline: 12px;
-  border: 1px solid #d8e5f6;
+  border: 1.5px solid #d8e5f6;
   background: #ffffff;
   color: #35507f;
+  font-weight: 800;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .workspace-stage__learn-btn--ghost,
@@ -3656,6 +3670,16 @@ onBeforeUnmount(() => {
   border-color: var(--app-green);
   color: #ffffff;
   box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+}
+
+.workspace-stage__learn-btn:hover,
+.workspace-stage__focus-btn:hover,
+.workspace-stage__menu button:hover,
+.workspace-stage__zoom button:hover,
+.workspace-drawer__secondary:hover,
+.workspace-drawer__link-btn:hover,
+.workspace-drawer__tag:hover {
+  transform: translateY(-1px);
 }
 
 .workspace-stage__legend {
@@ -3674,16 +3698,22 @@ onBeforeUnmount(() => {
 .workspace-stage__viewport {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  background: linear-gradient(180deg, #f9fbff 0%, #f1f6fc 100%);
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.14), transparent 20%),
+    linear-gradient(180deg, #f9fbff 0%, #f1f6fc 100%);
 }
 
 .workspace-stage__empty {
   background: rgba(255, 255, 255, 0.98);
-  border-color: #dbe5f1;
+  border: 1.5px solid #dbe5f1;
+  box-shadow: 0 18px 40px rgba(31, 41, 55, 0.1);
 }
 
 .workspace-drawer {
   border-radius: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.2), transparent 24%),
+    linear-gradient(180deg, #fffdfb 0%, #fbfdff 100%);
 }
 
 .workspace-drawer__header {
@@ -3707,14 +3737,15 @@ onBeforeUnmount(() => {
   padding: 8px;
   border-radius: 18px;
   background: #f6faff;
-  border: 1px solid #dfe9f5;
+  border: 1.5px solid #dfe9f5;
 }
 
 .workspace-drawer__tab {
   min-height: 34px;
   border-radius: 12px;
-  border-color: #d8e5f6;
+  border: 1.5px solid #d8e5f6;
   background: #ffffff;
+  font-weight: 800;
 }
 
 .workspace-drawer__tab.active {
@@ -3734,17 +3765,20 @@ onBeforeUnmount(() => {
 .workspace-drawer__empty,
 .workspace-drawer__relation-tip {
   border-radius: 16px;
+  border: 1.5px solid #dbe5f1;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .workspace-drawer__metric {
-  background: #f8fbff;
-  border-color: #dbe5f1;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .workspace-drawer__tag {
   background: #edf4ff;
-  border-color: #d8e5f6;
+  border: 1.5px solid #d8e5f6;
   color: #35507f;
+  font-weight: 700;
 }
 
 .workspace-drawer__primary {
@@ -3773,12 +3807,12 @@ onBeforeUnmount(() => {
 .workspace-stage__menu,
 .workspace-zoom {
   border-radius: 18px;
-  border: 1px solid #dbe5f1;
+  border: 1.5px solid #dbe5f1;
   background: rgba(255, 255, 255, 0.94);
 }
 
 .workspace-tree__summary {
-  box-shadow: var(--app-shadow-soft);
+  box-shadow: 0 10px 20px rgba(31, 41, 55, 0.06);
 }
 
 .workspace-tree__summary.active,
@@ -3794,7 +3828,7 @@ onBeforeUnmount(() => {
 .workspace-stage__menu {
   padding: 8px;
   gap: 8px;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.1);
 }
 
 .workspace-stage__menu button {

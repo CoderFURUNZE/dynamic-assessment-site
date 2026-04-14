@@ -176,12 +176,13 @@ onMounted(load);
 }
 
 .chart-card {
-  padding: 18px 18px 14px;
-  border-radius: 20px;
+  padding: 22px 22px 18px;
+  border-radius: 24px;
   border: 1px solid #dbe5f1;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
   gap: 14px;
+  box-shadow: var(--app-shadow-sm);
 }
 
 .chart-card__head {
@@ -192,7 +193,7 @@ onMounted(load);
 }
 
 .chart-card__head strong {
-  font-size: 18px;
+  font-size: 20px;
   color: var(--app-text-main);
 }
 

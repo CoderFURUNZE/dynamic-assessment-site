@@ -32,27 +32,27 @@ defineProps<{
 
 <style scoped>
 .page-section-card {
-  padding: 18px 20px;
+  padding: 22px 24px;
 }
 
 .page-section-card__header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 16px;
   align-items: start;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
   border-bottom: 1px solid var(--app-border);
 }
 
 .page-section-card__icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
   display: grid;
   place-items: center;
   color: var(--app-primary-deep);
-  background: linear-gradient(135deg, rgba(74, 132, 255, 0.12) 0%, rgba(107, 197, 255, 0.12) 100%);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(34, 197, 94, 0.14) 100%);
   border: 1px solid color-mix(in srgb, var(--app-primary) 18%, #ffffff);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
@@ -78,7 +78,7 @@ defineProps<{
 
 .page-section-card__title {
   margin: 0;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1.2;
   font-weight: 800;
   color: var(--app-ink);
@@ -87,8 +87,8 @@ defineProps<{
 .page-section-card__description {
   margin: 0;
   max-width: 560px;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.7;
   color: var(--app-ink-soft);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -109,7 +109,7 @@ defineProps<{
 
 @media (max-width: 900px) {
   .page-section-card {
-    padding: 14px;
+    padding: 18px;
   }
 
   .page-section-card__header {
@@ -119,7 +119,7 @@ defineProps<{
   }
 
   .page-section-card__title {
-    font-size: 17px;
+    font-size: 19px;
   }
 
   .page-section-card__actions {

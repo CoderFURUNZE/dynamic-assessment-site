@@ -38,10 +38,10 @@ const emit = defineEmits<{
   align-items: flex-start;
   gap: 18px;
   padding: 20px 22px;
-  border-radius: 24px;
-  border: 1px solid #dfe7f1;
-  background: #ffffff;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  border-radius: 28px;
+  border: 3px solid #1f2937;
+  background: linear-gradient(180deg, #fff8ef 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .student-content-page__left {
@@ -53,13 +53,13 @@ const emit = defineEmits<{
 .student-content-page__back {
   border: 0;
   border-radius: 999px;
-  background: #f4f7fb;
-  color: #39506d;
+  background: #f8fbff;
+  color: #355070;
   padding: 10px 16px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  border: 1px solid var(--app-border);
+  border: 1.5px solid #c6d8ef;
   min-height: 40px;
   display: inline-flex;
   align-items: center;
@@ -81,8 +81,8 @@ const emit = defineEmits<{
   flex-wrap: wrap;
   padding: 12px 16px;
   border-radius: 999px;
-  background: #f8fbff;
-  border: 1px solid #dfe7f1;
+  background: #eef5ff;
+  border: 1.5px solid #c6d8ef;
   color: #314661;
 }
 

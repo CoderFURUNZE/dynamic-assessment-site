@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -73,7 +73,7 @@ watch(
       saveStudentSubject(subject.value);
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 const currentKp = computed(() => kps.value.find((item) => item.id === currentKpId.value) ?? null);
@@ -123,14 +123,7 @@ const nextActionText = computed(() => {
 const dashboardStats = computed(() => [
   { label: "动态评分", value: `${Math.round((profile.value?.dynamic_score || 0) * 100)}%`, hint: "综合当前学习投入与成效" },
   { label: "风险提醒", value: profile.value?.risk_level || "正常", hint: "结合近期学习状态判断" },
-  { label: "当前状态", value: masteryStageLabel.value, hint: "按当前知识点掌握度计算" },
-  {
-    label: "知识达成",
-    value: tripleSummary.value
-      ? `${tripleSummary.value.knowledge_achieved ?? 0}/${tripleSummary.value.knowledge_total ?? 0}`
-      : "--",
-    hint: "当前课程已达成的知识点数量",
-  },
+  { label: "知识达成", value: knowledgeAchievement.value, hint: "当前课程已达成的知识点数量" },
 ]);
 
 function kpStorageKey() {
@@ -148,8 +141,7 @@ function studentQuery(extra: Record<string, string | undefined> = {}) {
 
 async function loadCourses() {
   try {
-    const endpoint = "/graph/courses";
-    const data = await api.get(endpoint);
+    const data = await api.get("/graph/courses");
     courses.value = (data.data ?? []).map((item: any) => ({
       id: Number(item.id),
       code: String(item.code || ""),
@@ -172,9 +164,7 @@ async function loadKps() {
     const data = await getWithCache("/graph/kps", { subject: subject.value, grade: grade.value });
     kps.value = data ?? [];
     const saved = Number(localStorage.getItem(kpStorageKey()) || 0);
-    if (saved && kps.value.some((item) => item.id === saved)) {
-      currentKpId.value = saved;
-    }
+    if (saved && kps.value.some((item) => item.id === saved)) currentKpId.value = saved;
     if (!currentKpId.value && kps.value.length) currentKpId.value = kps.value[0].id;
   } catch (e: any) {
     kps.value = [];
@@ -198,9 +188,7 @@ async function refreshMastery() {
 async function loadProfile() {
   if (!subject.value) return;
   try {
-    const res = await api.get(
-      `/eval/profile?subject=${encodeURIComponent(subject.value)}&grade=${encodeURIComponent(grade.value)}`
-    );
+    const res = await api.get(`/eval/profile?subject=${encodeURIComponent(subject.value)}&grade=${encodeURIComponent(grade.value)}`);
     profile.value = res.data ?? null;
   } catch (e: any) {
     if (e?.response?.status === 401) return;
@@ -217,9 +205,7 @@ async function loadReco() {
     const res = await api.get(`/reco?kp_id=${currentKpId.value}`);
     reco.value = res.data ?? null;
   } catch (e: any) {
-    if (e?.response?.status !== 401) {
-      ElMessage.error(e?.response?.data?.detail ?? "获取推荐失败");
-    }
+    if (e?.response?.status !== 401) ElMessage.error(e?.response?.data?.detail ?? "获取推荐失败");
   }
 }
 
@@ -301,192 +287,135 @@ onMounted(async () => {
   <div class="edu-page student-dashboard" v-loading="!courses.length && isStudent">
     <template v-if="isStudent">
       <section class="student-dashboard__hero">
-        <div class="student-dashboard__hero-main">
-          <div class="student-dashboard__hero-copy">
-            <span class="student-dashboard__hero-eyebrow">学习中心</span>
-            <h2>{{ currentCourse?.title || subject || "学习总览" }}</h2>
-            <p>{{ currentStageSummary }}</p>
-            <div class="student-dashboard__hero-meta">
-              <span>当前知识点：{{ dashboardTaskCode }}</span>
-              <span>下一步：{{ nextActionText }}</span>
-            </div>
-          </div>
+        <div class="student-dashboard__hero-copy">
+          <span class="student-dashboard__hero-eyebrow">学习中心</span>
+          <h2>{{ currentCourse?.title || subject || "学习总览" }}</h2>
+          <p>{{ dashboardLead }}</p>
+
           <div class="student-dashboard__hero-actions">
             <el-select v-model="subject" placeholder="切换课程" @change="onCourseChange" style="width: 220px">
               <el-option v-for="c in courses" :key="c.id" :label="c.title" :value="c.title" />
             </el-select>
-            <el-button @click="openGraphWorkspace">知识图谱</el-button>
             <el-button type="primary" @click="openCurrentLearning()">继续学习</el-button>
+            <el-button @click="openGraphWorkspace">知识图谱</el-button>
+          </div>
+
+          <div class="student-dashboard__hero-meta">
+            <span>当前阶段：{{ currentStageSummary }}</span>
+            <span>当前知识点：{{ dashboardTaskCode }}</span>
+          </div>
+        </div>
+
+        <div v-if="currentKp" class="student-dashboard__hero-card">
+          <div class="student-dashboard__hero-card-top">
+            <span>{{ dashboardTaskCode }}</span>
+            <strong>{{ Math.round(mastery * 100) }}%</strong>
+          </div>
+          <h3>{{ dashboardTaskTitle }}</h3>
+          <p>{{ dashboardTaskSummary }}</p>
+          <div class="student-dashboard__progress-box">
+            <div class="student-dashboard__progress-head">
+              <span>当前掌握度</span>
+              <strong>{{ masteryStageLabel }}</strong>
+            </div>
+            <el-progress :percentage="Math.round(mastery * 100)" :stroke-width="10" />
           </div>
         </div>
       </section>
 
-      <section class="student-dashboard__main-grid">
-        <main class="student-dashboard__main-column">
-          <section class="edu-panel student-dashboard__panel student-dashboard__task-panel">
-            <header class="edu-panel__header student-dashboard__panel-header">
-              <div>
-                <span class="student-dashboard__section-eyebrow">当前学习任务</span>
-                <h2 class="edu-panel__title">先完成当前任务</h2>
-                <p class="student-dashboard__panel-note">{{ dashboardLead }}</p>
-              </div>
-              <el-tag round type="info">{{ profile?.persona_label || masteryStageLabel }}</el-tag>
-            </header>
-
-            <div v-if="currentKp" class="student-dashboard__task-card">
-              <div class="student-dashboard__task-copy">
-                <div class="student-dashboard__kp-top">
-                  <span class="student-dashboard__kp-code">{{ dashboardTaskCode }}</span>
-                  <el-tag size="small" effect="plain">{{ masteryStageLabel }}</el-tag>
-                </div>
-                <h3>{{ dashboardTaskTitle }}</h3>
-                <p>{{ dashboardTaskSummary }}</p>
-                <div class="student-dashboard__progress-box">
-                  <div class="student-dashboard__progress-head">
-                    <span>当前掌握度</span>
-                    <strong>{{ Math.round(mastery * 100) }}%</strong>
-                  </div>
-                  <el-progress :percentage="Math.round(mastery * 100)" :stroke-width="10" />
-                </div>
-              </div>
-              <div class="student-dashboard__task-actions">
-                <el-select v-model="currentKpId" @change="onKpChange" placeholder="切换知识点">
-                  <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
-                </el-select>
-                <el-button type="primary" @click="openCurrentLearning()">继续学习</el-button>
-                <el-button @click="openGraphWorkspace">查看知识图谱</el-button>
-              </div>
-            </div>
-            <el-empty v-else description="当前课程暂时没有可学习的知识点" />
-          </section>
-
-          <section class="student-dashboard__stats">
-            <article v-for="item in dashboardStats" :key="item.label" class="student-dashboard__stat-card">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-              <small>{{ item.hint }}</small>
-            </article>
-          </section>
-
-          <section class="student-dashboard__actions-grid">
-            <button class="student-dashboard__action-card student-dashboard__action-card--primary" type="button" @click="openCurrentLearning()">
-              <span>继续学习</span>
-              <strong>{{ currentKp ? currentKp.title : "进入当前知识点" }}</strong>
-              <small>优先完成当前知识点学习与练习</small>
-            </button>
-            <button class="student-dashboard__action-card" type="button" @click="openCurrentLearning(recommendedTarget?.id || null)">
-              <span>推荐学习</span>
-              <strong>{{ recommendedTarget ? recommendedTarget.title : "暂时没有推荐知识点" }}</strong>
-              <small>{{ reco?.recommendation_stage_label || "根据当前状态推荐下一步内容" }}</small>
-            </button>
-            <button class="student-dashboard__action-card" type="button" @click="openReport">
-              <span>学习报告</span>
-              <strong>查看阶段反馈与学习建议</strong>
-              <small>把当前表现和下一步建议放在一起看</small>
-            </button>
-            <button class="student-dashboard__action-card" type="button" @click="openQuestionnaire">
-              <span>补充问卷</span>
-              <strong>完善画像信息</strong>
-              <small>补充系统自动看不到的学习情况</small>
-            </button>
-          </section>
-        </main>
-
-        <aside class="student-dashboard__side-column">
-          <section class="edu-panel student-dashboard__side-panel">
-            <header class="student-dashboard__side-head">
-              <div>
-                <span class="student-dashboard__section-eyebrow">本周任务</span>
-                <h3>下一步建议</h3>
-              </div>
-            </header>
-
-            <article class="student-dashboard__side-highlight">
-              <span>当前阶段</span>
-              <strong>{{ currentStageSummary }}</strong>
-              <p>{{ profile?.persona_intro || dashboardLead }}</p>
-            </article>
-
-            <div class="student-dashboard__side-list">
-              <article class="student-dashboard__side-item">
-                <span>推荐知识点</span>
-                <strong>{{ recommendedTarget ? recommendedTarget.title : "继续完成当前学习任务" }}</strong>
-                <p>{{ reco?.reason_summary || "系统会根据当前掌握度和画像为你推荐下一步内容。" }}</p>
-              </article>
-              <article class="student-dashboard__side-item">
-                <span>知识达成</span>
-                <strong>{{ knowledgeAchievement }}</strong>
-                <p>当前课程已完成的知识点数量，可继续通过图谱查看整体进度。</p>
-              </article>
-              <article class="student-dashboard__side-item">
-                <span>关键信号</span>
-                <strong>{{ personaSignals.length }} 项</strong>
-                <p v-if="personaSignals.length">{{ personaSignals[0]?.label }}：{{ personaSignals[0]?.detail }}</p>
-                <p v-else>当前暂无额外画像信号，继续保持当前学习节奏。</p>
-              </article>
-            </div>
-          </section>
-        </aside>
+      <section class="student-dashboard__stats-shell">
+        <div class="student-dashboard__stats">
+          <article v-for="item in dashboardStats" :key="item.label" class="student-dashboard__stat-card">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <small>{{ item.hint }}</small>
+          </article>
+        </div>
       </section>
 
-      <section class="student-dashboard__quick-grid">
-        <article class="student-dashboard__quick-card">
-          <span>能力摘要</span>
-          <strong>
-            {{ tripleSummary ? `${tripleSummary.ability_achieved ?? 0}/${tripleSummary.ability_target_total ?? 0}` : "--" }}
-          </strong>
-        </article>
-        <article class="student-dashboard__quick-card">
-          <span>素养摘要</span>
-          <strong>
-            {{ tripleSummary ? `${tripleSummary.literacy_achieved ?? 0}/${tripleSummary.literacy_target_total ?? 0}` : "--" }}
-          </strong>
-        </article>
-        <article class="student-dashboard__quick-card">
-          <span>关键信号</span>
-          <strong>{{ personaSignals.length }}</strong>
-        </article>
-        <article class="student-dashboard__quick-card">
-          <span>分项评分</span>
-          <strong>{{ breakdownMini.length ? `${Math.round((profile?.dynamic_score || 0) * 100)}%` : "--" }}</strong>
-        </article>
+      <section class="student-dashboard__action-shell">
+        <div class="student-dashboard__action-strip">
+          <button class="student-dashboard__action-card student-dashboard__action-card--primary" type="button" @click="openCurrentLearning()">
+            <span>继续学习</span>
+            <strong>{{ currentKp ? currentKp.title : "进入当前知识点" }}</strong>
+            <small>优先完成当前知识点学习与练习</small>
+          </button>
+          <button class="student-dashboard__action-card" type="button" @click="openCurrentLearning(recommendedTarget?.id || null)">
+            <span>推荐内容</span>
+            <strong>{{ recommendedTarget ? recommendedTarget.title : "继续当前学习任务" }}</strong>
+            <small>{{ reco?.recommendation_stage_label || "根据当前状态推荐下一步内容" }}</small>
+          </button>
+          <button class="student-dashboard__action-card" type="button" @click="openReport">
+            <span>学习报告</span>
+            <strong>查看阶段反馈</strong>
+            <small>把当前表现和建议放在一起看</small>
+          </button>
+        </div>
+      </section>
+
+      <section class="student-dashboard__simple-grid">
+        <section class="student-dashboard__simple-panel">
+          <div class="student-dashboard__section-top">
+            <span class="student-dashboard__section-eyebrow">课程内容</span>
+            <el-select v-model="currentKpId" @change="onKpChange" placeholder="切换知识点" style="width: 220px">
+              <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
+            </el-select>
+          </div>
+
+          <div class="student-dashboard__simple-course" v-if="currentKp">
+            <h3>{{ dashboardTaskTitle }}</h3>
+            <p>{{ dashboardTaskSummary }}</p>
+            <div class="student-dashboard__simple-actions">
+              <el-button type="primary" @click="openCurrentLearning()">开始学习</el-button>
+              <el-button @click="openQuestionnaire">补充问卷</el-button>
+            </div>
+          </div>
+          <el-empty v-else description="当前课程暂时没有可学习的知识点" />
+        </section>
+
+        <section class="student-dashboard__simple-panel">
+          <div class="student-dashboard__section-top">
+            <span class="student-dashboard__section-eyebrow">学习建议</span>
+          </div>
+
+          <div class="student-dashboard__simple-list">
+            <article class="student-dashboard__simple-item">
+              <span>下一步</span>
+              <strong>{{ nextActionText }}</strong>
+              <p>{{ reco?.reason_summary || profile?.persona_intro || "系统会根据当前掌握度推荐下一步内容。" }}</p>
+            </article>
+            <article class="student-dashboard__simple-item">
+              <span>知识达成</span>
+              <strong>{{ knowledgeAchievement }}</strong>
+              <p>当前课程已完成的知识点数量。</p>
+            </article>
+            <article class="student-dashboard__simple-item">
+              <span>关键信号</span>
+              <strong>{{ personaSignals.length }} 项</strong>
+              <p v-if="personaSignals.length">{{ personaSignals[0]?.label }}：{{ personaSignals[0]?.detail }}</p>
+              <p v-else>当前暂无额外画像信号，继续保持当前学习节奏。</p>
+            </article>
+          </div>
+        </section>
       </section>
     </template>
 
-    <section v-else class="edu-panel preview-mode">
-      <div class="preview-mode__hero">
-        <div class="preview-mode__copy">
-          <span class="preview-mode__eyebrow">学生端预览</span>
-          <h2 class="edu-panel__title">先选课程，再定位知识点</h2>
-          <p>用于管理员快速查看学生端学习内容与页面状态，不影响真实学生操作。</p>
-        </div>
-
-        <div class="preview-mode__summary">
-          <article class="preview-mode__summary-card">
-            <span>当前课程</span>
-            <strong>{{ subject || "未选择" }}</strong>
-          </article>
-          <article class="preview-mode__summary-card">
-            <span>知识点数量</span>
-            <strong>{{ kps.length }}</strong>
-          </article>
-          <article class="preview-mode__summary-card">
-            <span>当前知识点</span>
-            <strong>{{ currentKp ? currentKp.title : "未选择" }}</strong>
-            <small v-if="currentKp">{{ currentKp.code }}</small>
-          </article>
-        </div>
+    <section v-else class="preview-mode">
+      <div class="preview-mode__copy">
+        <span class="student-dashboard__section-eyebrow">学生端预览</span>
+        <h2>先选课程，再定位知识点</h2>
+        <p>用于管理员快速查看学生端学习内容与页面状态，不影响真实学生操作。</p>
       </div>
 
       <div class="preview-mode__selectors">
         <div class="preview-mode__field">
-          <label class="preview-mode__label">预览课程</label>
+          <label>预览课程</label>
           <el-select v-model="subject" placeholder="请选择课程" @change="onCourseChange">
             <el-option v-for="c in courses" :key="c.id" :label="c.title" :value="c.title" />
           </el-select>
         </div>
         <div class="preview-mode__field">
-          <label class="preview-mode__label">预览知识点</label>
+          <label>预览知识点</label>
           <el-select v-model="currentKpId" placeholder="请选择知识点" @change="onKpChange">
             <el-option v-for="kp in kps" :key="kp.id" :label="`${kp.code} ${kp.title}`" :value="kp.id" />
           </el-select>
@@ -498,33 +427,39 @@ onMounted(async () => {
 
 <style scoped>
 .student-dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  display: grid;
+  gap: 18px;
+  padding: 0;
+  min-width: 0;
+}
+
+.student-dashboard__hero,
+.student-dashboard__stats-shell,
+.student-dashboard__simple-panel,
+.student-dashboard__action-shell,
+.preview-mode {
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background: #fffdf8;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .student-dashboard__hero {
   display: grid;
-  gap: 16px;
-  padding: 24px;
-  border-radius: var(--app-radius-lg);
-  border: 1px solid color-mix(in srgb, var(--app-primary) 18%, var(--app-border));
-  background: linear-gradient(135deg, #eef4ff 0%, #f5fbf7 52%, #ffffff 100%);
-  box-shadow: var(--app-shadow-soft);
-}
-
-.student-dashboard__hero-main {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 22px;
+  padding: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.4), transparent 28%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
 }
 
 .student-dashboard__hero-copy {
   display: grid;
-  gap: 8px;
-  max-width: 60ch;
+  gap: 12px;
+  min-width: 0;
 }
 
 .student-dashboard__hero-eyebrow,
@@ -533,413 +468,309 @@ onMounted(async () => {
   width: fit-content;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(79, 140, 255, 0.1);
-  color: #3566b8;
+  background: #d7f9a8;
   font-size: 12px;
   font-weight: 800;
+  color: #1f2937;
+}
+
+.student-dashboard__hero-copy h2,
+.student-dashboard__hero-card h3,
+.student-dashboard__simple-course h3,
+.student-dashboard__simple-item strong,
+.preview-mode__copy h2 {
+  margin: 0;
+  font-family: "Fredoka", "Nunito", sans-serif;
+  color: #1d2433;
 }
 
 .student-dashboard__hero-copy h2 {
-  margin: 0;
-  font-size: clamp(24px, 4vw, 34px);
-  line-height: 1.15;
-  color: var(--app-text-main);
+  font-size: clamp(34px, 4vw, 52px);
+  line-height: 1;
+  overflow-wrap: anywhere;
 }
 
-.student-dashboard__hero-copy p {
+.student-dashboard__hero-copy p,
+.student-dashboard__hero-card p,
+.student-dashboard__simple-course p,
+.student-dashboard__simple-item p,
+.preview-mode__copy p {
   margin: 0;
-  font-size: 14px;
+  color: #636b7a;
   line-height: 1.7;
-  color: var(--app-text-soft);
+}
+
+.student-dashboard__hero-actions,
+.student-dashboard__simple-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.student-dashboard__hero-actions :deep(.el-select) {
+  max-width: 100%;
 }
 
 .student-dashboard__hero-meta {
   display: flex;
+  gap: 10px;
   flex-wrap: wrap;
-  gap: 10px 14px;
+  min-width: 0;
 }
 
-.student-dashboard__hero-meta span {
+.student-dashboard__hero-meta span,
+.student-dashboard__hero-card-top span,
+.student-dashboard__hero-card-top strong {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1.5px solid #c6d8ef;
+  background: #f6faff;
   font-size: 12px;
-  color: #5f7391;
-  font-weight: 700;
+  font-weight: 800;
+  color: #29476a;
 }
 
-.student-dashboard__hero-actions {
-  display: flex;
+.student-dashboard__hero-card {
+  display: grid;
   gap: 12px;
-  flex-wrap: wrap;
+  align-content: start;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  min-width: 0;
 }
 
-.student-dashboard__stats,
-.student-dashboard__quick-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.student-dashboard__stat-card,
-.student-dashboard__quick-card {
-  display: grid;
-  gap: 8px;
-  padding: 16px 18px;
-  border-radius: var(--app-radius);
-  border: 1px solid var(--app-border);
-  background: rgba(255, 255, 255, 0.88);
-}
-
-.student-dashboard__stat-card span,
-.student-dashboard__quick-card span {
-  font-size: 12px;
-  color: var(--app-text-soft);
-}
-
-.student-dashboard__stat-card strong,
-.student-dashboard__quick-card strong {
-  font-size: 24px;
-  line-height: 1.1;
-  color: var(--app-text-main);
-}
-
-.student-dashboard__stat-card small {
-  color: #7b8da6;
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.student-dashboard__main-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 16px;
-  align-items: start;
-}
-
-.student-dashboard__main-column,
-.student-dashboard__side-column {
-  display: grid;
-  gap: 16px;
-}
-
-.student-dashboard__panel {
-  padding: 20px;
-}
-
-.student-dashboard__panel-header {
-  align-items: flex-start;
-}
-
-.student-dashboard__panel-note {
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--app-text-soft);
-}
-
-.student-dashboard__task-panel {
-  gap: 18px;
-}
-
-.student-dashboard__kp-card {
-  display: grid;
-  gap: 14px;
-}
-
-.student-dashboard__task-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 20px;
-  align-items: start;
-}
-
-.student-dashboard__task-copy,
-.student-dashboard__task-actions {
-  display: grid;
-  gap: 14px;
-}
-
-.student-dashboard__kp-top {
+.student-dashboard__hero-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.student-dashboard__kp-code {
-  display: inline-flex;
-  width: fit-content;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.student-dashboard__kp-code {
-  background: var(--app-primary-soft);
-  color: var(--app-primary-deep);
-}
-
-.student-dashboard__kp-card h3 {
-  margin: 0;
-  font-size: 20px;
-  color: var(--app-text-main);
-}
-
-.student-dashboard__kp-card p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--app-text-soft);
-}
-
-.student-dashboard__actions-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.student-dashboard__action-card {
-  display: grid;
-  gap: 6px;
-  padding: 16px 18px;
-  text-align: left;
-  border-radius: 20px;
-  border: 1px solid color-mix(in srgb, var(--app-primary) 18%, var(--app-border));
-  background: linear-gradient(135deg, #f3f8ff 0%, #ffffff 100%);
-  color: inherit;
-  cursor: pointer;
-  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-}
-
-.student-dashboard__action-card span {
-  font-size: 12px;
-  color: var(--app-text-soft);
-}
-
-.student-dashboard__action-card strong {
-  font-size: 16px;
-  line-height: 1.35;
-  color: var(--app-text-main);
-}
-
-.student-dashboard__action-card:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--app-primary) 32%, var(--app-border));
-  box-shadow: 0 14px 26px rgba(79, 140, 255, 0.12);
-}
-
-.student-dashboard__action-card small {
-  color: #6f81a0;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.student-dashboard__action-card--primary {
-  border-color: color-mix(in srgb, var(--app-primary) 28%, var(--app-border));
-  background: linear-gradient(135deg, #eef4ff 0%, #ffffff 100%);
+  gap: 10px;
 }
 
 .student-dashboard__progress-box {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   padding: 14px;
-  border-radius: var(--app-radius-sm);
-  background: var(--app-surface-muted);
+  border-radius: 20px;
+  border: 1.5px solid #c6d8ef;
+  background: #f8fbff;
 }
 
 .student-dashboard__progress-head {
   display: flex;
-  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.student-dashboard__progress-head span {
-  font-size: 12px;
-  color: var(--app-text-soft);
+.student-dashboard__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
 }
 
-.student-dashboard__progress-head strong {
-  font-size: 14px;
-  color: var(--app-text-main);
+.student-dashboard__stats-shell {
+  padding: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
 }
 
-.student-dashboard__side-panel {
-  padding: 20px;
-  position: sticky;
-  top: 18px;
-  gap: 16px;
+.student-dashboard__stat-card,
+.student-dashboard__action-card,
+.student-dashboard__simple-item {
+  border: 1.5px solid #c6d8ef;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  min-width: 0;
 }
 
-.student-dashboard__side-head h3 {
-  margin: 8px 0 0;
-  font-size: 22px;
-  color: var(--app-text-main);
-}
-
-.student-dashboard__side-highlight {
+.student-dashboard__stat-card {
   display: grid;
   gap: 8px;
   padding: 18px;
-  border-radius: 20px;
-  border: 1px solid color-mix(in srgb, var(--app-primary) 18%, var(--app-border));
-  background: linear-gradient(135deg, #eef4ff 0%, #ffffff 100%);
 }
 
-.student-dashboard__side-highlight span,
-.student-dashboard__side-item span {
+.student-dashboard__stat-card span,
+.student-dashboard__action-card span,
+.student-dashboard__simple-item span {
   font-size: 12px;
-  color: var(--app-text-soft);
-  font-weight: 700;
+  font-weight: 800;
+  color: #6b7280;
 }
 
-.student-dashboard__side-highlight strong,
-.student-dashboard__side-item strong {
-  font-size: 18px;
-  color: var(--app-text-main);
-  line-height: 1.4;
+.student-dashboard__stat-card strong {
+  font-size: 28px;
+  line-height: 1.05;
+  color: #1d2433;
 }
 
-.student-dashboard__side-highlight p,
-.student-dashboard__side-item p {
-  margin: 0;
-  color: #667892;
-  font-size: 13px;
-  line-height: 1.7;
+.student-dashboard__stat-card small {
+  color: #6b7280;
+  line-height: 1.6;
 }
 
-.student-dashboard__side-list {
+.student-dashboard__action-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  min-width: 0;
+}
+
+.student-dashboard__action-shell {
+  padding: 14px;
+  border-width: 3px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+}
+
+.student-dashboard__action-card {
+  display: grid;
+  gap: 10px;
+  padding: 20px 22px;
+  text-align: left;
+  cursor: pointer;
+  align-content: start;
+  min-height: 148px;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.student-dashboard__action-card:hover {
+  border-color: #96b6e2;
+  background: #eef5ff;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 18px rgba(31, 41, 55, 0.08);
+}
+
+.student-dashboard__action-card strong {
+  font-family: "Fredoka", "Nunito", sans-serif;
+  font-size: 20px;
+  color: #1d2433;
+  overflow-wrap: anywhere;
+}
+
+.student-dashboard__action-card small {
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.student-dashboard__action-card--primary {
+  border-color: #96b6e2;
+  background: linear-gradient(180deg, #eef5ff 0%, #ffffff 100%);
+  box-shadow: 0 10px 18px rgba(31, 41, 55, 0.08);
+}
+
+.student-dashboard__action-card--primary span {
+  color: #355070;
+}
+
+.student-dashboard__action-card--primary strong {
+  color: #16355c;
+}
+
+.student-dashboard__simple-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 18px;
+  min-width: 0;
+}
+
+.student-dashboard__simple-panel {
+  padding: 22px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  min-width: 0;
+}
+
+.student-dashboard__section-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.student-dashboard__simple-course {
   display: grid;
   gap: 12px;
 }
 
-.student-dashboard__side-item {
+.student-dashboard__simple-list {
   display: grid;
-  gap: 6px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  border: 1px solid #e3eaf4;
-  background: #ffffff;
+  gap: 12px;
+  min-width: 0;
+}
+
+.student-dashboard__simple-item {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+}
+
+.student-dashboard__simple-item strong {
+  overflow-wrap: anywhere;
 }
 
 .preview-mode {
   display: grid;
   gap: 18px;
-  padding: 28px;
-  border-radius: 28px;
-  border: 1px solid #d9e6f7;
-  background:
-    radial-gradient(circle at top right, rgba(79, 140, 255, 0.12), transparent 28%),
-    linear-gradient(135deg, #f2f7ff 0%, #f8fbff 52%, #ffffff 100%);
-  box-shadow: 0 20px 42px rgba(24, 51, 92, 0.08);
-}
-
-.preview-mode__hero {
-  display: grid;
-  gap: 18px;
+  padding: 22px;
 }
 
 .preview-mode__copy {
   display: grid;
-  gap: 8px;
-}
-
-.preview-mode__eyebrow {
-  display: inline-flex;
-  width: fit-content;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(79, 140, 255, 0.1);
-  color: #3566b8;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-
-.preview-mode__copy p {
-  margin: 0;
-  max-width: 62ch;
-  color: var(--app-text-soft);
-  line-height: 1.7;
-}
-
-.preview-mode__summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.preview-mode__summary-card {
-  display: grid;
-  gap: 6px;
-  padding: 16px 18px;
-  border-radius: 20px;
-  border: 1px solid #dce7f5;
-  background: rgba(255, 255, 255, 0.88);
-}
-
-.preview-mode__summary-card span,
-.preview-mode__summary-card small {
-  color: var(--app-text-soft);
-  font-size: 12px;
-}
-
-.preview-mode__summary-card strong {
-  color: var(--app-text-main);
-  font-size: 20px;
-  line-height: 1.3;
+  gap: 10px;
 }
 
 .preview-mode__selectors {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  padding: 18px;
-  border-radius: 24px;
-  border: 1px solid #dce7f5;
-  background: rgba(255, 255, 255, 0.78);
 }
 
 .preview-mode__field {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
-.preview-mode__label {
+.preview-mode__field label {
   font-size: 13px;
   font-weight: 700;
   color: #4c6488;
 }
 
-.preview-mode__field :deep(.el-select) {
-  width: 100%;
-}
-
-.preview-mode__field :deep(.el-input__wrapper) {
-  min-height: 46px;
-  border-radius: 16px;
-  box-shadow: 0 0 0 1px #d6e3f5 inset !important;
-}
-
 @media (max-width: 1100px) {
+  .student-dashboard__hero,
+  .student-dashboard__action-shell,
+  .student-dashboard__action-strip,
+  .student-dashboard__simple-grid,
   .student-dashboard__stats,
-  .student-dashboard__main-grid,
-  .student-dashboard__task-card,
-  .student-dashboard__actions-grid,
-  .student-dashboard__quick-grid,
-  .preview-mode__summary,
   .preview-mode__selectors {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 720px) {
-  .student-dashboard__hero {
+  .student-dashboard__hero,
+  .student-dashboard__stats-shell,
+  .student-dashboard__action-shell,
+  .student-dashboard__simple-panel,
+  .preview-mode {
     padding: 18px;
   }
 
-  .preview-mode {
-    padding: 20px;
+  .student-dashboard__action-shell {
+    padding: 14px;
+  }
+
+  .student-dashboard__hero-copy h2 {
+    font-size: 40px;
   }
 }
 </style>

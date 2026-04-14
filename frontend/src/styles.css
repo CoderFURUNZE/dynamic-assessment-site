@@ -1,22 +1,22 @@
 ﻿:root {
   /* 鏍稿績鑹插僵绯荤粺 - 鐜颁唬鏁欒偛椋?*/
-  --app-primary: #4a84ff;
-  --app-primary-soft: rgba(74, 132, 255, 0.12);
-  --app-primary-deep: #3268da;
+  --app-primary: #1e40af;
+  --app-primary-soft: rgba(30, 64, 175, 0.12);
+  --app-primary-deep: #17358f;
   
-  --app-success: #16b58f;
-  --app-warning: #f4a63a;
+  --app-success: #22c55e;
+  --app-warning: #f59e0b;
   --app-error: #ef5b63;
-  --app-info: #6b7cff;
+  --app-info: #3b82f6;
 
-  --app-bg: #f5f8ff;
+  --app-bg: #f4f7ff;
   --app-card: #ffffff;
   --app-text-main: #0f172a;
   --app-text-soft: #64748b;
   --app-text-light: #94a3b8;
   
-  --app-border: rgba(211, 223, 242, 0.9);
-  --app-border-hover: rgba(163, 186, 226, 0.95);
+  --app-border: rgba(203, 215, 235, 0.9);
+  --app-border-hover: rgba(147, 173, 214, 0.95);
 
   /* 璇箟鍒悕锛堝巻鍙茬粍浠朵笌 class 缁熶竴鐢?ink锛?*/
   --app-ink: var(--app-text-main);
@@ -24,23 +24,24 @@
   --app-ink-light: var(--app-text-light);
 
   --app-surface: #ffffff;
-  --app-surface-muted: #f4f8ff;
-  --app-bg-alt: #eef4ff;
+  --app-surface-muted: #f8fbff;
+  --app-bg-alt: #edf3ff;
   --app-green: var(--app-success);
-  --app-green-dark: #059669;
-  --app-primary-tint: #edf3ff;
-  --app-eyebrow: #5b7aa8;
+  --app-green-dark: #16a34a;
+  --app-primary-tint: #e9f0ff;
+  --app-eyebrow: #5f75a3;
 
   /* 杞婚槾褰憋紙鍒楄〃鍗＄墖榛樿锛?*/
-  --app-shadow-soft: 0 10px 26px rgba(80, 118, 183, 0.08), 0 3px 10px rgba(15, 23, 42, 0.04);
+  --app-shadow-soft: 0 20px 45px rgba(15, 23, 42, 0.06), 0 6px 18px rgba(30, 64, 175, 0.05);
 
-  --app-gradient-primary: linear-gradient(135deg, #4a84ff 0%, #5f88ff 45%, #6bc5ff 100%);
-  --app-gradient-cta: linear-gradient(135deg, #4278f6 0%, #61a9ff 100%);
-  --app-gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(245, 249, 255, 0.98) 100%);
+  --app-gradient-primary: linear-gradient(135deg, #1e40af 0%, #2563eb 48%, #38bdf8 100%);
+  --app-gradient-cta: linear-gradient(135deg, #17358f 0%, #2563eb 56%, #22c55e 100%);
+  --app-gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 250, 255, 0.98) 100%);
   --app-gradient-page:
-    radial-gradient(circle at top left, rgba(131, 188, 255, 0.14), transparent 24%),
-    radial-gradient(circle at top right, rgba(102, 147, 255, 0.14), transparent 28%),
-    linear-gradient(180deg, #f2f6ff 0%, #f7faff 38%, #f5f8ff 100%);
+    radial-gradient(circle at 0% 0%, rgba(96, 165, 250, 0.18), transparent 24%),
+    radial-gradient(circle at 100% 12%, rgba(59, 130, 246, 0.12), transparent 28%),
+    radial-gradient(circle at 82% 100%, rgba(34, 197, 94, 0.08), transparent 22%),
+    linear-gradient(180deg, #eef4ff 0%, #f7faff 34%, #f3f7ff 100%);
 
   --app-text-xs: 12px;
   --app-text-sm: 13px;
@@ -64,15 +65,15 @@
   --app-duration-slow: 0.3s;
   
   /* 闃村奖绯荤粺 */
-  --app-shadow-sm: 0 4px 12px rgba(87, 116, 166, 0.08);
-  --app-shadow: 0 12px 28px rgba(87, 116, 166, 0.1), 0 2px 8px rgba(15, 23, 42, 0.04);
-  --app-shadow-lg: 0 18px 38px rgba(87, 116, 166, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06);
-  --app-shadow-xl: 0 26px 56px rgba(87, 116, 166, 0.16), 0 8px 18px rgba(15, 23, 42, 0.06);
+  --app-shadow-sm: 0 8px 20px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(30, 64, 175, 0.04);
+  --app-shadow: 0 18px 36px rgba(15, 23, 42, 0.08), 0 4px 14px rgba(30, 64, 175, 0.06);
+  --app-shadow-lg: 0 26px 56px rgba(15, 23, 42, 0.1), 0 8px 24px rgba(30, 64, 175, 0.07);
+  --app-shadow-xl: 0 34px 72px rgba(15, 23, 42, 0.12), 0 12px 30px rgba(30, 64, 175, 0.08);
   
   /* 甯冨眬涓庡渾瑙?*/
-  --app-radius: 16px;
-  --app-radius-lg: 24px;
-  --app-radius-sm: 8px;
+  --app-radius: 20px;
+  --app-radius-lg: 28px;
+  --app-radius-sm: 12px;
 
   /* 鍏ㄥ眬闈㈡澘锛氫笌 App.vue 涓甫瀵艰埅椤电殑涓诲尯鍩熺暀鐧戒竴鑷达紙鎮诞椤舵爮 + 搴曡竟璺濓級 */
   --app-layout-header-offset: 96px;
@@ -96,14 +97,14 @@
 
   /* Element Plus 瑕嗙洊 */
   --el-color-primary: var(--app-primary);
-  --el-color-primary-light-3: #77a2ff;
-  --el-color-primary-light-5: #9cbcff;
-  --el-color-primary-light-7: #c8d8ff;
-  --el-color-primary-light-8: #dbe6ff;
+  --el-color-primary-light-3: #4e7df1;
+  --el-color-primary-light-5: #85a4f8;
+  --el-color-primary-light-7: #bed0fb;
+  --el-color-primary-light-8: #dbe6fd;
   --el-color-primary-light-9: #edf3ff;
-  --el-color-primary-dark-2: #3268da;
+  --el-color-primary-dark-2: #17358f;
   --el-border-radius-base: var(--app-radius-sm);
-  --el-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --el-font-family: "Open Sans", "Segoe UI", sans-serif;
 }
 
 /* 鍏ㄥ眬閲嶇疆涓庡熀纭€鏍峰紡 */
@@ -137,6 +138,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Poppins", var(--el-font-family);
+  letter-spacing: -0.03em;
+}
+
 #app {
   min-height: 100vh;
   display: flex;
@@ -164,9 +175,9 @@ body {
 
 /* 鐜荤拑鎷熸€佸崱鐗?*/
 .glass-card {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: var(--app-shadow-lg);
 }
 
@@ -224,8 +235,8 @@ video {
   background: var(--app-gradient-surface);
   border-radius: var(--app-radius);
   border: 1px solid color-mix(in srgb, var(--app-border) 85%, transparent);
-  padding: 24px;
-  box-shadow: var(--app-shadow-soft);
+  padding: 26px;
+  box-shadow: var(--app-shadow);
   position: relative;
   overflow: hidden;
   transition: border-color var(--app-duration) var(--app-ease-out), box-shadow var(--app-duration) var(--app-ease-out);
@@ -237,13 +248,13 @@ video {
   position: absolute;
   inset: 0 auto auto 0;
   width: 100%;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(74, 132, 255, 0.26), rgba(107, 197, 255, 0.04) 48%, transparent 82%);
+  height: 88px;
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.14), rgba(255, 255, 255, 0));
   pointer-events: none;
 }
 
 .edu-panel:hover {
-  box-shadow: var(--app-shadow);
+  box-shadow: var(--app-shadow-lg);
   border-color: var(--app-border-hover);
 }
 
@@ -253,7 +264,7 @@ video {
 }
 
 .edu-header__title {
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 800;
   letter-spacing: -0.025em;
   color: var(--app-text-main);
@@ -292,10 +303,21 @@ video {
   position: absolute;
   top: 0;
   right: 0;
-  width: 6px;
-  height: 100%;
+  width: 100%;
+  height: 4px;
   background: var(--app-gradient-primary);
-  opacity: 0.85;
+  opacity: 0.92;
+}
+
+.edu-stat-card::before {
+  content: "";
+  position: absolute;
+  right: -12px;
+  top: -12px;
+  width: 84px;
+  height: 84px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.12) 0%, rgba(37, 99, 235, 0) 72%);
 }
 
 .edu-stat-card__label {
@@ -318,18 +340,19 @@ video {
   font-weight: 600;
   letter-spacing: 0.01em;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 14px;
+  border-radius: 16px;
+  min-height: 42px;
 }
 
 .el-button--primary {
   border-color: transparent !important;
-  background: var(--app-gradient-primary) !important;
-  box-shadow: 0 10px 22px rgba(74, 132, 255, 0.28);
+  background: var(--app-gradient-cta) !important;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.26);
 }
 
 .el-button--primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(74, 132, 255, 0.34);
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.32);
 }
 
 .el-button:not(.el-button--primary) {
@@ -392,14 +415,14 @@ video {
   background: var(--app-gradient-surface);
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius);
-  box-shadow: var(--app-shadow-soft);
+  box-shadow: var(--app-shadow);
   position: relative;
   overflow: hidden;
 }
 
 .panel-card:hover {
-  border-color: color-mix(in srgb, var(--app-primary) 12%, var(--app-border));
-  box-shadow: 0 14px 28px rgba(87, 116, 166, 0.11), 0 4px 12px rgba(15, 23, 42, 0.05);
+  border-color: color-mix(in srgb, var(--app-primary) 18%, var(--app-border));
+  box-shadow: var(--app-shadow-lg);
 }
 
 .el-card.panel-card {
@@ -604,9 +627,11 @@ video {
 .hub-page__header,
 .courses-workspace__hero,
 .student-dashboard__hero {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  border: 1px solid color-mix(in srgb, var(--app-border) 92%, #ffffff);
-  box-shadow: var(--app-shadow-soft);
+  background:
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.18), transparent 30%),
+    linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  border: 1px solid color-mix(in srgb, var(--app-primary) 10%, var(--app-border));
+  box-shadow: var(--app-shadow);
 }
 
 /* =============================================================================

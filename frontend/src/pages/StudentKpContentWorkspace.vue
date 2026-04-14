@@ -686,6 +686,7 @@ watch(kpId, async () => {
   padding: 20px 20px 28px;
   display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
 .student-kp-page__hero,
@@ -697,10 +698,12 @@ watch(kpId, async () => {
 .student-kp-page__side-card,
 .student-kp-page__card,
 .student-kp-page__bottom-nav {
-  border-radius: 24px;
-  border: 1px solid #dfe7f1;
-  background: #ffffff;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  border-radius: 32px;
+  border: 3px solid #1f2937;
+  background: #fffdf8;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .student-kp-page__hero {
@@ -709,17 +712,22 @@ watch(kpId, async () => {
   justify-content: space-between;
   gap: 18px;
   padding: 22px 24px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.32), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
 }
 
 .student-kp-page__hero-copy {
   display: flex;
   align-items: flex-start;
   gap: 14px;
+  min-width: 0;
 }
 
 .student-kp-page__hero-text {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .student-kp-page__back,
@@ -727,7 +735,7 @@ watch(kpId, async () => {
   min-height: 42px;
   padding: 0 18px;
   border-radius: 999px;
-  border: 1px solid #dce6f2;
+  border: 1.5px solid #c6d8ef;
   background: #ffffff;
   color: #314661;
   font-size: 14px;
@@ -741,17 +749,19 @@ watch(kpId, async () => {
   width: fit-content;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(79, 127, 255, 0.1);
-  color: #4f7fff;
+  background: #d7f9a8;
+  color: #1f2937;
   font-size: 12px;
   font-weight: 800;
 }
 
 .student-kp-page__hero-text h1 {
   margin: 0;
-  font-size: clamp(26px, 3vw, 34px);
-  line-height: 1.1;
-  color: #1f2a44;
+  font-size: clamp(28px, 4vw, 42px);
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+  color: #16355c;
+  overflow-wrap: anywhere;
 }
 
 .student-kp-page__hero-text p,
@@ -778,8 +788,9 @@ watch(kpId, async () => {
   display: inline-flex;
   padding: 7px 12px;
   border-radius: 999px;
-  background: #eef4ff;
-  color: #4f7fff;
+  background: #f5f9ff;
+  color: #355070;
+  border: 1px solid #cfe0f5;
   font-size: 12px;
   font-weight: 800;
 }
@@ -794,15 +805,16 @@ watch(kpId, async () => {
 }
 
 .student-kp-page__btn--primary {
-  border-color: #4f7fff;
-  background: linear-gradient(135deg, #5b7cfa 0%, #59b7ff 100%);
-  color: #ffffff;
+  border-color: #c6d8ef;
+  background: linear-gradient(135deg, #eaf8d3 0%, #ffffff 100%);
+  color: #16355c;
 }
 
 .student-kp-page__stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+  min-width: 0;
 }
 
 .student-kp-page__stat-card,
@@ -812,11 +824,15 @@ watch(kpId, async () => {
 .student-kp-page__info-card,
 .student-kp-page__side-card {
   padding: 20px 22px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
 }
 
 .student-kp-page__stat-card {
   display: grid;
   gap: 8px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 24px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .student-kp-page__stat-card span,
@@ -839,6 +855,7 @@ watch(kpId, async () => {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
+  min-width: 0;
 }
 
 .student-kp-page__workflow-card {
@@ -846,11 +863,16 @@ watch(kpId, async () => {
   gap: 6px;
   text-align: left;
   cursor: pointer;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .student-kp-page__workflow-card.active {
-  border-color: #9fbef3;
-  background: linear-gradient(165deg, #f7faff 0%, #eef4ff 100%);
+  border-color: #96b6e2;
+  background: #e8f1ff;
+  box-shadow: 0 8px 14px rgba(31, 41, 55, 0.08);
 }
 
 .student-kp-page__workflow-card.disabled {
@@ -864,6 +886,7 @@ watch(kpId, async () => {
 .student-kp-page__next-card h3,
 .student-kp-page__side-card h3 {
   color: #1f2a44;
+  overflow-wrap: anywhere;
 }
 
 .student-kp-page__task-card {
@@ -886,6 +909,8 @@ watch(kpId, async () => {
   justify-content: space-between;
   gap: 14px;
   align-items: flex-start;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .student-kp-page__progress-head {
@@ -901,6 +926,9 @@ watch(kpId, async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .student-kp-page__chapter-list,
@@ -909,13 +937,14 @@ watch(kpId, async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
 }
 
 .student-kp-page__chapter-chip,
 .student-kp-page__tag-list button,
 .student-kp-page__checklist span {
   border-radius: 999px;
-  border: 1px solid #dbe5f2;
+  border: 1px solid #cfe0f5;
   background: #f8fbff;
   color: #36506f;
   padding: 8px 12px;
@@ -935,24 +964,32 @@ watch(kpId, async () => {
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 18px;
   align-items: start;
+  min-width: 0;
+}
+
+.student-kp-page__side {
+  min-width: 0;
 }
 
 .student-kp-page__main {
   display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
 .student-kp-page__panel-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+  min-width: 0;
 }
 
 .student-kp-page__card :deep(.el-card__header) {
   padding: 18px 20px 14px;
-  border-bottom: 1px solid #e8eef6;
+  border-bottom: 1px solid #cfe0f5;
   font-weight: 800;
   color: #264160;
+  background: linear-gradient(180deg, #f8fbff 0%, #fbfdff 100%);
 }
 
 .student-kp-page__card :deep(.el-card__body) {
@@ -969,24 +1006,27 @@ watch(kpId, async () => {
 .student-kp-page__task-list {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .student-kp-page__link-list a {
   text-decoration: none;
   color: #35507f;
-  border: 1px solid #dce6f2;
-  border-radius: 14px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 18px;
   padding: 12px 14px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  overflow-wrap: anywhere;
 }
 
 .student-kp-page__task-item {
-  border: 1px solid #dfe7f1;
-  border-radius: 16px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 20px;
   padding: 14px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .student-kp-page__task-item strong {
