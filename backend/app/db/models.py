@@ -334,7 +334,7 @@ class StageImportRecord(SQLModel, table=True):
     status: str = ""
     note: str = ""
     happened_at: datetime = Field(default_factory=datetime.utcnow, index=True)
-    raw_json: str = "{}"
+    raw_json: str = Field(default="{}", sa_column=Column(Text, nullable=False))
 
 
 class Quiz(SQLModel, table=True):

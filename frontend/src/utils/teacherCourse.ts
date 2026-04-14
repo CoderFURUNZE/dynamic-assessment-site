@@ -4,6 +4,31 @@ type CourseLike = {
   title: string;
 };
 
+function normalizeSubjectCandidate(input: string) {
+  return String(input || "")
+    .replace(/\uFFFD/g, "")
+    .replace(/\?/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+function resolveFromCourses(raw: string, courses: CourseLike[]) {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+
+  const normalized = normalizeSubjectCandidate(value);
+  if (!normalized) return "";
+
+  const exact = courses.find((item) => item.title === value || item.title === normalized);
+  if (exact) return exact.title;
+
+  const fuzzy = courses.find((item) => {
+    const title = normalizeSubjectCandidate(item.title);
+    return normalized.includes(title) || title.includes(normalized);
+  });
+  return fuzzy?.title || "";
+}
+
 export function getSavedTeacherSubject() {
   return localStorage.getItem(TEACHER_SUBJECT_KEY) || "";
 }
@@ -22,12 +47,11 @@ export function resolveTeacherSubject(
   currentSubject: string,
   courses: CourseLike[]
 ) {
-  const available = new Set(courses.map((item) => item.title));
   const candidates = [routeSubject, currentSubject, getSavedTeacherSubject(), courses[0]?.title || ""];
   for (const item of candidates) {
-    const value = String(item || "").trim();
+    const value = resolveFromCourses(String(item || ""), courses);
     if (!value) continue;
-    if (!available.size || available.has(value)) return value;
+    return value;
   }
   return "";
 }

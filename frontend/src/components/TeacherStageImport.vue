@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
+import { CircleCheck, Files, FolderOpened, Promotion, UploadFilled } from "@element-plus/icons-vue";
 import { api } from "../api";
-import HoverTip from "./HoverTip.vue";
 import HintButton from "./HintButton.vue";
-import TeacherBehaviorImport from "./TeacherBehaviorImport.vue";
 
 type Stage = { id: number; title: string; stage_order: number };
 type ImportBatch = {
@@ -27,13 +26,13 @@ type MetricGuide = {
   next_action: string;
 };
 type ImportResult = {
-  batch_id: number;
+  batch_id?: number;
   total_rows: number;
   success_rows: number;
-  failed_rows: number;
+  failed_rows?: number;
   recalculated_users: number;
   next_action: string;
-  errors: string[];
+  errors?: string[];
   import_summary?: {
     stage_title?: string;
     quality_status?: string;
@@ -61,12 +60,14 @@ type InternalSummary = {
     risk_level: string;
   }>;
 };
-type ImportView = "import" | "preview" | "history";
+type ImportType = "system" | "manual" | "behavior";
 
 const props = defineProps<{ courseId: number | null; subject: string; grade: string }>();
 const emit = defineEmits<{ (e: "view-profiles"): void }>();
 
 const loading = ref(false);
+const uploading = ref(false);
+const behaviorApplying = ref(false);
 const stages = ref<Stage[]>([]);
 const batches = ref<ImportBatch[]>([]);
 const metricGuides = ref<MetricGuide[]>([]);
@@ -75,9 +76,11 @@ const metricType = ref("video");
 const uploadFile = ref<File | null>(null);
 const lastResult = ref<ImportResult | null>(null);
 const internalSummary = ref<InternalSummary | null>(null);
-const oneClickApplying = ref(false);
-const importView = ref<ImportView>("import");
-const systemMappings = reactive({ video: true, practice: true, mastery: true, behavior: true });
+const importType = ref<ImportType>("system");
+const historyAnchor = ref<HTMLElement | null>(null);
+const historyShell = ref<HTMLElement | null>(null);
+const systemMappings = reactive({ video: true, practice: true, mastery: true });
+const showCompleted = ref(false);
 
 const metricOptions = [
   { label: "视频学习记录", value: "video" },
@@ -88,68 +91,92 @@ const metricOptions = [
   { label: "课堂参与记录", value: "participation" },
 ];
 
+const importTypeCards = [
+  { value: "system" as const, title: "系统汇总数据", tag: "推荐", icon: Promotion, desc: "自动汇总平台已有的视频、练习和掌握度数据" },
+  { value: "manual" as const, title: "教师补录文件", tag: "补充", icon: FolderOpened, desc: "补充线下记录或人工整理的阶段数据文件" },
+  { value: "behavior" as const, title: "行为信号数据", tag: "进阶", icon: Files, desc: "导入行为事件与注意力信号，补充动态画像输入" },
+];
+
+const metricTypeLabels: Record<string, string> = {
+  video: "视频学习记录",
+  assignment: "作业完成记录",
+  quiz: "小测成绩记录",
+  attendance: "考勤记录",
+  task: "任务完成记录",
+  participation: "课堂参与记录",
+  behavior_signal: "行为信号汇总",
+};
+
+const sourceCards = computed(() => [
+  { key: "video" as const, title: "视频学习", desc: "汇总观看与学习记录", icon: Promotion },
+  { key: "practice" as const, title: "练习表现", desc: "同步练习次数与正确率", icon: Files },
+  { key: "mastery" as const, title: "掌握度变化", desc: "更新知识掌握趋势", icon: CircleCheck },
+]);
+
 const selectedStageLabel = computed(() => stages.value.find((item) => item.id === selectedStageId.value)?.title || "未选择阶段");
+const latestBatch = computed(() => batches.value[0] ?? null);
 const selectedGuide = computed(() => metricGuides.value.find((item) => item.metric_type === metricType.value) ?? null);
-const canUpload = computed(() => Boolean(props.courseId && selectedStageId.value && uploadFile.value));
-const enabledSystemMappings = computed(() => [systemMappings.video, systemMappings.practice, systemMappings.mastery, systemMappings.behavior].filter(Boolean).length);
-const summaryRows = computed(() => internalSummary.value?.rows.slice(0, 8) ?? []);
-const recentBatches = computed(() => batches.value.slice(0, 5));
-const latestBatchIds = computed(() => lastResult.value?.import_summary?.batch_ids ?? []);
-const completionRate = computed(() => {
-  if (!lastResult.value || !lastResult.value.total_rows) return "0%";
-  return `${Math.round((lastResult.value.success_rows / lastResult.value.total_rows) * 100)}%`;
+const canUploadManual = computed(() => Boolean(props.courseId && selectedStageId.value && uploadFile.value));
+const enabledSystemMappings = computed(() => Object.values(systemMappings).filter(Boolean).length);
+const currentModeLabel = computed(() => importTypeCards.find((item) => item.value === importType.value)?.title || "系统汇总数据");
+const currentModeDesc = computed(() => importTypeCards.find((item) => item.value === importType.value)?.desc || "");
+const latestBatchLabel = computed(() => latestBatch.value ? latestBatch.value.created_at.replace("T", " ").slice(0, 16) : "暂无导入记录");
+const historyCountLabel = computed(() => `${batches.value.length} 条记录`);
+const resultStatus = computed(() => ((lastResult.value?.recalculated_users ?? 0) > 0 ? "已更新画像" : "待更新画像"));
+const uploadTip = computed(() => {
+  if (importType.value === "system") return `已选择 ${enabledSystemMappings.value} 项数据来源，导入后将更新当前阶段画像。`;
+  if (importType.value === "manual") return selectedGuide.value?.summary || "上传后会覆盖当前阶段的同类文件数据。";
+  return "当前行为信号使用系统已采集数据，无需上传文件，开始导入后会直接汇总到当前阶段。";
 });
-const qualityLabel = computed(() => {
-  const value = lastResult.value?.import_summary?.quality_status;
-  if (value === "excellent") return "优秀";
-  if (value === "warning") return "需复核";
-  if (value === "risk") return "存在风险";
-  return "待生成";
-});
-const sourceLabels = computed(() => {
-  const sourceMap: Record<string, string> = {
-    video: "视频学习",
-    practice: "练习表现",
-    mastery: "掌握度变化",
-    behavior: "行为信号",
+const fileMeta = computed(() => {
+  if (!uploadFile.value) return null;
+  const sizeMb = uploadFile.value.size / 1024 / 1024;
+  return {
+    name: uploadFile.value.name,
+    size: `${sizeMb >= 1 ? sizeMb.toFixed(2) : (uploadFile.value.size / 1024).toFixed(1)} ${sizeMb >= 1 ? "MB" : "KB"}`,
   };
-  return (lastResult.value?.import_summary?.enabled_sources ?? []).map((item) => sourceMap[item] ?? item);
+});
+const recentBatches = computed(() => batches.value.slice(0, 5));
+const checklist = computed(() => [
+  { key: "stage", title: "选择阶段", desc: selectedStageLabel.value, done: Boolean(selectedStageId.value) },
+  { key: "type", title: "选择导入类型", desc: currentModeLabel.value, done: true },
+  {
+    key: "config",
+    title: importType.value === "manual" ? "上传导入文件" : importType.value === "system" ? "选择系统来源" : "确认行为信号导入",
+    desc: importType.value === "manual" ? (fileMeta.value?.name || "待上传文件") : importType.value === "system" ? `已选 ${enabledSystemMappings.value} 项来源` : "使用平台采集的行为数据",
+    done: importType.value === "manual" ? Boolean(uploadFile.value) : importType.value === "system" ? enabledSystemMappings.value > 0 : true,
+  },
+  { key: "result", title: "完成一次导入", desc: latestBatchLabel.value, done: Boolean(latestBatch.value) },
+]);
+const pendingItems = computed(() => checklist.value.filter((item) => !item.done));
+const completedItems = computed(() => checklist.value.filter((item) => item.done));
+const completionPercent = computed(() => Math.round((completedItems.value.length / Math.max(checklist.value.length, 1)) * 100));
+const resultSummaryCards = computed(() => {
+  if (!lastResult.value) return [];
+  return [
+    { label: "导入成功", value: String(lastResult.value.success_rows) },
+    { label: "导入失败", value: String(lastResult.value.failed_rows ?? 0) },
+    { label: "覆盖学生", value: String(lastResult.value.recalculated_users) },
+    { label: "画像状态", value: resultStatus.value },
+  ];
 });
 
-async function loadGuides() {
-  metricGuides.value = (await api.get("/stages/metric-guides")).data ?? [];
-}
-
+async function loadGuides() { metricGuides.value = (await api.get("/stages/metric-guides")).data ?? []; }
 async function loadStages() {
-  if (!props.courseId) {
-    stages.value = [];
-    selectedStageId.value = null;
-    return;
-  }
+  if (!props.courseId) { stages.value = []; selectedStageId.value = null; return; }
   stages.value = (await api.get(`/stages/courses/${props.courseId}`)).data ?? [];
-  if (!stages.value.some((item) => item.id === selectedStageId.value)) {
-    selectedStageId.value = stages.value[0]?.id ?? null;
-  }
+  if (!stages.value.some((item) => item.id === selectedStageId.value)) selectedStageId.value = stages.value[0]?.id ?? null;
 }
-
 async function loadBatches() {
-  if (!props.courseId) {
-    batches.value = [];
-    return;
-  }
+  if (!props.courseId) { batches.value = []; return; }
   const query = new URLSearchParams({ course_id: String(props.courseId) });
   if (selectedStageId.value) query.set("stage_id", String(selectedStageId.value));
   batches.value = (await api.get(`/stages/imports?${query.toString()}`)).data ?? [];
 }
-
 async function loadInternalSummary() {
-  if (!props.courseId || !selectedStageId.value) {
-    internalSummary.value = null;
-    return;
-  }
+  if (!props.courseId || !selectedStageId.value) { internalSummary.value = null; return; }
   internalSummary.value = (await api.get(`/stages/internal-summary?course_id=${props.courseId}&stage_id=${selectedStageId.value}`)).data ?? null;
 }
-
 async function refresh() {
   loading.value = true;
   try {
@@ -158,37 +185,28 @@ async function refresh() {
     await loadBatches();
     await loadInternalSummary();
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "加载阶段导入数据失败");
-  } finally {
-    loading.value = false;
-  }
+    ElMessage.error(e?.response?.data?.detail ?? "加载导入数据失败");
+  } finally { loading.value = false; }
 }
-
-function onFileChange(file: any) {
-  uploadFile.value = file?.raw ?? null;
-}
-
-async function upload() {
-  if (!canUpload.value || !props.courseId || !selectedStageId.value || !uploadFile.value) {
-    return ElMessage.warning("请先选择阶段并上传导入文件");
-  }
+function onFileChange(file: any) { uploadFile.value = file?.raw ?? null; }
+function onFileRemove() { uploadFile.value = null; }
+function toggleSystemMapping(key: keyof typeof systemMappings) { systemMappings[key] = !systemMappings[key]; }
+function scrollToHistory() { nextTick(() => historyAnchor.value?.scrollIntoView({ behavior: "smooth", block: "start" })); }
+async function uploadManual() {
+  if (!canUploadManual.value || !props.courseId || !selectedStageId.value || !uploadFile.value) return ElMessage.warning("请先选择上传文件");
   const form = new FormData();
   form.append("course_id", String(props.courseId));
   form.append("stage_id", String(selectedStageId.value));
   form.append("metric_type", metricType.value);
   form.append("file", uploadFile.value);
+  uploading.value = true;
   try {
     const data = (await api.post("/stages/imports/upload", form, { headers: { "Content-Type": "multipart/form-data" } })).data;
-    lastResult.value = data;
-    uploadFile.value = null;
-    importView.value = "preview";
-    await loadBatches();
-    ElMessage.success(`导入完成：成功 ${data.success_rows} 条，失败 ${data.failed_rows} 条，已重算 ${data.recalculated_users ?? 0} 名学生`);
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "文件导入失败");
-  }
+    lastResult.value = data; uploadFile.value = null; await loadBatches();
+    ElMessage.success(`导入完成，成功 ${data.success_rows} 条，失败 ${data.failed_rows} 条`);
+    scrollToHistory();
+  } catch (e: any) { ElMessage.error(e?.response?.data?.detail ?? "导入失败"); } finally { uploading.value = false; }
 }
-
 async function applyInternalSummary() {
   if (!props.courseId || !selectedStageId.value) return ElMessage.warning("请先选择课程和阶段");
   const form = new FormData();
@@ -197,669 +215,396 @@ async function applyInternalSummary() {
   form.append("include_video", String(systemMappings.video));
   form.append("include_practice", String(systemMappings.practice));
   form.append("include_mastery", String(systemMappings.mastery));
+  uploading.value = true;
   try {
     const data = (await api.post("/stages/internal-summary/apply", form, { headers: { "Content-Type": "multipart/form-data" } })).data;
-    lastResult.value = data;
-    importView.value = "preview";
-    await loadBatches();
-    await loadInternalSummary();
-    ElMessage.success(`系统汇总已应用：生成 ${data.success_rows} 条阶段记录，已重算 ${data.recalculated_users ?? 0} 名学生`);
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "应用系统汇总失败");
-  }
+    lastResult.value = data; await loadBatches(); await loadInternalSummary();
+    ElMessage.success("系统汇总导入完成"); scrollToHistory();
+  } catch (e: any) { ElMessage.error(e?.response?.data?.detail ?? "系统汇总导入失败"); } finally { uploading.value = false; }
 }
-
-async function applyOneClickImport() {
+async function applyBehavior() {
   if (!props.courseId || !selectedStageId.value) return ElMessage.warning("请先选择课程和阶段");
   const form = new FormData();
   form.append("course_id", String(props.courseId));
   form.append("stage_id", String(selectedStageId.value));
-  form.append("include_video", String(systemMappings.video));
-  form.append("include_practice", String(systemMappings.practice));
-  form.append("include_mastery", String(systemMappings.mastery));
-  form.append("include_behavior", String(systemMappings.behavior));
-  oneClickApplying.value = true;
+  behaviorApplying.value = true;
   try {
-    const data = (await api.post("/stages/one-click-import", form, { headers: { "Content-Type": "multipart/form-data" } })).data;
-    lastResult.value = data;
-    importView.value = "preview";
-    await loadBatches();
-    await loadInternalSummary();
-    ElMessage.success(`一键导入完成：生成 ${data.success_rows} 条记录，已重算 ${data.recalculated_users ?? 0} 名学生`);
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "一键导入失败");
-  } finally {
-    oneClickApplying.value = false;
-  }
+    lastResult.value = (await api.post("/stages/internal-behavior-summary/apply", form, { headers: { "Content-Type": "multipart/form-data" } })).data ?? null;
+    await loadBatches(); ElMessage.success("行为信号导入完成"); scrollToHistory();
+  } catch (e: any) { ElMessage.error(e?.response?.data?.detail ?? "行为信号导入失败"); } finally { behaviorApplying.value = false; }
 }
-
 async function downloadTemplate() {
   try {
     const res = await api.get(`/stages/template?metric_type=${encodeURIComponent(metricType.value)}`, { responseType: "blob" });
     const blob = new Blob([res.data], { type: "text/csv;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `stage_template_${metricType.value}.csv`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "下载模板失败");
-  }
+    const url = window.URL.createObjectURL(blob); const link = document.createElement("a");
+    link.href = url; link.download = `stage_template_${metricType.value}.csv`; link.click(); window.URL.revokeObjectURL(url);
+  } catch (e: any) { ElMessage.error(e?.response?.data?.detail ?? "模板下载失败"); }
 }
-
 async function downloadInternalSummary() {
   if (!props.courseId || !selectedStageId.value) return ElMessage.warning("请先选择课程和阶段");
   try {
     const res = await api.get(`/stages/internal-summary/export?course_id=${props.courseId}&stage_id=${selectedStageId.value}`, { responseType: "blob" });
     const blob = new Blob([res.data], { type: "text/csv;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `internal_stage_summary_${props.courseId}_${selectedStageId.value}.csv`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "导出系统汇总失败");
-  }
+    const url = window.URL.createObjectURL(blob); const link = document.createElement("a");
+    link.href = url; link.download = `internal_stage_summary_${props.courseId}_${selectedStageId.value}.csv`; link.click(); window.URL.revokeObjectURL(url);
+  } catch (e: any) { ElMessage.error(e?.response?.data?.detail ?? "汇总导出失败"); }
 }
-
-function openProfiles() {
-  emit("view-profiles");
-}
-
+function openProfiles() { emit("view-profiles"); }
 function handleExternalStageChange(event: Event) {
   const custom = event as CustomEvent<{ courseId?: number | null }>;
   const changedCourseId = Number(custom.detail?.courseId || 0);
   if (props.courseId && (!changedCourseId || changedCourseId === Number(props.courseId))) {
-    refresh().catch((e: any) => ElMessage.error(e?.response?.data?.detail ?? "同步阶段数据失败"));
+    refresh().catch((e: any) => ElMessage.error(e?.response?.data?.detail ?? "刷新导入数据失败"));
   }
 }
-
 watch(() => props.courseId, refresh, { immediate: true });
-watch(selectedStageId, () => {
-  loadBatches().catch(() => undefined);
-  loadInternalSummary().catch(() => undefined);
-});
+watch(selectedStageId, () => { loadBatches().catch(() => undefined); loadInternalSummary().catch(() => undefined); });
 onMounted(() => window.addEventListener("da:teacher-stage-changed", handleExternalStageChange as EventListener));
 onBeforeUnmount(() => window.removeEventListener("da:teacher-stage-changed", handleExternalStageChange as EventListener));
 </script>
 
 <template>
-  <el-card class="stage-import" shadow="never" v-loading="loading">
-    <template #header>
-      <div class="stage-import__header">
-        <div class="stage-import__intro">
-          <span class="stage-import__eyebrow">阶段导入</span>
-          <div class="stage-import__title">阶段导入工作台</div>
-          <p class="stage-import__subtitle">把系统汇总、整班补录和结果复核压缩进一套连续工作流里，页面重点放在清楚、顺手、稳定。</p>
-        </div>
-        <div class="stage-import__toolbar">
-          <HintButton size="small" :loading="loading" tip="刷新阶段、预览和导入历史" @click="refresh">刷新</HintButton>
-          <HintButton size="small" tip="下载当前数据类型的导入模板" @click="downloadTemplate">下载模板</HintButton>
-        </div>
-      </div>
-    </template>
+  <section class="import-workspace" v-loading="loading">
+    <div v-if="!courseId" class="import-empty">
+      <el-empty description="当前课程下暂无可导入阶段" />
+    </div>
 
-    <el-empty v-if="!courseId" description="请先在顶部选择课程" />
     <template v-else>
-      <section class="stage-import__hero">
-        <div class="hero-copy">
-          <h2>先选阶段，再导入，再复核</h2>
-          <p>左侧只放操作，右侧只放状态和结果，不再把所有卡片都堆在一列里，避免视觉重心失衡。</p>
-        </div>
-        <div class="hero-stats">
-          <div class="stat-card"><span>当前课程</span><strong>{{ subject || "未选择课程" }}</strong></div>
-          <div class="stat-card"><span>当前阶段</span><strong>{{ selectedStageLabel }}</strong></div>
-          <div class="stat-card"><span>最近重算</span><strong>{{ lastResult?.recalculated_users ?? 0 }}</strong></div>
-          <div class="stat-card"><span>最近成功率</span><strong>{{ completionRate }}</strong></div>
-        </div>
-      </section>
+      <section class="import-shell">
+        <div class="import-main panel-card">
+          <section class="import-section">
+            <div class="import-section__head">
+              <div>
+                <span class="import-section__eyebrow">步骤 1</span>
+                <h2>选择本次导入内容</h2>
+                <p>先明确导入来源，再进入阶段配置与上传执行。</p>
+              </div>
+            </div>
 
-      <el-tabs v-model="importView" class="stage-import__tabs">
-        <el-tab-pane label="导入配置" name="import" />
-        <el-tab-pane label="结果复核" name="preview" />
-        <el-tab-pane label="导入历史" name="history" />
-      </el-tabs>
-
-      <div class="stage-import__layout">
-        <main class="stage-import__main">
-          <section class="panel-card">
-            <div class="panel-card__title">当前导入范围</div>
-            <div class="scope-grid">
-              <div class="scope-item">
-                <span>课程</span>
-                <strong>{{ subject || "未选择课程" }}</strong>
-                <small>只会写入当前选中课程的阶段数据。</small>
-              </div>
-              <div class="scope-item">
-                <span>阶段</span>
-                <strong>{{ selectedStageLabel }}</strong>
-                <small>系统汇总和教师补录都会归并到这个阶段。</small>
-              </div>
-              <div class="scope-item">
-                <span>最近批次</span>
-                <strong>{{ latestBatchIds.length ? `#${latestBatchIds[0]}` : "暂无" }}</strong>
-                <small>用于追踪本次导入记录。</small>
-              </div>
+            <div class="type-grid">
+              <button
+                v-for="item in importTypeCards"
+                :key="item.value"
+                type="button"
+                class="type-card"
+                :class="{ 'is-active': importType === item.value }"
+                @click="importType = item.value"
+              >
+                <el-icon class="type-card__icon"><component :is="item.icon" /></el-icon>
+                <div class="type-card__copy">
+                  <span class="type-card__tag">{{ item.tag }}</span>
+                  <strong>{{ item.title }}</strong>
+                  <p>{{ item.desc }}</p>
+                </div>
+              </button>
             </div>
           </section>
 
-          <template v-if="importView === 'import'">
-            <div class="import-columns">
-              <section class="panel-card">
-                <div class="panel-card__header">
-                  <div>
-                    <div class="panel-card__eyebrow">系统汇总</div>
-                    <div class="panel-card__title">系统汇总导入</div>
-                  </div>
-                  <HintButton size="small" tip="导出当前阶段系统汇总 CSV" @click="downloadInternalSummary">导出汇总</HintButton>
-                </div>
-                <p class="panel-card__desc">优先导入系统已经采集到的视频、练习、掌握度和行为信号，用于快速生成阶段初始画像。</p>
-                <div class="mapping-grid">
-                  <label class="mapping-item">
-                    <el-switch v-model="systemMappings.video" />
-                    <div><strong>视频学习</strong><span>观看分钟与平均完成率</span></div>
-                  </label>
-                  <label class="mapping-item">
-                    <el-switch v-model="systemMappings.practice" />
-                    <div><strong>练习表现</strong><span>练习次数、正确率、完成情况</span></div>
-                  </label>
-                  <label class="mapping-item">
-                    <el-switch v-model="systemMappings.mastery" />
-                    <div><strong>掌握度变化</strong><span>掌握度、问卷更新、推荐推进</span></div>
-                  </label>
-                  <label class="mapping-item">
-                    <el-switch v-model="systemMappings.behavior" />
-                    <div><strong>行为信号</strong><span>行为事件与注意力信号</span></div>
-                  </label>
-                </div>
-                <div class="panel-card__hint">当前已选 {{ enabledSystemMappings }} 个来源。一键导入会统一写入当前阶段并重新计算画像。</div>
-                <div class="panel-card__actions">
-                  <HintButton type="primary" tip="只应用系统汇总，不包含行为信号" @click="applyInternalSummary">仅应用系统汇总</HintButton>
-                  <HintButton type="primary" :loading="oneClickApplying" tip="统一导入系统汇总和行为信号" @click="applyOneClickImport">一键导入全部来源</HintButton>
-                </div>
-                <div v-if="internalSummary" class="mini-stats">
-                  <div class="mini-stat"><span>学生</span><strong>{{ internalSummary.summary.student_count }}</strong></div>
-                  <div class="mini-stat"><span>视频覆盖</span><strong>{{ internalSummary.summary.video_students }}</strong></div>
-                  <div class="mini-stat"><span>练习覆盖</span><strong>{{ internalSummary.summary.practice_students }}</strong></div>
-                  <div class="mini-stat"><span>推荐推进</span><strong>{{ internalSummary.summary.recommendation_students }}</strong></div>
-                </div>
-              </section>
+          <section class="import-section">
+            <div class="import-section__head import-section__head--actions">
+              <div>
+                <span class="import-section__eyebrow">步骤 2</span>
+                <h2>配置并开始导入</h2>
+                <p>{{ uploadTip }}</p>
+              </div>
+              <div class="import-section__actions">
+                <HintButton v-if="importType === 'system'" size="small" tip="导出系统汇总 CSV" @click="downloadInternalSummary">下载汇总</HintButton>
+                <HintButton v-if="importType !== 'system'" size="small" tip="下载当前导入模板" @click="downloadTemplate">下载模板</HintButton>
+              </div>
+            </div>
 
-              <section class="panel-card">
-                <div class="panel-card__header">
-                  <div>
-                    <div class="panel-card__eyebrow">文件补录</div>
-                    <div class="panel-card__title">整班文件补录</div>
-                  </div>
-                  <div class="inline-tip">
-                    <span>导入说明</span>
-                    <HoverTip content="先选阶段，再选数据类型，下载模板后按字段填写，再上传 CSV 或 XLSX。导入成功后系统会批量重算当前阶段画像。" />
-                  </div>
+            <div class="config-panel">
+              <div class="config-grid">
+                <div class="field-block field-block--full">
+                  <label>阶段</label>
+                  <el-select v-model="selectedStageId" size="large" placeholder="请选择阶段">
+                    <el-option v-for="item in stages" :key="item.id" :label="`${item.stage_order}. ${item.title}`" :value="item.id" />
+                  </el-select>
                 </div>
-                <el-form label-width="90px">
-                  <el-form-item label="阶段">
-                    <el-select v-model="selectedStageId" style="width: 100%" placeholder="选择阶段">
-                      <el-option v-for="item in stages" :key="item.id" :label="`${item.stage_order}. ${item.title}`" :value="item.id" />
-                    </el-select>
-                  </el-form-item>
-                  <el-form-item label="数据类型">
-                    <el-select v-model="metricType" style="width: 100%">
+
+                <template v-if="importType === 'system'">
+                  <div class="field-block field-block--full">
+                    <label>系统来源</label>
+                    <div class="source-grid">
+                      <button
+                        v-for="item in sourceCards"
+                        :key="item.key"
+                        type="button"
+                        class="source-card"
+                        :class="{ 'is-active': systemMappings[item.key] }"
+                        @click="toggleSystemMapping(item.key)"
+                      >
+                        <div class="source-card__meta">
+                          <el-icon><component :is="item.icon" /></el-icon>
+                          <div>
+                            <strong>{{ item.title }}</strong>
+                            <span>{{ item.desc }}</span>
+                          </div>
+                        </div>
+                        <el-switch :model-value="systemMappings[item.key]" @click.stop />
+                      </button>
+                    </div>
+                  </div>
+                </template>
+
+                <template v-else-if="importType === 'manual'">
+                  <div class="field-block">
+                    <label>数据类型</label>
+                    <el-select v-model="metricType" size="large">
                       <el-option v-for="item in metricOptions" :key="item.value" :label="item.label" :value="item.value" />
                     </el-select>
-                  </el-form-item>
-                  <el-form-item label="上传文件">
-                    <el-upload :auto-upload="false" :show-file-list="true" :limit="1" @change="onFileChange">
-                      <el-button>选择整班 CSV / XLSX</el-button>
+                  </div>
+
+                  <div class="field-block field-block--full">
+                    <label>上传文件</label>
+                    <el-upload
+                      class="upload-dropzone"
+                      drag
+                      :auto-upload="false"
+                      :show-file-list="false"
+                      :limit="1"
+                      accept=".csv,.xlsx"
+                      @change="onFileChange"
+                    >
+                      <el-icon class="upload-dropzone__icon"><UploadFilled /></el-icon>
+                      <div class="upload-dropzone__title">拖拽文件到此，或点击上传</div>
+                      <div class="upload-dropzone__desc">支持 CSV / XLSX</div>
                     </el-upload>
-                  </el-form-item>
-                  <el-form-item>
-                    <HintButton type="primary" :disabled="!canUpload" tip="按当前阶段批量导入整班文件并重算画像" @click="upload">上传并生成阶段画像</HintButton>
-                  </el-form-item>
-                </el-form>
-                <div class="note-grid">
-                  <div class="note-card"><strong>模板匹配</strong><span>建议至少保证 `username` 或 `student_no` 能匹配到学生账号。</span></div>
-                  <div class="note-card"><strong>合并方式</strong><span>教师补录会与系统汇总结果共同保留在当前阶段。</span></div>
-                </div>
-              </section>
-            </div>
 
-            <TeacherBehaviorImport
-              :course-id="courseId"
-              :stage-id="selectedStageId"
-              :subject="subject"
-              :grade="grade"
-              :stage-title="selectedStageLabel"
-            />
-          </template>
-
-          <template v-else-if="importView === 'preview'">
-            <section class="panel-card" v-if="internalSummary">
-              <div class="panel-card__title">系统汇总预览</div>
-              <el-table :data="summaryRows" size="small" style="width: 100%">
-                <el-table-column prop="username" label="账号" width="120" />
-                <el-table-column prop="student_no" label="学号" width="120" />
-                <el-table-column prop="watched_minutes" label="视频分钟" width="110" />
-                <el-table-column label="练习正确率" width="120">
-                  <template #default="{ row }">{{ Math.round((row.practice_accuracy || 0) * 100) }}%</template>
-                </el-table-column>
-                <el-table-column prop="practice_attempts" label="练习次数" width="100" />
-                <el-table-column label="掌握度" width="100">
-                  <template #default="{ row }">{{ Math.round((row.course_mastery || 0) * 100) }}%</template>
-                </el-table-column>
-                <el-table-column label="动态评价" width="100">
-                  <template #default="{ row }">{{ Math.round((row.dynamic_score || 0) * 100) }}%</template>
-                </el-table-column>
-                <el-table-column prop="risk_level" label="风险等级" min-width="120" />
-              </el-table>
-            </section>
-
-            <section class="panel-card" v-if="lastResult">
-              <div class="panel-card__header">
-                <div class="panel-card__title">最近一次导入结果</div>
-                <HintButton type="primary" tip="跳转到学生画像页查看本次导入结果" @click="openProfiles">查看学生画像</HintButton>
-              </div>
-              <div class="mini-stats">
-                <div class="mini-stat"><span>总记录数</span><strong>{{ lastResult.total_rows }}</strong></div>
-                <div class="mini-stat"><span>成功导入</span><strong>{{ lastResult.success_rows }}</strong></div>
-                <div class="mini-stat"><span>失败记录</span><strong>{{ lastResult.failed_rows }}</strong></div>
-                <div class="mini-stat"><span>质量状态</span><strong>{{ qualityLabel }}</strong></div>
-              </div>
-              <div class="note-grid note-grid--wide">
-                <div class="note-card"><strong>导入来源</strong><span>{{ sourceLabels.length ? sourceLabels.join(" / ") : "手工文件导入" }}</span></div>
-                <div class="note-card"><strong>重算范围</strong><span>{{ lastResult.import_summary?.recalculation_scope || `已重算 ${lastResult.recalculated_users} 名学生` }}</span></div>
-                <div class="note-card"><strong>质量说明</strong><span>{{ lastResult.import_summary?.quality_hint || lastResult.next_action }}</span></div>
-              </div>
-              <div v-if="lastResult.errors?.length" class="error-stack">
-                <div v-for="item in lastResult.errors.slice(0, 5)" :key="item">{{ item }}</div>
-              </div>
-            </section>
-
-            <section class="panel-card" v-if="selectedGuide">
-              <div class="panel-card__title">当前数据类型说明</div>
-              <p class="panel-card__desc">{{ selectedGuide.summary }}</p>
-              <div class="note-grid note-grid--wide">
-                <div class="note-card"><strong>模板字段</strong><span>{{ selectedGuide.template_fields.join("、") }}</span></div>
-                <div class="note-card"><strong>影响的维度</strong><span>{{ selectedGuide.affected_dimensions.join("、") }}</span></div>
-                <div class="note-card"><strong>重点影响指标</strong><span>{{ selectedGuide.affected_indicators.join("、") }}</span></div>
-              </div>
-            </section>
-          </template>
-
-          <template v-else>
-            <section class="panel-card">
-              <div class="panel-card__title">导入历史与错误复盘</div>
-              <el-table :data="batches" size="small" style="width: 100%">
-                <el-table-column prop="created_at" label="时间" width="180">
-                  <template #default="{ row }">{{ row.created_at.replace("T", " ").slice(0, 19) }}</template>
-                </el-table-column>
-                <el-table-column prop="stage_title" label="阶段" min-width="180" />
-                <el-table-column prop="metric_type" label="类型" width="120" />
-                <el-table-column prop="file_name" label="文件" min-width="180" />
-                <el-table-column label="成功/总数" width="140">
-                  <template #default="{ row }">{{ row.success_rows }}/{{ row.total_rows }}</template>
-                </el-table-column>
-                <el-table-column label="错误预览" min-width="240">
-                  <template #default="{ row }">
-                    <div v-if="row.error_preview.length === 0" class="ok-text">无</div>
-                    <div v-else class="error-stack">
-                      <div v-for="item in row.error_preview" :key="item">{{ item }}</div>
+                    <div v-if="fileMeta" class="file-card">
+                      <div class="file-card__meta">
+                        <strong>{{ fileMeta.name }}</strong>
+                        <span>{{ fileMeta.size }}</span>
+                      </div>
+                      <button class="ghost-btn" type="button" @click="onFileRemove">移除</button>
                     </div>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </section>
-          </template>
-        </main>
+                  </div>
+                </template>
 
-        <aside class="stage-import__side">
-          <section class="panel-card panel-card--sticky">
-            <div class="panel-card__title">导入建议</div>
-            <ol class="checklist">
-              <li>先确认课程和阶段，再执行导入，避免不同阶段的数据混写。</li>
-              <li>优先导入系统汇总，再决定是否补录教师线下文件。</li>
-              <li>导入完成后先看结果复核，再进入学生分析页查看动态变化。</li>
-            </ol>
+                <template v-else>
+                  <div class="field-block field-block--full">
+                    <label>行为信号汇总</label>
+                    <div class="behavior-placeholder">
+                      <el-icon><Files /></el-icon>
+                      <div>
+                        <strong>使用平台已采集行为数据</strong>
+                        <span>将汇总行为事件、注意力信号与动态变化，直接补充阶段画像。</span>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <div class="config-actions">
+                <HintButton v-if="importType === 'system'" type="primary" :loading="uploading" tip="执行系统汇总导入" @click="applyInternalSummary">开始导入</HintButton>
+                <HintButton v-else-if="importType === 'manual'" type="primary" :disabled="!canUploadManual" :loading="uploading" tip="上传文件并开始导入" @click="uploadManual">开始导入</HintButton>
+                <HintButton v-else type="primary" :loading="behaviorApplying" tip="汇总行为信号并生成阶段画像" @click="applyBehavior">开始导入</HintButton>
+                <span class="config-tip">{{ currentModeDesc }}</span>
+              </div>
+
+              <div v-if="selectedGuide && importType === 'manual'" class="guide-box">
+                <div>
+                  <strong>模板说明</strong>
+                  <p>{{ selectedGuide.summary }}</p>
+                </div>
+                <div class="guide-chips">
+                  <span v-for="field in selectedGuide.template_fields" :key="field">{{ field }}</span>
+                </div>
+              </div>
+            </div>
           </section>
+        </div>
 
-          <section class="panel-card panel-card--sticky">
-            <div class="panel-card__title">当前快照</div>
-            <div class="mini-stats mini-stats--side">
-              <div class="mini-stat"><span>阶段数</span><strong>{{ stages.length }}</strong></div>
-              <div class="mini-stat"><span>历史批次</span><strong>{{ batches.length }}</strong></div>
-              <div class="mini-stat"><span>系统预览行</span><strong>{{ internalSummary?.rows.length ?? 0 }}</strong></div>
+        <aside class="import-side">
+          <section class="side-card">
+            <span class="side-card__eyebrow">当前导入摘要</span>
+            <div class="side-card__summary">
+              <div><small>课程</small><strong>{{ subject || "未选择课程" }}</strong></div>
+              <div><small>阶段</small><strong>{{ selectedStageLabel }}</strong></div>
+              <div><small>模式</small><strong>{{ currentModeLabel }}</strong></div>
+              <div><small>最近导入</small><strong>{{ latestBatchLabel }}</strong></div>
             </div>
           </section>
 
-          <section class="panel-card panel-card--sticky" v-if="recentBatches.length">
-            <div class="panel-card__title">最近导入记录</div>
-            <div class="history-list">
-              <div v-for="item in recentBatches" :key="item.id" class="history-item">
-                <div class="history-item__head">
-                  <strong>{{ item.stage_title }}</strong>
-                  <span>{{ item.metric_type }}</span>
-                </div>
-                <small>{{ item.created_at.replace("T", " ").slice(0, 16) }}</small>
-                <p>成功 {{ item.success_rows }}/{{ item.total_rows }}，失败 {{ item.failed_rows }}</p>
+          <section class="side-card">
+            <div class="side-card__head">
+              <div>
+                <span class="side-card__eyebrow">当前完成度</span>
+                <h3>{{ completionPercent }}%</h3>
+                <p>还差 {{ pendingItems.length }} 项待补充</p>
               </div>
+            </div>
+
+            <div class="side-checks">
+              <article v-for="item in pendingItems" :key="item.key" class="side-check side-check--pending">
+                <div><strong>{{ item.title }}</strong><span>{{ item.desc }}</span></div>
+              </article>
+            </div>
+
+            <button class="side-toggle" type="button" @click="showCompleted = !showCompleted">
+              已完成 {{ completedItems.length }} 项
+              <span>{{ showCompleted ? "收起" : "展开" }}</span>
+            </button>
+
+            <div v-if="showCompleted" class="side-checks side-checks--done">
+              <article v-for="item in completedItems" :key="item.key" class="side-check side-check--done">
+                <div><strong>{{ item.title }}</strong><span>{{ item.desc }}</span></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="side-card">
+            <span class="side-card__eyebrow">快捷操作</span>
+            <div class="side-actions">
+              <HintButton size="small" tip="刷新当前课程的导入数据" @click="refresh">刷新</HintButton>
+              <HintButton size="small" tip="查看最近导入记录" @click="scrollToHistory">查看历史</HintButton>
+              <HintButton size="small" tip="去结果页复核画像" @click="openProfiles">去看结果</HintButton>
             </div>
           </section>
         </aside>
-      </div>
+      </section>
+
+      <section class="result-card panel-card">
+        <div class="result-card__head">
+          <div>
+            <span class="import-section__eyebrow">导入结果</span>
+            <h2>查看本次导入结果</h2>
+            <p>导入完成后，这里会显示结果摘要与下一步操作入口。</p>
+          </div>
+          <HintButton size="small" tip="查看完整导入历史" @click="scrollToHistory">查看导入历史</HintButton>
+        </div>
+
+        <div v-if="!lastResult" class="result-strip">
+          暂无本次导入结果。完成一次导入后，这里会立即显示成功数、失败数和重算结果。
+        </div>
+
+        <template v-else>
+          <div class="result-grid">
+            <div v-for="item in resultSummaryCards" :key="item.label" class="result-summary">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+
+          <div class="result-note">
+            <span>{{ lastResult.next_action }}</span>
+            <button class="ghost-btn" type="button" @click="openProfiles">去结果复核</button>
+          </div>
+
+          <div v-if="lastResult.errors?.length" class="error-box">
+            <strong>错误预览</strong>
+            <span v-for="msg in lastResult.errors" :key="msg">{{ msg }}</span>
+          </div>
+        </template>
+      </section>
+
+      <section ref="historyAnchor" class="history-card panel-card">
+        <div class="history-card__head">
+          <div>
+            <span class="import-section__eyebrow">历史记录</span>
+            <h2>导入历史</h2>
+            <p>保留最近导入记录，方便回看阶段数据与最近一次操作。</p>
+          </div>
+          <div class="history-card__meta">{{ historyCountLabel }}</div>
+        </div>
+
+        <div ref="historyShell" class="history-table-shell">
+          <el-table :data="recentBatches" size="large" style="width: 100%">
+            <el-table-column label="时间" min-width="180">
+              <template #default="{ row }">{{ row.created_at.replace("T", " ").slice(0, 19) }}</template>
+            </el-table-column>
+            <el-table-column prop="stage_title" label="阶段" min-width="220" />
+            <el-table-column label="类型" min-width="160">
+              <template #default="{ row }"><span class="history-badge">{{ metricTypeLabels[row.metric_type] || row.metric_type }}</span></template>
+            </el-table-column>
+            <el-table-column prop="file_name" label="文件" min-width="220" />
+            <el-table-column label="成功/总数" min-width="120">
+              <template #default="{ row }">{{ row.success_rows }}/{{ row.total_rows }}</template>
+            </el-table-column>
+            <el-table-column label="错误预览" min-width="260">
+              <template #default="{ row }">
+                <span v-if="!row.error_preview?.length" class="history-ok">无</span>
+                <div v-else class="history-errors" :title="row.error_preview.join('\n')">{{ row.error_preview.join("；") }}</div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </section>
     </template>
-  </el-card>
+  </section>
 </template>
 
 <style scoped>
-.stage-import {
-  border-radius: 28px;
-  border: 1px solid #dfe7f2;
-  background: radial-gradient(circle at top right, rgba(74, 115, 184, 0.12), transparent 22%), linear-gradient(180deg, #fff 0%, #f6f9ff 100%);
-  box-shadow: 0 24px 56px rgba(30, 52, 86, 0.08);
-}
-
-.stage-import__header,
-.stage-import__toolbar,
-.stage-import__hero,
-.hero-stats,
-.scope-grid,
-.import-columns,
-.mapping-grid,
-.mini-stats,
-.note-grid,
-.stage-import__layout,
-.panel-card__header,
-.inline-tip {
-  display: flex;
-  gap: 16px;
-}
-
-.stage-import__header,
-.panel-card__header {
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-
-.stage-import__intro,
-.hero-copy,
-.workflow-card,
-.panel-card,
-.stat-card,
-.scope-item,
-.mapping-item,
-.mini-stat,
-.note-card,
-.history-item {
-  display: grid;
-  gap: 8px;
-}
-
-.stage-import__eyebrow,
-.panel-card__eyebrow {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #4a73b8;
-}
-
-.stage-import__title {
-  font-size: 24px;
-  font-weight: 800;
-  color: #20344f;
-}
-
-.stage-import__subtitle,
-.hero-copy p,
-.panel-card__desc,
-.panel-card__hint,
-.mapping-item span,
-.note-card span,
-.history-item small,
-.history-item p,
-.scope-item small {
-  color: #61758f;
-  line-height: 1.75;
-}
-
-.stage-import__subtitle {
-  margin: 8px 0 0;
-  max-width: 760px;
-}
-
-.stage-import__hero {
-  align-items: stretch;
-  justify-content: space-between;
-  padding: 24px;
-  margin-bottom: 18px;
-  border-radius: 24px;
-  border: 1px solid #d9e4f4;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(236, 244, 255, 0.98));
-}
-
-.hero-copy {
-  flex: 1 1 360px;
-}
-
-.hero-copy h2 {
-  margin: 0 0 8px;
-  font-size: 28px;
-  line-height: 1.2;
-  color: #20344f;
-}
-
-.hero-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(170px, 1fr));
-  flex: 0 1 420px;
-}
-
-.stat-card,
-.scope-item,
-.mini-stat,
-.note-card {
-  padding: 15px 16px;
-  border-radius: 18px;
-  border: 1px solid #dfe7f2;
-  background: #f9fbff;
-}
-
-.stat-card span,
-.scope-item span,
-.mini-stat span {
-  font-size: 12px;
-  color: #7488a0;
-}
-
-.stat-card strong,
-.scope-item strong,
-.mini-stat strong {
-  font-size: 22px;
-  line-height: 1.4;
-  color: #20344f;
-}
-
-.stage-import__tabs {
-  margin-bottom: 18px;
-}
-
-.stage-import__layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  align-items: start;
-}
-
-.stage-import__main,
-.stage-import__side,
-.history-list {
-  display: grid;
-  gap: 18px;
-}
-
-.panel-card {
-  padding: 20px;
-  border-radius: 24px;
-  border: 1px solid #dfe7f2;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 12px 28px rgba(29, 53, 87, 0.05);
-}
-
-.panel-card__title {
-  font-size: 18px;
-  font-weight: 800;
-  color: #20344f;
-}
-
-.panel-card--sticky {
-  position: sticky;
-  top: 16px;
-}
-
-.scope-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.import-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-}
-
-.mapping-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.mapping-item {
-  grid-template-columns: auto 1fr;
-  align-items: start;
-  padding: 14px;
-  border-radius: 18px;
-  border: 1px solid #dfe7f2;
-  background: #f9fbff;
-}
-
-.mapping-item strong,
-.note-card strong,
-.history-item__head strong {
-  color: #20344f;
-}
-
-.panel-card__actions,
-.stage-import__toolbar {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.mini-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.mini-stats--side {
-  grid-template-columns: 1fr;
-}
-
-.note-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.note-grid--wide {
-  grid-template-columns: 1fr;
-}
-
-.inline-tip {
-  align-items: center;
-  color: #61758f;
-  font-size: 13px;
-}
-
-.checklist {
-  margin: 0;
-  padding-left: 18px;
-  color: #556a83;
-  line-height: 1.85;
-}
-
-.history-item {
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid #dfe7f2;
-  background: #f9fbff;
-}
-
-.history-item__head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-}
-
-.history-item__head span {
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #eaf2ff;
-  color: #4069ac;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.history-item p {
-  margin: 0;
-}
-
-.error-stack {
-  display: grid;
-  gap: 6px;
-  color: #c45b54;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.ok-text {
-  color: #4d9b6b;
-}
-
-@media (max-width: 1280px) {
-  .stage-import__layout,
-  .scope-grid,
-  .import-columns,
-  .mapping-grid,
-  .mini-stats,
-  .note-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .stage-import__hero {
-    flex-direction: column;
-  }
-
-  .hero-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .panel-card--sticky {
-    position: static;
-  }
-}
-
-@media (max-width: 768px) {
-  .hero-copy h2 {
-    font-size: 22px;
-  }
-
-  .hero-stats {
-    grid-template-columns: 1fr;
-  }
-
-  .stat-card strong,
-  .scope-item strong,
-  .mini-stat strong {
-    font-size: 18px;
-  }
-}
+.import-workspace { display: grid; gap: 24px; }
+.panel-card,.side-card { border: 1px solid #dfe7f4; border-radius: 20px; background: #ffffff; box-shadow: 0 8px 24px rgba(31, 61, 120, 0.05); }
+.import-empty { border-radius: 20px; border: 1px solid #dfe7f4; background: #ffffff; padding: 24px; }
+.import-shell { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 24px; align-items: start; }
+.import-main { padding: 24px; display: grid; gap: 24px; }
+.import-section { display: grid; gap: 18px; }
+.import-section__head,.result-card__head,.history-card__head,.side-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.import-section__eyebrow,.side-card__eyebrow { display: inline-flex; width: fit-content; padding: 6px 12px; border-radius: 999px; background: #eef4ff; color: #4f7fff; font-size: 12px; font-weight: 800; }
+.import-section__head h2,.result-card__head h2,.history-card__head h2 { margin: 8px 0 0; color: #1f2a44; font-size: 28px; line-height: 1.2; }
+.import-section__head p,.result-card__head p,.history-card__head p,.side-card p { margin: 8px 0 0; color: #70839d; line-height: 1.7; }
+.type-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.type-card { display: grid; gap: 12px; padding: 20px; text-align: left; border-radius: 18px; border: 1px solid #dfe7f4; background: #ffffff; cursor: pointer; }
+.type-card.is-active { border-color: #9fbef3; background: linear-gradient(165deg, #f8fbff 0%, #eef4ff 100%); }
+.type-card__icon { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: #eef4ff; color: #4f7fff; font-size: 20px; }
+.type-card__copy { display: grid; gap: 6px; }
+.type-card__tag { display: inline-flex; width: fit-content; padding: 4px 10px; border-radius: 999px; background: #f6f8fc; color: #60758f; font-size: 12px; font-weight: 700; }
+.type-card strong { color: #1f2a44; font-size: 22px; }
+.type-card p { margin: 0; color: #70839d; line-height: 1.7; }
+.config-panel { border-radius: 18px; border: 1px solid #e3ebf6; background: #f9fbff; padding: 20px; display: grid; gap: 18px; }
+.config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.field-block { display: grid; gap: 10px; }
+.field-block--full { grid-column: 1 / -1; }
+.field-block label { font-size: 13px; font-weight: 700; color: #405a7f; }
+.source-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.source-card { display: flex; justify-content: space-between; gap: 14px; padding: 16px; border-radius: 16px; border: 1px solid #dfe7f4; background: #ffffff; cursor: pointer; }
+.source-card.is-active { border-color: #9fbef3; background: #eef4ff; }
+.source-card__meta { display: flex; gap: 12px; align-items: flex-start; }
+.source-card__meta .el-icon,.behavior-placeholder .el-icon { color: #4f7fff; font-size: 18px; margin-top: 3px; }
+.source-card__meta strong,.behavior-placeholder strong,.file-card__meta strong,.guide-box strong,.result-summary strong,.side-check strong { color: #1f2a44; }
+.source-card__meta span,.behavior-placeholder span,.file-card__meta span,.side-check span { display: block; margin-top: 4px; color: #70839d; font-size: 13px; line-height: 1.6; }
+.upload-dropzone { width: 100%; }
+:deep(.upload-dropzone .el-upload-dragger) { width: 100%; padding: 34px 18px; border-radius: 16px; border: 1px dashed #b7caf0; background: linear-gradient(180deg, #fbfdff 0%, #f3f8ff 100%); }
+.upload-dropzone__icon { margin-bottom: 10px; color: #4f8cff; font-size: 28px; }
+.upload-dropzone__title { color: #1c2e46; font-size: 16px; font-weight: 700; }
+.upload-dropzone__desc { margin-top: 6px; color: #7c8ea7; font-size: 13px; }
+.file-card,.behavior-placeholder,.guide-box,.result-strip,.result-summary,.error-box { border-radius: 16px; }
+.file-card,.behavior-placeholder { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; border: 1px solid #dde7f5; background: #ffffff; }
+.ghost-btn { min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #dce6f2; background: #ffffff; color: #314661; font-size: 13px; font-weight: 700; cursor: pointer; }
+.config-actions,.result-note,.side-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.config-tip { color: #70839d; font-size: 13px; }
+.guide-box { display: grid; gap: 12px; padding: 16px; border: 1px solid #dfe7f4; background: #ffffff; }
+.guide-box p { margin: 6px 0 0; color: #70839d; line-height: 1.7; }
+.guide-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.guide-chips span { display: inline-flex; padding: 6px 10px; border-radius: 999px; background: #eef4ff; color: #4f7fff; font-size: 12px; font-weight: 700; }
+.import-side { display: grid; gap: 16px; position: sticky; top: 18px; }
+.side-card { padding: 18px; display: grid; gap: 14px; }
+.side-card__summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.side-card__summary div { display: grid; gap: 4px; }
+.side-card__summary small { color: #70839d; font-size: 12px; }
+.side-card__summary strong,.side-card__head h3 { color: #1f2a44; font-size: 18px; }
+.side-checks { display: grid; gap: 10px; }
+.side-check { padding: 14px; border-radius: 14px; border: 1px solid #dfe7f4; background: #ffffff; }
+.side-check--done { background: #f6fbf7; border-color: #d7eadb; }
+.side-toggle { display: flex; justify-content: space-between; align-items: center; min-height: 38px; padding: 0 4px; background: transparent; border: 0; color: #36506f; font-weight: 700; cursor: pointer; }
+.result-card,.history-card { padding: 24px; }
+.result-strip { padding: 16px 18px; border: 1px dashed #d7e3f5; background: #f9fbff; color: #70839d; line-height: 1.7; }
+.result-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.result-summary { padding: 18px; border: 1px solid #dfe7f4; background: #f9fbff; display: grid; gap: 8px; }
+.result-summary span { color: #7a8ea8; font-size: 13px; }
+.result-summary strong { font-size: 28px; }
+.error-box { margin-top: 14px; display: grid; gap: 8px; padding: 16px; border: 1px solid #f2d7d7; background: #fff8f8; color: #8b4a4a; }
+.history-card__meta { min-height: 34px; padding: 0 14px; border-radius: 999px; display: inline-flex; align-items: center; background: #f3f7ff; border: 1px solid #dbe6f5; color: #466183; font-size: 13px; font-weight: 700; }
+.history-table-shell { margin-top: 18px; overflow: hidden; border: 1px solid #e1e9f5; border-radius: 14px; background: #fbfdff; }
+.history-badge { min-height: 28px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; background: #eef4ff; color: #4872b8; font-size: 12px; font-weight: 700; }
+.history-ok { color: #2f6e49; font-weight: 700; }
+.history-errors { color: #8b4a4a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:deep(.history-table-shell .el-table) { --el-table-border-color: #e1e9f5; --el-table-header-bg-color: #f6f9ff; --el-table-row-hover-bg-color: #f8fbff; }
+:deep(.history-table-shell .el-table th.el-table__cell) { color: #597394; font-weight: 700; }
+:deep(.history-table-shell .el-table td.el-table__cell) { color: #1f3550; }
+@media (max-width: 1200px) { .import-shell,.type-grid,.source-grid,.result-grid { grid-template-columns: 1fr; } .import-side { position: static; } }
+@media (max-width: 900px) { .config-grid,.side-card__summary { grid-template-columns: 1fr; } .field-block--full { grid-column: span 1; } .import-main,.result-card,.history-card { padding: 20px; } }
 </style>

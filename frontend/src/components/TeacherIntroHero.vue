@@ -15,6 +15,7 @@ defineProps<{
         <h2 class="teacher-intro-hero__title">{{ title }}</h2>
         <span v-if="pill" class="teacher-intro-hero__pill">{{ pill }}</span>
       </div>
+      <p v-if="description" class="teacher-intro-hero__description">{{ description }}</p>
     </div>
     <div v-if="$slots.actions" class="teacher-intro-hero__actions">
       <slot name="actions" />
@@ -78,6 +79,13 @@ defineProps<{
   color: #4f6788;
   font-size: 12px;
   font-weight: 700;
+}
+
+.teacher-intro-hero__description {
+  margin: 0;
+  color: #61789a;
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .teacher-intro-hero__actions {

@@ -27,15 +27,10 @@ const SCORE_OPTIONS = [
   { label: "总是", value: 1.0 },
 ];
 
-function scoreOptionLabel(score: number | null | undefined) {
-  const option = SCORE_OPTIONS.find((item) => item.value === score);
-  return option?.label ?? "未选择";
-}
-
 const QUESTION_BANK: Record<string, string[]> = {
-  creative_thinking: ["我会主动尝试不同解法。", "我会把旧知识用于新问题。", "我愿意提出自己的新想法。"],
+  creative_thinking: ["我会主动尝试不同解法。", "我会把旧知识用到新问题中。", "我愿意提出自己的新想法。"],
   value_judgement: ["我会思考这种做法是否合理。", "我会比较不同方案的利弊。", "我会结合目标做选择。"],
-  academic_background: ["我了解自己当前基础水平。", "我知道自己在哪些前置知识薄弱。", "我清楚这门课和自己背景的关系。"],
+  academic_background: ["我了解自己当前的基础水平。", "我知道自己在哪些前置知识上较弱。", "我清楚这门课和自己背景的关系。"],
   interest_type: ["我对这门课的内容有兴趣。", "我愿意主动探索课外资料。", "我愿意持续投入学习时间。"],
   intelligence_advantage: ["我知道自己擅长哪种学习方式。", "我会优先用擅长方式解决问题。", "我会在小组中发挥自己的优势。"],
   resource_preference: ["我会选择适合自己的资源类型。", "我会根据目标调整学习资源。", "我会复看关键资源内容。"],
@@ -47,6 +42,7 @@ const QUESTION_BANK: Record<string, string[]> = {
 const props = defineProps<{
   courseId: number | null;
 }>();
+
 const emit = defineEmits<{
   (e: "saved"): void;
 }>();
@@ -55,24 +51,26 @@ const loading = ref(false);
 const saving = ref(false);
 const items = ref<LocalItem[]>([]);
 
+function scoreOptionLabel(score: number | null | undefined) {
+  const option = SCORE_OPTIONS.find((item) => item.value === score);
+  return option?.label ?? "未选择";
+}
+
 const groupedItems = computed(() => {
   const bucket = new Map<string, LocalItem[]>();
   for (const item of items.value) {
     const key = item.dimension_title || "未分组";
-    const arr = bucket.get(key) ?? [];
-    arr.push(item);
-    bucket.set(key, arr);
+    const rows = bucket.get(key) ?? [];
+    rows.push(item);
+    bucket.set(key, rows);
   }
-  return Array.from(bucket.entries()).map(([title, rows]) => ({
-    title,
-    rows,
-  }));
+  return Array.from(bucket.entries()).map(([title, rows]) => ({ title, rows }));
 });
 
 const completedCount = computed(() => items.value.filter((item) => typeof item.score === "number").length);
 const progressText = computed(() => `${completedCount.value}/${items.value.length}`);
 const answeredQuestionCount = computed(() =>
-  items.value.reduce((count, item) => count + item.questionAnswers.filter((v) => typeof v === "number").length, 0),
+  items.value.reduce((count, item) => count + item.questionAnswers.filter((value) => typeof value === "number").length, 0),
 );
 const totalQuestionCount = computed(() => items.value.reduce((count, item) => count + item.questionAnswers.length, 0));
 const completionPercent = computed(() => {
@@ -90,15 +88,16 @@ const dimensionSummary = computed(() => {
   for (const item of items.value) {
     if (typeof item.score !== "number") continue;
     const key = item.dimension_title || "未分组";
-    const arr = bucket.get(key) ?? [];
-    arr.push(item.score);
-    bucket.set(key, arr);
+    const rows = bucket.get(key) ?? [];
+    rows.push(item.score);
+    bucket.set(key, rows);
   }
   return Array.from(bucket.entries())
-    .map(([title, values]) => {
-      const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
-      return { title, avg: Number(avg.toFixed(2)), count: values.length };
-    })
+    .map(([title, values]) => ({
+      title,
+      avg: Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2)),
+      count: values.length,
+    }))
     .sort((a, b) => b.avg - a.avg);
 });
 const strongestItem = computed(() => {
@@ -111,6 +110,7 @@ const weakestItem = computed(() => {
   if (!scored.length) return null;
   return [...scored].sort((a, b) => Number(a.score) - Number(b.score))[0];
 });
+const canSave = computed(() => items.value.some((item) => item.questionAnswers.some((value) => typeof value === "number")));
 
 function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
@@ -128,20 +128,18 @@ function getQuestionTexts(item: Item): string[] {
 
 function scoreToAnswers(score: number | null, count: number): Array<number | null> {
   if (typeof score !== "number") return new Array(count).fill(null);
-  const normalized = clamp01(score);
-  return new Array(count).fill(normalized);
+  return new Array(count).fill(clamp01(score));
 }
 
 function calcAutoScore(item: LocalItem): number | null {
-  const answered = item.questionAnswers.filter((v): v is number => typeof v === "number");
+  const answered = item.questionAnswers.filter((value): value is number => typeof value === "number");
   if (!answered.length) return null;
-  const avg = answered.reduce((sum, v) => sum + v, 0) / answered.length;
+  const avg = answered.reduce((sum, value) => sum + value, 0) / answered.length;
   return Number(clamp01(avg).toFixed(2));
 }
 
 function applyAutoScore(item: LocalItem) {
-  const value = calcAutoScore(item);
-  item.score = value;
+  item.score = calcAutoScore(item);
 }
 
 async function load() {
@@ -173,6 +171,10 @@ async function save() {
     ElMessage.warning("请先选择课程");
     return;
   }
+  if (!canSave.value) {
+    ElMessage.warning("请至少完成一项问卷作答");
+    return;
+  }
   saving.value = true;
   try {
     await api.put(`/portrait/questionnaire-input?course_id=${props.courseId}`, {
@@ -182,7 +184,7 @@ async function save() {
         note: item.note || "",
       })),
     });
-    ElMessage.success("补充内容已保存");
+    ElMessage.success(`补充内容已保存，已更新 ${completedCount.value} 项`);
     await load();
     emit("saved");
   } catch (e: any) {
@@ -207,7 +209,7 @@ watch(
       <div class="questionnaire-pane__header">
         <div>
           <div class="questionnaire-pane__title">补充问卷</div>
-          <div class="questionnaire-pane__subtitle">按课程要求补充填写，系统会用于更新画像结果。</div>
+          <div class="questionnaire-pane__subtitle">按课程要求补充填写，系统会用于更新学习画像结果。</div>
         </div>
         <div class="questionnaire-pane__meta">
           <span>完成度 {{ progressText }}</span>
@@ -222,8 +224,8 @@ watch(
     </div>
 
     <div v-else-if="items.length === 0" class="questionnaire-pane__empty">
-      <el-empty description="这门课没有启用补充问卷项" :image-size="90" />
-      <div class="questionnaire-pane__hint">老师启用“学生补充”类指标后，这里会自动出现。</div>
+      <el-empty description="这门课还没有启用补充问卷项" :image-size="90" />
+      <div class="questionnaire-pane__hint">老师启用问卷型指标后，这里会自动出现可填写内容。</div>
     </div>
 
     <div v-else class="questionnaire-pane__content">
@@ -249,7 +251,7 @@ watch(
 
         <div class="questionnaire-summary__chart">
           <div class="questionnaire-summary__title">按维度结果</div>
-          <div v-if="dimensionSummary.length === 0" class="questionnaire-summary__empty">填写后这里会显示图形结果</div>
+          <div v-if="dimensionSummary.length === 0" class="questionnaire-summary__empty">填写后这里会显示维度结果</div>
           <div v-else class="dimension-bars">
             <div v-for="row in dimensionSummary" :key="row.title" class="dimension-bars__row">
               <div class="dimension-bars__head">
@@ -272,7 +274,7 @@ watch(
               <strong>{{ item.indicator_title }}</strong>
               <span>学生补充项</span>
             </div>
-            <div class="questionnaire-item__question-title">题项作答（推荐）</div>
+            <div class="questionnaire-item__question-title">题项作答</div>
             <div class="questionnaire-item__questions">
               <div v-for="(text, qIndex) in item.questionTexts" :key="`${item.indicator_id}-${qIndex}`" class="question-row">
                 <div class="question-row__text">{{ qIndex + 1 }}. {{ text }}</div>
@@ -291,15 +293,15 @@ watch(
               <span>系统换算结果：{{ scoreOptionLabel(calcAutoScore(item)) }}</span>
             </div>
             <div class="questionnaire-item__hint">
-              这里只需要完成上面的题项作答，系统会自动换算成本项结果，不需要你自己设置任何权重或评分规则。
+              完成上面的题项后，系统会自动换算当前指标结果，不需要你手动设置权重或评分规则。
             </div>
-            <el-input v-model="item.note" type="textarea" :rows="2" placeholder="可选：填写说明、标签或学习感受" />
+            <el-input v-model="item.note" type="textarea" :rows="2" placeholder="可选：补充说明、标签或当前学习感受" />
           </article>
         </div>
       </section>
 
       <div class="questionnaire-pane__actions">
-        <el-button type="primary" :loading="saving" @click="save">保存补充内容</el-button>
+        <el-button type="primary" :loading="saving" :disabled="!canSave" @click="save">保存补充内容</el-button>
       </div>
     </div>
   </el-card>

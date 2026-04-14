@@ -133,8 +133,8 @@ def _parse_dt(value: str | None) -> datetime | None:
     return stage_support.parse_dt(value)
 
 
-def _course_out(stage: CourseStage) -> CourseStageOut:
-    return stage_support.course_out(stage)
+def _course_out(stage: CourseStage, course: Course | None = None) -> CourseStageOut:
+    return stage_support.course_out(stage, course)
 
 
 def _metric_type_value(value: StageMetricType | str) -> str:
@@ -1065,11 +1065,11 @@ def list_stages(
     session: Session = Depends(get_session),
     user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    _get_course_or_403(session, user, course_id)
+    course = _get_course_or_403(session, user, course_id)
     rows = session.exec(
         select(CourseStage).where(CourseStage.course_id == course_id).order_by(CourseStage.stage_order, CourseStage.id)
     ).all()
-    return [stage_support.course_out(row) for row in rows]
+    return [stage_support.course_out(row, course) for row in rows]
 
 
 @router.post("/courses/{course_id}", response_model=CourseStageOut)

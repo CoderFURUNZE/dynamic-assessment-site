@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
@@ -29,19 +29,29 @@ type DimensionItem = {
 const props = defineProps<{
   courseId: number | null;
   subject: string;
+  courses: Array<{ id: number; title: string; code?: string }>;
+}>();
+
+const emit = defineEmits<{
+  (e: "subject-change", value: string): void;
 }>();
 
 const loading = ref(false);
 const saving = ref(false);
 const items = ref<DimensionItem[]>([]);
 const selectedDimensionId = ref<number | null>(null);
+const sourceFilter = ref<"all" | "auto" | "imported" | "teacher" | "questionnaire">("all");
+const statusFilter = ref<"all" | "enabled" | "disabled">("all");
 
-const enabledCount = computed(() =>
-  items.value.reduce((sum, dim) => sum + dim.indicators.filter((item) => item.enabled).length, 0)
-);
+const sourceTypeOptions = [
+  { value: "auto", label: "系统自动" },
+  { value: "imported", label: "阶段导入" },
+  { value: "teacher", label: "教师补充" },
+  { value: "questionnaire", label: "问卷自评" },
+] as const;
 
 const selectedDimension = computed(
-  () => items.value.find((item) => item.id === selectedDimensionId.value) ?? items.value[0] ?? null
+  () => items.value.find((item) => item.id === selectedDimensionId.value) ?? items.value[0] ?? null,
 );
 
 const selectedDimensionSummary = computed(() => {
@@ -52,6 +62,19 @@ const selectedDimensionSummary = computed(() => {
     enabledCount: enabledIndicators.length,
     total: enabledIndicators.reduce((sum, indicator) => sum + Number(indicator.weight || 0), 0),
   };
+});
+
+const filteredIndicators = computed(() => {
+  const dimension = selectedDimension.value;
+  if (!dimension) return [];
+  return dimension.indicators.filter((indicator) => {
+    const matchesSource = sourceFilter.value === "all" || indicator.source_type === sourceFilter.value;
+    const matchesStatus =
+      statusFilter.value === "all" ||
+      (statusFilter.value === "enabled" && indicator.enabled) ||
+      (statusFilter.value === "disabled" && !indicator.enabled);
+    return matchesSource && matchesStatus;
+  });
 });
 
 function ensureSelectedDimension() {
@@ -67,8 +90,8 @@ function ensureSelectedDimension() {
 function sourceTypeLabel(sourceType: string) {
   if (sourceType === "auto") return "系统自动";
   if (sourceType === "imported") return "阶段导入";
-  if (sourceType === "teacher") return "老师补充";
-  if (sourceType === "questionnaire") return "学生补充";
+  if (sourceType === "teacher") return "教师补充";
+  if (sourceType === "questionnaire") return "问卷自评";
   return sourceType;
 }
 
@@ -104,7 +127,7 @@ async function saveSelection() {
           indicator_id: indicator.id,
           enabled: indicator.enabled,
           weight: Number(indicator.weight || indicator.default_weight || 0),
-        }))
+        })),
     );
     await api.put(`/portrait/course-selection?course_id=${props.courseId}`, { selections });
     ElMessage.success("课程评价项已保存");
@@ -120,9 +143,11 @@ watch(
   () => props.courseId,
   () => {
     selectedDimensionId.value = null;
+    sourceFilter.value = "all";
+    statusFilter.value = "all";
     loadSelection();
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(
@@ -130,7 +155,7 @@ watch(
   () => {
     ensureSelectedDimension();
   },
-  { deep: true }
+  { deep: true },
 );
 
 onMounted(loadSelection);
@@ -162,10 +187,43 @@ onMounted(loadSelection);
 
         <section class="indicator-master__detail">
           <div class="indicator-detail-header">
-            <div>
+            <div class="indicator-detail-header__main">
               <div class="indicator-detail-header__title">评价维度大类与细类</div>
               <div class="indicator-detail-header__meta">
                 {{ selectedDimension ? `${selectedDimension.title}，默认展示该大类下的细项` : "先从左侧选择一个一级维度" }}
+              </div>
+            </div>
+            <div v-if="selectedDimension" class="indicator-toolbar">
+              <div class="indicator-toolbar__controls">
+                <el-select
+                  :model-value="subject"
+                  size="large"
+                  class="indicator-toolbar__select indicator-toolbar__select--course"
+                  placeholder="选择课程"
+                  @update:model-value="(value) => emit('subject-change', String(value || ''))"
+                >
+                  <el-option
+                    v-for="course in courses"
+                    :key="course.id"
+                    :label="course.title"
+                    :value="course.title"
+                  />
+                </el-select>
+                <el-select v-model="sourceFilter" size="large" class="indicator-toolbar__select">
+                  <el-option label="全部来源" value="all" />
+                  <el-option
+                    v-for="item in sourceTypeOptions"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
+                <el-select v-model="statusFilter" size="large" class="indicator-toolbar__select">
+                  <el-option label="全部状态" value="all" />
+                  <el-option label="仅看启用" value="enabled" />
+                  <el-option label="仅看未启用" value="disabled" />
+                </el-select>
+                <el-button type="primary" size="large" round :loading="saving" @click="saveSelection">保存配置</el-button>
               </div>
             </div>
           </div>
@@ -176,9 +234,15 @@ onMounted(loadSelection);
             :image-size="72"
           />
 
+          <el-empty
+            v-else-if="!filteredIndicators.length"
+            description="当前筛选条件下没有匹配的细项"
+            :image-size="72"
+          />
+
           <div v-else class="indicator-list">
             <article
-              v-for="indicator in selectedDimension.indicators"
+              v-for="indicator in filteredIndicators"
               :key="indicator.id"
               class="indicator-list__item"
               :class="{ 'is-disabled': !indicator.active }"
@@ -190,7 +254,7 @@ onMounted(loadSelection);
                   </el-checkbox>
                   <span class="indicator-list__code">{{ indicator.code }}</span>
                 </div>
-                <p class="indicator-list__desc">{{ indicator.description || "还没写说明" }}</p>
+                <p class="indicator-list__desc">{{ indicator.description || "还没填写说明" }}</p>
               </div>
 
               <div class="indicator-list__meta">
@@ -298,9 +362,14 @@ onMounted(loadSelection);
 .indicator-detail-header {
   display: flex;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
   padding: 2px 0 16px;
   border-bottom: 1px solid #dbe5f1;
+}
+
+.indicator-detail-header__main {
+  min-width: 0;
 }
 
 .indicator-detail-header__title {
@@ -315,17 +384,25 @@ onMounted(loadSelection);
   color: #6f809f;
 }
 
-.summary-pill {
-  display: inline-flex;
+.indicator-toolbar {
+  min-width: min(100%, 620px);
+}
+
+.indicator-toolbar__controls {
+  display: flex;
   align-items: center;
-  min-height: 32px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid #d7e4f5;
-  background: #f7faff;
-  color: #355b97;
-  font-size: 13px;
-  font-weight: 700;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.indicator-toolbar__select {
+  width: 148px;
+}
+
+.indicator-toolbar__select--course {
+  width: 148px;
 }
 
 .indicator-list {
@@ -474,19 +551,27 @@ onMounted(loadSelection);
   .indicator-detail-header {
     justify-content: flex-start;
   }
+
+  .indicator-detail-header {
+    flex-direction: column;
+  }
+
+  .indicator-toolbar,
+  .indicator-toolbar__controls {
+    width: 100%;
+    justify-items: start;
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 720px) {
-  .indicator-toolbar {
-    justify-content: flex-start;
+  .indicator-toolbar__controls {
+    flex-wrap: wrap;
   }
 
-  .indicator-toolbar__meta {
-    width: 100%;
-  }
-
-  .indicator-metric {
-    min-width: calc(50% - 6px);
+  .indicator-toolbar__select,
+  .indicator-toolbar__select--course {
+    width: 148px;
   }
 
   .indicator-weight-editor {

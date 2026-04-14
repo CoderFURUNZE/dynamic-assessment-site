@@ -1,4 +1,4 @@
-import json
+﻿import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -371,7 +371,7 @@ def activate_teacher_course(
     if not _is_course_platform_open(course):
         raise HTTPException(status_code=400, detail="课程当前不可激活")
     if course.teacher_id is None or int(course.teacher_id) != int(user.id):
-        raise HTTPException(status_code=403, detail="该课程未指定给当前教师，无法激活")
+        raise HTTPException(status_code=403, detail="该课程未分配给当前教师，无法激活")
     existing = session.exec(
         select(CourseTeacherActivation).where(
             CourseTeacherActivation.course_id == course_id,
@@ -468,7 +468,7 @@ def exit_teacher_course(
     if activation is None:
         raise HTTPException(status_code=404, detail="课程未激活")
     if activation.teaching_status == TeacherCourseStatus.teaching:
-        raise HTTPException(status_code=400, detail="请先结束课程，再退出工作台")
+        raise HTTPException(status_code=400, detail="璇峰厛缁撴潫璇剧▼锛屽啀閫€鍑哄伐浣滃彴")
     session.delete(activation)
     session.commit()
     return {"ok": True}
@@ -537,7 +537,7 @@ def enroll_course(
         raise HTTPException(status_code=404, detail="Course not found")
     status_value = course.enroll_status.value if isinstance(course.enroll_status, CourseEnrollStatus) else str(course.enroll_status or "")
     if status_value != CourseEnrollStatus.open.value:
-        raise HTTPException(status_code=400, detail="当前课程不可报名")
+        raise HTTPException(status_code=400, detail="褰撳墠璇剧▼涓嶅彲鎶ュ悕")
     if course.apply_deadline is not None and datetime.utcnow() > course.apply_deadline:
         raise HTTPException(status_code=400, detail="已超过报名截止时间")
     active_count = len(
@@ -549,7 +549,7 @@ def enroll_course(
         ).all()
     )
     if active_count >= int(course.max_students or 0):
-        raise HTTPException(status_code=400, detail="课程名额已满")
+        raise HTTPException(status_code=400, detail="璇剧▼鍚嶉宸叉弧")
     prereqs = session.exec(select(CoursePrerequisite).where(CoursePrerequisite.course_id == course_id)).all()
     if prereqs:
         prereq_ids = [int(item.prerequisite_course_id) for item in prereqs]
@@ -562,7 +562,7 @@ def enroll_course(
         done_ids = {int(item) for item in completed}
         missing = [cid for cid in prereq_ids if cid not in done_ids]
         if missing:
-            raise HTTPException(status_code=400, detail=f"未完成前置课程：{', '.join(str(item) for item in missing)}")
+            raise HTTPException(status_code=400, detail=f"鏈畬鎴愬墠缃绋嬶細{', '.join(str(item) for item in missing)}")
     existing = session.exec(
         select(CourseApplication).where(CourseApplication.student_id == user.id, CourseApplication.course_id == course_id)
     ).first()
@@ -757,7 +757,7 @@ def graph_map(
         ]
         if blocked:
             blocked_titles = [kp_title_map.get(item, str(item)) for item in blocked[:3]]
-            blocked_reason = f"前驱未完成：{'、'.join(blocked_titles)}"
+            blocked_reason = f"前置未完成：{'、'.join(blocked_titles)}"
         dimension_info = kp_dimension_summary.get("by_kp", {}).get(int(kp.id), {})
         overlay.append(
             GraphOverlayNodeOut(
@@ -851,7 +851,7 @@ def node_detail(
                 mastery=float(mastery.value),
                 status=mastery.status,
                 recommended=False,
-                blocked_reason=f"前驱未完成：{'、'.join(blocked_titles or [str(item) for item in blocked[:3]])}" if blocked else None,
+                blocked_reason=f"前置未完成：{'、'.join(blocked_titles or [str(item) for item in blocked[:3]])}" if blocked else None,
                 knowledge_enabled=bool(dimension_info.get("knowledge_enabled", True)),
                 ability_enabled=bool(dimension_info.get("ability_enabled", False)),
                 literacy_enabled=bool(dimension_info.get("literacy_enabled", False)),
@@ -1038,7 +1038,7 @@ def path(
     elif next_title_list:
         path_summary = f"前置已满足，可以继续学习后继知识点：{'、'.join(next_title_list[:3])}"
     else:
-        path_summary = "当前知识点暂无明确后继，可在相关知识点中做补充学习"
+        path_summary = "当前知识点暂时没有明确后继，可在相关知识点中补充学习"
 
     return GraphPathOut(
         kp_id=kp_id,

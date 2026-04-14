@@ -28,6 +28,7 @@ def init_db() -> None:
     _ensure_knowledgeedge_columns()
     _ensure_mastery_columns()
     _ensure_learning_resource_columns()
+    _ensure_stage_import_record_columns()
     _ensure_stage_snapshot_columns()
     _ensure_profile_snapshot_columns()
     _ensure_enrollment_columns()
@@ -262,6 +263,30 @@ def _ensure_learning_resource_columns() -> None:
             conn.execute(text("UPDATE learningresource SET source_kind='external' WHERE source_kind IS NULL"))
             conn.execute(text("UPDATE learningresource SET updated_at=CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
             conn.execute(text("UPDATE learningresource SET created_at=CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+    except Exception:
+        pass
+
+
+def _ensure_stage_import_record_columns() -> None:
+    _ensure_columns("stageimportrecord", {"raw_json": "raw_json TEXT DEFAULT '{}'"})
+    inspector = inspect(engine)
+    try:
+        cols = {c["name"]: c for c in inspector.get_columns("stageimportrecord")}
+    except Exception:
+        return
+    raw = cols.get("raw_json")
+    if raw is None:
+        return
+    raw_type = str(raw.get("type", "")).lower()
+    if "text" in raw_type or "clob" in raw_type:
+        return
+    try:
+        with engine.begin() as conn:
+            dialect = engine.dialect.name.lower()
+            if dialect == "mysql":
+                conn.execute(text("ALTER TABLE stageimportrecord MODIFY COLUMN raw_json LONGTEXT NOT NULL"))
+            elif dialect == "sqlite":
+                pass
     except Exception:
         pass
 

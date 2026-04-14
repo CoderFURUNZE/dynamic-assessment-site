@@ -4,7 +4,6 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import TeacherStudentDetail from "../components/TeacherStudentDetail.vue";
-import PageSectionCard from "../components/PageSectionCard.vue";
 import TeacherIntroHero from "../components/TeacherIntroHero.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
@@ -36,7 +35,10 @@ function syncQuery() {
   saveTeacherSubject(subject.value);
   router.replace({
     path: "/teacher/students",
-    query: buildTeacherSubjectQuery(subject.value, { tab: "detail", user_id: selectedStudentId.value ? String(selectedStudentId.value) : undefined }),
+    query: buildTeacherSubjectQuery(subject.value, {
+      tab: "detail",
+      user_id: selectedStudentId.value ? String(selectedStudentId.value) : undefined,
+    }),
   });
 }
 
@@ -44,7 +46,7 @@ watch(subject, () => syncQuery());
 watch(
   () => route.query.subject,
   (value) => {
-    const next = String(value || "").trim();
+    const next = resolveTeacherSubject(String(value || ""), subject.value, courses.value);
     if (next && next !== subject.value) subject.value = next;
   },
 );
@@ -54,15 +56,11 @@ onMounted(loadCourses);
 
 <template>
   <div class="teacher-page">
-    <TeacherIntroHero
-      eyebrow="学生分析"
-      title="学生详情"
-      pill="个体变化"
-    />
+    <TeacherIntroHero eyebrow="学生分析" title="学生详情" pill="个体变化" />
 
-    <PageSectionCard eyebrow="学生分析" title="学生详情">
+    <section class="teacher-detail-panel">
       <TeacherStudentDetail :subject="subject" :grade="grade" :initial-user-id="selectedStudentId" />
-    </PageSectionCard>
+    </section>
   </div>
 </template>
 
@@ -70,5 +68,9 @@ onMounted(loadCourses);
 .teacher-page {
   display: grid;
   gap: 20px;
+}
+
+.teacher-detail-panel {
+  min-width: 0;
 }
 </style>

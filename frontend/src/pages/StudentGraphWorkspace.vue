@@ -53,12 +53,50 @@ const workspaceState = ref<WorkspaceState>({
 const isStandaloneWorkspace = computed(() => Boolean(route.meta?.standaloneWorkspace));
 const currentCourse = computed(() => courses.value.find((item) => item.title === subject.value) ?? null);
 const currentKp = computed(() => kps.value.find((item) => item.id === currentKpId.value) ?? null);
-const selectedLabel = computed(() => {
-  if (currentKp.value) return `${currentKp.value.code} ${currentKp.value.title}`;
-  if (workspaceState.value.selectedCategory) return workspaceState.value.selectedCategory;
-  return "未选择";
+
+const recommendationLabel = computed(() => reco.value?.target_kp?.title || "继续完成当前知识点");
+const currentNodeLabel = computed(() => currentKp.value?.title || "请先在图谱中选择一个知识点");
+const currentNodeCode = computed(() => currentKp.value?.code || "--");
+const graphLead = computed(() => {
+  if (pathInfo.value?.path_summary) return pathInfo.value.path_summary;
+  if (reco.value?.reason_summary) return reco.value.reason_summary;
+  return "从图谱里选择一个知识点，系统会告诉你下一步该学什么。";
 });
-const recommendationLabel = computed(() => reco.value?.target_kp?.title || "暂无");
+
+const graphOverviewCards = computed(() => [
+  {
+    label: "知识点数量",
+    value: workspaceState.value.kpCount || kps.value.length,
+    hint: "当前课程纳入图谱的知识点",
+  },
+  {
+    label: "分类数量",
+    value: workspaceState.value.categoryCount,
+    hint: "用于组织学习路径的分类层级",
+  },
+  {
+    label: "当前筛选",
+    value: workspaceState.value.filteredCount || workspaceState.value.kpCount || kps.value.length,
+    hint: "当前视图里可见的节点数量",
+  },
+]);
+
+const graphStatusText = computed(() => {
+  if (!currentKp.value) return "等待选择";
+  if (pathInfo.value?.can_unlock_next === false && (pathInfo.value.blocked_titles?.length || 0) > 0) return "需补前置";
+  if (reco.value?.target_kp?.id === currentKp.value.id) return "推荐学习";
+  return "可继续学习";
+});
+
+const blockedSummary = computed(() => {
+  if (!pathInfo.value?.blocked_titles?.length) return "当前没有前置阻塞，可以继续推进后续知识点。";
+  return `需先补足：${pathInfo.value.blocked_titles.join("、")}`;
+});
+
+const nextCandidatesPreview = computed(() => {
+  if (!pathInfo.value?.next_titles?.length) return "完成当前知识点后，系统会在这里提示下一步内容。";
+  return pathInfo.value.next_titles.slice(0, 3).join("、");
+});
 
 const graphPathHint = computed(() => {
   if (!pathInfo.value) return null;
@@ -117,9 +155,7 @@ async function loadCourses() {
       ? ""
       : resolveStudentSubject(routeSubject, subject.value, courses.value);
     subject.value = nextSubject;
-    if (!nextSubject) {
-      resetWorkspaceState();
-    }
+    if (!nextSubject) resetWorkspaceState();
   } catch (e: any) {
     resetWorkspaceState();
     if (e?.response?.status === 401) return;
@@ -187,7 +223,7 @@ async function handleCourseChange() {
   syncQuery();
 }
 
-function handleSelectKp(id: number) {
+function openStudentKpContent(id: number) {
   router.push({
     path: `/student/kp-content/${id}`,
     query: {
@@ -195,6 +231,26 @@ function handleSelectKp(id: number) {
       from: "graph-workspace",
     },
   });
+}
+
+function openCurrentLearning() {
+  if (!currentKpId.value) {
+    ElMessage.warning("请先选择一个知识点");
+    return;
+  }
+  openStudentKpContent(currentKpId.value);
+}
+
+function openRecommendedLearning() {
+  if (reco.value?.target_kp?.id) {
+    openStudentKpContent(reco.value.target_kp.id);
+    return;
+  }
+  openCurrentLearning();
+}
+
+function handleSelectKp(id: number) {
+  currentKpId.value = id;
 }
 
 function handleStateChange(payload: WorkspaceState) {
@@ -219,6 +275,7 @@ watch(
   currentKpId,
   async (value, oldValue) => {
     if (value === oldValue) return;
+    syncQuery();
     await loadRecommendation();
     await loadPathInfo();
   },
@@ -231,32 +288,101 @@ onMounted(refreshWorkspace);
   <div class="graph-page" :class="{ 'graph-page--standalone': isStandaloneWorkspace }">
     <section class="graph-page__toolbar">
       <div class="graph-page__toolbar-copy">
-        <span class="graph-page__eyebrow">Knowledge Graph</span>
+        <span class="graph-page__eyebrow">学习导航</span>
         <h1>知识图谱</h1>
         <p>{{ currentCourse?.title || "当前没有可学习课程" }}</p>
+        <div class="graph-page__toolbar-meta">
+          <span>当前知识点：{{ currentNodeCode }}</span>
+          <span>学习状态：{{ graphStatusText }}</span>
+        </div>
       </div>
 
       <div class="graph-page__toolbar-actions">
-        <el-select v-model="subject" class="graph-page__select" placeholder="选择课程" @change="handleCourseChange" :disabled="courses.length === 0">
+        <el-select
+          v-model="subject"
+          class="graph-page__select"
+          placeholder="选择课程"
+          :disabled="courses.length === 0"
+          @change="handleCourseChange"
+        >
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
         <button class="graph-page__toolbar-btn" type="button" @click="refreshWorkspace">刷新</button>
+        <button class="graph-page__toolbar-btn graph-page__toolbar-btn--primary" type="button" @click="openCurrentLearning">
+          去学习
+        </button>
       </div>
     </section>
 
-    <section class="graph-page__workspace">
-      <KnowledgeGraphWorkspace
-        embedded
-        :subject="subject"
-        :grade="grade"
-        :current-kp-id="currentKpId"
-        :recommended-kp-id="reco?.target_kp?.id ?? null"
-        :highlighted-kp-ids="pathInfo?.next_candidates ?? null"
-        :graph-path-hint="graphPathHint"
-        :graph-reco-hint="graphRecoHint"
-        @select-kp="handleSelectKp"
-        @state-change="handleStateChange"
-      />
+    <section class="graph-page__overview">
+      <article v-for="item in graphOverviewCards" :key="item.label" class="graph-page__overview-card">
+        <span>{{ item.label }}</span>
+        <strong>{{ item.value }}</strong>
+        <small>{{ item.hint }}</small>
+      </article>
+    </section>
+
+    <section class="graph-page__content">
+      <section class="graph-page__workspace">
+        <KnowledgeGraphWorkspace
+          embedded
+          :subject="subject"
+          :grade="grade"
+          :current-kp-id="currentKpId"
+          :recommended-kp-id="reco?.target_kp?.id ?? null"
+          :highlighted-kp-ids="pathInfo?.next_candidates ?? null"
+          :graph-path-hint="graphPathHint"
+          :graph-reco-hint="graphRecoHint"
+          @select-kp="handleSelectKp"
+          @open-content="openStudentKpContent"
+          @state-change="handleStateChange"
+        />
+      </section>
+
+      <aside class="graph-page__side">
+        <section class="graph-page__side-panel">
+          <div class="graph-page__side-head">
+            <span class="graph-page__section-eyebrow">当前学习点</span>
+            <h3>{{ currentNodeLabel }}</h3>
+            <p>{{ graphLead }}</p>
+          </div>
+
+          <div class="graph-page__focus-card">
+            <span class="graph-page__focus-code">{{ currentNodeCode }}</span>
+            <strong>{{ graphStatusText }}</strong>
+            <p>{{ currentKp?.chapter || "当前知识点尚未配置所属分类" }}</p>
+          </div>
+
+          <div class="graph-page__side-list">
+            <article class="graph-page__side-item">
+              <span>推荐学习</span>
+              <strong>{{ recommendationLabel }}</strong>
+              <p>{{ reco?.reason_summary || "系统会根据你的当前学习状态推荐下一步内容。" }}</p>
+            </article>
+
+            <article class="graph-page__side-item">
+              <span>前置状态</span>
+              <strong>{{ pathInfo?.can_unlock_next === false ? "需要补前置" : "可以继续推进" }}</strong>
+              <p>{{ blockedSummary }}</p>
+            </article>
+
+            <article class="graph-page__side-item">
+              <span>下一步路径</span>
+              <strong>{{ nextCandidatesPreview }}</strong>
+              <p>{{ pathInfo?.path_summary || "完成当前知识点后，系统会给出后续学习建议。" }}</p>
+            </article>
+          </div>
+
+          <div class="graph-page__side-actions">
+            <button class="graph-page__side-btn graph-page__side-btn--primary" type="button" @click="openCurrentLearning">
+              进入当前知识点
+            </button>
+            <button class="graph-page__side-btn" type="button" @click="openRecommendedLearning">
+              学习推荐内容
+            </button>
+          </div>
+        </section>
+      </aside>
     </section>
   </div>
 </template>
@@ -265,12 +391,13 @@ onMounted(refreshWorkspace);
 .graph-page {
   min-height: calc(100dvh - 96px);
   display: grid;
-  gap: 10px;
+  gap: 14px;
 }
 
 .graph-page__toolbar,
 .graph-page__workspace,
-.graph-page__stat-card {
+.graph-page__overview-card,
+.graph-page__side-panel {
   border-radius: 24px;
   border: 1px solid color-mix(in srgb, var(--app-primary) 14%, var(--app-border));
   background: #ffffff;
@@ -312,6 +439,18 @@ onMounted(refreshWorkspace);
   color: #60758f;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.graph-page__toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.graph-page__toolbar-meta span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #60758f;
 }
 
 .graph-page__toolbar-actions {
@@ -362,6 +501,59 @@ onMounted(refreshWorkspace);
   color: #214d8f;
 }
 
+.graph-page__toolbar-btn--primary {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.graph-page__toolbar-btn--primary:hover,
+.graph-page__toolbar-btn--primary:focus-visible {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.graph-page__overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.graph-page__overview-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+}
+
+.graph-page__overview-card span,
+.graph-page__section-eyebrow,
+.graph-page__side-item span,
+.graph-page__focus-card span {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.graph-page__overview-card strong {
+  font-size: 24px;
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+.graph-page__overview-card small {
+  color: #7b8da6;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.graph-page__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  align-items: start;
+}
+
 .graph-page__workspace {
   overflow: hidden;
   min-height: min(82vh, 1000px);
@@ -369,10 +561,119 @@ onMounted(refreshWorkspace);
   background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
 }
 
+.graph-page__side {
+  min-width: 0;
+}
+
+.graph-page__side-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  position: sticky;
+  top: 18px;
+}
+
+.graph-page__side-head {
+  display: grid;
+  gap: 8px;
+}
+
+.graph-page__section-eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(79, 140, 255, 0.1);
+  color: #3566b8;
+}
+
+.graph-page__side-head h3 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.25;
+  color: #0f172a;
+}
+
+.graph-page__side-head p,
+.graph-page__side-item p,
+.graph-page__focus-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.graph-page__focus-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 18%, var(--app-border));
+  background: linear-gradient(135deg, #eef4ff 0%, #ffffff 100%);
+}
+
+.graph-page__focus-card strong,
+.graph-page__side-item strong {
+  font-size: 18px;
+  line-height: 1.4;
+  color: #0f172a;
+}
+
+.graph-page__focus-code {
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid #dce7f5;
+}
+
+.graph-page__side-list {
+  display: grid;
+  gap: 12px;
+}
+
+.graph-page__side-item {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.graph-page__side-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.graph-page__side-btn {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 1px solid #d7e4f5;
+  background: #ffffff;
+  color: #274263;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.graph-page__side-btn--primary {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
 @media (max-width: 1100px) {
   .graph-page__toolbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .graph-page__overview,
+  .graph-page__content {
+    grid-template-columns: 1fr;
   }
 }
 

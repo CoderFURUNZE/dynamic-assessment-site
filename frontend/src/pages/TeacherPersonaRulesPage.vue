@@ -4,7 +4,6 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import AdminPersonaManager from "../components/AdminPersonaManager.vue";
-import PageSectionCard from "../components/PageSectionCard.vue";
 import TeacherIntroHero from "../components/TeacherIntroHero.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
@@ -45,26 +44,22 @@ onMounted(loadCourses);
 
 <template>
   <div class="teacher-page">
-    <TeacherIntroHero
-      eyebrow="学生分析"
-      title="课程画像规则"
-      pill="教师配置"
-    />
+    <TeacherIntroHero eyebrow="学生分析" title="课程画像规则" pill="教师配置" />
 
-    <PageSectionCard eyebrow="课程规则" title="课程画像规则">
+    <section class="teacher-rules-panel">
       <AdminPersonaManager
         :subject="subject"
         :grade="grade"
         manager-role="teacher"
         step="settings"
       />
-    </PageSectionCard>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.teacher-page {
-  display: grid;
-  gap: 20px;
+.teacher-page,
+.teacher-rules-panel {
+  min-width: 0;
 }
 </style>

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from app.api.deps import require_role, teacher_has_course_access
+from app.api.routers import stage_support
 from app.db.models import (
     Course,
     CourseStage,
@@ -514,21 +515,31 @@ def save_questionnaire_indicator_input(
             session.delete(item)
 
     session.commit()
-    stage_ids = session.exec(
-        select(CourseStage.id).where(CourseStage.course_id == course_id).order_by(CourseStage.stage_order.asc())
+    stage_rows = session.exec(
+        select(CourseStage).where(CourseStage.course_id == course_id).order_by(CourseStage.stage_order.asc())
     ).all()
-    for stage_id in stage_ids:
+    normalized_stage_rows: list[CourseStage] = []
+    for stage in stage_rows:
+        subject, grade = stage_support._normalized_stage_identity(stage, course)
+        if stage.subject != subject or stage.grade != grade:
+            stage.subject = subject
+            stage.grade = grade
+            session.add(stage)
+        normalized_stage_rows.append(stage)
+    session.commit()
+    for stage in normalized_stage_rows:
         recalculate_stage_snapshots_for_stage(
             session,
-            stage_id=int(stage_id),
+            stage_id=int(stage.id),
             user_ids=[target_user_id],
             persist=True,
         )
+    profile_grade = next((str(stage.grade or "").strip() for stage in normalized_stage_rows if str(stage.grade or "").strip()), "通用")
     recalculate_profile_snapshot(
         session,
         user_id=target_user_id,
         subject=course.title,
-        grade="通用",
+        grade=profile_grade,
         persist=True,
     )
     return {"ok": True, "count": len(keep_ids)}

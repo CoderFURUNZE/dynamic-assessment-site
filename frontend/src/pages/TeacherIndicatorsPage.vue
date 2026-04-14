@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -13,8 +13,8 @@ const route = useRoute();
 const router = useRouter();
 const subject = ref("");
 const courses = ref<Course[]>([]);
-const selectedCourseId = computed<number | null>(() => courses.value.find((item) => item.title === subject.value)?.id ?? null);
 
+const selectedCourseId = computed<number | null>(() => courses.value.find((item) => item.title === subject.value)?.id ?? null);
 async function loadCourses() {
   try {
     const res = await api.get("/graph/courses");
@@ -51,7 +51,12 @@ onMounted(loadCourses);
     />
 
     <div class="teacher-page__content">
-      <TeacherIndicatorSelector :course-id="selectedCourseId" :subject="subject" />
+      <TeacherIndicatorSelector
+        :course-id="selectedCourseId"
+        :subject="subject"
+        :courses="courses"
+        @subject-change="subject = $event"
+      />
     </div>
   </div>
 </template>

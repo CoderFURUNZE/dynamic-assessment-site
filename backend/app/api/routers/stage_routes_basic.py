@@ -19,11 +19,11 @@ def list_stages(
     session: Session = Depends(get_session),
     user: User = Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    stage_support.get_course_or_403(session, user, course_id)
+    course = stage_support.get_course_or_403(session, user, course_id)
     rows = session.exec(
         select(CourseStage).where(CourseStage.course_id == course_id).order_by(CourseStage.stage_order, CourseStage.id)
     ).all()
-    return [stage_support.course_out(row) for row in rows]
+    return [stage_support.course_out(row, course) for row in rows]
 
 
 @router.post("/courses/{course_id}", response_model=CourseStageOut)
@@ -63,7 +63,7 @@ def create_stage(
     session.commit()
     session.refresh(stage)
     stage_support.log_action(session, user, "course_stage_create", f"course_id={course_id} stage_id={stage.id}")
-    return stage_support.course_out(stage)
+    return stage_support.course_out(stage, course)
 
 
 @router.put("/{stage_id}", response_model=CourseStageOut)
@@ -108,7 +108,7 @@ def update_stage(
     session.commit()
     session.refresh(stage)
     stage_support.log_action(session, user, "course_stage_update", f"stage_id={stage_id}")
-    return stage_support.course_out(stage)
+    return stage_support.course_out(stage, course)
 
 
 @router.delete("/{stage_id}")

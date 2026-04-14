@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
+import { ElCard, ElMessage, ElProgress } from "element-plus";
 import { api } from "../api";
 import ResourcePane from "../components/ResourcePane.vue";
 import QuizPane from "../components/QuizPane.vue";
-import StudentKpHeader from "../components/StudentKpHeader.vue";
 
 type KpInfo = {
   id: number;
@@ -22,14 +21,6 @@ type ResourceItem = {
   url: string;
   category?: string;
   description?: string;
-  tags?: string;
-  preview_type?: string;
-  preview_status?: string;
-  preview_error?: string;
-  converted_preview_url?: string;
-  original_file_url?: string;
-  detected_resource_type?: string;
-  original_file_name?: string;
 };
 
 type TaskItem = {
@@ -72,29 +63,19 @@ type NodeDetail = {
 type RecoData = {
   target_kp: { id: number; code: string; title: string; mastery?: number };
   reason_summary: string;
-  recommendation_stage?: string;
   recommendation_stage_label?: string;
   advice_text: string;
-  persona_label?: string;
-  persona_strategy_tag?: string;
 };
+
+type WorkspaceView = "overview" | "resource" | "practice" | "review" | "next";
+type QuizSubView = "practice" | "records" | "wrong" | "review";
 
 const route = useRoute();
 const router = useRouter();
 
 const loading = ref(false);
-type WorkspaceView = "overview" | "resource" | "practice" | "review" | "next";
 const activeView = ref<WorkspaceView>("resource");
 const workflowSteps: WorkspaceView[] = ["overview", "resource", "practice", "review", "next"];
-type QuizSubView = "practice" | "records" | "wrong" | "review";
-const quizSubViewFromPath = computed<QuizSubView | null>(() => {
-  const p = String(route.path || "");
-  if (p.endsWith(`/practice`)) return "practice";
-  if (p.endsWith(`/records`)) return "records";
-  if (p.endsWith(`/wrong`)) return "wrong";
-  if (p.endsWith(`/review`)) return "review";
-  return null;
-});
 const detail = ref<NodeDetail | null>(null);
 const reco = ref<RecoData | null>(null);
 const lastRecommendedTargetId = ref<number | null>(null);
@@ -118,6 +99,15 @@ const graphView = computed(() => {
   return v === "path" || v === "reco" || v === "map" ? v : "map";
 });
 
+const quizSubViewFromPath = computed<QuizSubView | null>(() => {
+  const p = String(route.path || "");
+  if (p.endsWith("/practice")) return "practice";
+  if (p.endsWith("/records")) return "records";
+  if (p.endsWith("/wrong")) return "wrong";
+  if (p.endsWith("/review")) return "review";
+  return null;
+});
+
 const learningResources = computed(() =>
   (detail.value?.resource_list ?? []).filter((item) => (item.category || "learning") !== "recommend"),
 );
@@ -135,20 +125,82 @@ const recommendationContext = computed(() => {
     advice: reco.value.advice_text,
   };
 });
+
 const closureDoneCount = computed(() => [closureState.resourceDone, closureState.practiceDone].filter(Boolean).length);
 const closureReady = computed(() => closureDoneCount.value >= 2);
-
 const stats = computed(() => ({
   learning: learningResources.value.length,
   practice: detail.value?.practice_list?.length ?? 0,
   recommend: recommendedResources.value.length + (detail.value?.task_list?.length ?? 0),
 }));
 const navigation = computed(() => detail.value?.navigation ?? null);
+const masteryPercent = computed(() => Math.round(Number(detail.value?.overlay?.mastery ?? 0) * 100));
+const masteryStatus = computed(() => {
+  const raw = String(detail.value?.overlay?.status || "").toLowerCase();
+  if (raw === "mastered") return "已掌握";
+  if (raw === "learning" || raw === "in_progress") return "学习中";
+  if (raw === "risk") return "待巩固";
+  if (raw === "not_started") return "未开始";
+  if (masteryPercent.value >= 85) return "已掌握";
+  if (masteryPercent.value >= 50) return "学习中";
+  if (masteryPercent.value > 0) return "待巩固";
+  return "未开始";
+});
+const taskLead = computed(() => detail.value?.kp?.description || "先完成资源学习和练习，再看下一步建议。");
+const currentTaskSubtitle = computed(() => `${detail.value?.kp?.title || "当前知识点"}（示例）`);
+const sidebarSuggestion = computed(() => {
+  if (recommendationContext.value?.reason) return recommendationContext.value.reason;
+  if (detail.value?.overlay?.blocked_reason) return detail.value.overlay.blocked_reason;
+  return "建议先完成当前知识点的资源学习与练习，再进入下一知识点。";
+});
+const nextStepSuggestion = computed(() => {
+  if (reco.value?.target_kp?.title) return reco.value.target_kp.title;
+  if (navigation.value?.next?.title) return navigation.value.next.title;
+  return "继续巩固当前知识点";
+});
+
+const stepLabelMap: Record<WorkspaceView, string> = {
+  overview: "学习概览",
+  resource: "资源学习",
+  practice: "练习作答",
+  review: "复盘反馈",
+  next: "下一步建议",
+};
+
+const workflowCards = computed(() => [
+  { key: "overview" as WorkspaceView, title: "学习概览", hint: "先看推荐与当前进度", count: "概览" },
+  { key: "resource" as WorkspaceView, title: "资源学习", hint: `${stats.value.learning} 项资源`, count: `${stats.value.learning}` },
+  { key: "practice" as WorkspaceView, title: "练习作答", hint: `${stats.value.practice} 道练习`, count: `${stats.value.practice}` },
+  { key: "review" as WorkspaceView, title: "复盘反馈", hint: "错题与记录复盘", count: closureState.practiceDone ? "已更新" : "待完成" },
+  { key: "next" as WorkspaceView, title: "下一步建议", hint: closureReady.value ? "已解锁" : "待解锁", count: closureReady.value ? "可进入" : "未解锁" },
+]);
+
+const nextStepDisabledReason = computed(() => {
+  if (closureReady.value) return "";
+  const todos: string[] = [];
+  if (!closureState.resourceDone) todos.push("完成资源学习");
+  if (!closureState.practiceDone) todos.push("完成练习提交");
+  return `进入“下一步建议”前，请先${todos.join("、")}。`;
+});
+
+function getStepDisabled(view: WorkspaceView) {
+  return view === "next" ? !closureReady.value : false;
+}
+
+const nextView = computed<WorkspaceView | null>(() => {
+  const idx = workflowSteps.indexOf(activeView.value);
+  if (idx < 0 || idx >= workflowSteps.length - 1) return null;
+  return workflowSteps[idx + 1];
+});
+
+const nextButtonText = computed(() => {
+  if (!nextView.value) return "下一步";
+  return `下一步：${stepLabelMap[nextView.value]}`;
+});
 
 watch(
   () => quizSubViewFromPath.value,
-  (v: QuizSubView | null) => {
-    // 当进入题库子路由时，自动聚焦对应工作流视图
+  (v) => {
     if (!v) return;
     activeView.value = v === "practice" ? "practice" : "review";
   },
@@ -164,6 +216,10 @@ const quizRouteView = computed<QuizSubView | null>(() => {
 });
 
 function switchView(view: WorkspaceView) {
+  if (getStepDisabled(view)) {
+    if (nextStepDisabledReason.value) ElMessage.warning(nextStepDisabledReason.value);
+    return;
+  }
   activeView.value = view;
   if (view === "practice") {
     goQuizSubView("practice");
@@ -175,26 +231,6 @@ function switchView(view: WorkspaceView) {
   }
 }
 
-const canEnterNextStep = computed(() => closureReady.value);
-const stepLabelMap: Record<WorkspaceView, string> = {
-  overview: "学习总览",
-  resource: "资源学习",
-  practice: "练习作答",
-  review: "错题复盘",
-  next: "下一步建议",
-};
-const nextStepDisabledReason = computed(() => {
-  if (canEnterNextStep.value) return "";
-  const todos: string[] = [];
-  if (!closureState.resourceDone) todos.push("完成资源学习");
-  if (!closureState.practiceDone) todos.push("完成练习提交");
-  return `进入“下一步建议”前，请先${todos.join("、")}。`;
-});
-
-function getStepDisabled(view: WorkspaceView) {
-  return view === "next" ? !canEnterNextStep.value : false;
-}
-
 function goPrevView() {
   const idx = workflowSteps.indexOf(activeView.value);
   if (idx <= 0) return;
@@ -204,45 +240,15 @@ function goPrevView() {
 function goNextView() {
   const idx = workflowSteps.indexOf(activeView.value);
   if (idx < 0 || idx >= workflowSteps.length - 1) return;
-  const next = workflowSteps[idx + 1];
-  if (getStepDisabled(next)) {
-    if (nextStepDisabledReason.value) ElMessage.warning(nextStepDisabledReason.value);
-    return;
-  }
-  switchView(next);
+  switchView(workflowSteps[idx + 1]);
 }
-
-const nextView = computed<WorkspaceView | null>(() => {
-  const idx = workflowSteps.indexOf(activeView.value);
-  if (idx < 0 || idx >= workflowSteps.length - 1) return null;
-  return workflowSteps[idx + 1];
-});
-
-const nextButtonText = computed(() => {
-  if (!nextView.value) return "下一步";
-  return `下一步：${stepLabelMap[nextView.value]}`;
-});
 
 function handleQuizViewChange(v: QuizSubView) {
   activeView.value = v === "practice" ? "practice" : "review";
   goQuizSubView(v);
 }
 
-const masterySummary = computed(() => {
-  const o = detail.value?.overlay;
-  if (!o || o.mastery == null) return "";
-  const pct = Math.round(Number(o.mastery) * 100);
-  const raw = String(o.status || "").toLowerCase();
-  const map: Record<string, string> = {
-    mastered: "已掌握",
-    learning: "学习中",
-    in_progress: "学习中",
-    not_started: "未学习",
-    risk: "待巩固",
-  };
-  const label = map[raw] || o.status || "";
-  return label ? `掌握度 ${pct}% · ${label}` : `掌握度 ${pct}%`;
-});
+const masterySummary = computed(() => `${masteryPercent.value}% · ${masteryStatus.value}`);
 
 function goBack() {
   router.push({
@@ -299,16 +305,14 @@ function goQuizSubView(view: QuizSubView) {
   const targetPath = `${base}/${view === "practice" ? "practice" : view}`;
   const currentPath = String(router.currentRoute.value?.path || "");
   if (currentPath === targetPath) return;
-  router
-    .push({
-      path: targetPath,
-      query: {
-        subject: subject.value || undefined,
-        grade: grade.value || undefined,
-        preview: isPreview.value ? "1" : undefined,
-      },
-    })
-    .catch(() => {});
+  router.push({
+    path: targetPath,
+    query: {
+      subject: subject.value || undefined,
+      grade: grade.value || undefined,
+      preview: isPreview.value ? "1" : undefined,
+    },
+  }).catch(() => {});
 }
 
 async function loadDetail() {
@@ -325,7 +329,6 @@ async function loadDetail() {
         ElMessage.warning(blockedReason);
       }
       goBack();
-      return;
     }
   } catch (e: any) {
     const message = e?.response?.data?.detail ?? "加载学习内容失败";
@@ -402,107 +405,161 @@ watch(kpId, async () => {
 </script>
 
 <template>
-  <div class="student-content-page" v-loading="loading">
-    <StudentKpHeader
-      title="知识点学习"
-      subtitle="按顺序完成资源学习、练习作答和错题复盘，最后再看下一步建议。"
-      hint="这里的“练习题”是题库逐题作答，会直接影响掌握度和学习报告。"
-      :code="detail?.kp?.code"
-      :kp-title="detail?.kp?.title"
-      :chapter="detail?.kp?.chapter"
-      :mastery-summary="masterySummary"
-      @back="goBack"
-    />
-
-    <section v-if="navigation" class="student-content-nav-card">
-      <div class="student-content-nav-card__head">
-        <div>
-          <strong>知识点导航</strong>
-          <span>当前位于 {{ navigation.chapter || detail?.kp.chapter || "未分章" }}</span>
-        </div>
-        <div class="student-content-nav-card__actions">
-          <button class="student-content-page__back" :disabled="!navigation.previous" @click="navigation.previous && goToKp(navigation.previous.id)">
-            上一个知识点
-          </button>
-          <button class="student-content-reco__btn" :disabled="!navigation.next" @click="navigation.next && goToKp(navigation.next.id)">
-            下一个知识点
-          </button>
+  <div class="student-kp-page" v-loading="loading">
+    <section class="student-kp-page__hero">
+      <div class="student-kp-page__hero-copy">
+        <button class="student-kp-page__back" type="button" @click="goBack">返回图谱</button>
+        <div class="student-kp-page__hero-text">
+          <span class="student-kp-page__eyebrow">知识点学习</span>
+          <h1>{{ detail?.kp?.title || "知识点学习" }}</h1>
+          <p>{{ taskLead }}</p>
+          <div class="student-kp-page__hero-meta">
+            <span>{{ detail?.kp?.code || "--" }}</span>
+            <span>{{ detail?.kp?.chapter || "未分类" }}</span>
+            <span>{{ masterySummary }}</span>
+          </div>
         </div>
       </div>
-      <div class="student-content-nav-card__list">
-        <button
-          v-for="item in navigation.chapter_nodes"
-          :key="item.id"
-          class="student-content-nav-card__node"
-          :class="{ active: item.id === kpId }"
-          @click="goToKp(item.id)"
-        >
-          {{ item.title }}
+
+      <div class="student-kp-page__hero-actions">
+        <button class="student-kp-page__btn" type="button" @click="switchView('resource')">资源学习</button>
+        <button class="student-kp-page__btn student-kp-page__btn--primary" type="button" @click="switchView('practice')">
+          继续学习
         </button>
       </div>
     </section>
 
-    <section class="student-content-overview">
-      <div class="student-content-overview__item">
+    <section class="student-kp-page__stats">
+      <article class="student-kp-page__stat-card">
+        <span>掌握度</span>
+        <strong>{{ masteryPercent }}%</strong>
+        <small>当前知识点学习状态：{{ masteryStatus }}</small>
+      </article>
+      <article class="student-kp-page__stat-card">
         <span>学习资源</span>
         <strong>{{ stats.learning }}</strong>
-      </div>
-      <div class="student-content-overview__item">
-        <span>练习题</span>
+        <small>{{ videoResources.length }} 个视频资源</small>
+      </article>
+      <article class="student-kp-page__stat-card">
+        <span>练习作答</span>
         <strong>{{ stats.practice }}</strong>
-      </div>
-      <div class="student-content-overview__item">
+        <small>当前知识点可练习题目数</small>
+      </article>
+      <article class="student-kp-page__stat-card">
         <span>推荐内容</span>
         <strong>{{ stats.recommend }}</strong>
-      </div>
+        <small>推荐资源与任务数量</small>
+      </article>
     </section>
 
-    <main class="student-content-main">
-      <template v-if="activeView === 'overview'">
-        <section v-if="recommendationContext" class="student-content-reco">
-          <div class="student-content-reco__main">
-            <div class="student-content-reco__eyebrow">知识图谱推荐</div>
-            <div class="student-content-reco__title">
-              {{ recommendationContext.label }}
-              <span v-if="recommendationContext.isCurrentTarget"> · 当前正在学习推荐点</span>
+    <section class="student-kp-page__workflow">
+      <button
+        v-for="item in workflowCards"
+        :key="item.key"
+        class="student-kp-page__workflow-card"
+        :class="{ active: activeView === item.key, disabled: getStepDisabled(item.key) }"
+        type="button"
+        @click="switchView(item.key)"
+      >
+        <span>{{ item.title }}</span>
+        <strong>{{ item.count }}</strong>
+        <small>{{ item.hint }}</small>
+      </button>
+    </section>
+
+    <section class="student-kp-page__content">
+      <main class="student-kp-page__main">
+        <section class="student-kp-page__task-card">
+          <div class="student-kp-page__task-copy">
+            <span class="student-kp-page__section-eyebrow">当前学习任务</span>
+            <div class="student-kp-page__task-head">
+              <div>
+                <span class="student-kp-page__task-code">{{ detail?.kp?.code || "--" }}</span>
+                <h2>{{ detail?.kp?.title || "当前暂无知识点" }}</h2>
+                <p>{{ currentTaskSubtitle }}</p>
+              </div>
+              <span class="student-kp-page__status-pill">{{ masteryStatus }}</span>
             </div>
-            <p class="student-content-reco__text">{{ recommendationContext.reason }}</p>
-            <p class="student-content-reco__text">{{ recommendationContext.advice }}</p>
+            <div class="student-kp-page__progress">
+              <div class="student-kp-page__progress-head">
+                <span>当前掌握度</span>
+                <strong>{{ masteryPercent }}%</strong>
+              </div>
+              <ElProgress :percentage="masteryPercent" :show-text="false" :stroke-width="10" color="#4f7fff" />
+            </div>
           </div>
-          <button class="student-content-reco__btn" @click="switchView('resource')">进入资源学习</button>
+
+          <div class="student-kp-page__task-actions">
+            <button class="student-kp-page__btn student-kp-page__btn--primary" type="button" @click="switchView('resource')">
+              进入资源学习
+            </button>
+            <button class="student-kp-page__btn" type="button" @click="switchView('practice')">
+              进入练习作答
+            </button>
+          </div>
         </section>
 
-        <section class="student-content-closure">
-          <div class="student-content-closure__main">
-            <div class="student-content-closure__eyebrow">学习进度</div>
-            <div class="student-content-closure__title">
-              已完成 {{ closureDoneCount }}/2 项
-              <span v-if="closureReady"> · 可进入下一步建议</span>
+        <section v-if="navigation" class="student-kp-page__chapter-nav">
+          <div class="student-kp-page__chapter-head">
+            <div>
+              <span class="student-kp-page__section-eyebrow">章节导航</span>
+              <h3>当前位于 {{ navigation.chapter || detail?.kp?.chapter || "未分章" }}</h3>
             </div>
-            <div class="student-content-closure__checks">
+            <div class="student-kp-page__chapter-actions">
+              <button class="student-kp-page__btn" type="button" :disabled="!navigation.previous" @click="navigation.previous && goToKp(navigation.previous.id)">
+                上一知识点
+              </button>
+              <button class="student-kp-page__btn" type="button" :disabled="!navigation.next" @click="navigation.next && goToKp(navigation.next.id)">
+                下一知识点
+              </button>
+            </div>
+          </div>
+          <div class="student-kp-page__chapter-list">
+            <button
+              v-for="item in navigation.chapter_nodes"
+              :key="item.id"
+              class="student-kp-page__chapter-chip"
+              :class="{ active: item.id === kpId }"
+              type="button"
+              @click="goToKp(item.id)"
+            >
+              {{ item.title }}
+            </button>
+          </div>
+        </section>
+
+        <section v-if="activeView === 'overview'" class="student-kp-page__panel-grid">
+          <article v-if="recommendationContext" class="student-kp-page__info-card">
+            <span class="student-kp-page__section-eyebrow">推荐说明</span>
+            <h3>{{ recommendationContext.label }}</h3>
+            <p>{{ recommendationContext.reason }}</p>
+            <p>{{ recommendationContext.advice }}</p>
+            <button class="student-kp-page__btn" type="button" @click="switchView('resource')">开始资源学习</button>
+          </article>
+
+          <article class="student-kp-page__info-card">
+            <span class="student-kp-page__section-eyebrow">学习进度</span>
+            <h3>已完成 {{ closureDoneCount }}/2 项</h3>
+            <p>{{ closureReady ? "可以进入下一步建议" : "建议先完成资源学习与练习提交" }}</p>
+            <div class="student-kp-page__checklist">
               <span :class="{ done: closureState.resourceDone }">资源学习</span>
               <span :class="{ done: closureState.practiceDone }">练习提交</span>
             </div>
-          </div>
-          <div class="student-content-closure__actions">
-            <button class="student-content-page__back" @click="switchView('resource')">先学资源</button>
-            <button class="student-content-reco__btn" @click="switchView('practice')">去做练习</button>
-          </div>
+          </article>
         </section>
-      </template>
 
-      <template v-else-if="activeView === 'resource'">
-          <el-card v-if="isPreview" shadow="never" class="student-content-card">
+        <template v-else-if="activeView === 'resource'">
+          <ElCard v-if="isPreview" shadow="never" class="student-kp-page__card">
             <template #header>学习资源（预览模式）</template>
-            <div v-if="learningResources.length === 0" class="student-content-empty">当前知识点还没有学习资源</div>
-            <div v-else class="student-content-links">
+            <div v-if="learningResources.length === 0" class="student-kp-page__empty">当前知识点还没有学习资源</div>
+            <div v-else class="student-kp-page__link-list">
               <a v-for="item in learningResources" :key="item.id" :href="item.url" target="_blank" rel="noreferrer">{{ item.title }}</a>
             </div>
-          </el-card>
+          </ElCard>
           <ResourcePane v-else :kp-id="kpId" @progress-updated="handleResourceUpdated" />
-      </template>
+        </template>
 
-      <QuizPane
+        <QuizPane
           v-else-if="activeView === 'practice' || activeView === 'review'"
           :kp-id="kpId"
           :preview="isPreview"
@@ -511,36 +568,32 @@ watch(kpId, async () => {
           @view-change="(v) => handleQuizViewChange(v)"
         />
 
-        <el-card v-else shadow="never" class="student-content-card">
-          <template #header>推荐资源与拓展</template>
-          <section v-if="recommendationContext" class="student-content-reco student-content-reco--inner">
-            <div class="student-content-reco__main">
-              <div class="student-content-reco__eyebrow">推荐说明</div>
-              <div class="student-content-reco__title">
-                {{ recommendationContext.label }}
-                <span v-if="recommendationContext.isCurrentTarget"> · 当前点位即推荐目标</span>
-              </div>
-              <p class="student-content-reco__text">{{ recommendationContext.reason }}</p>
-              <p class="student-content-reco__text">{{ recommendationContext.advice }}</p>
-            </div>
-            <button class="student-content-reco__btn" @click="goToRecommendedTarget">
-              {{ recommendationContext.isCurrentTarget ? "继续学习当前推荐点" : "跳到系统推荐点" }}
+        <ElCard v-else shadow="never" class="student-kp-page__card">
+          <template #header>下一步建议</template>
+
+          <section v-if="recommendationContext" class="student-kp-page__next-card">
+            <span class="student-kp-page__section-eyebrow">推荐学习</span>
+            <h3>{{ recommendationContext.label }}</h3>
+            <p>{{ recommendationContext.reason }}</p>
+            <p>{{ recommendationContext.advice }}</p>
+            <button class="student-kp-page__btn student-kp-page__btn--primary" type="button" @click="goToRecommendedTarget">
+              {{ recommendationContext.isCurrentTarget ? "继续学习当前推荐点" : "跳转到系统推荐点" }}
             </button>
           </section>
 
-          <div class="student-content-section">
+          <div class="student-kp-page__section">
             <h3>推荐资源</h3>
-            <div v-if="recommendedResources.length === 0" class="student-content-empty">暂无推荐资源</div>
-            <div v-else class="student-content-links">
+            <div v-if="recommendedResources.length === 0" class="student-kp-page__empty">暂无推荐资源</div>
+            <div v-else class="student-kp-page__link-list">
               <a v-for="item in recommendedResources" :key="item.id" :href="item.url" target="_blank" rel="noreferrer">{{ item.title }}</a>
             </div>
           </div>
 
-          <div class="student-content-section">
+          <div class="student-kp-page__section">
             <h3>学习任务</h3>
-            <div v-if="(detail?.task_list?.length ?? 0) === 0" class="student-content-empty">暂无学习任务</div>
-            <div v-else class="student-content-task-list">
-              <div v-for="task in detail?.task_list ?? []" :key="task.id" class="student-content-task">
+            <div v-if="(detail?.task_list?.length ?? 0) === 0" class="student-kp-page__empty">暂无学习任务</div>
+            <div v-else class="student-kp-page__task-list">
+              <div v-for="task in detail?.task_list ?? []" :key="task.id" class="student-kp-page__task-item">
                 <strong>{{ task.title }}</strong>
                 <p>{{ task.description || "暂无任务描述" }}</p>
                 <a v-if="task.link_url" :href="task.link_url" target="_blank" rel="noreferrer">打开任务链接</a>
@@ -548,489 +601,476 @@ watch(kpId, async () => {
             </div>
           </div>
 
-          <div class="student-content-section">
+          <div class="student-kp-page__section">
             <h3>相关知识点</h3>
-            <div class="student-content-tags">
-              <button v-for="item in detail?.prerequisites ?? []" :key="`pre-${item.id}`" @click="goToKp(item.id)">
+            <div class="student-kp-page__tag-list">
+              <button v-for="item in detail?.prerequisites ?? []" :key="`pre-${item.id}`" type="button" @click="goToKp(item.id)">
                 前置：{{ item.title }}
               </button>
-              <button v-for="item in detail?.downstream ?? []" :key="`next-${item.id}`" @click="goToKp(item.id)">
+              <button v-for="item in detail?.downstream ?? []" :key="`next-${item.id}`" type="button" @click="goToKp(item.id)">
                 后续：{{ item.title }}
               </button>
-              <button v-for="item in detail?.related ?? []" :key="`rel-${item.id}`" @click="goToKp(item.id)">
+              <button v-for="item in detail?.related ?? []" :key="`rel-${item.id}`" type="button" @click="goToKp(item.id)">
                 关联：{{ item.title }}
               </button>
             </div>
           </div>
+        </ElCard>
 
-          <section class="student-content-closure student-content-closure--inner">
-            <div class="student-content-closure__main">
-              <div class="student-content-closure__eyebrow">学习收口</div>
-              <div class="student-content-closure__title">
-                已完成 {{ closureDoneCount }}/2 项
-                <span v-if="closureReady"> · 建议进入下一推荐知识点</span>
-              </div>
-              <div class="student-content-closure__checks">
-                <span :class="{ done: closureState.resourceDone }">资源学习</span>
-                <span :class="{ done: closureState.practiceDone }">练习提交</span>
-              </div>
-            </div>
-            <div class="student-content-closure__actions">
-              <button class="student-content-page__back" @click="goToRecommendedTarget">前往下一推荐</button>
-              <button class="student-content-reco__btn" @click="goToReport">回到学习报告</button>
-            </div>
-          </section>
-        </el-card>
+        <section class="student-kp-page__bottom-nav">
+          <button class="student-kp-page__btn" type="button" :disabled="activeView === 'overview'" @click="goPrevView">上一步</button>
+          <div class="student-kp-page__bottom-hint">
+            <span v-if="activeView === 'next'">已经到最后一步，可继续前往推荐知识点或查看学习报告。</span>
+            <span v-else-if="nextView === 'next' && !closureReady">{{ nextStepDisabledReason }}</span>
+            <span v-else>按顺序推进学习流程：概览 → 资源 → 练习 → 复盘 → 下一步。</span>
+          </div>
+          <button
+            class="student-kp-page__btn student-kp-page__btn--primary"
+            type="button"
+            :disabled="activeView === 'next' || (nextView === 'next' && !closureReady)"
+            @click="goNextView"
+          >
+            {{ nextButtonText }}
+          </button>
+        </section>
+      </main>
 
-      <section class="student-content-step-nav">
-        <button class="student-content-page__back" :disabled="activeView === 'overview'" @click="goPrevView">
-          上一步
-        </button>
-        <div class="student-content-step-nav__hint">
-          <span v-if="activeView === 'next'">已到最后一步，可选择前往推荐知识点或回学习报告。</span>
-          <span v-else-if="nextView === 'next' && !canEnterNextStep">
-            {{ nextStepDisabledReason }}
-          </span>
-          <span v-else>按流程推进可减少操作分散：总览 → 资源 → 练习 → 复盘 → 下一步。</span>
-        </div>
-        <button
-          class="student-content-reco__btn"
-          :disabled="activeView === 'next' || (nextView === 'next' && !canEnterNextStep)"
-          @click="goNextView"
-        >
-          {{ nextButtonText }}
-        </button>
-      </section>
-    </main>
+      <aside class="student-kp-page__side">
+        <section class="student-kp-page__side-card">
+          <span class="student-kp-page__section-eyebrow">下一步建议</span>
+          <h3>{{ nextStepSuggestion }}</h3>
+          <p>{{ sidebarSuggestion }}</p>
+        </section>
+
+        <section class="student-kp-page__side-card">
+          <span class="student-kp-page__section-eyebrow">学习概况</span>
+          <div class="student-kp-page__side-metrics">
+            <div>
+              <small>掌握度</small>
+              <strong>{{ masteryPercent }}%</strong>
+            </div>
+            <div>
+              <small>资源</small>
+              <strong>{{ stats.learning }}</strong>
+            </div>
+            <div>
+              <small>练习</small>
+              <strong>{{ stats.practice }}</strong>
+            </div>
+            <div>
+              <small>推荐</small>
+              <strong>{{ stats.recommend }}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="student-kp-page__side-card">
+          <span class="student-kp-page__section-eyebrow">学习提醒</span>
+          <div class="student-kp-page__checklist">
+            <span :class="{ done: closureState.resourceDone }">已学资源</span>
+            <span :class="{ done: closureState.practiceDone }">已做练习</span>
+          </div>
+          <p>{{ closureReady ? "当前已完成本轮学习闭环，可以进入下一步建议。" : "建议优先完成当前任务后再进入下一知识点。" }}</p>
+          <button class="student-kp-page__btn" type="button" @click="goToReport">查看学习报告</button>
+        </section>
+      </aside>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.student-content-page {
+.student-kp-page {
   min-height: 100vh;
   max-width: 1480px;
   margin: 0 auto;
   padding: 20px 20px 28px;
-  background: var(--app-bg);
   display: grid;
   gap: 18px;
 }
 
-.student-content-overview {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.student-kp-page__hero,
+.student-kp-page__stat-card,
+.student-kp-page__workflow-card,
+.student-kp-page__task-card,
+.student-kp-page__chapter-nav,
+.student-kp-page__info-card,
+.student-kp-page__side-card,
+.student-kp-page__card,
+.student-kp-page__bottom-nav {
+  border-radius: 24px;
+  border: 1px solid #dfe7f1;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+}
+
+.student-kp-page__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px 24px;
+}
+
+.student-kp-page__hero-copy {
+  display: flex;
+  align-items: flex-start;
   gap: 14px;
 }
 
-.student-content-nav-card {
-  border-radius: 22px;
-  border: 1px solid #dfe7f1;
-  background: #ffffff;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
-  padding: 16px;
+.student-kp-page__hero-text {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
-.student-content-nav-card__head {
-  display: none;
+.student-kp-page__back,
+.student-kp-page__btn {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid #dce6f2;
+  background: #ffffff;
+  color: #314661;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.student-content-nav-card__actions {
-  display: none;
+.student-kp-page__eyebrow,
+.student-kp-page__section-eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(79, 127, 255, 0.1);
+  color: #4f7fff;
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.student-content-nav-card__list {
+.student-kp-page__hero-text h1 {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.1;
+  color: #1f2a44;
+}
+
+.student-kp-page__hero-text p,
+.student-kp-page__task-head p,
+.student-kp-page__chapter-head p,
+.student-kp-page__info-card p,
+.student-kp-page__side-card p,
+.student-kp-page__next-card p,
+.student-kp-page__task-item p {
+  margin: 0;
+  color: #70819a;
+  line-height: 1.7;
+}
+
+.student-kp-page__hero-meta {
   display: flex;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 10px;
 }
 
-.student-content-nav-card__node {
+.student-kp-page__hero-meta span,
+.student-kp-page__task-code,
+.student-kp-page__status-pill {
+  display: inline-flex;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #4f7fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.student-kp-page__hero-actions,
+.student-kp-page__task-actions,
+.student-kp-page__chapter-actions,
+.student-kp-page__bottom-nav {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.student-kp-page__btn--primary {
+  border-color: #4f7fff;
+  background: linear-gradient(135deg, #5b7cfa 0%, #59b7ff 100%);
+  color: #ffffff;
+}
+
+.student-kp-page__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.student-kp-page__stat-card,
+.student-kp-page__workflow-card,
+.student-kp-page__task-card,
+.student-kp-page__chapter-nav,
+.student-kp-page__info-card,
+.student-kp-page__side-card {
+  padding: 20px 22px;
+}
+
+.student-kp-page__stat-card {
+  display: grid;
+  gap: 8px;
+}
+
+.student-kp-page__stat-card span,
+.student-kp-page__stat-card small,
+.student-kp-page__workflow-card span,
+.student-kp-page__workflow-card small,
+.student-kp-page__side-metrics small {
+  color: #70819a;
+  font-size: 13px;
+}
+
+.student-kp-page__stat-card strong,
+.student-kp-page__side-metrics strong {
+  font-size: 28px;
+  line-height: 1.1;
+  color: #1f2a44;
+}
+
+.student-kp-page__workflow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.student-kp-page__workflow-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-kp-page__workflow-card.active {
+  border-color: #9fbef3;
+  background: linear-gradient(165deg, #f7faff 0%, #eef4ff 100%);
+}
+
+.student-kp-page__workflow-card.disabled {
+  opacity: 0.6;
+}
+
+.student-kp-page__workflow-card strong,
+.student-kp-page__task-head h2,
+.student-kp-page__chapter-head h3,
+.student-kp-page__info-card h3,
+.student-kp-page__next-card h3,
+.student-kp-page__side-card h3 {
+  color: #1f2a44;
+}
+
+.student-kp-page__task-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.student-kp-page__task-copy,
+.student-kp-page__chapter-head,
+.student-kp-page__progress,
+.student-kp-page__next-card {
+  display: grid;
+  gap: 10px;
+}
+
+.student-kp-page__task-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.student-kp-page__progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  color: #5d6d84;
+  font-weight: 700;
+}
+
+.student-kp-page__chapter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.student-kp-page__chapter-list,
+.student-kp-page__tag-list,
+.student-kp-page__checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.student-kp-page__chapter-chip,
+.student-kp-page__tag-list button,
+.student-kp-page__checklist span {
+  border-radius: 999px;
   border: 1px solid #dbe5f2;
   background: #f8fbff;
-  color: #3d5775;
-  border-radius: 999px;
-  min-height: 36px;
-  padding: 0 14px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.student-content-nav-card__node.active {
-  border-color: #7ea7f0;
-  background: #edf4ff;
-  color: #27476a;
-}
-
-.student-content-overview__item {
-  border-radius: 20px;
-  border: 1px solid #dfe7f1;
-  background: #ffffff;
-  padding: 18px;
-  display: grid;
-  gap: 6px;
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.04);
-}
-
-.student-content-overview__item span {
-  font-size: 13px;
-  color: #687d98;
-}
-
-.student-content-overview__item strong {
-  font-size: 22px;
-  color: #29415f;
-}
-
-.student-content-reco {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 16px;
-  border-radius: 20px;
-  border: 1px solid #dfe7f1;
-  background: #ffffff;
-  padding: 18px 20px;
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.04);
-}
-
-.student-content-reco__main {
-  display: grid;
-  gap: 6px;
-}
-
-.student-content-reco__eyebrow {
-  display: none;
-}
-
-.student-content-reco__title {
-  font-size: 17px;
-  font-weight: 800;
-  color: #264160;
-}
-
-.student-content-reco__text {
-  margin: 0;
-  color: #667b98;
-  font-size: 13px;
-}
-
-.student-content-reco__btn {
-  border: 1px solid #dfe7f1;
-  border-radius: 14px;
-  background: #f8fbff;
-  color: #39506d;
-  padding: 10px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.student-content-closure {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 16px;
-  border-radius: 20px;
-  border: 1px solid #dbe7df;
-  background: #ffffff;
-  padding: 18px 20px;
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.04);
-}
-
-.student-content-closure__main {
-  display: grid;
-  gap: 8px;
-}
-
-.student-content-closure__eyebrow {
-  display: none;
-}
-
-.student-content-closure__title {
-  font-size: 18px;
-  font-weight: 800;
-  color: #28473a;
-}
-
-.student-content-closure__checks {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.student-content-closure__checks span {
-  border-radius: 999px;
-  border: 1px solid #cfe2d5;
-  padding: 6px 12px;
-  color: #5c7569;
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.student-content-closure__checks span.done {
-  border-color: #7cb592;
-  color: #256145;
-  background: #e9f6ee;
-}
-
-.student-content-closure__actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.student-content-menu {
-  border-radius: 16px;
-  border: 1px solid var(--app-border);
-  background: #ffffff;
-  box-shadow: var(--app-shadow-soft);
-  padding: 12px;
-  display: grid;
-  gap: 8px;
-  align-content: start;
-}
-
-.student-content-menu__item {
-  border: 1px solid #dce6f2;
-  border-radius: 14px;
-  background: #ffffff;
-  color: #3c587d;
-  min-height: 58px;
-  padding: 12px;
-  text-align: left;
-  font-size: 13px;
-  font-weight: 900;
-  cursor: pointer;
-  display: grid;
-  grid-template-columns: 34px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  line-height: 1.2;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-}
-
-.student-content-menu__item.active {
-  border-color: #a8c5f8;
-  background: linear-gradient(165deg, #f5f9ff 0%, #eef4fc 100%);
-  color: #22549b;
-  box-shadow: 0 10px 24px rgba(47, 111, 237, 0.08);
-}
-
-.student-content-menu__item:hover {
-  border-color: #c8d7e7;
-  background: #ffffff;
-}
-
-.student-content-menu__hint {
-  margin: 0 6px -2px;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #94a5b8;
-}
-
-.student-content-menu__icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  background: #ffffff;
-  border: 1px solid #dbe4ef;
-  display: grid;
-  place-items: center;
-  color: #5c7cb2;
-}
-
-.student-content-menu__text {
-  font-size: 15px;
-}
-
-.student-content-menu__count {
-  font-size: 12px;
-  font-weight: 900;
-  color: var(--app-primary);
-  background: color-mix(in srgb, var(--app-primary) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--app-primary) 30%, var(--app-border));
-  padding: 3px 8px;
-  border-radius: 999px;
-}
-
-.student-content-menu__done {
-  grid-column: 1 / -1;
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: flex-start;
-  margin-top: 6px;
-  color: #2f7a47;
-  font-weight: 900;
-  font-size: 12px;
-}
-
-.student-content-main {
-  min-width: 0;
-  display: grid;
-  gap: 16px;
-}
-
-.student-content-step-nav {
-  display: none;
-}
-
-.student-content-step-nav__hint {
-  color: #6b809d;
-  font-size: 12px;
-}
-
-.student-content-card {
-  border-radius: 22px;
-  border: 1px solid #dfe7f1;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
-  overflow: hidden;
-}
-
-.student-content-reco--inner {
-  margin-bottom: 12px;
-}
-
-.student-content-closure--inner {
-  margin-top: 12px;
-}
-
-.student-content-empty {
-  color: #8ea1ba;
-  font-size: 13px;
-  padding: 4px 0;
-}
-
-.student-content-section {
-  margin-bottom: 18px;
-}
-
-.student-content-section:last-child {
-  margin-bottom: 0;
-}
-
-.student-content-section h3 {
-  margin: 0 0 8px;
-  color: #2b4463;
-  font-size: 14px;
-}
-
-.student-content-links {
-  display: grid;
-  gap: 8px;
-}
-
-.student-content-links a {
-  text-decoration: none;
-  color: #35507f;
-  border: 1px solid #dce6f2;
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: #f8fbff;
-}
-
-.student-content-links a:hover {
-  background: #eef5ff;
-}
-
-.student-content-task-list {
-  display: grid;
-  gap: 8px;
-}
-
-.student-content-task {
-  border: 1px solid #dfe7f1;
-  border-radius: 16px;
-  padding: 14px;
-  background: #f8fbff;
-}
-
-.student-content-task strong {
-  font-size: 14px;
-  color: #2a3e57;
-}
-
-.student-content-task p {
-  margin: 6px 0;
-  color: #617792;
-  font-size: 13px;
-}
-
-.student-content-task a {
-  color: #35507f;
-  font-size: 13px;
-}
-
-.student-content-tags {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.student-content-tags button {
-  border: 1px solid #cdddf4;
-  border-radius: 999px;
+  color: #36506f;
   padding: 8px 12px;
   font-size: 12px;
-  color: #35507f;
-  background: #eef5ff;
-  cursor: pointer;
+  font-weight: 700;
 }
 
-.student-content-card :deep(.el-card__header) {
+.student-kp-page__chapter-chip.active,
+.student-kp-page__checklist span.done {
+  border-color: #8ab39a;
+  background: #eaf8f0;
+  color: #2f6e49;
+}
+
+.student-kp-page__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  align-items: start;
+}
+
+.student-kp-page__main {
+  display: grid;
+  gap: 18px;
+}
+
+.student-kp-page__panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.student-kp-page__card :deep(.el-card__header) {
   padding: 18px 20px 14px;
   border-bottom: 1px solid #e8eef6;
   font-weight: 800;
   color: #264160;
 }
 
-.student-content-card :deep(.el-card__body) {
+.student-kp-page__card :deep(.el-card__body) {
   padding: 18px 20px 20px;
 }
 
-@media (max-width: 1080px) {
-  .student-content-overview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .student-content-reco {
-    grid-template-columns: 1fr;
-    align-items: start;
-    display: grid;
-  }
-
-  .student-content-closure {
-    grid-template-columns: 1fr;
-    align-items: start;
-    display: grid;
-  }
-
-  .student-content-step-nav {
-    position: static;
-    grid-template-columns: 1fr;
-  }
-
+.student-kp-page__empty {
+  color: #8ea1ba;
+  font-size: 13px;
+  padding: 6px 0;
 }
 
-@media (max-width: 720px) {
-  .student-content-page {
+.student-kp-page__link-list,
+.student-kp-page__task-list {
+  display: grid;
+  gap: 10px;
+}
+
+.student-kp-page__link-list a {
+  text-decoration: none;
+  color: #35507f;
+  border: 1px solid #dce6f2;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #f8fbff;
+}
+
+.student-kp-page__task-item {
+  border: 1px solid #dfe7f1;
+  border-radius: 16px;
+  padding: 14px;
+  background: #f8fbff;
+  display: grid;
+  gap: 8px;
+}
+
+.student-kp-page__task-item strong {
+  color: #2a3e57;
+  font-size: 15px;
+}
+
+.student-kp-page__task-item a {
+  color: #35507f;
+  font-size: 13px;
+}
+
+.student-kp-page__section {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.student-kp-page__section h3 {
+  margin: 0;
+  color: #2b4463;
+  font-size: 16px;
+}
+
+.student-kp-page__bottom-nav {
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.student-kp-page__bottom-hint {
+  flex: 1;
+  color: #6b809d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.student-kp-page__side {
+  display: grid;
+  gap: 16px;
+  position: sticky;
+  top: 18px;
+}
+
+.student-kp-page__side-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1180px) {
+  .student-kp-page__stats,
+  .student-kp-page__workflow,
+  .student-kp-page__panel-grid,
+  .student-kp-page__content {
+    grid-template-columns: 1fr;
+  }
+
+  .student-kp-page__task-card,
+  .student-kp-page__chapter-head,
+  .student-kp-page__hero {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .student-kp-page__side {
+    position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .student-kp-page {
     padding: 16px 14px 24px;
   }
 
-  .student-content-overview {
-    grid-template-columns: 1fr;
+  .student-kp-page__hero-copy {
+    flex-direction: column;
+  }
+
+  .student-kp-page__hero-actions,
+  .student-kp-page__task-actions,
+  .student-kp-page__chapter-actions,
+  .student-kp-page__bottom-nav {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>

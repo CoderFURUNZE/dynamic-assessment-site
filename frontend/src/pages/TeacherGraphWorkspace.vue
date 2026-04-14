@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { getRole } from "../token";
 import AdminIntroHero from "../components/AdminIntroHero.vue";
-import KnowledgeGraphWorkspace from "../components/KnowledgeGraphWorkspace.vue";
+import TeacherGraphWorkbench from "../components/TeacherGraphWorkbench.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
 type Course = {
@@ -17,6 +17,12 @@ type Course = {
   end_at?: string | null;
 };
 
+type TeacherGraphWorkbenchExpose = {
+  reloadGraph: () => Promise<void>;
+  fitGraph: () => void;
+  resetGraphViewport: () => void;
+};
+
 const route = useRoute();
 const router = useRouter();
 
@@ -24,6 +30,8 @@ const isTeacher = computed(() => getRole() === "teacher");
 const courses = ref<Course[]>([]);
 const subject = ref("");
 const grade = ref("通用");
+const workbenchRef = ref<TeacherGraphWorkbenchExpose | null>(null);
+const refreshing = ref(false);
 
 const currentCourse = computed(() => courses.value.find((item) => item.title === subject.value) ?? null);
 const isReadonlyCourse = computed(() => {
@@ -39,7 +47,7 @@ const isReadonlyCourse = computed(() => {
 
 const courseLifecycleLabel = computed(() => {
   const value = String(currentCourse.value?.lifecycle_status || "draft").toLowerCase();
-  if (value === "active") return "开课中";
+  if (value === "active") return "进行中";
   if (value === "archived") return "已归档";
   return "待开课";
 });
@@ -63,39 +71,20 @@ function syncQuery() {
 }
 
 async function refreshWorkspace() {
-  await loadCourses();
+  refreshing.value = true;
+  try {
+    await loadCourses();
+    await nextTick();
+    await workbenchRef.value?.reloadGraph?.();
+    workbenchRef.value?.fitGraph?.();
+    ElMessage.success("知识图谱已刷新");
+  } finally {
+    refreshing.value = false;
+  }
 }
 
 function goBack() {
   router.push({ path: "/teacher/workspace", query: buildTeacherSubjectQuery(subject.value) });
-}
-
-function openTeacherKpWorkspace(kpId: number) {
-  if (!kpId) {
-    ElMessage.warning("请先选择一个知识点");
-    return;
-  }
-  router.push({
-    path: `/teacher/kp-content/${kpId}`,
-    query: {
-      subject: subject.value || undefined,
-      grade: grade.value || undefined,
-      mode: "edit",
-      from: "graph-workspace",
-    },
-  });
-}
-
-function createTeacherKp() {
-  router.push({
-    path: "/teacher/kp-content/0",
-    query: {
-      subject: subject.value || undefined,
-      grade: grade.value || undefined,
-      mode: "create",
-      from: "graph-workspace",
-    },
-  });
 }
 
 watch(
@@ -113,7 +102,7 @@ watch(subject, () => {
 onMounted(async () => {
   if (!isTeacher.value) {
     ElMessage.warning("仅教师可访问知识图谱");
-    router.push("/login/student");
+    router.push("/login/staff");
     return;
   }
   await loadCourses();
@@ -126,15 +115,16 @@ onMounted(async () => {
       eyebrow="教师工作台"
       title="知识图谱"
       pill="内容建设"
-      :description="`${currentCourse?.title || '当前课程'} · 在这里维护课程知识点关系、内容入口和图谱结构。`"
+      :description="`${currentCourse?.title || '当前课程'} · 在这里维护课程知识点、章节关系与内容入口。`"
     >
       <template #actions>
         <el-select v-model="subject" class="graph-page__select" placeholder="选择课程">
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
-        <el-button class="graph-page__toolbar-btn graph-page__toolbar-btn--accent" :disabled="isReadonlyCourse" @click="createTeacherKp">新建知识点</el-button>
         <el-button class="graph-page__toolbar-btn" @click="goBack">返回工作台</el-button>
-        <el-button class="graph-page__toolbar-btn graph-page__toolbar-btn--accent" @click="refreshWorkspace">刷新</el-button>
+        <el-button class="graph-page__toolbar-btn graph-page__toolbar-btn--accent" :loading="refreshing" @click="refreshWorkspace">
+          刷新图谱
+        </el-button>
       </template>
     </AdminIntroHero>
 
@@ -155,7 +145,13 @@ onMounted(async () => {
 
     <section class="graph-page__panel">
       <div class="graph-page__panel-body">
-        <KnowledgeGraphWorkspace embedded actor-mode="teacher" :subject="subject" :grade="grade" @open-content="openTeacherKpWorkspace" />
+        <TeacherGraphWorkbench
+          ref="workbenchRef"
+          embedded
+          :subject="subject"
+          :grade="grade"
+          :readonly="isReadonlyCourse"
+        />
       </div>
     </section>
   </div>
@@ -215,6 +211,10 @@ onMounted(async () => {
   border-radius: 16px;
 }
 
+.graph-page__panel-body > * {
+  width: 100%;
+}
+
 .graph-page__select {
   width: 240px;
 }
@@ -258,14 +258,7 @@ onMounted(async () => {
 
 .graph-page__toolbar-btn.graph-page__toolbar-btn--accent {
   border-color: #b8cdf3;
-  color: #2e5ea8;
-}
-
-.graph-page__toolbar-btn.is-disabled,
-.graph-page__toolbar-btn.is-disabled:hover {
-  border-color: #e3eaf5;
-  background: #f8fbff;
-  color: #afbdd0;
+  background: linear-gradient(180deg, #ffffff 0%, #eff5ff 100%);
 }
 
 @media (max-width: 960px) {

@@ -30,7 +30,25 @@ type KP = {
   pos_y?: number | null;
 };
 
-function runTeacherSearch() {}
+function runTeacherSearch() {
+  const keyword = search.value.trim();
+  if (!keyword) {
+    ElMessage.info("请输入知识点名称、编码或章节");
+    return;
+  }
+  showAllKps.value = true;
+  if (filteredKps.value.length === 0) {
+    ElMessage.warning("未找到匹配的知识点");
+    return;
+  }
+  const first = filteredKps.value[0];
+  activeChapter.value = first.chapter || "未分章";
+  selectKp(first.id);
+  nextTick(() => {
+    viewportFitRetryCount.value = 0;
+    fitVisibleToViewport();
+  });
+}
 
 function resetTeacherSearch() {
   search.value = "";
@@ -120,6 +138,10 @@ const panX = ref(0);
 const panY = ref(0);
 const viewportFitRetryCount = ref(0);
 const stageRef = ref<HTMLElement | null>(null);
+const viewportWidth = ref(0);
+const viewportHeight = ref(0);
+let stageResizeObserver: ResizeObserver | null = null;
+let stageResizeFrame = 0;
 const draggingCanvas = ref(false);
 const draggingNode = ref<DragNode | null>(null);
 const dragStartX = ref(0);
@@ -354,7 +376,7 @@ function viewStateStorageKey() {
 }
 
 function persistViewState() {
-  if (mutingViewStatePersist.value) return;
+  if (mutingViewStatePersist.value || props.embedded) return;
   const key = viewStateStorageKey();
   if (!key) return;
   const payload: WorkbenchViewState = {
@@ -373,7 +395,54 @@ function persistViewState() {
   localStorage.setItem(key, JSON.stringify(payload));
 }
 
+function disconnectStageResizeObserver() {
+  if (stageResizeObserver) {
+    stageResizeObserver.disconnect();
+    stageResizeObserver = null;
+  }
+  if (stageResizeFrame) {
+    cancelAnimationFrame(stageResizeFrame);
+    stageResizeFrame = 0;
+  }
+}
+
+function fitStageToViewport() {
+  viewportFitRetryCount.value = 0;
+  if (showAllKps.value && visibleKps.value.length > 0) {
+    fitVisibleToViewport();
+    return;
+  }
+  fitCategoryNodesToViewport();
+}
+
+function scheduleStageAutoFit() {
+  if (loading.value) return;
+  if (stageResizeFrame) cancelAnimationFrame(stageResizeFrame);
+  stageResizeFrame = requestAnimationFrame(() => {
+    stageResizeFrame = 0;
+    fitStageToViewport();
+  });
+}
+
+function connectStageResizeObserver(target: HTMLElement | null) {
+  disconnectStageResizeObserver();
+  if (!target) return;
+  viewportWidth.value = target.clientWidth || 0;
+  viewportHeight.value = target.clientHeight || 0;
+  if (typeof ResizeObserver === "undefined") return;
+  stageResizeObserver = new ResizeObserver((entries) => {
+    const entry = entries[0];
+    if (!entry) return;
+    viewportWidth.value = entry.contentRect.width;
+    viewportHeight.value = entry.contentRect.height;
+    if (entry.contentRect.width < 48 || entry.contentRect.height < 48) return;
+    scheduleStageAutoFit();
+  });
+  stageResizeObserver.observe(target);
+}
+
 function restoreViewState() {
+  if (props.embedded) return false;
   const key = viewStateStorageKey();
   if (!key) return false;
   const raw = localStorage.getItem(key);
@@ -836,11 +905,25 @@ function cancelCategoryLinkSelection() {
 }
 
 function zoomIn() {
-  canvasScale.value = Math.min(MAX_CANVAS_SCALE, Number((canvasScale.value + SCALE_STEP).toFixed(2)));
+  zoomToScale(Math.min(MAX_CANVAS_SCALE, Number((canvasScale.value + SCALE_STEP).toFixed(2))));
 }
 
 function zoomOut() {
-  canvasScale.value = Math.max(MIN_CANVAS_SCALE, Number((canvasScale.value - SCALE_STEP).toFixed(2)));
+  zoomToScale(Math.max(MIN_CANVAS_SCALE, Number((canvasScale.value - SCALE_STEP).toFixed(2))));
+}
+
+function zoomToScale(nextScale: number) {
+  if (!stageRef.value) {
+    canvasScale.value = nextScale;
+    return;
+  }
+  const centerX = stageRef.value.clientWidth / 2;
+  const centerY = stageRef.value.clientHeight / 2;
+  const worldX = (centerX - panX.value) / canvasScale.value;
+  const worldY = (centerY - panY.value) / canvasScale.value;
+  canvasScale.value = nextScale;
+  panX.value = centerX - worldX * nextScale;
+  panY.value = centerY - worldY * nextScale;
 }
 
 function resetViewport() {
@@ -1090,7 +1173,7 @@ async function load() {
   if (!props.subject) return;
   loading.value = true;
   try {
-    const viewRestored = !props.fullscreen && restoreViewState();
+    const viewRestored = !props.fullscreen && !props.embedded && restoreViewState();
     const [kpRes, edgeRes, chapterEdgeRes, covRes, layoutRes] = await Promise.all([
       api.get(`/graph/kps?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`),
       api.get(`/admin/edges?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}&page=1&page_size=500`),
@@ -1187,6 +1270,12 @@ async function load() {
     loading.value = false;
   }
 }
+
+defineExpose({
+  reloadGraph: load,
+  fitGraph: fitStageToViewport,
+  resetGraphViewport: resetViewport,
+});
 
 async function saveKp() {
   if (props.readonly) {
@@ -1384,7 +1473,7 @@ watch(
     graphEditorOpen.value = false;
     selectedId.value = null;
     selectedCategory.value = null;
-    const restored = !props.fullscreen && restoreViewState();
+    const restored = !props.fullscreen && !props.embedded && restoreViewState();
     if (!restored || props.fullscreen) {
       canvasScale.value = DEFAULT_CANVAS_SCALE;
       panX.value = 0;
@@ -1408,6 +1497,10 @@ watch(visibleKps, () => {
   normalizeWorkbenchSelectionState();
 });
 
+watch(stageRef, (value) => {
+  connectStageResizeObserver(value);
+}, { flush: "post" });
+
 watch(
   [kps, categoryNodes, visibleKps, selectedType, selectedId, selectedCategory],
   () => {
@@ -1427,6 +1520,7 @@ window.addEventListener("mousemove", onWindowMouseMove);
 window.addEventListener("mouseup", stopDragging);
 
 onBeforeUnmount(() => {
+  disconnectStageResizeObserver();
   window.removeEventListener("mousemove", onWindowMouseMove);
   window.removeEventListener("mouseup", stopDragging);
 });
@@ -1596,11 +1690,9 @@ onBeforeUnmount(() => {
       >
       <svg
         class="teacher-canvas"
-        :width="CANVAS_WIDTH"
-        :height="CANVAS_HEIGHT"
-        :style="{ transform: `translate(${panX}px, ${panY}px) scale(${canvasScale})` }"
+        width="100%"
+        height="100%"
       >
-        <rect x="0" y="0" :width="CANVAS_WIDTH" :height="CANVAS_HEIGHT" fill="var(--graph-canvas-bg)" />
         <defs>
           <marker id="teacher-edge-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(100,116,139,0.55)" />
@@ -1615,79 +1707,82 @@ onBeforeUnmount(() => {
             <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(75,94,130,0.55)" />
           </marker>
         </defs>
+        <g :transform="`translate(${panX} ${panY})`">
+          <g :transform="`scale(${canvasScale})`">
+          <line
+            v-for="edge in visibleChapterEdges"
+            :key="`chapter-${edge.id}`"
+            :x1="categoryPoint(edge.source_chapter).x"
+            :y1="categoryPoint(edge.source_chapter).y"
+            :x2="categoryPoint(edge.target_chapter).x"
+            :y2="categoryPoint(edge.target_chapter).y"
+            :stroke="edge.relation_type === 'support' ? 'rgba(70,165,123,0.5)' : (edge.relation_type === 'related' ? 'rgba(74,120,213,0.42)' : 'rgba(75,94,130,0.52)')"
+            stroke-width="2.2"
+            stroke-dasharray="6 6"
+            :marker-end="edge.relation_type === 'related' ? undefined : 'url(#teacher-chapter-arrow)'"
+          />
 
-        <line
-          v-for="edge in visibleChapterEdges"
-          :key="`chapter-${edge.id}`"
-          :x1="categoryPoint(edge.source_chapter).x"
-          :y1="categoryPoint(edge.source_chapter).y"
-          :x2="categoryPoint(edge.target_chapter).x"
-          :y2="categoryPoint(edge.target_chapter).y"
-          :stroke="edge.relation_type === 'support' ? 'rgba(70,165,123,0.5)' : (edge.relation_type === 'related' ? 'rgba(74,120,213,0.42)' : 'rgba(75,94,130,0.52)')"
-          stroke-width="2.2"
-          stroke-dasharray="6 6"
-          :marker-end="edge.relation_type === 'related' ? undefined : 'url(#teacher-chapter-arrow)'"
-        />
+          <line
+            v-for="edge in visibleEdges"
+            :key="`${edge.id}-${edge.relation_type}`"
+            :x1="edgeLine(edge).x1"
+            :y1="edgeLine(edge).y1"
+            :x2="edgeLine(edge).x2"
+            :y2="edgeLine(edge).y2"
+            :stroke="edgeStroke(edge)"
+            :stroke-width="edgeWidth(edge)"
+            stroke-linecap="round"
+            :stroke-dasharray="edgeDasharray(edge)"
+            :marker-end="edgeMarker(edge)"
+          />
 
-        <line
-          v-for="edge in visibleEdges"
-          :key="`${edge.id}-${edge.relation_type}`"
-          :x1="edgeLine(edge).x1"
-          :y1="edgeLine(edge).y1"
-          :x2="edgeLine(edge).x2"
-          :y2="edgeLine(edge).y2"
-          :stroke="edgeStroke(edge)"
-          :stroke-width="edgeWidth(edge)"
-          stroke-linecap="round"
-          :stroke-dasharray="edgeDasharray(edge)"
-          :marker-end="edgeMarker(edge)"
-        />
+          <line
+            v-for="kp in visibleKps"
+            :key="`cat-${kp.id}`"
+            :x1="categoryKpLine(kp).x1"
+            :y1="categoryKpLine(kp).y1"
+            :x2="categoryKpLine(kp).x2"
+            :y2="categoryKpLine(kp).y2"
+            stroke="rgba(100,116,139,0.4)"
+            stroke-width="1.2"
+            stroke-linecap="round"
+            stroke-dasharray="3 4"
+          />
 
-        <line
-          v-for="kp in visibleKps"
-          :key="`cat-${kp.id}`"
-          :x1="categoryKpLine(kp).x1"
-          :y1="categoryKpLine(kp).y1"
-          :x2="categoryKpLine(kp).x2"
-          :y2="categoryKpLine(kp).y2"
-          stroke="rgba(100,116,139,0.4)"
-          stroke-width="1.2"
-          stroke-linecap="round"
-          stroke-dasharray="3 4"
-        />
+          <g
+            v-for="category in categoryNodes"
+            :key="category.key"
+            class="teacher-category-node"
+            :transform="`translate(${categoryPoint(category.key).x}, ${categoryPoint(category.key).y})`"
+            @click="selectCategory(category.key)"
+            @mousedown="onNodeMouseDown($event, 'category', category.key)"
+          >
+            <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#eef5ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#8fb8ff' : '#dbe5f1'" stroke-width="1.8" />
+            <text class="teacher-category-node__title" text-anchor="middle" y="-6">{{ category.title }}</text>
+            <text class="teacher-category-node__meta" text-anchor="middle" y="22">{{ category.total }} 个知识点</text>
+          </g>
 
-        <g
-          v-for="category in categoryNodes"
-          :key="category.key"
-          class="teacher-category-node"
-          :transform="`translate(${categoryPoint(category.key).x}, ${categoryPoint(category.key).y})`"
-          @click="selectCategory(category.key)"
-          @mousedown="onNodeMouseDown($event, 'category', category.key)"
-        >
-          <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#eef5ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#8fb8ff' : '#dbe5f1'" stroke-width="1.8" />
-          <text class="teacher-category-node__title" text-anchor="middle" y="-6">{{ category.title }}</text>
-          <text class="teacher-category-node__meta" text-anchor="middle" y="22">{{ category.total }} 个知识点</text>
-        </g>
-
-        <g
-          v-for="kp in visibleKps"
-          :key="kp.id"
-          class="teacher-node"
-          :transform="`translate(${kpPoint(kp.id).x}, ${kpPoint(kp.id).y})`"
-          @click="selectKp(kp.id)"
-          @mousedown="onNodeMouseDown($event, 'kp', kp.id)"
-          @mouseenter="hoveredKpId = kp.id"
-          @mouseleave="hoveredKpId = null"
-        >
-          <circle :r="nodeRadius(kp) + 18" fill="transparent" :stroke="ringStroke('literacy', kp)" :stroke-width="splitLabels(kp.literacy_tag).length ? 5 : 0" />
-          <circle :r="nodeRadius(kp) + 10" fill="transparent" :stroke="ringStroke('ability', kp)" :stroke-width="splitLabels(kp.ability_tag).length ? 5 : 0" />
-          <circle :r="nodeRadius(kp) + 2" fill="transparent" stroke="#9db7e8" stroke-width="3.5" />
-          <circle :r="nodeRadius(kp) + 22" :fill="kp.id === selectedKp?.id ? 'rgba(70, 122, 235, 0.10)' : 'rgba(96,139,232,0.06)'" />
-          <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#f7fbff' : '#ffffff'" :stroke="kp.id === selectedKp?.id ? '#76a7f8' : '#dbe5f1'" stroke-width="2" />
-          <text class="teacher-node__code" text-anchor="middle" y="-8">{{ kp.code }}</text>
-          <text class="teacher-node__title" text-anchor="middle" y="16">{{ kp.title.slice(0, 10) }}</text>
-          <g v-if="kpCoverageWarnLabels(kp.id).length" :transform="`translate(0, ${nodeRadius(kp) + 16})`">
-            <text class="teacher-node__warn" text-anchor="middle" y="0">{{ kpCoverageWarnLabels(kp.id).join(" · ") }}</text>
+          <g
+            v-for="kp in visibleKps"
+            :key="kp.id"
+            class="teacher-node"
+            :transform="`translate(${kpPoint(kp.id).x}, ${kpPoint(kp.id).y})`"
+            @click="selectKp(kp.id)"
+            @mousedown="onNodeMouseDown($event, 'kp', kp.id)"
+            @mouseenter="hoveredKpId = kp.id"
+            @mouseleave="hoveredKpId = null"
+          >
+            <circle :r="nodeRadius(kp) + 18" fill="transparent" :stroke="ringStroke('literacy', kp)" :stroke-width="splitLabels(kp.literacy_tag).length ? 5 : 0" />
+            <circle :r="nodeRadius(kp) + 10" fill="transparent" :stroke="ringStroke('ability', kp)" :stroke-width="splitLabels(kp.ability_tag).length ? 5 : 0" />
+            <circle :r="nodeRadius(kp) + 2" fill="transparent" stroke="#9db7e8" stroke-width="3.5" />
+            <circle :r="nodeRadius(kp) + 22" :fill="kp.id === selectedKp?.id ? 'rgba(70, 122, 235, 0.10)' : 'rgba(96,139,232,0.06)'" />
+            <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#f7fbff' : '#ffffff'" :stroke="kp.id === selectedKp?.id ? '#76a7f8' : '#dbe5f1'" stroke-width="2" />
+            <text class="teacher-node__code" text-anchor="middle" y="-8">{{ kp.code }}</text>
+            <text class="teacher-node__title" text-anchor="middle" y="16">{{ kp.title.slice(0, 10) }}</text>
+            <g v-if="kpCoverageWarnLabels(kp.id).length" :transform="`translate(0, ${nodeRadius(kp) + 16})`">
+              <text class="teacher-node__warn" text-anchor="middle" y="0">{{ kpCoverageWarnLabels(kp.id).join(" · ") }}</text>
+            </g>
+          </g>
           </g>
         </g>
       </svg>
@@ -2098,6 +2193,22 @@ onBeforeUnmount(() => {
   min-height: 0;
   gap: 0;
   padding: 0;
+}
+
+.teacher-workbench--embedded {
+  min-height: 0;
+}
+
+.teacher-workbench--embedded .teacher-content {
+  min-height: 0;
+}
+
+.teacher-workbench--embedded .teacher-stage {
+  min-height: 0;
+}
+
+.teacher-workbench--embedded .teacher-stage__viewport {
+  min-height: clamp(320px, 54dvh, 720px);
 }
 
 .teacher-workbench--fullscreen .teacher-sidebar {
@@ -2662,8 +2773,9 @@ onBeforeUnmount(() => {
   left: 0;
   top: 0;
   display: block;
-  transform-origin: 0 0;
-  transition: transform 0.08s ease;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
   cursor: grab;
   z-index: 1;
 }

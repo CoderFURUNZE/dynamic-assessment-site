@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from statistics import mean
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlmodel import Session, desc, select
 
 from app.db.models import (
@@ -830,16 +830,18 @@ def get_latest_profile_snapshot(
     subject: str,
     grade: str,
 ) -> LearnerProfileSnapshot | None:
-    return session.exec(
+    rows = session.exec(
         select(LearnerProfileSnapshot)
-        .where(
-            LearnerProfileSnapshot.user_id == user_id,
-            LearnerProfileSnapshot.subject == subject,
-            LearnerProfileSnapshot.grade == grade,
-        )
+        .where(LearnerProfileSnapshot.user_id == user_id)
         .order_by(desc(LearnerProfileSnapshot.updated_at), desc(LearnerProfileSnapshot.id))
-        .limit(1)
-    ).first()
+        .limit(50)
+    ).all()
+    subject_text = str(subject or "").strip()
+    grade_text = str(grade or "").strip()
+    for row in rows:
+        if str(row.subject or "").strip() == subject_text and str(row.grade or "").strip() == grade_text:
+            return row
+    return None
 
 
 def get_profile_trend(
@@ -853,15 +855,16 @@ def get_profile_trend(
 ) -> list[LearnerProfileSnapshot]:
     stmt = select(LearnerProfileSnapshot).where(
         LearnerProfileSnapshot.user_id == user_id,
-        LearnerProfileSnapshot.subject == subject,
-        LearnerProfileSnapshot.grade == grade,
     )
     if days is not None and days > 0:
         stmt = stmt.where(LearnerProfileSnapshot.updated_at >= datetime.utcnow() - timedelta(days=days))
     rows = session.exec(
-        stmt.order_by(desc(LearnerProfileSnapshot.updated_at), desc(LearnerProfileSnapshot.id)).limit(max(1, limit))
+        stmt.order_by(desc(LearnerProfileSnapshot.updated_at), desc(LearnerProfileSnapshot.id)).limit(max(50, limit * 6))
     ).all()
-    return list(rows)
+    subject_text = str(subject or "").strip()
+    grade_text = str(grade or "").strip()
+    filtered = [row for row in rows if str(row.subject or "").strip() == subject_text and str(row.grade or "").strip() == grade_text]
+    return list(filtered[: max(1, limit)])
 
 
 def get_stage_snapshot_trend(
@@ -875,15 +878,16 @@ def get_stage_snapshot_trend(
 ) -> list[StageEvaluationSnapshot]:
     stmt = select(StageEvaluationSnapshot).where(
         StageEvaluationSnapshot.user_id == user_id,
-        StageEvaluationSnapshot.subject == subject,
-        StageEvaluationSnapshot.grade == grade,
     )
     if days is not None and days > 0:
         stmt = stmt.where(StageEvaluationSnapshot.updated_at >= datetime.utcnow() - timedelta(days=days))
     rows = session.exec(
-        stmt.order_by(desc(StageEvaluationSnapshot.stage_order), desc(StageEvaluationSnapshot.updated_at)).limit(max(1, limit))
+        stmt.order_by(desc(StageEvaluationSnapshot.stage_order), desc(StageEvaluationSnapshot.updated_at)).limit(max(50, limit * 6))
     ).all()
-    return list(rows)
+    subject_text = str(subject or "").strip()
+    grade_text = str(grade or "").strip()
+    filtered = [row for row in rows if str(row.subject or "").strip() == subject_text and str(row.grade or "").strip() == grade_text]
+    return list(filtered[: max(1, limit)])
 
 
 def get_latest_stage_snapshot(
@@ -893,16 +897,18 @@ def get_latest_stage_snapshot(
     subject: str,
     grade: str,
 ) -> StageEvaluationSnapshot | None:
-    return session.exec(
+    rows = session.exec(
         select(StageEvaluationSnapshot)
-        .where(
-            StageEvaluationSnapshot.user_id == user_id,
-            StageEvaluationSnapshot.subject == subject,
-            StageEvaluationSnapshot.grade == grade,
-        )
+        .where(StageEvaluationSnapshot.user_id == user_id)
         .order_by(desc(StageEvaluationSnapshot.stage_order), desc(StageEvaluationSnapshot.updated_at))
-        .limit(1)
-    ).first()
+        .limit(50)
+    ).all()
+    subject_text = str(subject or "").strip()
+    grade_text = str(grade or "").strip()
+    for row in rows:
+        if str(row.subject or "").strip() == subject_text and str(row.grade or "").strip() == grade_text:
+            return row
+    return None
 
 
 def get_stage_teacher_feedback(
@@ -1831,7 +1837,12 @@ def recalculate_profile_snapshot(
         LearningBehaviorEvent.created_at >= since_30d,
     ]
     if kp_ids:
-        behavior_where.append(LearningBehaviorEvent.kp_id.in_(kp_ids))
+        behavior_where.append(
+            or_(
+                LearningBehaviorEvent.kp_id.in_(kp_ids),
+                LearningBehaviorEvent.event_type == "login",
+            )
+        )
     behavior_rows = session.exec(
         select(LearningBehaviorEvent)
         .where(*behavior_where)

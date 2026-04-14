@@ -32,6 +32,7 @@ function handleChange(value: string) {
       <div class="workspace-topbar__main">
         <div class="workspace-topbar__badge">{{ badge }}</div>
         <div class="workspace-topbar__title">{{ title }}</div>
+        <div v-if="subtitle" class="workspace-topbar__subtitle">{{ subtitle }}</div>
       </div>
 
       <div class="workspace-topbar__actions">
@@ -111,6 +112,12 @@ function handleChange(value: string) {
   font-weight: 800;
   color: var(--app-ink);
   letter-spacing: -0.01em;
+}
+
+.workspace-topbar__subtitle {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #617897;
 }
 
 .workspace-topbar__actions {

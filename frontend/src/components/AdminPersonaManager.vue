@@ -370,6 +370,31 @@ function scorePercent(value: number) {
   return `${Math.round(num * 100)}%`;
 }
 
+function scoreToneClass(value: number) {
+  const num = Number(value || 0) * 100;
+  if (num >= 60) return "is-good";
+  if (num >= 30) return "is-mid";
+  return "is-bad";
+}
+
+function personaToneClass(label: string) {
+  if (label.includes("高风险")) return "is-danger";
+  if (label.includes("拖延")) return "is-warning";
+  return "is-steady";
+}
+
+function levelToneClass(level: string) {
+  if (level.includes("风险")) return "is-risk";
+  if (level.includes("预警")) return "is-warning";
+  return "is-stable";
+}
+
+function summarizeReason(row: PersonaStudent) {
+  const summary = String(row.reason_summary || "").trim();
+  if (!summary) return `${row.persona_label || "未分类"}；掌握度 ${Number(row.course_mastery || 0).toFixed(2)}`;
+  return summary.replace(/\s+/g, " ");
+}
+
 function riskTagType(level: string) {
   return level === "风险" ? "danger" : "success";
 }
@@ -557,54 +582,73 @@ watch(
       </div>
     </section>
 
-    <section v-if="showResultsStep" class="persona-card">
-      <div class="persona-step-header">
+    <section v-if="showResultsStep" class="persona-results-page">
+      <div class="results-header">
         <div>
-          <h3 class="persona-title">画像结果预览</h3>
-          <p class="persona-step-header__desc">查看当前规则下的学生画像分类、风险等级和判定依据。</p>
-        </div>
-        <div class="persona-action-group">
-          <el-button round @click="loadStudents">刷新</el-button>
-          <el-button v-if="canManage" round type="primary" :loading="recalculating" @click="recalculate">重算画像</el-button>
+          <div class="results-header__eyebrow">结果查看</div>
+          <h3 class="persona-title persona-title--results">画像结果</h3>
         </div>
       </div>
-      <div class="persona-result-toolbar">
-        <el-input v-model="resultKeyword" placeholder="搜索账号、姓名、学号、班级或判定依据" clearable />
-        <el-select v-model="resultPersonaFilter" placeholder="全部画像">
-          <el-option label="全部画像" value="all" />
-          <el-option v-for="item in personaOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-select v-model="resultRiskFilter" placeholder="全部等级">
-          <el-option label="全部等级" value="all" />
-          <el-option label="风险" value="风险" />
-          <el-option label="普通" value="普通" />
-        </el-select>
+
+      <div class="results-toolbar">
+        <div class="results-toolbar__filters">
+          <el-input v-model="resultKeyword" placeholder="搜索账号、姓名、学号、班级或判定摘要" clearable />
+          <el-select v-model="resultPersonaFilter" placeholder="全部类型">
+            <el-option label="全部类型" value="all" />
+            <el-option v-for="item in personaOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-model="resultRiskFilter" placeholder="全部等级">
+            <el-option label="全部等级" value="all" />
+            <el-option label="预警" value="预警" />
+            <el-option label="风险" value="风险" />
+            <el-option label="普通" value="普通" />
+          </el-select>
+        </div>
+        <div class="results-toolbar__actions">
+          <el-button @click="loadStudents">刷新</el-button>
+          <el-button v-if="canManage" plain>导出结果</el-button>
+        </div>
       </div>
-      <div class="persona-feedback-card">
-        <div>共 {{ students.length }} 名学生，筛选后 {{ filteredStudents.length }} 名</div>
-        <div>风险学生 {{ riskyCount }} 名</div>
+
+      <div class="results-summary">
+        <div>共 <strong>{{ students.length }}</strong> 名学生，当前显示 <strong>{{ filteredStudents.length }}</strong> 名</div>
+        <div>风险学生 <strong class="results-summary__risk">{{ riskyCount }}</strong> 名</div>
       </div>
-      <el-table :data="filteredStudents" border stripe>
+
+      <div class="results-table-card">
+      <el-table :data="filteredStudents">
         <el-table-column prop="username" label="账号" min-width="110" />
         <el-table-column prop="full_name" label="姓名" min-width="100" />
-        <el-table-column prop="persona_label" label="当前类型" min-width="130" />
-        <el-table-column prop="latest_stage_title" label="最新阶段" min-width="110" />
-        <el-table-column prop="stage_trend" label="阶段变化" min-width="110" />
+        <el-table-column label="当前类型" min-width="130">
+          <template #default="{ row }">
+            <span class="persona-type-pill" :class="personaToneClass(row.persona_label)">{{ row.persona_label || "未分类" }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="动态评分" min-width="100">
-          <template #default="{ row }">{{ scorePercent(row.dynamic_score) }}</template>
+          <template #default="{ row }">
+            <span class="score-text" :class="scoreToneClass(row.dynamic_score)">{{ scorePercent(row.dynamic_score) }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="课程掌握度" min-width="110">
-          <template #default="{ row }">{{ scorePercent(row.course_mastery) }}</template>
+          <template #default="{ row }">
+            <span class="score-text" :class="scoreToneClass(row.course_mastery)">{{ scorePercent(row.course_mastery) }}</span>
+          </template>
         </el-table-column>
         <el-table-column label="等级" min-width="90">
           <template #default="{ row }">
-            <el-tag size="small" :type="riskTagType(row.risk_level)">{{ row.risk_level || '普通' }}</el-tag>
+            <span class="level-pill" :class="levelToneClass(row.risk_level || '普通')">{{ row.risk_level || '普通' }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="reason_summary" label="判定依据" min-width="240" show-overflow-tooltip />
+        <el-table-column label="判定摘要" min-width="280">
+          <template #default="{ row }">
+            <el-tooltip :content="summarizeReason(row)" placement="top">
+              <span class="reason-summary">{{ summarizeReason(row) }}</span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column v-if="showStudentDetailAction" label="详情" width="80" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" text type="primary" @click="emit('view-student', row.user_id)">查看</el-button>
+            <el-button size="small" plain class="results-view-btn" @click="emit('view-student', row.user_id)">查看</el-button>
           </template>
         </el-table-column>
         <el-table-column v-if="canManage" label="人工覆盖" min-width="220" fixed="right">
@@ -619,6 +663,7 @@ watch(
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </section>
   </div>
 </template>
@@ -1136,6 +1181,172 @@ watch(
   min-width: 120px;
 }
 
+.persona-results-page {
+  display: grid;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+
+.results-header,
+.results-toolbar,
+.results-toolbar__filters,
+.results-toolbar__actions,
+.results-summary {
+  display: flex;
+  align-items: center;
+}
+
+.results-header,
+.results-toolbar,
+.results-summary {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.results-header__eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.persona-title--results {
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.results-header__actions,
+.results-toolbar__actions,
+.results-toolbar__filters {
+  gap: 12px;
+}
+
+.results-toolbar {
+  padding: 0;
+}
+
+.results-toolbar__filters {
+  flex: 1 1 auto;
+}
+
+.results-toolbar__filters > *:first-child {
+  flex: 1 1 460px;
+}
+
+.results-toolbar__filters :deep(.el-select),
+.results-toolbar__actions :deep(.el-button),
+.results-header__actions :deep(.el-button),
+.results-toolbar__filters :deep(.el-input) {
+  min-height: 40px;
+}
+
+.results-summary {
+  padding: 6px 2px 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.results-summary strong {
+  color: #0f172a;
+}
+
+.results-summary__risk {
+  color: #ef4444 !important;
+}
+
+.results-table-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.persona-type-pill,
+.level-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.persona-type-pill.is-steady {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.persona-type-pill.is-warning {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
+.persona-type-pill.is-danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.level-pill.is-warning {
+  background: #fefce8;
+  border-color: #fde68a;
+  color: #a16207;
+}
+
+.level-pill.is-risk {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #c2410c;
+}
+
+.level-pill.is-stable {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.score-text {
+  font-weight: 700;
+}
+
+.score-text.is-good {
+  color: #16a34a;
+}
+
+.score-text.is-mid {
+  color: #d97706;
+}
+
+.score-text.is-bad {
+  color: #dc2626;
+}
+
+.reason-summary {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #475569;
+}
+
+.results-view-btn {
+  border-radius: 10px;
+  border-color: #bfdbfe;
+  color: #2563eb;
+  background: #ffffff;
+}
+
+.results-view-btn:hover {
+  background: #eff6ff;
+}
+
 :deep(.el-input__wrapper),
 :deep(.el-select__wrapper),
 :deep(.el-textarea__inner) {
@@ -1150,6 +1361,27 @@ watch(
   border-radius: 16px;
 }
 
+.persona-results-page :deep(.el-input__wrapper),
+.persona-results-page :deep(.el-select__wrapper) {
+  min-height: 40px;
+  border-radius: 10px;
+}
+
+.persona-results-page :deep(.el-table) {
+  --el-table-border-color: #e5e7eb;
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-row-hover-bg-color: #f8fbff;
+}
+
+.persona-results-page :deep(.el-table th.el-table__cell) {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.persona-results-page :deep(.el-table td.el-table__cell) {
+  color: #0f172a;
+}
+
 @media (max-width: 1200px) {
   .persona-preset-grid,
   .persona-grid--two,
@@ -1158,6 +1390,17 @@ watch(
   .persona-readonly__grid,
   .persona-result-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .results-toolbar,
+  .results-header,
+  .results-summary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .results-toolbar__filters {
+    flex-direction: column;
   }
 }
 

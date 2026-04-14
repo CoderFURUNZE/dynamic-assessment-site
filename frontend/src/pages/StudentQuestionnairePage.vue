@@ -67,8 +67,10 @@ onMounted(async () => {
     <WorkspaceTopbar
       v-model="subject"
       :courses="courses"
-      badge="补充问卷"
-      title="补充问卷"
+      badge="学习画像"
+      title="学生补充问卷"
+      subtitle="补充学习状态、兴趣和策略信息，系统会和学习行为一起更新当前课程画像。"
+      :meta-text="selectedCourseId ? `当前课程：${subject}，保存后会自动更新画像结果。` : '请先选择课程，再完成补充问卷。'"
       @change="syncQuery"
     >
       <el-button @click="router.push({ path: '/student/dashboard', query: studentQuery() })">返回学习中心</el-button>
@@ -77,7 +79,7 @@ onMounted(async () => {
       </el-button>
     </WorkspaceTopbar>
 
-    <PageSectionCard eyebrow="补充问卷" title="补充信息">
+    <PageSectionCard eyebrow="问卷填写" title="本次补充内容">
       <QuestionnairePane :course-id="selectedCourseId" />
     </PageSectionCard>
   </div>

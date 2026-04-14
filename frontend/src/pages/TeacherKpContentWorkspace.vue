@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import type { Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -102,6 +102,7 @@ const saving = ref(false);
 const relationSaving = ref(false);
 const kpMetaDialogOpen = ref(false);
 const activeSection = ref<SectionKey>("learning");
+const completedChecklistOpen = ref(false);
 const contentMainRef = ref<HTMLElement | null>(null);
 const contentMetaRef = ref<HTMLElement | null>(null);
 
@@ -239,11 +240,16 @@ function syncKpFormFromNode(node: Partial<KpInfo> | null | undefined) {
 
 const assignedQuestionIds = computed(() => new Set(assignedPractice.value.map((item) => item.question_id)));
 const kpMap = computed(() => new Map(graphKps.value.map((item) => [item.id, item])));
+const currentKpCode = computed(() => kpForm.code.trim() || (createMode.value ? "新建知识点" : "未设置编码"));
+const currentKpSubtitle = computed(() => {
+  const title = kpForm.title.trim();
+  return title ? `${currentKpCode.value} · ${title}` : currentKpCode.value;
+});
 
 const stats = computed(() => ({
   basic: createMode.value ? 0 : 1,
   learning: learningResources.value.length,
-  practice: assignedPractice.value.length,
+  practice: questions.value.length,
   relation: kp.value ? graphEdges.value.filter((item) => item.prereq_id === kp.value?.id || item.next_id === kp.value?.id).length : 0,
   check: completenessScore.value,
 }));
@@ -261,28 +267,32 @@ const sectionCards = computed(() => {
       key: "basic" as SectionKey,
       title: "基础信息",
       desc: "名称、标签、难度与章节",
-      count: createMode.value ? "新建" : "已建",
+      count: createMode.value ? "待建" : "已建",
+      status: createMode.value ? "需先保存基础信息" : "已完成基础配置",
       icon: icons.basic,
     },
     {
       key: "learning" as SectionKey,
       title: "学习资料",
       desc: "视频、文档、课件与外链",
-      count: stats.value.learning,
+      count: `${stats.value.learning} 项`,
+      status: stats.value.learning > 0 ? "已配置学习资料" : "待补充学习资料",
       icon: icons.learning,
     },
     {
       key: "practice" as SectionKey,
       title: "练习与题库",
       desc: "题目与随堂练习顺序",
-      count: stats.value.practice,
+      count: `${stats.value.practice} 题`,
+      status: `已加入练习 ${assignedPractice.value.length} 题`,
       icon: icons.practice,
     },
     {
       key: "relation" as SectionKey,
       title: "图谱关系",
       desc: "前置、后继、关联与支撑",
-      count: stats.value.relation,
+      count: `${stats.value.relation} 条`,
+      status: stats.value.relation > 0 ? "已建立图谱关系" : "待补充图谱关系",
       icon: icons.relation,
     },
     {
@@ -299,11 +309,6 @@ const workspaceCards = computed(() => sectionCards.value.filter((item) => item.k
 const basicChecklistItems = computed(() =>
   checklistItems.value.filter((item) => ["code", "title", "chapter", "description", "ability", "literacy"].includes(item.key)),
 );
-const sidebarChecklistItems = computed(() => {
-  const missing = checklistItems.value.filter((item) => !item.done);
-  const done = checklistItems.value.filter((item) => item.done);
-  return [...missing, ...done].slice(0, 6);
-});
 const basicInfoRows = computed(() => [
   {
     key: "code",
@@ -362,6 +367,12 @@ const basicInfoRows = computed(() => [
     detail: kpForm.description.trim() ? "当前已补充学习说明。" : "建议说明学生学什么、为什么学、如何学。",
   },
 ]);
+const basicInfoLeftRows = computed(() =>
+  basicInfoRows.value.filter((item) => ["code", "title", "chapter", "difficulty"].includes(item.key)),
+);
+const basicInfoRightRows = computed(() =>
+  basicInfoRows.value.filter((item) => ["knowledge_tag", "ability_tag", "literacy_tag", "description"].includes(item.key)),
+);
 
 const graphLinkQuery = computed(() => ({
   subject: subject.value || undefined,
@@ -455,6 +466,93 @@ const completenessScore = computed(() => {
 });
 
 const missingChecklistItems = computed(() => checklistItems.value.filter((item) => !item.done));
+const completedChecklistItems = computed(() => checklistItems.value.filter((item) => item.done));
+
+const practiceSearch = ref("");
+const practiceTypeFilter = ref("all");
+const practiceDifficultyFilter = ref("all");
+const practiceAssignmentFilter = ref("all");
+const practiceSort = ref("latest");
+const practiceCurrentPage = ref(1);
+const practicePageSize = ref(5);
+const practiceTypeOptions = [
+  { label: "全部题型", value: "all" },
+  { label: "选择题", value: "mcq" },
+  { label: "判断题", value: "tof" },
+  { label: "简答题", value: "short" },
+];
+const practiceDifficultyOptions = [
+  { label: "全部难度", value: "all" },
+  { label: "基础", value: "easy" },
+  { label: "进阶", value: "medium" },
+  { label: "挑战", value: "hard" },
+];
+const practiceAssignmentOptions = [
+  { label: "全部状态", value: "all" },
+  { label: "未加入练习", value: "pending" },
+  { label: "已加入练习", value: "assigned" },
+];
+const practiceSortOptions = [
+  { label: "最新优先", value: "latest" },
+  { label: "难度从高到低", value: "difficulty-desc" },
+  { label: "难度从低到高", value: "difficulty-asc" },
+  { label: "题型排序", value: "type" },
+];
+const filteredQuestions = computed(() => {
+  const keyword = practiceSearch.value.trim().toLowerCase();
+  return [...questions.value]
+    .filter((item) => {
+      if (keyword) {
+        const haystack = `${item.prompt} ${item.ability_subtags || ""} ${item.cognitive_level || ""}`.toLowerCase();
+        if (!haystack.includes(keyword)) return false;
+      }
+      if (practiceTypeFilter.value !== "all" && item.type !== practiceTypeFilter.value) return false;
+      if (practiceDifficultyFilter.value !== "all") {
+        const difficulty = Number(item.difficulty || 0);
+        if (practiceDifficultyFilter.value === "easy" && difficulty >= 0.34) return false;
+        if (practiceDifficultyFilter.value === "medium" && (difficulty < 0.34 || difficulty > 0.67)) return false;
+        if (practiceDifficultyFilter.value === "hard" && difficulty <= 0.67) return false;
+      }
+      if (practiceAssignmentFilter.value === "assigned" && !assignedQuestionIds.value.has(item.id)) return false;
+      if (practiceAssignmentFilter.value === "pending" && assignedQuestionIds.value.has(item.id)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      switch (practiceSort.value) {
+        case "difficulty-desc":
+          return (b.difficulty || 0) - (a.difficulty || 0);
+        case "difficulty-asc":
+          return (a.difficulty || 0) - (b.difficulty || 0);
+        case "type":
+          return `${questionTypeLabel(a.type)}${a.prompt}`.localeCompare(`${questionTypeLabel(b.type)}${b.prompt}`, "zh-Hans-CN");
+        default:
+          return b.id - a.id;
+      }
+    });
+});
+const paginatedQuestions = computed(() => {
+  const start = (practiceCurrentPage.value - 1) * practicePageSize.value;
+  return filteredQuestions.value.slice(start, start + practicePageSize.value);
+});
+const assignedPracticeCountLabel = computed(() => `${assignedPractice.value.length} 题`);
+
+watch([practiceSearch, practiceTypeFilter, practiceDifficultyFilter, practiceAssignmentFilter, practiceSort], () => {
+  practiceCurrentPage.value = 1;
+});
+
+watch([filteredQuestions, practicePageSize], () => {
+  const totalPages = Math.max(1, Math.ceil(filteredQuestions.value.length / practicePageSize.value));
+  if (practiceCurrentPage.value > totalPages) {
+    practiceCurrentPage.value = totalPages;
+  }
+});
+
+function checklistTargetSection(key: string): SectionKey {
+  if (key === "relation") return "relation";
+  if (key === "learning" || key === "recommend") return "learning";
+  if (key === "practice" || key === "practiceAssigned") return "practice";
+  return "basic";
+}
 
 function parseOptions(text: string) {
   return text
@@ -1149,13 +1247,11 @@ watch(
           <div class="content-topbar__titles">
             <div class="content-eyebrow">知识点配置</div>
             <h1 class="content-title">知识点配置工作台</h1>
-            <p class="content-subtitle">围绕当前知识点完成基础信息、学习资源、练习题库、图谱关系和完整度检查。</p>
+            <p class="content-subtitle">{{ currentKpSubtitle }}</p>
           </div>
         </div>
         <div class="content-topbar__actions">
-          <el-button :loading="saving" @click="createMode ? saveKpMeta() : openKpMetaEditor()">
-            {{ createMode ? "保存基础信息" : "编辑基础信息" }}
-          </el-button>
+          <el-button :loading="saving" @click="saveKpMeta">保存</el-button>
           <el-button type="primary" :loading="saving" @click="saveAndBack">保存并返回图谱</el-button>
         </div>
       </header>
@@ -1200,6 +1296,7 @@ watch(
           <div class="summary-card__body">
             <span class="summary-card__label">{{ card.title }}</span>
             <strong class="summary-card__value">{{ card.count }}</strong>
+            <span class="summary-card__status">{{ card.status }}</span>
             <small class="summary-card__desc">{{ card.desc }}</small>
           </div>
         </button>
@@ -1300,29 +1397,36 @@ watch(
           </template>
 
           <template v-else-if="activeSection === 'basic'">
-            <section class="content-card panel-shell">
+            <section class="content-card content-card--section panel-shell">
               <div class="content-card__head">
                 <div>
                   <h3>基础信息</h3>
-                  <p>以下按列表查看当前知识点的基础配置。需要修改时，回到上方表单统一编辑。</p>
+                  <p>以两列信息卡查看当前知识点的基础配置，需要修改时统一进入编辑弹窗处理。</p>
                 </div>
                 <div class="content-card__head-actions">
-                  <el-button :loading="saving" @click="saveKpMeta">保存基础信息</el-button>
                   <el-button @click="openKpMetaEditor">编辑基础信息</el-button>
                 </div>
               </div>
-              <div class="content-list">
-                <div v-for="item in basicInfoRows" :key="item.key" class="content-item basic-record">
-                  <div class="content-item__body">
-                    <div class="content-item__meta">
-                      <div class="content-badge">{{ item.badge }}</div>
+              <div class="basic-grid">
+                <div class="basic-column">
+                  <article v-for="item in basicInfoLeftRows" :key="item.key" class="basic-field-card">
+                    <div class="basic-field-card__top">
+                      <span class="content-badge">{{ item.badge }}</span>
+                      <el-button size="small" @click="openKpMetaEditor">编辑</el-button>
                     </div>
-                    <strong>{{ item.title }}：{{ item.value }}</strong>
-                    <span>{{ item.detail }}</span>
-                  </div>
-                  <div class="content-item__actions">
-                    <el-button size="small" @click="openKpMetaEditor">编辑</el-button>
-                  </div>
+                    <strong class="basic-field-card__value">{{ item.title }}：{{ item.value }}</strong>
+                    <p class="basic-field-card__detail">{{ item.detail }}</p>
+                  </article>
+                </div>
+                <div class="basic-column">
+                  <article v-for="item in basicInfoRightRows" :key="item.key" class="basic-field-card">
+                    <div class="basic-field-card__top">
+                      <span class="content-badge">{{ item.badge }}</span>
+                      <el-button size="small" @click="openKpMetaEditor">编辑</el-button>
+                    </div>
+                    <strong class="basic-field-card__value">{{ item.title }}：{{ item.value }}</strong>
+                    <p class="basic-field-card__detail">{{ item.detail }}</p>
+                  </article>
                 </div>
               </div>
             </section>
@@ -1343,25 +1447,26 @@ watch(
               <div v-if="learningResources.length === 0 && recommendResources.length === 0" class="content-empty">还没有学习资源或推荐拓展</div>
               <el-tabs v-else v-model="teacherResourceView" class="teacher-resource-tabs">
                 <el-tab-pane label="全部资源一览" name="all">
-                  <div class="content-list">
-                    <div v-for="item in [...allLearningResourcesSorted, ...recommendResources]" :key="`${item.category}-${item.id}`" class="content-item">
-                      <div class="content-item__body">
+                  <div class="content-list resource-card-list">
+                    <article v-for="item in [...allLearningResourcesSorted, ...recommendResources]" :key="`${item.category}-${item.id}`" class="resource-card">
+                      <div class="resource-card__main">
                         <div class="content-item__meta">
                           <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
-                          <div class="content-badge">{{ (item.category || 'learning') === 'recommend' ? '推荐拓展' : '学习资源' }}</div>
+                          <div class="content-badge">{{ (item.category || 'learning') === 'recommend' ? '推荐资源' : '学习资源' }}</div>
                           <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">
                             {{ previewStatusLabel(item.preview_status) }}
                           </div>
                         </div>
                         <strong>{{ item.title }}</strong>
-                        <span>
-                          原始格式：{{ (item.file_extension || "").replace('.', '').toUpperCase() || resourceTypeLabel(item.type) }}
-                          · 预览方式：{{ previewLabel(item) }}
-                        </span>
-                        <span v-if="item.original_file_name">{{ item.original_file_name }}</span>
-                        <span v-if="item.preview_error" class="content-error">{{ item.preview_error }}</span>
+                        <p class="resource-card__summary">{{ item.description || "补充资源说明，帮助老师快速判断适用场景。" }}</p>
                       </div>
-                      <div class="content-item__actions">
+                      <div class="resource-card__meta">
+                        <span><strong>来源</strong>{{ item.source_kind === 'external' ? '外部链接' : '上传文件' }}</span>
+                        <span><strong>预览</strong>{{ previewLabel(item) }}</span>
+                        <span><strong>分类</strong>{{ (item.category || 'learning') === 'recommend' ? '推荐拓展' : '学习资料' }}</span>
+                        <span><strong>更新</strong>{{ item.original_file_name || '已配置资源' }}</span>
+                      </div>
+                      <div class="content-item__actions resource-card__actions">
                         <el-button size="small" type="primary" plain @click="openResourceEdit(item, (item.category || 'learning') === 'recommend' ? 'recommend' : 'learning')">编辑</el-button>
                         <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
                         <el-dropdown trigger="click" @command="(cmd) => handleResourceMoreCommand(String(cmd), item)">
@@ -1378,7 +1483,7 @@ watch(
                           </template>
                         </el-dropdown>
                       </div>
-                    </div>
+                    </article>
                   </div>
                 </el-tab-pane>
                 <el-tab-pane label="按类型分组" name="grouped">
@@ -1388,20 +1493,27 @@ watch(
                         <strong>{{ group.title }}</strong>
                         <span>{{ group.items.length }} 个</span>
                       </div>
-                      <div class="content-list">
-                        <div v-for="item in group.items" :key="item.id" class="content-item">
-                          <div class="content-item__body">
+                      <div class="content-list resource-card-list">
+                        <article v-for="item in group.items" :key="item.id" class="resource-card">
+                          <div class="resource-card__main">
                             <div class="content-item__meta">
                               <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
                               <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">{{ previewStatusLabel(item.preview_status) }}</div>
                             </div>
                             <strong>{{ item.title }}</strong>
+                            <p class="resource-card__summary">{{ item.description || "当前资源已关联到该类型分组，可继续补充说明与预览配置。" }}</p>
                           </div>
-                          <div class="content-item__actions">
+                          <div class="resource-card__meta">
+                            <span><strong>来源</strong>{{ item.source_kind === 'external' ? '外部链接' : '上传文件' }}</span>
+                            <span><strong>预览</strong>{{ previewLabel(item) }}</span>
+                            <span><strong>分类</strong>学习资料</span>
+                            <span><strong>更新</strong>{{ item.original_file_name || '已配置资源' }}</span>
+                          </div>
+                          <div class="content-item__actions resource-card__actions">
                             <el-button size="small" type="primary" plain @click="openResourceEdit(item, 'learning')">编辑</el-button>
                             <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
                           </div>
-                        </div>
+                        </article>
                       </div>
                     </section>
                     <section class="content-group">
@@ -1410,20 +1522,28 @@ watch(
                         <span>{{ recommendResources.length }} 个</span>
                       </div>
                       <div v-if="recommendResources.length === 0" class="content-empty">还没有推荐拓展资源</div>
-                      <div v-else class="content-list">
-                        <div v-for="item in recommendResources" :key="item.id" class="content-item">
-                          <div class="content-item__body">
+                      <div v-else class="content-list resource-card-list">
+                        <article v-for="item in recommendResources" :key="item.id" class="resource-card">
+                          <div class="resource-card__main">
                             <div class="content-item__meta">
                               <div class="content-badge">{{ resourceTypeLabel(item.detected_resource_type || item.type) }}</div>
+                              <div class="content-badge">推荐资源</div>
                               <div class="content-status" :class="`content-status--${item.preview_status || 'ready'}`">{{ previewStatusLabel(item.preview_status) }}</div>
                             </div>
                             <strong>{{ item.title }}</strong>
+                            <p class="resource-card__summary">{{ item.description || "推荐拓展资源可用于课后延伸与差异化学习。" }}</p>
                           </div>
-                          <div class="content-item__actions">
+                          <div class="resource-card__meta">
+                            <span><strong>来源</strong>{{ item.source_kind === 'external' ? '外部链接' : '上传文件' }}</span>
+                            <span><strong>预览</strong>{{ previewLabel(item) }}</span>
+                            <span><strong>分类</strong>推荐拓展</span>
+                            <span><strong>更新</strong>{{ item.original_file_name || '已配置资源' }}</span>
+                          </div>
+                          <div class="content-item__actions resource-card__actions">
                             <el-button size="small" type="primary" plain @click="openResourceEdit(item, 'recommend')">编辑</el-button>
                             <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
                           </div>
-                        </div>
+                        </article>
                       </div>
                     </section>
                   </div>
@@ -1433,55 +1553,82 @@ watch(
           </template>
 
           <template v-else-if="activeSection === 'practice'">
-            <section class="content-card panel-shell">
+            <section class="content-card content-card--practice panel-shell">
               <div class="content-card__head">
                 <div>
-                  <h3>题库</h3>
-                  <p>维护本知识点下的题目，并标注认知层级与能力标签；下方“已加入的练习”决定学生端练习顺序。</p>
+                  <h3>练习与题库</h3>
+                  <p>左侧维护题库与筛选，右侧集中查看已加入练习与顺序，减少长列表滚动负担。</p>
                 </div>
-                <el-button type="primary" @click="openQuestionCreate">新增题目</el-button>
+                <div class="content-card__head-actions">
+                  <el-button type="primary" @click="openQuestionCreate">新增题目</el-button>
+                </div>
               </div>
 
-              <div v-if="questions.length === 0" class="content-empty">当前知识点还没有题目</div>
-              <div v-else class="content-list">
-                <div v-for="item in questions" :key="item.id" class="content-item">
-                  <div class="content-item__body">
-                    <div class="content-badge">{{ questionTypeLabel(item.type) }}</div>
-                    <strong>{{ item.prompt }}</strong>
-                    <span>
-                      难度 {{ Math.round((item.difficulty || 0) * 100) }}% · 认知：{{ cognitiveLabel(item.cognitive_level) }}
-                      <template v-if="item.ability_subtags"> · 能力标签：{{ item.ability_subtags }}</template>
-                      · {{ assignedQuestionIds.has(item.id) ? "已加入练习" : "未加入练习" }}
-                    </span>
+              <div class="practice-layout">
+                <section class="practice-bank">
+                  <div class="practice-toolbar">
+                    <div class="practice-toolbar__group practice-toolbar__group--search">
+                      <el-input v-model="practiceSearch" placeholder="搜索题目标题、能力标签或认知层级" clearable />
+                    </div>
+                    <div class="practice-toolbar__group">
+                      <el-select v-model="practiceTypeFilter" placeholder="题型筛选">
+                        <el-option v-for="item in practiceTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+                      </el-select>
+                      <el-select v-model="practiceDifficultyFilter" placeholder="难度筛选">
+                        <el-option v-for="item in practiceDifficultyOptions" :key="item.value" :label="item.label" :value="item.value" />
+                      </el-select>
+                      <el-select v-model="practiceAssignmentFilter" placeholder="状态筛选">
+                        <el-option v-for="item in practiceAssignmentOptions" :key="item.value" :label="item.label" :value="item.value" />
+                      </el-select>
+                      <el-select v-model="practiceSort" placeholder="排序方式">
+                        <el-option v-for="item in practiceSortOptions" :key="item.value" :label="item.label" :value="item.value" />
+                      </el-select>
+                    </div>
                   </div>
-                  <div class="content-item__actions">
-                    <el-button size="small" @click="openQuestionEdit(item)">编辑</el-button>
-                    <el-button v-if="!assignedQuestionIds.has(item.id)" size="small" @click="assignQuestionToPractice(item.id)">加入练习</el-button>
-                    <el-button size="small" type="danger" @click="removeQuestion(item.id)">删除</el-button>
-                  </div>
-                </div>
-              </div>
-            </section>
 
-            <section class="content-card panel-shell">
-              <div class="content-card__head">
-                <div>
-                  <h3>已加入的练习</h3>
-                  <p>这里的题会进入学生端练习流，学生可以按知识点完成练习。</p>
-                </div>
-              </div>
-              <div v-if="assignedPractice.length === 0" class="content-empty">还没有加入练习的题目</div>
-              <div v-else class="content-list">
-                <div v-for="item in assignedPractice" :key="item.id" class="content-item">
-                  <div class="content-item__body">
-                    <div class="content-badge">第 {{ item.order }} 题</div>
-                    <strong>{{ item.prompt }}</strong>
-                    <span>{{ questionTypeLabel(item.type) }}</span>
+                  <div class="practice-toolbar__summary">
+                    <span>题库共 {{ questions.length }} 题</span>
+                    <span>当前筛选后 {{ filteredQuestions.length }} 题</span>
+                    <span>已加入练习 {{ assignedPractice.length }} 题</span>
                   </div>
-                  <div class="content-item__actions">
-                    <el-button size="small" type="danger" @click="removeAssignedPractice(item.id)">移出练习</el-button>
+
+                  <div v-if="filteredQuestions.length === 0" class="content-empty">当前筛选条件下暂无题目，可先新增题目或调整筛选条件。</div>
+                  <div v-else class="practice-question-list">
+                    <article v-for="item in paginatedQuestions" :key="item.id" class="practice-question-card">
+                      <div class="practice-question-card__main">
+                        <div class="practice-question-card__head">
+                          <strong>{{ item.prompt }}</strong>
+                          <div class="practice-question-card__tags">
+                            <span class="content-badge">{{ questionTypeLabel(item.type) }}</span>
+                            <span class="content-badge">难度 {{ Math.round((item.difficulty || 0) * 100) }}%</span>
+                            <span class="content-badge">{{ cognitiveLabel(item.cognitive_level) }}</span>
+                          </div>
+                        </div>
+                        <p class="practice-question-card__meta">
+                          <span>来源：当前知识点题库</span>
+                          <span>适用对象：学生随堂练习</span>
+                          <span v-if="item.ability_subtags">说明：{{ item.ability_subtags }}</span>
+                        </p>
+                      </div>
+                      <div class="content-item__actions practice-question-card__actions">
+                        <el-button size="small" @click="openQuestionEdit(item)">预览</el-button>
+                        <el-button v-if="!assignedQuestionIds.has(item.id)" size="small" @click="assignQuestionToPractice(item.id)">加入练习</el-button>
+                        <el-button v-else size="small" @click="removeAssignedPractice(assignedPractice.find((entry) => entry.question_id === item.id)?.id || 0)">移除</el-button>
+                        <el-button size="small" type="danger" @click="removeQuestion(item.id)">删除</el-button>
+                      </div>
+                    </article>
+                    <div class="practice-pagination">
+                      <el-pagination
+                        v-model:current-page="practiceCurrentPage"
+                        v-model:page-size="practicePageSize"
+                        :total="filteredQuestions.length"
+                        :page-sizes="[5, 8, 10]"
+                        layout="total, sizes, prev, pager, next"
+                        background
+                      />
+                    </div>
                   </div>
-                </div>
+                </section>
               </div>
             </section>
           </template>
@@ -1495,30 +1642,36 @@ watch(
                 </div>
               </div>
 
-              <div class="relation-create">
-                <el-form-item label="关系类型">
-                  <el-select v-model="relationForm.relationType" style="width: 100%">
-                    <el-option label="前置 / 后继" value="prerequisite" />
-                    <el-option label="关联" value="related" />
-                    <el-option label="支撑" value="support" />
-                    <el-option label="包含" value="contains" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="关系方向">
-                  <el-segmented
-                    v-model="relationForm.direction"
-                    :options="[
-                      { label: '当前点 -> 目标点', value: 'outgoing' },
-                      { label: '目标点 -> 当前点', value: 'incoming' },
-                    ]"
-                  />
-                </el-form-item>
-                <el-form-item label="目标知识点">
-                  <el-select v-model="relationForm.targetId" filterable style="width: 100%" placeholder="选择要建立关系的知识点">
-                    <el-option v-for="item in relationOptions" :key="item.value" :label="item.label" :value="item.value" />
-                  </el-select>
-                </el-form-item>
-                <div class="relation-create__actions">
+              <div class="relation-create relation-create--stacked">
+                <div class="relation-create__grid">
+                  <el-form-item label="关系类型">
+                    <el-select v-model="relationForm.relationType" style="width: 100%">
+                      <el-option label="前置 / 后继" value="prerequisite" />
+                      <el-option label="关联" value="related" />
+                      <el-option label="支撑" value="support" />
+                      <el-option label="包含" value="contains" />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="关系方向">
+                    <el-segmented
+                      v-model="relationForm.direction"
+                      :options="[
+                        { label: '当前点 -> 目标点', value: 'outgoing' },
+                        { label: '目标点 -> 当前点', value: 'incoming' },
+                      ]"
+                    />
+                  </el-form-item>
+                  <el-form-item label="目标知识点">
+                    <el-select v-model="relationForm.targetId" filterable style="width: 100%" placeholder="选择需要建立关系的知识点">
+                      <el-option v-for="item in relationOptions" :key="item.value" :label="item.label" :value="item.value" />
+                    </el-select>
+                  </el-form-item>
+                </div>
+                <div class="relation-create__actions relation-create__actions--split">
+                  <p class="relation-create__helper">
+                    先设置关系类型与方向，再将对应知识点加入当前图谱关系。
+                    <span>当前已建立 {{ stats.relation }} 条关系，可在下方四个分区查看结果。</span>
+                  </p>
                   <el-button type="primary" :loading="relationSaving" @click="createRelation">添加关系</el-button>
                 </div>
               </div>
@@ -1619,60 +1772,131 @@ watch(
           </template>
         </main>
 
-        <aside class="content-check-panel panel-shell" aria-label="发布前检查">
-          <div class="content-check-panel__head">
-            <div>
-              <strong>发布前检查</strong>
-              <span>完成后再进入学生端预览</span>
-            </div>
-            <el-button size="small" @click="openStudentPreview">学生端预览</el-button>
-          </div>
-
-          <div class="compact-score-card">
-            <div>
-              <span class="compact-score-card__label">当前完整度</span>
-              <strong class="compact-score-card__value">{{ completenessScore }}%</strong>
-            </div>
-            <p class="compact-score-card__text">
-              {{ missingChecklistItems.length === 0 ? "当前已满足学生端预览条件" : `还有 ${missingChecklistItems.length} 项待补充` }}
-            </p>
-          </div>
-
-          <div v-if="false" class="check-overview check-overview--stacked">
-            <div class="check-overview__score">
-              <span>当前完整度</span>
-              <strong>{{ completenessScore }}%</strong>
-            </div>
-            <div class="check-overview__summary">
-              <strong>{{ missingChecklistItems.length === 0 ? "这个知识点已经可以进入学生端使用" : "还有以下配置项待补充" }}</strong>
-              <span v-if="missingChecklistItems.length === 0">基础信息、学习资源、练习题和图谱关系都已配置完成。</span>
-              <span v-else>{{ missingChecklistItems.map((item) => item.label).join("、") }}</span>
-            </div>
-          </div>
-
-          <div class="check-list check-list--compact">
-            <article v-for="item in sidebarChecklistItems" :key="item.key" class="check-list__item" :class="{ done: item.done }">
-              <div class="check-list__copy">
-                <strong>{{ item.label }}</strong>
-                <span>{{ item.detail }}</span>
+        <aside class="content-check-panel panel-shell" :class="{ 'content-check-panel--practice': activeSection === 'practice' }" aria-label="发布前检查">
+          <template v-if="activeSection === 'practice'">
+            <div class="content-check-panel__head">
+              <div>
+                <strong>已加入练习</strong>
+                <span>把当前选中的题目作为学生练习顺序预览，右侧专注当前任务。</span>
               </div>
-              <div class="check-list__actions">
-                <span class="check-list__status">{{ item.done ? "已完成" : "待补充" }}</span>
-                <el-button
-                  v-if="!item.done"
-                  size="small"
-                  @click="jumpToSection(item.key === 'relation' ? 'relation' : item.key === 'learning' || item.key === 'recommend' ? 'learning' : item.key === 'practice' || item.key === 'practiceAssigned' ? 'practice' : 'basic')"
-                >
-                  去处理
-                </el-button>
-              </div>
-            </article>
-          </div>
+            </div>
 
-          <div class="content-check-panel__footer">
-            <el-button :loading="saving" @click="saveKpMeta">保存基础信息</el-button>
-            <el-button type="primary" :loading="saving" @click="saveAndBack">保存并返回图谱</el-button>
-          </div>
+            <div class="compact-score-card compact-score-card--practice">
+              <div>
+                <span class="compact-score-card__label">当前已选题数</span>
+                <strong class="compact-score-card__value">{{ assignedPractice.length }}</strong>
+              </div>
+              <p class="compact-score-card__text">
+                {{ assignedPractice.length === 0 ? '还没有加入练习的题目，可从左侧题库快速加入。' : `按顺序展示给学生，当前共 ${assignedPractice.length} 题。` }}
+              </p>
+            </div>
+
+            <section class="check-panel-section">
+              <div v-if="assignedPractice.length === 0" class="content-empty practice-empty">还没有加入练习的题目。</div>
+              <div v-else class="practice-order-list practice-order-list--sidebar">
+                <article v-for="item in assignedPractice" :key="item.id" class="practice-order-item">
+                  <div>
+                    <span class="content-badge">第 {{ item.order }} 题</span>
+                    <strong>{{ item.prompt }}</strong>
+                    <p>{{ questionTypeLabel(item.type) }}</p>
+                  </div>
+                  <el-button size="small" type="danger" @click="removeAssignedPractice(item.id)">移除</el-button>
+                </article>
+              </div>
+            </section>
+
+            <section class="check-panel-section check-panel-section--muted">
+              <div class="check-panel-section__head">
+                <strong>发布前检查</strong>
+                <span>{{ missingChecklistItems.length }} 项</span>
+              </div>
+              <div class="compact-score-card compact-score-card--slim">
+                <div>
+                  <span class="compact-score-card__label">当前完成度</span>
+                  <strong class="compact-score-card__value">{{ completenessScore }}%</strong>
+                </div>
+                <p class="compact-score-card__text">
+                  {{ missingChecklistItems.length === 0 ? '当前配置已满足预览条件。' : `还差 ${missingChecklistItems.length} 项待补充。` }}
+                </p>
+              </div>
+              <div class="check-list check-list--compact">
+                <article v-for="item in missingChecklistItems.slice(0, 2)" :key="item.key" class="check-list__item">
+                  <div class="check-list__copy">
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.detail }}</span>
+                  </div>
+                  <div class="check-list__actions">
+                    <el-button size="small" @click="jumpToSection(checklistTargetSection(item.key))">去处理</el-button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <div class="content-check-panel__footer">
+              <el-button type="primary" :loading="saving" @click="saveAndBack">保存并返回图谱</el-button>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="content-check-panel__head">
+              <div>
+                <strong>发布前检查</strong>
+                <span>只突出待处理项，完成项收起展示。</span>
+              </div>
+              <el-button size="small" @click="openStudentPreview">学生端预览</el-button>
+            </div>
+
+            <div class="compact-score-card">
+              <div>
+                <span class="compact-score-card__label">当前完成度</span>
+                <strong class="compact-score-card__value">{{ completenessScore }}%</strong>
+              </div>
+              <p class="compact-score-card__text">
+                {{ missingChecklistItems.length === 0 ? '当前配置已满足预览条件' : `还差 ${missingChecklistItems.length} 项待补充` }}
+              </p>
+            </div>
+
+            <section class="check-panel-section">
+              <div class="check-panel-section__head">
+                <strong>待处理项</strong>
+                <span>{{ missingChecklistItems.length }} 项</span>
+              </div>
+              <div v-if="missingChecklistItems.length === 0" class="content-empty">当前没有待处理项，可以直接保存并返回图谱。</div>
+              <div v-else class="check-list check-list--compact">
+                <article v-for="item in missingChecklistItems" :key="item.key" class="check-list__item">
+                  <div class="check-list__copy">
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.detail }}</span>
+                  </div>
+                  <div class="check-list__actions">
+                    <el-button size="small" @click="jumpToSection(checklistTargetSection(item.key))">去处理</el-button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="check-panel-section">
+              <button type="button" class="check-panel-toggle" @click="completedChecklistOpen = !completedChecklistOpen">
+                <strong>已完成 {{ completedChecklistItems.length }} 项</strong>
+                <span>{{ completedChecklistOpen ? '收起' : '展开' }}</span>
+              </button>
+              <div v-if="completedChecklistOpen" class="completed-list">
+                <article v-for="item in completedChecklistItems" :key="item.key" class="check-list__item done">
+                  <div class="check-list__copy">
+                    <strong>{{ item.label }}</strong>
+                    <span>{{ item.detail }}</span>
+                  </div>
+                  <div class="check-list__actions">
+                    <span class="check-list__status">已完成</span>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <div class="content-check-panel__footer">
+              <el-button type="primary" :loading="saving" @click="saveAndBack">保存并返回图谱</el-button>
+            </div>
+          </template>
         </aside>
       </div>
     </div>
@@ -2483,6 +2707,70 @@ watch(
   gap: 10px;
 }
 
+.resource-card-list {
+  gap: 14px;
+}
+
+.resource-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.9fr) auto;
+  gap: 18px;
+  align-items: flex-start;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 20px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.resource-card:hover {
+  border-color: #cfe0ff;
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.08);
+}
+
+.resource-card__main {
+  display: grid;
+  gap: 10px;
+}
+
+.resource-card__main strong {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.resource-card__summary {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.7;
+  font-size: 14px;
+}
+
+.resource-card__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  padding: 4px 0;
+}
+
+.resource-card__meta span {
+  display: grid;
+  gap: 4px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.resource-card__meta strong {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.resource-card__actions {
+  align-self: center;
+  min-width: 158px;
+}
+
 .compact-score-card {
   padding: 16px;
   display: grid;
@@ -3152,6 +3440,468 @@ watch(
   color: #5c708c;
 }
 
+.teacher-content-page__inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  gap: 24px;
+}
+
+.panel-shell {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.content-topbar {
+  min-height: auto;
+  padding: 20px 24px;
+  gap: 16px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.content-topbar__titles {
+  gap: 4px;
+}
+
+.content-eyebrow,
+.content-subtitle {
+  display: block;
+}
+
+.content-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.content-title {
+  margin: 0;
+  font-size: 32px;
+  color: #0f172a;
+}
+
+.content-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.content-back {
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.content-summary {
+  gap: 16px;
+}
+
+.summary-card {
+  min-height: 108px;
+  padding: 20px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.summary-card--active {
+  border-color: #bfd6ff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+}
+
+.summary-card__body {
+  gap: 6px;
+}
+
+.summary-card__label {
+  color: #64748b;
+}
+
+.summary-card__value {
+  font-size: 18px;
+  color: #0f172a;
+}
+
+.summary-card__status {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary-card__desc {
+  font-size: 13px;
+}
+
+.content-workbench {
+  grid-template-columns: minmax(0, 1.72fr) minmax(320px, 0.68fr);
+  gap: 20px;
+}
+
+.content-card {
+  padding: 24px;
+  gap: 20px;
+}
+
+.content-card__head h3 {
+  font-size: 18px;
+  color: #0f172a;
+}
+
+.content-card__head p {
+  margin-top: 6px;
+  color: #64748b;
+}
+
+.basic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.basic-column {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.basic-field-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 18px 20px;
+  display: grid;
+  gap: 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.basic-field-card:hover,
+.practice-question-card:hover,
+.practice-order-item:hover,
+.relation-item:hover,
+.check-list__item:hover {
+  border-color: #cfe0ff;
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.08);
+}
+
+.basic-field-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.basic-field-card__value {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.basic-field-card__detail {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.content-card--practice {
+  overflow: hidden;
+}
+
+.practice-layout {
+  display: block;
+}
+
+.practice-bank,
+.practice-aside {
+  min-width: 0;
+}
+
+.practice-toolbar {
+  position: sticky;
+  top: 16px;
+  z-index: 3;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.practice-toolbar__group {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.practice-toolbar__group--search {
+  grid-template-columns: 1fr;
+}
+
+.practice-toolbar__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.practice-toolbar__summary span {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.practice-question-list,
+.practice-order-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.practice-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.practice-question-card,
+.practice-sidebar-card,
+.practice-order-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.practice-question-card {
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.practice-question-card__main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.practice-question-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.practice-question-card__head strong {
+  min-width: 0;
+  font-size: 15px;
+  color: #0f172a;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.practice-question-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.practice-question-card__meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.practice-question-card__actions {
+  align-self: center;
+  flex-wrap: nowrap;
+}
+
+.practice-question-card__actions :deep(.el-button) {
+  padding-inline: 10px;
+}
+
+.practice-sidebar-card {
+  padding: 18px;
+  position: sticky;
+  top: 16px;
+}
+
+.practice-aside__head h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.practice-aside__head p,
+.practice-order-item p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.practice-order-item {
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.practice-order-item strong {
+  display: block;
+  margin-top: 8px;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.practice-empty {
+  margin-top: 0;
+  min-height: 112px;
+  display: grid;
+  place-items: center;
+}
+
+.relation-create--stacked {
+  gap: 12px;
+}
+
+.relation-create__grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.8fr) minmax(240px, 0.9fr) minmax(0, 1.4fr);
+  gap: 14px;
+}
+
+.relation-create__actions--split {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.relation-create__helper {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.relation-create__helper span {
+  color: #94a3b8;
+}
+
+.relation-panel {
+  min-height: 220px;
+  background: #fcfdff;
+}
+
+.content-check-panel {
+  top: 20px;
+  padding: 18px;
+  gap: 14px;
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.content-check-panel--practice {
+  gap: 16px;
+}
+
+.content-check-panel--practice .content-check-panel__head {
+  padding-bottom: 4px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.content-check-panel--practice .practice-order-list--sidebar {
+  margin-top: 0;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.content-check-panel--practice .check-panel-section--muted {
+  padding-top: 4px;
+  border-top: 1px solid #eef2f7;
+}
+
+.compact-score-card--practice .compact-score-card__value {
+  font-size: 32px;
+}
+
+.compact-score-card--slim {
+  padding: 14px;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.compact-score-card--slim .compact-score-card__value {
+  font-size: 28px;
+}
+
+.check-panel-section {
+  display: grid;
+  gap: 12px;
+}
+
+.check-panel-section__head,
+.check-panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.check-panel-section__head strong,
+.check-panel-toggle strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.check-panel-section__head span,
+.check-panel-toggle span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.check-panel-toggle {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.completed-list {
+  display: grid;
+  gap: 8px;
+}
+
+.check-list__item {
+  padding: 14px 16px;
+}
+
+.check-list__item.done {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.content-check-panel__footer .el-button {
+  width: 100%;
+}
+
 @media (max-width: 1120px) {
   .content-topbar {
     grid-template-columns: 1fr;
@@ -3165,7 +3915,8 @@ watch(
   .content-summary,
   .content-check-grid,
   .relation-grid,
-  .basic-tags-grid {
+  .basic-tags-grid,
+  .basic-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -3196,13 +3947,25 @@ watch(
     grid-template-columns: 1fr;
   }
 
+  .practice-layout,
+  .relation-create__grid,
+  .practice-toolbar__group,
+  .resource-card {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-card__meta {
+    grid-template-columns: 1fr;
+  }
+
 }
 
 @media (max-width: 768px) {
   .content-summary,
   .content-check-grid,
   .relation-grid,
-  .basic-tags-grid {
+  .basic-tags-grid,
+  .basic-grid {
     grid-template-columns: 1fr;
   }
 
@@ -3219,7 +3982,10 @@ watch(
   }
 
   .relation-item,
-  .check-list__item {
+  .check-list__item,
+  .practice-question-card,
+  .practice-order-item,
+  .resource-card {
     flex-direction: column;
     align-items: flex-start;
   }

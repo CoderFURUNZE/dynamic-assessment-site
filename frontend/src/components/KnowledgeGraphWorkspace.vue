@@ -28,7 +28,25 @@ type GraphKp = {
   pos_y?: number | null;
 };
 
-function runWorkspaceSearch() {}
+function runWorkspaceSearch() {
+  const keyword = search.value.trim();
+  if (!keyword) {
+    ElMessage.info("请输入知识点名称、编码或章节");
+    return;
+  }
+  showAllKps.value = true;
+  if (filteredKps.value.length === 0) {
+    ElMessage.warning("未找到匹配的知识点");
+    return;
+  }
+  const first = filteredKps.value[0];
+  activeChapter.value = first.chapter || "未分章";
+  selectKp(first.id);
+  nextTick(() => {
+    fitViewportRetryCount = 0;
+    fitVisibleToViewport();
+  });
+}
 
 function resetWorkspaceSearch() {
   search.value = "";
@@ -1549,7 +1567,8 @@ onBeforeUnmount(() => {
               <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(75,94,130,0.55)" />
             </marker>
           </defs>
-          <g :transform="`translate(${panX} ${panY}) scale(${canvasScale})`">
+          <g :transform="`translate(${panX} ${panY})`">
+            <g :transform="`scale(${canvasScale})`">
             <line
               v-for="edge in visibleChapterEdges"
               :key="`chapter-${edge.id}`"
@@ -1649,6 +1668,7 @@ onBeforeUnmount(() => {
                 <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#89aef5" />
                 <text class="workspace-node__badge" text-anchor="middle" y="-36">路径</text>
               </g>
+            </g>
             </g>
           </g>
         </svg>

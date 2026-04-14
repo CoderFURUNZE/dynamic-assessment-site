@@ -629,3 +629,8 @@
 2026-04-09 09:31:40,063 INFO app.audit actor=admin role=admin action=user_update detail=user_id=20
 2026-04-09 10:01:25,541 INFO app.audit actor=admin role=admin action=user_update detail=user_id=20
 2026-04-09 10:05:04,797 INFO app.audit actor=admin role=admin action=course_delete detail=id=23 code=MATH
+2026-04-14 09:22:54,615 INFO app.audit actor=teacher1 role=teacher action=stage_internal_summary_apply detail=course_id=2 stage_id=4 success=21 include_video=True include_practice=True include_mastery=True
+2026-04-14 09:35:21,123 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=2 stage_id=4 metric=quiz success=0 failed=1
+2026-04-14 09:38:35,060 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=2 stage_id=4 metric=quiz success=0 failed=1
+2026-04-14 09:39:12,458 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=2 stage_id=4 metric=quiz success=0 failed=1
+2026-04-14 09:39:49,050 INFO app.audit actor=teacher1 role=teacher action=stage_data_import detail=course_id=2 stage_id=4 metric=quiz success=1 failed=0

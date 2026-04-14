@@ -127,20 +127,43 @@ def assert_course_stage_editable(course: Course) -> None:
         raise HTTPException(status_code=400, detail="当前课程已归档或未处于开课状态，不能修改阶段数据")
 
 
+def _looks_broken_text(value: str | None) -> bool:
+    text = str(value or "").strip()
+    return not text or "?" in text or "�" in text
+
+
+def _normalized_stage_identity(stage: CourseStage, course: Course | None = None) -> tuple[str, str]:
+    subject = str(stage.subject or "").strip()
+    grade = str(stage.grade or "").strip()
+    if _looks_broken_text(subject):
+        subject = str((course.title if course is not None else "") or "").strip() or subject or "未命名课程"
+    if _looks_broken_text(grade):
+        grade = "通用"
+    return subject, grade
+
+
 def get_stage_or_403(session: Session, user: User, stage_id: int) -> CourseStage:
     stage = session.get(CourseStage, stage_id)
     if stage is None:
         raise HTTPException(status_code=404, detail="stage not found")
-    get_course_or_403(session, user, int(stage.course_id))
+    course = get_course_or_403(session, user, int(stage.course_id))
+    subject, grade = _normalized_stage_identity(stage, course)
+    if subject != stage.subject or grade != stage.grade:
+        stage.subject = subject
+        stage.grade = grade
+        session.add(stage)
+        session.commit()
+        session.refresh(stage)
     return stage
 
 
-def course_out(stage: CourseStage) -> CourseStageOut:
+def course_out(stage: CourseStage, course: Course | None = None) -> CourseStageOut:
+    subject, grade = _normalized_stage_identity(stage, course)
     return CourseStageOut(
         id=int(stage.id),
         course_id=stage.course_id,
-        subject=stage.subject,
-        grade=stage.grade,
+        subject=subject,
+        grade=grade,
         title=stage.title,
         stage_order=stage.stage_order,
         starts_at=stage.starts_at.isoformat() if stage.starts_at else None,

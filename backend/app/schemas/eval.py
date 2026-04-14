@@ -117,6 +117,9 @@ class ProfileOut(BaseModel):
     risk_level: str = "预警"
     override_source: str = "auto"
     reason_summary: str = ""
+    current_stage_title: str | None = None
+    current_trend_label: str | None = None
+    summary: str | None = None
     trend: list[ProfileTrendPointOut] = []
     current_stage: CurrentStageOut | None = None
     stage_history: list[CurrentStageOut] = []

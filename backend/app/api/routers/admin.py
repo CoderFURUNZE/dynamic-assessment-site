@@ -4323,12 +4323,20 @@ def analytics_overview(
         for student in students
         if student.id is not None
     ]
+    snapshots = [snapshot for snapshot in snapshots if snapshot is not None]
     latest_stage_map: dict[int, StageEvaluationSnapshot] = {}
-    all_stage_rows = session.exec(
+    stage_rows = session.exec(
         select(StageEvaluationSnapshot)
-        .where(StageEvaluationSnapshot.subject == subject, StageEvaluationSnapshot.grade == grade)
+        .where(StageEvaluationSnapshot.user_id.in_(student_ids) if student_ids else False)
         .order_by(StageEvaluationSnapshot.stage_order, StageEvaluationSnapshot.updated_at)
     ).all()
+    subject_text = str(subject or "").strip()
+    grade_text = str(grade or "").strip()
+    all_stage_rows = [
+        row
+        for row in stage_rows
+        if str(row.subject or "").strip() == subject_text and str(row.grade or "").strip() == grade_text
+    ]
     stage_bucket: dict[int, dict] = {}
     for row in all_stage_rows:
         latest_stage_map[int(row.user_id)] = row
