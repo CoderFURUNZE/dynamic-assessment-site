@@ -157,7 +157,7 @@ onMounted(load);
 }
 
 .dashboard-chart-panel {
-  padding: 20px 22px 18px;
+  padding: 0;
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -176,13 +176,13 @@ onMounted(load);
 }
 
 .chart-card {
-  padding: 22px 22px 18px;
-  border-radius: 24px;
-  border: 1px solid #dbe5f1;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 24px;
+  border-radius: 30px;
+  border: 3px solid #1f2937;
+  background: radial-gradient(circle at top right, rgba(210, 238, 255, 0.72), transparent 42%), #fffdf6;
   display: grid;
   gap: 14px;
-  box-shadow: var(--app-shadow-sm);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .chart-card__head {
@@ -230,7 +230,7 @@ onMounted(load);
   position: absolute;
   left: 0;
   right: 0;
-  border-top: 2px dashed rgba(98, 124, 168, 0.32);
+  border-top: 2px dashed rgba(71, 85, 105, 0.24);
 }
 
 .bar-chart__grid-line:nth-of-type(1) { top: 18px; }
@@ -243,7 +243,7 @@ onMounted(load);
   bottom: 54px;
   border-top-style: solid;
   border-top-width: 2px;
-  border-top-color: rgba(43, 62, 99, 0.55);
+  border-top-color: rgba(6, 78, 59, 0.45);
 }
 
 .bar-chart__bars {
@@ -291,7 +291,7 @@ onMounted(load);
   width: min(48px, 78%);
   min-height: 20px;
   border-radius: 14px 14px 6px 6px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
 }
 
 .bar-chart__label {

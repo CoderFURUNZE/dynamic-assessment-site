@@ -45,11 +45,19 @@ const currentNavTree = computed<AppNavItem[]>(() => {
   return [];
 });
 
-const studentNavItems = computed<AppNavItem[]>(() =>
-  routeGroup.value === "student"
+const topNavItems = computed<AppNavItem[]>(() =>
+  routeGroup.value === "student" || routeGroup.value === "teacher" || routeGroup.value === "admin"
     ? currentNavTree.value.flatMap((section) => section.children ?? [])
     : [],
 );
+
+const primaryNavItems = computed<AppNavItem[]>(() =>
+  routeGroup.value === "student" || routeGroup.value === "teacher" || routeGroup.value === "admin"
+    ? currentNavTree.value
+    : [],
+);
+
+const secondaryNavItems = computed<AppNavItem[]>(() => currentSection.value?.children ?? []);
 
 function parseTarget(target: string) {
   const [path, rawQuery] = target.split("?");
@@ -213,28 +221,42 @@ function goBackToMain() {
       </main>
     </template>
 
-    <template v-else-if="routeGroup === 'student'">
-      <section class="student-shell">
+    <template v-else-if="routeGroup === 'student' || routeGroup === 'teacher' || routeGroup === 'admin'">
+      <section class="student-shell" :class="[`student-shell--${routeGroup}`]">
         <header class="student-shell__header">
-          <div class="student-shell__brand" @click="router.push('/student/dashboard')">
+          <div class="student-shell__brand" @click="navigateTo(routeGroup === 'student' ? '/student/dashboard' : routeGroup === 'teacher' ? '/teacher/workspace' : '/admin/dashboard')">
             <div class="student-shell__logo">DA</div>
             <div class="student-shell__brand-copy">
               <strong>动态评价系统</strong>
-              <span>Student Learning Space</span>
+              <span>{{ routeGroup === "student" ? "Student Learning Space" : routeGroup === "teacher" ? "Teacher Learning Space" : "Admin Control Center" }}</span>
             </div>
           </div>
 
-          <nav class="student-shell__nav">
-            <button
-              v-for="item in studentNavItems"
-              :key="item.key"
-              class="student-shell__nav-item"
-              :class="{ active: activeNavKey === item.key }"
-              @click="navigateTo(item.path)"
-            >
-              {{ item.label }}
-            </button>
-          </nav>
+          <div class="student-shell__nav-stack">
+            <nav class="student-shell__nav student-shell__nav--primary">
+              <button
+                v-for="item in primaryNavItems"
+                :key="item.key"
+                class="student-shell__nav-item student-shell__nav-item--primary"
+                :class="{ active: currentSection?.key === item.key }"
+                @click="navigateTo(item.path)"
+              >
+                {{ item.label }}
+              </button>
+            </nav>
+
+            <nav class="student-shell__nav student-shell__nav--secondary">
+              <button
+                v-for="item in secondaryNavItems"
+                :key="item.key"
+                class="student-shell__nav-item student-shell__nav-item--secondary"
+                :class="{ active: activeNavKey === item.key }"
+                @click="navigateTo(item.path)"
+              >
+                {{ item.label }}
+              </button>
+            </nav>
+          </div>
 
           <div class="student-shell__actions">
             <div class="pro-role-chip">
@@ -273,92 +295,6 @@ function goBackToMain() {
       </section>
     </template>
 
-    <template v-else>
-      <aside class="pro-sider">
-        <div class="pro-brand" @click="router.push('/')">
-          <div class="pro-brand__logo">DA</div>
-          <div v-if="!sidebarCollapsed" class="pro-brand__text">
-            <strong>动态评价系统</strong>
-            <span>{{ routeGroup === "student" ? "学生学习后台" : routeGroup === "teacher" ? "教师工作后台" : "平台管理后台" }}</span>
-          </div>
-        </div>
-
-        <nav class="pro-menu">
-          <section v-for="section in currentNavTree" :key="section.key" class="pro-menu__section">
-            <div v-if="section.children && !sidebarCollapsed" class="pro-menu__children">
-              <button
-                v-for="item in section.children"
-                :key="item.key"
-                class="pro-menu__item pro-menu__item--child"
-                :class="{ active: activeNavKey === item.key }"
-                @click="navigateTo(item.path)"
-              >
-                <el-icon v-if="item.icon" class="pro-menu__child-icon"><component :is="item.icon" /></el-icon>
-                <span>{{ item.label }}</span>
-              </button>
-            </div>
-          </section>
-        </nav>
-      </aside>
-
-      <section class="pro-main">
-        <header class="pro-header">
-          <div class="pro-header__left">
-            <button class="pro-icon-btn" @click="toggleSidebar">
-              <el-icon><component :is="sidebarCollapsed ? Expand : Fold" /></el-icon>
-            </button>
-            <div class="pro-header__badge">
-              <el-icon><component :is="currentTitleIcon" /></el-icon>
-            </div>
-            <div class="pro-header__title">
-              <span>{{ pageSection }}</span>
-              <strong>{{ pageTitle }}</strong>
-            </div>
-          </div>
-
-          <div class="pro-header__right">
-            <div class="pro-role-chip">
-              <span class="pro-role-chip__dot"></span>
-              <span>{{ roleLabel }}</span>
-            </div>
-
-            <el-tooltip v-if="canOpenPreview" content="预览学生端" placement="bottom">
-              <button class="pro-icon-btn" @click="openPreview">
-                <el-icon><Monitor /></el-icon>
-              </button>
-            </el-tooltip>
-
-            <el-tooltip v-if="canReturnToAdmin" content="返回管理员端" placement="bottom">
-              <button class="pro-icon-btn" @click="returnToAdmin">
-                <el-icon><ArrowLeft /></el-icon>
-              </button>
-            </el-tooltip>
-
-            <el-tooltip content="账号菜单" placement="bottom">
-              <el-dropdown trigger="click">
-                <button class="pro-icon-btn">
-                  <el-icon><User /></el-icon>
-                </button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item @click="logout" :icon="SwitchButton">退出登录</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </el-tooltip>
-          </div>
-        </header>
-
-        <div class="pro-content">
-          <router-view v-slot="{ Component }">
-            <transition name="page-fade" mode="out-in">
-              <component :is="Component" />
-            </transition>
-          </router-view>
-        </div>
-      </section>
-    </template>
-
     <button v-if="isStandaloneWorkspace" class="pro-standalone-back" @click="goBackToMain">
       <el-icon><ArrowLeft /></el-icon>
       <span>返回主工作台</span>
@@ -381,16 +317,16 @@ function goBackToMain() {
 
 .pro-shell--teacher {
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 22%),
-    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.08), transparent 18%),
-    linear-gradient(180deg, #eef4ff 0%, #f7faff 100%);
+    radial-gradient(circle at top left, rgba(16, 185, 129, 0.12), transparent 24%),
+    radial-gradient(circle at 100% 0%, rgba(8, 145, 178, 0.12), transparent 22%),
+    linear-gradient(180deg, #eef8f4 0%, #f7fbf9 100%);
 }
 
 .pro-shell--admin {
   background:
-    radial-gradient(circle at top left, rgba(124, 58, 237, 0.12), transparent 22%),
-    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.1), transparent 18%),
-    linear-gradient(180deg, #f5f3ff 0%, #faf7ff 100%);
+    radial-gradient(circle at top left, rgba(5, 150, 105, 0.12), transparent 24%),
+    radial-gradient(circle at 100% 0%, rgba(8, 145, 178, 0.12), transparent 22%),
+    linear-gradient(180deg, #eff8f4 0%, #f8fbf9 100%);
 }
 
 .pro-shell--standalone {
@@ -410,13 +346,18 @@ function goBackToMain() {
   padding: 18px 18px 28px;
 }
 
+.student-shell--teacher,
+.student-shell--admin {
+  max-width: 1360px;
+}
+
 .student-shell__header {
   position: sticky;
   top: 14px;
   z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
   gap: 18px;
   padding: 14px 18px;
   border-radius: 28px;
@@ -425,11 +366,20 @@ function goBackToMain() {
   box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
+.student-shell--teacher .student-shell__header,
+.student-shell--admin .student-shell__header {
+  background: rgba(255, 253, 249, 0.94);
+  border-color: #1f2937;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+}
+
 .student-shell__brand {
   display: inline-flex;
   align-items: center;
   gap: 12px;
   cursor: pointer;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .student-shell__logo {
@@ -445,8 +395,18 @@ function goBackToMain() {
   color: #1d2433;
 }
 
+.student-shell--teacher .student-shell__logo {
+  background: #d8f5ea;
+}
+
+.student-shell--admin .student-shell__logo {
+  background: #dff3ff;
+}
+
 .student-shell__brand-copy {
   display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .student-shell__brand-copy strong {
@@ -460,16 +420,27 @@ function goBackToMain() {
   font-size: 11px;
 }
 
+.student-shell__nav-stack {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  padding-top: 2px;
+  justify-items: center;
+}
+
 .student-shell__nav {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
+  justify-content: center;
 }
 
 .student-shell__nav-item {
-  min-height: 40px;
-  padding: 0 16px;
+  min-height: 36px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 1.5px solid #c6d8ef;
   background: #ffffff;
@@ -477,6 +448,26 @@ function goBackToMain() {
   font-weight: 800;
   color: #445f7e;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.student-shell__nav--primary {
+  gap: 10px;
+}
+
+.student-shell__nav-item--primary {
+  min-height: 38px;
+  padding-inline: 15px;
+  font-size: 13px;
+}
+
+.student-shell__nav-item--secondary {
+  min-height: 34px;
+  padding-inline: 13px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #607694;
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f9ff 100%);
 }
 
 .student-shell__nav-item.active {
@@ -484,10 +475,22 @@ function goBackToMain() {
   color: #16355c;
 }
 
+.student-shell--teacher .student-shell__nav-item.active {
+  background: #dff6e6;
+  color: #174b39;
+}
+
+.student-shell--admin .student-shell__nav-item.active {
+  background: #e1f3ec;
+  color: #1d4654;
+}
+
 .student-shell__actions {
   display: flex;
   align-items: center;
   gap: 10px;
+  align-self: center;
+  justify-self: end;
 }
 
 .student-shell__content {
@@ -516,6 +519,32 @@ function goBackToMain() {
   box-shadow: 0 24px 54px rgba(15, 23, 42, 0.2);
   z-index: 1100;
   transition: width 0.22s ease, inset 0.22s ease;
+}
+
+.pro-shell--teacher .pro-sider,
+.pro-shell--admin .pro-sider {
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.16), transparent 22%),
+    radial-gradient(circle at bottom left, rgba(52, 211, 153, 0.14), transparent 24%),
+    linear-gradient(180deg, #0f3d36 0%, #14584e 56%, #1b6b5f 100%);
+  color: #ddf7ef;
+}
+
+.pro-shell--teacher .pro-brand__logo,
+.pro-shell--admin .pro-brand__logo {
+  background: linear-gradient(135deg, #f8fffd 0%, #d6faef 100%);
+  color: #0f4f43;
+  box-shadow: 0 18px 28px rgba(6, 78, 59, 0.22);
+}
+
+.pro-shell--teacher .pro-brand__text strong,
+.pro-shell--admin .pro-brand__text strong {
+  color: #f4fff9;
+}
+
+.pro-shell--teacher .pro-brand__text span,
+.pro-shell--admin .pro-brand__text span {
+  color: rgba(221, 247, 239, 0.72);
 }
 
 .pro-shell--student .pro-sider {
@@ -640,6 +669,13 @@ function goBackToMain() {
   box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.26);
 }
 
+.pro-shell--teacher .pro-menu__item.active,
+.pro-shell--admin .pro-menu__item.active {
+  background: linear-gradient(90deg, rgba(240, 253, 250, 0.22) 0%, rgba(45, 212, 191, 0.24) 100%);
+  color: #f5fffb;
+  box-shadow: inset 0 0 0 1px rgba(153, 246, 228, 0.22);
+}
+
 .pro-shell--student .pro-menu__item.active {
   background: #c8f7bb;
   color: #1d2433;
@@ -706,6 +742,13 @@ function goBackToMain() {
   box-shadow: var(--app-shadow);
 }
 
+.pro-shell--teacher .pro-header,
+.pro-shell--admin .pro-header {
+  background: rgba(250, 255, 252, 0.88);
+  border: 1px solid rgba(178, 230, 214, 0.9);
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.08);
+}
+
 .pro-shell--student .pro-header {
   background: rgba(255, 253, 249, 0.92);
   border: 2px solid #1d2433;
@@ -713,12 +756,7 @@ function goBackToMain() {
 }
 
 .pro-shell--teacher .pro-header {
-  border-color: rgba(147, 197, 253, 0.9);
-}
-
-.pro-shell--admin .pro-header {
-  border-color: rgba(196, 181, 253, 0.9);
-  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(94, 234, 212, 0.68);
 }
 
 .pro-header__left,
@@ -775,8 +813,40 @@ function goBackToMain() {
 }
 
 .pro-shell--admin .pro-header__badge {
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.14) 0%, rgba(167, 139, 250, 0.16) 100%);
-  color: #6d28d9;
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.12) 0%, rgba(34, 211, 238, 0.14) 100%);
+  color: #0f766e;
+}
+
+.pro-shell--teacher .pro-header__badge {
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.12) 0%, rgba(16, 185, 129, 0.14) 100%);
+  color: #0f766e;
+}
+
+.pro-shell--teacher .pro-role-chip,
+.pro-shell--admin .pro-role-chip {
+  border-color: rgba(178, 230, 214, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 253, 248, 0.98) 100%);
+  color: #325b53;
+}
+
+.pro-shell--teacher .pro-role-chip__dot,
+.pro-shell--admin .pro-role-chip__dot {
+  background: linear-gradient(135deg, #059669 0%, #0891b2 100%);
+  box-shadow: 0 0 0 5px rgba(5, 150, 105, 0.12);
+}
+
+.pro-shell--teacher .pro-icon-btn,
+.pro-shell--admin .pro-icon-btn {
+  border-color: rgba(178, 230, 214, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 252, 248, 0.98) 100%);
+  color: #3a5d56;
+}
+
+.pro-shell--teacher .pro-icon-btn:hover,
+.pro-shell--admin .pro-icon-btn:hover {
+  border-color: rgba(94, 234, 212, 0.95);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(221, 249, 242, 1) 100%);
+  color: #0f766e;
 }
 
 .pro-icon-btn {
@@ -852,6 +922,14 @@ function goBackToMain() {
   background: radial-gradient(circle at top right, rgba(111, 193, 255, 0.08), transparent 24%), transparent;
 }
 
+.pro-shell--teacher .pro-content,
+.pro-shell--admin .pro-content {
+  background:
+    radial-gradient(circle at top right, rgba(153, 246, 228, 0.22), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(34, 211, 238, 0.08), transparent 20%),
+    transparent;
+}
+
 .pro-shell--student .pro-content {
   background:
     radial-gradient(circle at top right, rgba(201, 237, 255, 0.42), transparent 26%),
@@ -915,13 +993,30 @@ function goBackToMain() {
   }
 
   .student-shell__header {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
   }
 
+  .student-shell__nav-stack,
   .student-shell__nav,
   .student-shell__actions {
     width: 100%;
+  }
+
+  .student-shell__actions {
+    justify-content: flex-end;
+  }
+
+  .student-shell__nav-item--primary {
+    min-height: 36px;
+    padding-inline: 13px;
+    font-size: 12px;
+  }
+
+  .student-shell__nav-item--secondary {
+    min-height: 32px;
+    padding-inline: 11px;
+    font-size: 11px;
   }
 
   .pro-sider {

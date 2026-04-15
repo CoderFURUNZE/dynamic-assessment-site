@@ -243,7 +243,12 @@ onMounted(async () => {
 }
 
 .panel-card {
-  border-radius: 20px;
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .review-head {
@@ -257,14 +262,14 @@ onMounted(async () => {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 800;
-  color: #6c86ab;
+  color: #5d8666;
 }
 
 .review-head__title {
   margin-top: 8px;
   font-size: 22px;
   font-weight: 800;
-  color: #253d58;
+  color: #1f5130;
 }
 
 .review-actions {
@@ -279,6 +284,62 @@ onMounted(async () => {
 
 .review-tabs :deep(.el-tabs__nav) {
   margin: 0;
+}
+
+.review-page :deep(.el-card__header) {
+  padding: 24px 24px 0;
+  border-bottom: none;
+}
+
+.review-page :deep(.el-card__body) {
+  padding: 20px 24px 24px;
+}
+
+.review-page :deep(.el-table) {
+  --el-table-border-color: #d8e5f6;
+  --el-table-header-bg-color: #eef5ff;
+  --el-table-row-hover-bg-color: #f8fbff;
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.review-page :deep(.el-table th.el-table__cell) {
+  color: #587394;
+  font-weight: 800;
+}
+
+.review-page :deep(.el-table td.el-table__cell) {
+  color: #35506b;
+}
+
+.review-page :deep(.el-tabs__active-bar) {
+  background: linear-gradient(90deg, #3f8f57, #2c6a8c);
+}
+
+.review-page :deep(.el-tabs__item) {
+  color: #6b7f70;
+  font-weight: 700;
+}
+
+.review-page :deep(.el-tabs__item.is-active) {
+  color: #245a37;
+}
+
+.review-page :deep(.el-tag) {
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.review-page :deep(.el-button--primary),
+.review-page :deep(.el-button--success) {
+  border-color: rgba(51, 122, 71, 0.8);
+  background: linear-gradient(135deg, #2f7a45, #2aa887);
+}
+
+.review-page :deep(.el-button--danger.is-plain) {
+  border-color: rgba(177, 93, 93, 0.35);
+  color: #a34545;
+  background: rgba(255, 243, 243, 0.92);
 }
 
 .review-help {

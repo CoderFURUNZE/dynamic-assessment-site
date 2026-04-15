@@ -3,7 +3,16 @@ const LEGACY_STUDENT_SUBJECT_KEY = "da_student_last_subject";
 
 type CourseLike = {
   title: string;
+  active?: boolean;
+  enroll_status?: string;
 };
+
+function isAccessibleCourse(course: CourseLike | undefined) {
+  if (!course) return false;
+  if (course.active === false) return false;
+  if (String(course.enroll_status || "").trim().toLowerCase() === "closed") return false;
+  return Boolean(String(course.title || "").trim());
+}
 
 export function getSavedStudentSubject() {
   return localStorage.getItem(STUDENT_SUBJECT_KEY) || localStorage.getItem(LEGACY_STUDENT_SUBJECT_KEY) || "";
@@ -21,12 +30,14 @@ export function saveStudentSubject(subject: string) {
 }
 
 export function resolveStudentSubject(routeSubject: string, currentSubject: string, courses: CourseLike[]) {
-  const available = new Set(courses.map((item) => item.title));
-  const candidates = [routeSubject, currentSubject, getSavedStudentSubject(), courses[0]?.title || ""];
+  const accessibleCourses = courses.filter((item) => isAccessibleCourse(item));
+  const fallbackCourse = accessibleCourses[0] || courses[0];
+  const accessibleTitles = new Set(accessibleCourses.map((item) => item.title));
+  const candidates = [routeSubject, currentSubject, getSavedStudentSubject(), fallbackCourse?.title || ""];
   for (const item of candidates) {
     const value = String(item || "").trim();
     if (!value) continue;
-    if (!available.size || available.has(value)) return value;
+    if (accessibleTitles.has(value)) return value;
   }
-  return "";
+  return String(fallbackCourse?.title || "").trim();
 }

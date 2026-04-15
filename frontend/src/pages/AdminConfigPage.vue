@@ -127,6 +127,29 @@ onMounted(async () => {
   gap: 20px;
 }
 
+.admin-config-page .grid {
+  padding: 18px;
+  border-radius: 32px;
+  border: 3px solid #1f2937;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+}
+
+.admin-config-page :deep(.el-card.panel-card) {
+  border: 1.5px solid #c6d8ef !important;
+  border-radius: 24px !important;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82) !important;
+}
+
+.admin-config-page :deep(.el-card__header) {
+  border-bottom: 1px solid #d8e5f4;
+  color: #16355c;
+  font-weight: 800;
+}
+
 .grid {
   display: grid;
   gap: 16px;

@@ -625,9 +625,9 @@ watch(() => props.mode, () => { page.value = 1; load(); });
   display: grid;
   gap: 4px;
   padding: 12px 14px;
-  border: 1px solid #dbe5f1;
-  border-radius: 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1.5px solid #c6d8ef;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   min-width: 0;
   width: 100%;
 }
@@ -640,22 +640,23 @@ watch(() => props.mode, () => { page.value = 1; load(); });
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 14px 16px 16px;
-  border: 1px solid #dfe9f7;
-  border-radius: 22px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 18px 20px 20px;
+  border: 3px solid #1f2937;
+  border-radius: 30px;
+  background: radial-gradient(circle at top right, rgba(210, 238, 255, 0.72), transparent 40%), #fffdf6;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 .admin-user-card__table-wrap :deep(.el-table) {
-  border-radius: 0 !important;
-  overflow: visible;
-  border: none !important;
+  border-radius: 22px !important;
+  overflow: hidden;
+  border: 1.5px solid #c6d8ef !important;
   box-shadow: none !important;
-  background: #ffffff !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   width: 100% !important;
   max-width: 100% !important;
 }
 .admin-user-card__table-wrap :deep(.el-table__inner-wrapper) {
-  border-radius: 0 !important;
+  border-radius: 22px !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -676,13 +677,13 @@ watch(() => props.mode, () => { page.value = 1; load(); });
 .admin-user-card__table-wrap :deep(.el-table::before),
 .admin-user-card__table-wrap :deep(.el-table--border::before),
 .admin-user-card__table-wrap :deep(.el-table--border::after) {
-  display: none !important;
+  background: #d8e5f6 !important;
 }
 .admin-user-card__table-wrap :deep(.el-table__border-left-patch) {
-  display: none !important;
+  background: #d8e5f6 !important;
 }
 .admin-user-card__table-wrap :deep(.el-table th.el-table__cell) {
-  background: #f6faff !important;
+  background: #eef5ff !important;
   color: #587394;
   font-weight: 800;
 }
@@ -701,7 +702,7 @@ watch(() => props.mode, () => { page.value = 1; load(); });
   border-bottom: none !important;
 }
 .admin-user-card__table-wrap :deep(.el-table__row:hover > td.el-table__cell) {
-  background: #f8fbff !important;
+  background: #f3f8ff !important;
 }
 .admin-user-card__table-wrap :deep(.el-switch) {
   --el-switch-on-color: #4a82ff;
@@ -775,10 +776,10 @@ watch(() => props.mode, () => { page.value = 1; load(); });
   color: #2f7b51;
 }
 .admin-user-card__preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-.admin-user-card__preview-box { padding: 12px 14px; border: 1px solid #dbe6f4; border-radius: 14px; background: #f8fbff; display: grid; gap: 6px; color: var(--app-text-soft); }
+.admin-user-card__preview-box { padding: 12px 14px; border: 1.5px solid #c6d8ef; border-radius: 18px; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%); display: grid; gap: 6px; color: var(--app-text-soft); }
 .admin-user-card__preview-box strong,
 .admin-user-card__preview-list strong { color: var(--app-text-main); }
-.admin-user-card__preview-list { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid #dbe6f4; border-radius: 14px; background: #f8fbff; margin-bottom: 12px; color: var(--app-text-soft); max-height: 280px; overflow: auto; }
+.admin-user-card__preview-list { display: grid; gap: 6px; padding: 12px 14px; border: 1.5px solid #c6d8ef; border-radius: 18px; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%); margin-bottom: 12px; color: var(--app-text-soft); max-height: 280px; overflow: auto; }
 .admin-user-card__preview-list--error { border-color: #f0d0d0; background: #fff8f8; color: #b44b4b; }
 .admin-user-card__row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .admin-user-card__pager { display: flex; justify-content: flex-end; margin-top: 12px; }

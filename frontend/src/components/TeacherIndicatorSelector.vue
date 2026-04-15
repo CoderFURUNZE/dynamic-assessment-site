@@ -223,7 +223,7 @@ onMounted(loadSelection);
                   <el-option label="仅看启用" value="enabled" />
                   <el-option label="仅看未启用" value="disabled" />
                 </el-select>
-                <el-button type="primary" size="large" round :loading="saving" @click="saveSelection">保存配置</el-button>
+                <el-button class="indicator-toolbar__save" size="large" round :loading="saving" @click="saveSelection">保存配置</el-button>
               </div>
             </div>
           </div>
@@ -306,10 +306,13 @@ onMounted(loadSelection);
 
 .indicator-master-wrap {
   padding: 18px;
-  border: 1px solid #d7e4f5;
-  border-radius: 28px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: 0 14px 30px rgba(109, 146, 211, 0.1);
+  border: 3px solid #1f2937;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top right, rgba(210, 238, 255, 0.34), transparent 42%),
+    radial-gradient(circle at top left, rgba(215, 249, 168, 0.16), transparent 28%),
+    #fffdf6;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .indicator-master {
@@ -327,9 +330,9 @@ onMounted(loadSelection);
 
 .dimension-card {
   min-height: 86px;
-  border: 1px solid #dbe5f1;
-  border-radius: 20px;
-  background: #ffffff;
+  border: 1px solid #d9e2ee;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #fffdf9 0%, #fff8f0 100%);
   padding: 18px 18px;
   display: flex;
   align-items: center;
@@ -338,20 +341,20 @@ onMounted(loadSelection);
 }
 
 .dimension-card:hover {
-  border-color: #aac6f7;
-  box-shadow: 0 10px 20px rgba(93, 131, 192, 0.08);
+  border-color: #d8dfc7;
+  box-shadow: 0 10px 20px rgba(121, 110, 84, 0.08);
 }
 
 .dimension-card.is-active {
-  border-color: #c8dfbc;
-  background: linear-gradient(180deg, #f4fbef 0%, #eef8e7 100%);
-  box-shadow: 0 12px 24px rgba(116, 154, 92, 0.12);
+  border-color: #1f2937;
+  background: radial-gradient(circle at top left, rgba(215, 249, 168, 0.48), transparent 55%), #fffdf6;
+  box-shadow: 0 10px 0 rgba(31, 41, 55, 0.1);
 }
 
 .dimension-card__title {
   font-size: 15px;
   font-weight: 800;
-  color: #22395b;
+  color: #17325c;
   line-height: 1.5;
 }
 
@@ -365,7 +368,7 @@ onMounted(loadSelection);
   justify-content: space-between;
   gap: 12px;
   padding: 2px 0 16px;
-  border-bottom: 1px solid #dbe5f1;
+  border-bottom: 1px solid #e8e1d6;
 }
 
 .indicator-detail-header__main {
@@ -375,7 +378,7 @@ onMounted(loadSelection);
 .indicator-detail-header__title {
   font-size: 18px;
   font-weight: 800;
-  color: #1f3960;
+  color: #17325c;
 }
 
 .indicator-detail-header__meta {
@@ -405,6 +408,58 @@ onMounted(loadSelection);
   width: 148px;
 }
 
+.indicator-toolbar :deep(.el-select__wrapper) {
+  min-height: 50px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 1px #dde3ef !important;
+}
+
+.indicator-toolbar :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 1px rgba(184, 143, 70, 0.42),
+    0 0 0 4px rgba(184, 143, 70, 0.12) !important;
+}
+
+.indicator-toolbar :deep(.el-select__selected-item),
+.indicator-toolbar :deep(.el-select__placeholder),
+.indicator-toolbar :deep(.el-select__caret) {
+  color: #5f6f85 !important;
+}
+
+.indicator-toolbar :deep(.el-button.indicator-toolbar__save) {
+  --el-button-bg-color: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%);
+  --el-button-border-color: #c7e38e;
+  --el-button-text-color: #23421f;
+  --el-button-hover-bg-color: #e7f4c2;
+  --el-button-hover-border-color: #b7d97c;
+  --el-button-hover-text-color: #1f3b1b;
+  --el-button-active-bg-color: #d8efad;
+  --el-button-active-border-color: #afd26f;
+  --el-button-active-text-color: #1f3b1b;
+  --el-button-disabled-bg-color: #edf5dd;
+  --el-button-disabled-border-color: #d7e3b8;
+  --el-button-disabled-text-color: #799060;
+  min-height: 50px;
+  padding: 0 22px;
+  border-radius: 18px;
+  border: 1px solid #c7e38e;
+  background: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%) !important;
+  color: #23421f !important;
+  box-shadow: 0 10px 20px rgba(182, 214, 118, 0.24);
+  font-weight: 800;
+}
+
+.indicator-toolbar :deep(.el-button.indicator-toolbar__save:hover),
+.indicator-toolbar :deep(.el-button.indicator-toolbar__save:focus-visible) {
+  border-color: #b7d97c;
+  background: linear-gradient(180deg, #f1fad7 0%, #d8efad 100%) !important;
+  color: #1f3b1b !important;
+}
+
 .indicator-list {
   display: grid;
   gap: 16px;
@@ -417,10 +472,12 @@ onMounted(loadSelection);
   gap: 16px;
   align-items: start;
   padding: 18px 20px;
-  border: 1px solid #dbe5f1;
-  border-radius: 20px;
-  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
-  box-shadow: 0 10px 24px rgba(87, 116, 166, 0.08);
+  border: 1px solid #e5ddd1;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top left, rgba(215, 249, 168, 0.08), transparent 26%),
+    linear-gradient(180deg, #fffdf9 0%, #fff8f1 100%);
+  box-shadow: none;
 }
 
 .indicator-list__item.is-disabled {
@@ -443,7 +500,7 @@ onMounted(loadSelection);
 .indicator-list__title {
   font-size: 18px;
   font-weight: 700;
-  color: #22395b;
+  color: #17325c;
 }
 
 .indicator-list__code {
@@ -452,15 +509,15 @@ onMounted(loadSelection);
   min-height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  background: #f3f7ff;
-  color: #6f809f;
+  background: #f5f0e7;
+  color: #7e705c;
   font-size: 12px;
   font-weight: 700;
 }
 
 .indicator-list__desc {
   margin: 0;
-  color: #5f7188;
+  color: #5f6f85;
   font-size: 15px;
   line-height: 1.7;
 }
@@ -481,33 +538,35 @@ onMounted(loadSelection);
   min-height: 32px;
   padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid #d7e4f5;
-  background: #ffffff;
-  color: #4d617d;
+  border: 1px solid #e5ddd1;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
+  color: #5f6f85;
   font-size: 13px;
   font-weight: 700;
 }
 
 .indicator-list__pill--source {
-  background: #f6f9ff;
-  color: #46638c;
+  background: #fff4e6;
+  border-color: #ead7bc;
+  color: #87633e;
 }
 
 .indicator-list__pill--weight {
-  background: #f9fbff;
-  color: #3b6487;
+  background: #fff9ec;
+  border-color: #e5ddc8;
+  color: #6f6a52;
 }
 
 .indicator-list__pill--active {
-  border-color: #c8dfbc;
-  background: #f0f9eb;
-  color: #48643d;
+  border-color: #b9dd7f;
+  background: #dff6b6;
+  color: #2f5a37;
 }
 
 .indicator-list__pill--inactive {
-  border-color: #e4e9f1;
-  background: #f7f9fc;
-  color: #7a889f;
+  border-color: #e3ddd3;
+  background: #f7f3ed;
+  color: #877d70;
 }
 
 .indicator-weight-editor {
@@ -519,7 +578,7 @@ onMounted(loadSelection);
 }
 
 .indicator-weight-editor__label {
-  color: #7b8ba5;
+  color: #7e705c;
   font-size: 13px;
   font-weight: 700;
 }
@@ -528,10 +587,56 @@ onMounted(loadSelection);
   width: 124px;
 }
 
+.indicator-weight-editor :deep(.el-input-number) {
+  --el-input-number-controls-height: 40px;
+}
+
 .indicator-weight-editor :deep(.el-input-number__decrease),
 .indicator-weight-editor :deep(.el-input-number__increase),
 .indicator-weight-editor :deep(.el-input__wrapper) {
   min-height: 32px;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
+  border-color: #e5ddd1;
+  color: #5e6b7d;
+}
+
+.indicator-weight-editor :deep(.el-input-number__decrease:hover),
+.indicator-weight-editor :deep(.el-input-number__increase:hover) {
+  color: #355a28;
+  background: #eef5dd;
+}
+
+.indicator-weight-editor :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px #e5ddd1 inset !important;
+}
+
+.indicator-weight-editor :deep(.el-input__inner) {
+  color: #5e6b7d;
+}
+
+.indicator-list :deep(.el-checkbox__input.is-checked .el-checkbox__inner),
+.indicator-list :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
+  background-color: #9ac659;
+  border-color: #9ac659;
+}
+
+.indicator-list :deep(.el-checkbox__inner:hover) {
+  border-color: #9ac659;
+}
+
+.indicator-list :deep(.el-checkbox__input.is-checked + .el-checkbox__label),
+.indicator-list :deep(.el-checkbox__label) {
+  color: inherit;
+}
+
+.indicator-list :deep(.el-checkbox__input .el-checkbox__inner) {
+  border-color: #cbbd9d;
+  background: #fffdf8;
+}
+
+.indicator-list :deep(.el-checkbox__input.is-disabled .el-checkbox__inner) {
+  background: #f2f0eb;
+  border-color: #d8d2c8;
 }
 
 @media (max-width: 1100px) {

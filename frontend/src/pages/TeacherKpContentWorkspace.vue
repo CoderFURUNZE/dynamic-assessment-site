@@ -3447,10 +3447,12 @@ watch(
 }
 
 .panel-shell {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 20px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  background:
+    radial-gradient(circle at top right, rgba(210, 238, 255, 0.58), transparent 38%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  border: 3px solid #1f2937;
+  border-radius: 30px;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .content-topbar {
@@ -3500,14 +3502,17 @@ watch(
 .summary-card {
   min-height: 108px;
   padding: 20px;
-  border-radius: 18px;
-  background: #ffffff;
-  box-shadow: none;
+  border-radius: 24px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .summary-card--active {
-  border-color: #bfd6ff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+  border-color: #8fb8ff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 0 0 3px rgba(59, 130, 246, 0.08);
 }
 
 .summary-card__body {
@@ -3566,13 +3571,14 @@ watch(
 }
 
 .basic-field-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  background: #ffffff;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   padding: 18px 20px;
   display: grid;
   gap: 12px;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .basic-field-card:hover,
@@ -3624,9 +3630,10 @@ watch(
   display: grid;
   gap: 12px;
   padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  background: #f8fafc;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .practice-toolbar__group {
@@ -3648,9 +3655,9 @@ watch(
 .practice-toolbar__summary span {
   padding: 6px 12px;
   border-radius: 999px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #64748b;
+  border: 1.5px solid #c6d8ef;
+  background: #eef5ff;
+  color: #587394;
   font-size: 12px;
   font-weight: 700;
 }
@@ -3671,9 +3678,10 @@ watch(
 .practice-question-card,
 .practice-sidebar-card,
 .practice-order-item {
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  background: #ffffff;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .practice-question-card {
@@ -3894,8 +3902,8 @@ watch(
 }
 
 .check-list__item.done {
-  background: #f8fafc;
-  border-color: #e2e8f0;
+  background: linear-gradient(180deg, #eef5ff 0%, #ffffff 100%);
+  border-color: #bfd6ff;
 }
 
 .content-check-panel__footer .el-button {

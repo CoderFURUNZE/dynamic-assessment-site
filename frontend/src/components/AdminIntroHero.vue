@@ -33,9 +33,11 @@ defineProps<{
   gap: 20px;
   flex-wrap: wrap;
   background:
-    radial-gradient(circle at top right, rgba(96, 165, 250, 0.28), transparent 34%),
-    radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.12), transparent 26%),
-    linear-gradient(135deg, #eff5ff 0%, #edf4ff 52%, #ffffff 100%);
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.3), transparent 28%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .admin-intro-hero__main {
@@ -56,15 +58,21 @@ defineProps<{
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  color: var(--app-eyebrow);
+  color: #1f2937;
   text-transform: uppercase;
+  display: inline-flex;
+  width: fit-content;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #d7f9a8;
 }
 
 .admin-intro-hero__title {
   margin: 0;
   font-size: clamp(28px, 3vw, 40px);
   line-height: 1.08;
-  color: #1f2d3d;
+  color: #1d2433;
+  font-family: "Fredoka", "Nunito", sans-serif;
 }
 
 .admin-intro-hero__pill {
@@ -73,18 +81,18 @@ defineProps<{
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
-  border: 1px solid #d7e4f5;
-  background: rgba(255, 255, 255, 0.82);
-  color: #4f6788;
+  border: 1.5px solid #c6d8ef;
+  background: #f6faff;
+  color: #29476a;
   font-size: 12px;
   font-weight: 700;
-  box-shadow: var(--app-shadow-sm);
+  box-shadow: none;
 }
 
 .admin-intro-hero__description {
   margin: 0;
   max-width: 62ch;
-  color: var(--app-text-soft);
+  color: #636b7a;
   font-size: 15px;
   line-height: 1.8;
 }

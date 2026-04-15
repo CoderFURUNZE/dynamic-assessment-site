@@ -38,40 +38,46 @@ const props = defineProps<{
 
 <style scoped>
 .hero-card {
-  padding: 22px;
-  border-radius: 20px;
-  background: #ffffff;
-  border: 1px solid var(--app-border);
-  box-shadow: var(--app-shadow-soft);
-  color: var(--app-ink);
+  padding: 24px;
+  border-radius: 30px;
+  background: radial-gradient(circle at top right, rgba(210, 238, 255, 0.72), transparent 40%), #fffdf6;
+  border: 3px solid #1f2937;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  color: #17325c;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .hero-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #d7f9a8;
+  color: #17325c;
   font-size: 12px;
-  color: #5c7da8;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .hero-name {
-  font-size: 28px;
+  font-size: 34px;
   font-weight: 800;
-  color: #22395b;
+  color: #17325c;
 }
 
 .hero-meta {
   font-size: 14px;
   font-weight: 700;
-  color: #35577f;
+  color: #4f6788;
 }
 
 .hero-text {
   font-size: 14px;
   line-height: 1.7;
-  color: #587596;
+  color: #5b6c85;
 }
 
 .hero-stats {
@@ -81,10 +87,10 @@ const props = defineProps<{
 }
 
 .hero-stat {
-  padding: 12px;
-  border-radius: 16px;
-  background: #ffffff;
-  border: 1px solid var(--app-border);
+  padding: 14px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid #cadcf7;
   box-shadow: none;
   display: grid;
   gap: 4px;
@@ -92,13 +98,13 @@ const props = defineProps<{
 
 .hero-stat span {
   font-size: 12px;
-  color: #6f86a3;
+  color: #6f809f;
 }
 
 .hero-stat strong {
   font-size: 20px;
   font-weight: 800;
-  color: #2a4d78;
+  color: #17325c;
 }
 
 @media (max-width: 1100px) {

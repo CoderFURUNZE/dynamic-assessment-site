@@ -678,9 +678,10 @@ watch(
   display: grid;
   gap: 18px;
   padding: 22px 24px;
-  border: 1px solid #dfe9f7;
-  border-radius: 24px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  border: 3px solid #1f2937;
+  border-radius: 30px;
+  background: radial-gradient(circle at top right, rgba(210, 238, 255, 0.72), transparent 42%), #fffdf6;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .persona-unified-card {
@@ -783,9 +784,9 @@ watch(
 
 .persona-preset-card {
   padding: 20px;
-  border-radius: 20px;
-  border: 1px solid #dce8f7;
-  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  border-radius: 24px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   text-align: left;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
@@ -839,8 +840,9 @@ watch(
 }
 
 .persona-preset-card.is-active {
-  border-color: #77a9ff;
-  box-shadow: 0 14px 32px rgba(99, 139, 214, 0.14);
+  border-color: #1f2937;
+  background: radial-gradient(circle at top left, rgba(215, 249, 168, 0.5), transparent 55%), #fffdf6;
+  box-shadow: 0 10px 0 rgba(31, 41, 55, 0.1);
   transform: translateY(-2px);
 }
 
@@ -878,7 +880,7 @@ watch(
   padding: 0 14px;
   min-height: 38px;
   border-radius: 999px;
-  border: 1px solid #dce8f7;
+  border: 1.5px solid #c6d8ef;
   background: #eef5ff;
   color: #37537d;
   font-size: 13px;
@@ -951,9 +953,9 @@ watch(
   display: grid;
   gap: 16px;
   padding: 18px;
-  border: 1px solid #dce8f7;
+  border: 1.5px solid #c6d8ef;
   border-radius: 24px;
-  background: #fff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -971,8 +973,8 @@ watch(
   gap: 18px;
   padding: 20px;
   border-radius: 24px;
-  border: 1px solid #d8e7fb;
-  background: linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(247,251,255,0.98) 100%);
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(135deg, rgba(248,251,255,0.98) 0%, rgba(255,255,255,0.98) 100%);
 }
 
 .persona-threshold-card.is-risk { background: linear-gradient(135deg, #fff7f4 0%, #fffdfd 100%); }
@@ -998,8 +1000,8 @@ watch(
   gap: 14px;
   padding: 18px;
   border-radius: 20px;
-  border: 1px solid #dce8f7;
-  background: rgba(255, 255, 255, 0.9);
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .persona-threshold-card__section-title {
@@ -1055,8 +1057,8 @@ watch(
   gap: 14px;
   padding: 16px;
   border-radius: 20px;
-  border: 1px solid #dce8f7;
-  background: #fff;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .dimension-card__title,
@@ -1094,9 +1096,9 @@ watch(
   box-sizing: border-box;
   min-height: 42px;
   padding: 0 14px;
-  border: 1px solid #dce8f7;
+  border: 1.5px solid #c6d8ef;
   border-radius: 16px;
-  background: #f7fbff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   color: #5d7698;
   display: flex;
   align-items: center;
@@ -1146,8 +1148,8 @@ watch(
 .persona-readonly__card {
   padding: 18px;
   border-radius: 20px;
-  border: 1px solid #dce8f7;
-  background: #fff;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .persona-readonly__value {
@@ -1165,9 +1167,9 @@ watch(
 
 .persona-feedback-card {
   padding: 14px 16px;
-  border: 1px solid #dce8f7;
+  border: 1.5px solid #c6d8ef;
   border-radius: 18px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   color: #567397;
   font-size: 13px;
   font-weight: 700;
@@ -1185,10 +1187,10 @@ watch(
   display: grid;
   gap: 16px;
   padding: 20px 22px;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  background: #ffffff;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  border: 3px solid #1f2937;
+  border-radius: 30px;
+  background: radial-gradient(circle at top right, rgba(210, 238, 255, 0.72), transparent 42%), #fffdf6;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .results-header,
@@ -1258,10 +1260,10 @@ watch(
 }
 
 .results-table-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 22px;
   overflow: hidden;
-  background: #ffffff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .persona-type-pill,

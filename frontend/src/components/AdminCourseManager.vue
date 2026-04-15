@@ -373,10 +373,11 @@ Promise.all([loadTeacherOptions(), load()]);
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 14px 16px 16px;
-  border: 1px solid #dfe9f7;
-  border-radius: 22px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 18px 20px 20px;
+  border: 3px solid #1f2937;
+  border-radius: 30px;
+  background: radial-gradient(circle at top right, rgba(210, 238, 255, 0.72), transparent 40%), #fffdf6;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 .course-manager__table-header {
   display: flex;
@@ -446,16 +447,16 @@ Promise.all([loadTeacherOptions(), load()]);
   min-height: 46px;
 }
 .course-table-wrap :deep(.el-table) {
-  border-radius: 0 !important;
-  overflow: visible;
-  border: none !important;
+  border-radius: 22px !important;
+  overflow: hidden;
+  border: 1.5px solid #c6d8ef !important;
   box-shadow: none !important;
-  background: #ffffff !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   width: 100% !important;
   max-width: 100% !important;
 }
 .course-table-wrap :deep(.el-table__inner-wrapper) {
-  border-radius: 0 !important;
+  border-radius: 22px !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -476,13 +477,13 @@ Promise.all([loadTeacherOptions(), load()]);
 .course-table-wrap :deep(.el-table::before),
 .course-table-wrap :deep(.el-table--border::before),
 .course-table-wrap :deep(.el-table--border::after) {
-  display: none !important;
+  background: #d8e5f6 !important;
 }
 .course-table-wrap :deep(.el-table__border-left-patch) {
-  display: none !important;
+  background: #d8e5f6 !important;
 }
 .course-table-wrap :deep(.el-table th.el-table__cell) {
-  background: #f6faff !important;
+  background: #eef5ff !important;
   color: #587394;
   font-weight: 800;
 }
@@ -501,7 +502,7 @@ Promise.all([loadTeacherOptions(), load()]);
   border-bottom: none !important;
 }
 .course-table-wrap :deep(.el-table__row:hover > td.el-table__cell) {
-  background: #f8fbff !important;
+  background: #f3f8ff !important;
 }
 .course-table-wrap :deep(.el-switch) {
   --el-switch-on-color: #4a82ff;
@@ -538,11 +539,11 @@ Promise.all([loadTeacherOptions(), load()]);
 }
 .course-setting__pill.is-active,
 .course-setting__pill.is-open {
-  background: #edf7ef;
-  color: #28734b;
+  background: #dff6b6;
+  color: #214f2f;
 }
 .course-setting__pill.is-draft {
-  background: #eef4ff;
+  background: #eef5ff;
   color: #335ea8;
 }
 .course-setting__pill.is-archived,

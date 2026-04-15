@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import TeacherEnrollmentReviewPage from "./TeacherEnrollmentReview.vue";
 import TeacherFinalScoreReviewPage from "./TeacherFinalScoreReview.vue";
-import AdminIntroHero from "../components/AdminIntroHero.vue";
+import TeacherIntroHero from "../components/TeacherIntroHero.vue";
 
 type ReviewTab = "enrollment" | "final";
 
@@ -51,7 +51,7 @@ function switchTab(tab: ReviewTab) {
 
 <template>
   <div class="review-workspace">
-    <AdminIntroHero eyebrow="教师工作台" title="审核与评分" :pill="currentTabMeta.label" description="把课程收尾动作放到一个地方处理。先审核报名，再复核最终成绩，避免老师在多个页面之间来回切换。" />
+    <TeacherIntroHero eyebrow="教师工作台" title="审核与评分" :pill="currentTabMeta.label" description="把课程收尾动作放到一个地方处理。先审核报名，再复核最终成绩，避免老师在多个页面之间来回切换。" />
 
     <section class="review-focus panel-card">
       <div>
@@ -87,6 +87,12 @@ function switchTab(tab: ReviewTab) {
   display: grid;
   gap: 18px;
   padding: 22px 24px;
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .review-focus > div:first-child {
@@ -124,9 +130,9 @@ function switchTab(tab: ReviewTab) {
 }
 
 .review-tab-card {
-  border: 1px solid var(--app-border);
-  border-radius: 16px;
-  background: #fff;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   padding: 14px 16px;
   display: grid;
   gap: 4px;
@@ -137,7 +143,7 @@ function switchTab(tab: ReviewTab) {
 
 .review-tab-card:hover {
   transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--app-primary) 28%, var(--app-border));
+  border-color: #8fd8c1;
 }
 
 .review-tab-card strong {
@@ -152,9 +158,9 @@ function switchTab(tab: ReviewTab) {
 }
 
 .review-tab-card.active {
-  border-color: color-mix(in srgb, var(--app-primary) 38%, var(--app-border));
-  background: var(--app-primary-tint);
-  box-shadow: 0 18px 40px rgba(47, 109, 246, 0.12);
+  border-color: #1f2937;
+  background: radial-gradient(circle at top left, rgba(215, 249, 168, 0.38), transparent 58%), #fffdf6;
+  box-shadow: 0 10px 0 rgba(31, 41, 55, 0.08);
 }
 
 @media (max-width: 960px) {

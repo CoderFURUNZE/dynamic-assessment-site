@@ -331,7 +331,12 @@ onMounted(async () => {
 }
 
 .panel-card {
-  border-radius: 20px;
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .final-review-layout {
@@ -342,9 +347,11 @@ onMounted(async () => {
 
 .final-review-sidebar {
   padding: 18px;
-  border: 1px solid var(--app-border);
-  background: #ffffff;
-  box-shadow: var(--app-shadow-soft);
+  border: 3px solid #1f2937;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .sidebar-head__eyebrow {
@@ -352,14 +359,14 @@ onMounted(async () => {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 800;
-  color: #6c86ab;
+  color: #5d8666;
 }
 
 .sidebar-head__title {
   margin-top: 8px;
   font-size: 22px;
   font-weight: 800;
-  color: #253d58;
+  color: #1f5130;
 }
 
 .sidebar-head__subtitle {
@@ -373,21 +380,21 @@ onMounted(async () => {
 }
 
 .student-item {
-  border: 1px solid var(--app-border);
-  border-radius: 16px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 22px;
   padding: 14px;
-  background: #fcfdff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   display: grid;
   gap: 8px;
   text-align: left;
   cursor: pointer;
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .student-item.active {
-  border-color: #aac4eb;
-  background: #f3f8ff;
-  box-shadow: none;
+  border-color: rgba(78, 138, 96, 0.48);
+  background: linear-gradient(180deg, rgba(223, 243, 227, 0.98), rgba(243, 250, 245, 0.98));
+  box-shadow: 0 14px 30px rgba(42, 109, 61, 0.12);
 }
 
 .student-item__main,
@@ -397,11 +404,11 @@ onMounted(async () => {
 }
 
 .student-item strong {
-  color: #24374f;
+  color: #1f5130;
 }
 
 .student-item span {
-  color: #68809d;
+  color: #5b715e;
   font-size: 13px;
 }
 
@@ -437,7 +444,7 @@ onMounted(async () => {
 
 .confirm-form__row label {
   font-size: 13px;
-  color: #68809d;
+  color: #5b715e;
   font-weight: 700;
 }
 
@@ -453,21 +460,21 @@ onMounted(async () => {
 }
 
 .timeline-item {
-  border: 1px solid var(--app-border);
-  border-radius: 16px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 22px;
   padding: 14px;
-  background: #fcfdff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .timeline-item__title {
   font-weight: 700;
-  color: #24374f;
+  color: #1f5130;
 }
 
 .timeline-item__meta,
 .timeline-item__desc {
   margin-top: 6px;
-  color: #68809d;
+  color: #5b715e;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -479,10 +486,10 @@ onMounted(async () => {
 }
 
 .closure-panel__item {
-  border: 1px solid var(--app-border);
-  border-radius: 16px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 22px;
   padding: 14px;
-  background: #fcfdff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   display: grid;
   gap: 8px;
 }
@@ -492,18 +499,48 @@ onMounted(async () => {
 }
 
 .closure-panel__item span {
-  color: #6b809c;
+  color: #5b715e;
   font-size: 13px;
 }
 
 .closure-panel__item strong {
-  color: #24374f;
+  color: #1f5130;
   line-height: 1.7;
 }
 
 .empty-card,
 .empty-text {
-  color: #6b809c;
+  color: #5b715e;
+}
+
+.final-review-page :deep(.el-card__header) {
+  padding: 24px 24px 0;
+  border-bottom: none;
+  color: #1f5130;
+  font-weight: 800;
+}
+
+.final-review-page :deep(.el-card__body) {
+  padding: 20px 24px 24px;
+}
+
+.final-review-page :deep(.el-select__wrapper),
+.final-review-page :deep(.el-textarea__inner),
+.final-review-page :deep(.el-input__wrapper),
+.final-review-page :deep(.el-input-number),
+.final-review-page :deep(.el-input-number .el-input__wrapper) {
+  border-radius: 18px;
+  box-shadow: 0 0 0 1px rgba(140, 173, 149, 0.3) inset;
+  background: rgba(245, 250, 246, 0.96);
+}
+
+.final-review-page :deep(.el-button--primary) {
+  border-color: rgba(51, 122, 71, 0.8);
+  background: linear-gradient(135deg, #2f7a45, #2aa887);
+}
+
+.final-review-page :deep(.el-button:not(.el-button--primary)) {
+  border-radius: 999px;
 }
 
 @media (max-width: 1100px) {

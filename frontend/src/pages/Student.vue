@@ -21,7 +21,13 @@ type KP = {
   chapter?: string;
 };
 
-type Course = { id: number; code: string; title: string };
+type Course = {
+  id: number;
+  code: string;
+  title: string;
+  active?: boolean;
+  enroll_status?: string;
+};
 
 type RecoData = {
   target_kp: { id: number; code: string; title: string; mastery?: number };
@@ -166,6 +172,8 @@ async function loadCourses() {
       id: Number(item.id),
       code: String(item.code || ""),
       title: String(item.title || ""),
+      active: item.active !== false,
+      enroll_status: String(item.enroll_status || ""),
     }));
     subject.value = resolveStudentSubject(String(route.query.subject || ""), subject.value, courses.value);
   } catch (e: any) {

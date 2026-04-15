@@ -51,14 +51,21 @@ onMounted(loadCourses);
 
 <template>
   <div class="teacher-page">
-    <TeacherIntroHero eyebrow="阶段评价" title="阶段设置" pill="阶段设置" />
-    <TeacherStageManager
-      :course-id="selectedCourseId"
-      :subject="subject"
-      :grade="grade"
-      :courses="courses"
-      @subject-change="syncQuery"
+    <TeacherIntroHero
+      eyebrow="阶段评价"
+      title="阶段设置"
+      pill="阶段流程"
+      description="先设定课程阶段，再让后续的导入、结果和审核都基于同一套阶段口径运行。"
     />
+    <section class="teacher-page__panel">
+      <TeacherStageManager
+        :course-id="selectedCourseId"
+        :subject="subject"
+        :grade="grade"
+        :courses="courses"
+        @subject-change="syncQuery"
+      />
+    </section>
   </div>
 </template>
 
@@ -66,5 +73,16 @@ onMounted(loadCourses);
 .teacher-page {
   display: grid;
   gap: 20px;
+}
+
+.teacher-page__panel {
+  min-width: 0;
+  padding: 18px;
+  border-radius: 32px;
+  border: 3px solid #1f2937;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 </style>

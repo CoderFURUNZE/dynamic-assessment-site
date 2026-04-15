@@ -1260,7 +1260,17 @@ watch(
 }
 
 .detail-card {
-  border-radius: 24px;
+  border-radius: 32px;
+  border: 3px solid #1f2937 !important;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%) !important;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12) !important;
+  overflow: hidden;
+}
+
+.detail-card :deep(.el-card__body) {
+  padding: 18px;
 }
 
 .detail-layout {
@@ -1272,10 +1282,10 @@ watch(
 .analysis-card,
 .tab-panel,
 .sub-card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
+  border-radius: 24px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .core-panel {
@@ -1333,28 +1343,30 @@ watch(
 .status-pill {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: 7px 13px;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
+  border: 1.5px solid #c6d8ef;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .status-pill--danger {
   color: #b91c1c;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: linear-gradient(180deg, #fff7f7 0%, #fff1f1 100%);
+  border-color: #fecaca;
 }
 
 .status-pill--warning {
   color: #c2410c;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
+  background: linear-gradient(180deg, #fffaf2 0%, #fff4e6 100%);
+  border-color: #fed7aa;
 }
 
 .status-pill--success {
   color: #15803d;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
+  background: linear-gradient(180deg, #f4fff8 0%, #effcf4 100%);
+  border-color: #bbf7d0;
 }
 
 .core-panel__summary {
@@ -1382,10 +1394,11 @@ watch(
 
 .core-panel__side {
   min-width: 280px;
-  padding-left: 24px;
-  border-left: 1px solid #e5e7eb;
+  padding: 18px 0 18px 24px;
+  border-left: 1.5px solid #c6d8ef;
   display: grid;
   gap: 14px;
+  align-content: start;
 }
 
 .core-panel__actions {
@@ -1411,10 +1424,10 @@ watch(
 
 .metric-card {
   padding: 20px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
+  border-radius: 20px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
   display: grid;
   gap: 10px;
 }
@@ -1535,9 +1548,9 @@ watch(
 
 .analysis-note {
   padding: 14px 16px;
-  border-radius: 14px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
   color: #475569;
   line-height: 1.7;
   font-size: 14px;
@@ -1587,9 +1600,9 @@ watch(
 .stage-node {
   width: 100%;
   padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
+  border-radius: 18px;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   display: grid;
   gap: 8px;
   text-align: left;
@@ -1666,9 +1679,9 @@ watch(
 }
 .empty-strip {
   padding: 16px 18px;
-  border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
 }
 
 .empty-strip--panel {
@@ -1741,10 +1754,11 @@ watch(
 }
 
 .record-metric-card {
-  border-radius: 14px;
-  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  border: 1.5px solid #c6d8ef;
   box-shadow: none;
   min-height: 128px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .record-metric-card--wide {
@@ -1770,13 +1784,14 @@ watch(
 
 .record-chips span,
 .indicator-row__evidence span {
-  padding: 4px 10px;
+  padding: 5px 11px;
   border-radius: 999px;
-  border: 1px solid #dbeafe;
-  background: #eff6ff;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f4f9ff 0%, #edf6ff 100%);
   color: #2563eb;
   font-size: 12px;
   font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .record-split-grid,
@@ -1811,9 +1826,9 @@ watch(
 .video-progress-item,
 .recommendation-item {
   padding: 14px 16px;
-  border-radius: 14px;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
 }
 
 .practice-summary__item {
@@ -1821,8 +1836,8 @@ watch(
   gap: 6px;
   min-height: 82px;
   align-content: center;
-  background: #ffffff;
-  border-color: #e2e8f0;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border-color: #c6d8ef;
   box-shadow: none;
 }
 
@@ -1878,10 +1893,10 @@ watch(
 }
 
 .record-table {
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 18px;
   overflow: hidden;
-  background: #ffffff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   box-shadow: none;
 }
 
@@ -1899,9 +1914,9 @@ watch(
 .feedback-history-item,
 .indicator-input-card {
   padding: 14px 16px;
-  border-radius: 14px;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
 }
 
 .summary-metric {
@@ -1922,10 +1937,10 @@ watch(
 }
 
 .weak-list {
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 18px;
   overflow: hidden;
-  background: #ffffff;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   gap: 0;
 }
 
@@ -1953,9 +1968,9 @@ watch(
 .weak-item {
   padding: 14px 16px;
   border: 0;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #d9e6f6;
   border-radius: 0;
-  background: #ffffff;
+  background: transparent;
 }
 
 .weak-item:last-child {
@@ -2037,9 +2052,9 @@ watch(
 .teacher-history,
 .teacher-indicators {
   padding: 20px;
-  border-radius: 12px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
 }
 
 .teacher-tool__composer {
@@ -2104,27 +2119,28 @@ watch(
 .feedback-chip {
   padding: 8px 12px;
   border-radius: 999px;
-  border: 1px solid #dbeafe;
-  background: #eff6ff;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f4f9ff 0%, #edf6ff 100%);
   color: #2563eb;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .feedback-chip:hover {
-  background: #dbeafe;
+  background: linear-gradient(180deg, #eaf3ff 0%, #dfeeff 100%);
 }
 
 .feedback-chip--tag {
-  border-color: #e5e7eb;
-  background: #f8fafc;
+  border-color: #d9e7f6;
+  background: linear-gradient(180deg, #fbfdff 0%, #f3f8fd 100%);
   color: #475569;
 }
 
 .feedback-chip--tag.is-active {
-  border-color: #bfdbfe;
-  background: #eff6ff;
+  border-color: #93c5fd;
+  background: linear-gradient(180deg, #eef6ff 0%, #e0efff 100%);
   color: #2563eb;
 }
 
@@ -2145,7 +2161,7 @@ watch(
 
 .teacher-indicators {
   padding: 14px 16px;
-  background: #f8fafc;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .teacher-indicators__toggle {

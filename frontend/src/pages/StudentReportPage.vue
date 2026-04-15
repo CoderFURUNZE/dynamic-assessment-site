@@ -6,7 +6,13 @@ import { api } from "../api";
 import LearnerReportPane from "../components/LearnerReportPane.vue";
 import { resolveStudentSubject, saveStudentSubject } from "../utils/studentCourse";
 
-type Course = { id: number; code: string; title: string };
+type Course = {
+  id: number;
+  code: string;
+  title: string;
+  active?: boolean;
+  enroll_status?: string;
+};
 
 const route = useRoute();
 const router = useRouter();

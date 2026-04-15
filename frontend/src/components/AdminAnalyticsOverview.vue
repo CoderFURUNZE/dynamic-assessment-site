@@ -619,15 +619,24 @@ watch(
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
+  padding: 14px;
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.24), transparent 28%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .summary-card,
 .analytics-card,
 .focus-section {
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  background: #ffffff;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  border: 3px solid #1f2937;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.2), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 10px 0 rgba(31, 41, 55, 0.1);
 }
 
 .summary-card {
@@ -779,9 +788,10 @@ watch(
 .knowledge-item,
 .risk-overview__item,
 .focus-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  background: #ffffff;
+  border: 1.5px solid #c6d8ef;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .persona-row,
@@ -887,9 +897,9 @@ watch(
 .advice-panel {
   margin-top: 14px;
   padding: 14px 16px;
-  border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
   color: #64748b;
   font-size: 13px;
   line-height: 1.6;
@@ -960,10 +970,6 @@ watch(
   display: grid;
   gap: 18px;
   padding: 24px 26px 26px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
 }
 
 .focus-section .section-title {
@@ -980,10 +986,10 @@ watch(
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-  background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
+  border-radius: 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .focus-card__accent {
@@ -1060,7 +1066,7 @@ watch(
   align-items: flex-start;
   justify-content: center;
   padding: 16px 16px 16px 8px;
-  border-left: 1px solid #f1f5f9;
+  border-left: 1.5px solid #d9e7f6;
 }
 
 .focus-section__dot {
@@ -1100,10 +1106,11 @@ watch(
 .focus-section__guide {
   display: grid;
   gap: 6px;
-  padding: 16px 18px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f4f9ff 0%, #edf6ff 100%);
+  border: 1.5px solid #c6d8ef;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .focus-section__guide span {
@@ -1122,18 +1129,18 @@ watch(
 .focus-card :deep(.el-button) {
   width: 96px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 0 16px;
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: linear-gradient(135deg, #2754c5 0%, #22c55e 120%);
+  border: 1.5px solid #2a5bbf;
   color: #ffffff;
-  box-shadow: none;
+  box-shadow: 0 8px 18px rgba(39, 84, 197, 0.16);
   margin-top: 2px;
 }
 
 .focus-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
 }
 
 .focus-card.is-active,
@@ -1144,14 +1151,14 @@ watch(
 }
 
 .focus-card :deep(.el-button:hover) {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: linear-gradient(135deg, #2146a5 0%, #16a34a 120%);
+  border-color: #2146a5;
 }
 
 .focus-card.risk-tone--high,
 .focus-card.risk-tone--medium,
 .focus-card.risk-tone--low {
-  border-color: #e5e7eb;
+  border-color: #c6d8ef;
 }
 
 .focus-card .risk-tag {
@@ -1164,17 +1171,17 @@ watch(
 
 .focus-section__guide-btn :deep(.el-button),
 .focus-section__guide-btn {
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 10px 16px;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
+  background: linear-gradient(180deg, #f4f9ff 0%, #edf6ff 100%);
+  border: 1.5px solid #c6d8ef;
   color: #2563eb;
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .focus-section__guide-btn:hover {
-  background: #f8fafc;
-  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #eaf3ff 0%, #e0efff 100%);
+  border-color: #93c5fd;
   color: #2563eb;
 }
 
@@ -1199,18 +1206,19 @@ watch(
 }
 
 .table-filter {
-  padding: 6px 12px;
+  padding: 7px 12px;
   border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f9ff 100%);
   color: #64748b;
   font-size: 12px;
   font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .table-filter.is-active {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #eef6ff 0%, #e0efff 100%);
+  border-color: #93c5fd;
   color: #2563eb;
 }
 
@@ -1225,9 +1233,9 @@ watch(
   display: grid;
   gap: 16px;
   padding: 16px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1.5px solid #c6d8ef;
+  border-radius: 18px;
   transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -1288,15 +1296,15 @@ watch(
   min-width: 72px;
   height: 34px;
   padding: 0 14px;
-  border-radius: 10px;
-  border-color: #bfdbfe;
+  border-radius: 14px;
+  border: 1.5px solid #c6d8ef;
   color: #2563eb;
-  background: #ffffff;
-  box-shadow: none;
+  background: linear-gradient(180deg, #f4f9ff 0%, #edf6ff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .risk-student-row__aside :deep(.el-button:hover) {
-  background: #eff6ff;
+  background: linear-gradient(180deg, #eaf3ff 0%, #e0efff 100%);
   border-color: #93c5fd;
 }
 
@@ -1396,9 +1404,9 @@ watch(
   place-content: center;
   gap: 8px;
   text-align: center;
-  border: 1px dashed #cbd5e1;
-  border-radius: 14px;
-  background: #f8fafc;
+  border: 1.5px dashed #c6d8ef;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .empty-panel--compact {

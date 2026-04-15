@@ -97,10 +97,12 @@ onMounted(loadCourses);
   gap: 16px;
   flex-wrap: wrap;
   padding: 24px 22px;
-  border: 1px solid #dbe7f6;
-  border-radius: 20px;
-  background: linear-gradient(180deg, #dfeafb 0%, #edf4ff 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.32), transparent 28%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .analytics-toolbar__main,
@@ -119,8 +121,8 @@ onMounted(loadCourses);
 
 .analytics-toolbar__course span {
   font-size: 12px;
-  font-weight: 600;
-  color: #355b93;
+  font-weight: 700;
+  color: #25645b;
 }
 
 .analytics-title {
@@ -133,7 +135,7 @@ onMounted(loadCourses);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #5b83d6;
+  color: #0f766e;
 }
 
 .analytics-title h1 {
@@ -147,19 +149,29 @@ onMounted(loadCourses);
 .analytics-title p {
   margin: 0;
   font-size: 12px;
-  color: #557198;
+  color: #5d746c;
 }
 
 :deep(.analytics-toolbar .el-select__wrapper) {
   min-height: 40px;
-  border-radius: 12px;
-  box-shadow: none;
-  background: rgba(255, 255, 255, 0.88);
+  border-radius: 18px;
+  box-shadow: 0 0 0 1px #c7daf6 inset;
+  background: linear-gradient(180deg, #f9fbff 0%, #eef5ff 100%);
 }
 
 :deep(.analytics-toolbar .el-select__placeholder),
 :deep(.analytics-toolbar .el-select__selected-item) {
-  color: #355b93;
+  color: #355070;
+}
+
+:deep(.teacher-page .edu-panel) {
+  padding: 0;
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.32), transparent 28%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 @media (max-width: 768px) {

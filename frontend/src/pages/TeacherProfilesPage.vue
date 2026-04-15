@@ -72,16 +72,18 @@ onMounted(loadCourses);
 
 .profiles-hero {
   padding: 26px 24px;
-  border: 1px solid #dbe7f6;
-  border-radius: 20px;
-  background: linear-gradient(180deg, #dfeafb 0%, #edf4ff 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .profiles-hero__eyebrow {
   font-size: 12px;
   font-weight: 700;
-  color: #3b82f6;
+  color: #5d8666;
 }
 
 .profiles-hero__headline {
@@ -97,7 +99,7 @@ onMounted(loadCourses);
   font-size: 20px;
   line-height: 1.2;
   font-weight: 800;
-  color: #0f172a;
+  color: #1f5130;
 }
 
 .profiles-hero__pill {
@@ -106,15 +108,22 @@ onMounted(loadCourses);
   height: 32px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid #c9daf5;
-  background: rgba(255, 255, 255, 0.9);
-  color: #355b93;
+  border: 1.5px solid #c6d8ef;
+  background: #eef5ff;
+  color: #355070;
   font-size: 13px;
   font-weight: 700;
 }
 
 .teacher-profiles-panel {
   min-width: 0;
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  padding: 24px;
 }
 
 @media (max-width: 760px) {
@@ -124,6 +133,10 @@ onMounted(loadCourses);
 
   .profiles-hero__title {
     font-size: 18px;
+  }
+
+  .teacher-profiles-panel {
+    padding: 18px;
   }
 }
 </style>

@@ -5,6 +5,8 @@ import { router } from "./router";
 import { startLoading, endLoading } from "./loading";
 
 let handlingUnauthorized = false;
+let handlingBackendUnavailable = false;
+let lastBackendUnavailableAt = 0;
 
 /** 从 axios 配置中取出本次请求携带的 Bearer token（无则空串）；兼容 AxiosHeaders / 普通对象 / 数组 */
 function bearerTokenFromRequestConfig(config: unknown): string {
@@ -47,6 +49,17 @@ function shouldBypassCache(url?: string | null): boolean {
     || value.startsWith("/eval/profile")
     || value.startsWith("/reco")
   );
+}
+
+function notifyBackendUnavailable() {
+  const now = Date.now();
+  if (handlingBackendUnavailable || now - lastBackendUnavailableAt < 6000) return;
+  handlingBackendUnavailable = true;
+  lastBackendUnavailableAt = now;
+  ElMessage.error("后端服务未连接：当前前端正在请求 http://127.0.0.1:8000。请先启动 backend 服务，再刷新页面重试。");
+  window.setTimeout(() => {
+    handlingBackendUnavailable = false;
+  }, 1200);
 }
 
 // 重试机制
@@ -139,6 +152,9 @@ api.interceptors.response.use((response) => {
   } else if (error.request) {
     // 请求已发出但没有收到响应
     console.error('API Error: No response received');
+    if (isAxiosError(error)) {
+      notifyBackendUnavailable();
+    }
   } else {
     // 请求配置出错
     console.error('API Error:', error.message);

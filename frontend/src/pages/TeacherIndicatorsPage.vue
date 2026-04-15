@@ -48,16 +48,17 @@ onMounted(loadCourses);
       eyebrow="阶段评价"
       title="指标配置"
       pill="评价口径"
+      description="把课程评价维度、指标映射和使用口径集中维护，避免后续结果解释出现偏差。"
     />
 
-    <div class="teacher-page__content">
+    <section class="teacher-page__content">
       <TeacherIndicatorSelector
         :course-id="selectedCourseId"
         :subject="subject"
         :courses="courses"
         @subject-change="subject = $event"
       />
-    </div>
+    </section>
   </div>
 </template>
 
@@ -69,5 +70,12 @@ onMounted(loadCourses);
 
 .teacher-page__content {
   min-width: 0;
+  padding: 18px;
+  border-radius: 32px;
+  border: 3px solid #1f2937;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 </style>

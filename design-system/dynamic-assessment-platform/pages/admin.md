@@ -1,7 +1,7 @@
 # Admin Page Overrides
 
 > **PROJECT:** Dynamic Assessment Platform
-> **Generated:** 2026-04-14 17:32:29
+> **Generated:** 2026-04-15 09:34:16
 > **Page Type:** Dashboard / Data View
 
 > ⚠️ **IMPORTANT:** Rules in this file **override** the Master file (`design-system/MASTER.md`).
@@ -13,13 +13,13 @@
 
 ### Layout Overrides
 
-- **Max Width:** 1200px (standard)
-- **Layout:** Full-width sections, centered content
-- **Sections:** 1. Hero (Video/Mission), 2. Solutions by Industry, 3. Solutions by Role, 4. Client Logos, 5. Contact Sales
+- **Max Width:** 1400px or full-width
+- **Grid:** 12-column grid for data flexibility
+- **Sections:** 1. Hero, 2. Product video/mockup (center), 3. Feature breakdown per section, 4. Comparison (optional), 5. CTA
 
 ### Spacing Overrides
 
-- No overrides — use Master spacing
+- **Content Density:** High — optimize for information display
 
 ### Typography Overrides
 
@@ -27,11 +27,13 @@
 
 ### Color Overrides
 
-- **Strategy:** Corporate: Navy/Grey. High integrity. Conservative accents.
+- **Strategy:** Video surround: Brand color overlay. Features: Icon color #0080FF. Text: Dark #222
 
 ### Component Overrides
 
-- Avoid: Use arbitrary large z-index values
+- Avoid: Let images/content push layout around
+- Avoid: Stack multiple fixed elements carelessly
+- Avoid: Expect z-index to work across contexts
 
 ---
 
@@ -43,6 +45,8 @@
 
 ## Recommendations
 
-- Effects: Deal movement animations, metric updates, leaderboard ranking changes, gauge needle movements, status change highlights
-- Layout: Define z-index scale system (10 20 30 50)
-- CTA Placement: Contact Sales (Primary) + Login (Secondary)
+- Effects: Smooth scroll, reveal on scroll, parallax images, text animations, page-flip transitions
+- Layout: Reserve space for async content
+- Layout: Account for safe areas and other fixed elements
+- Layout: Understand what creates new stacking context
+- CTA Placement: Video center + CTA right/bottom

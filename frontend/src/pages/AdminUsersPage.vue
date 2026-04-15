@@ -21,10 +21,13 @@ import AdminUserManager from "../components/AdminUserManager.vue";
 }
 
 .admin-users-page__panel {
-  padding: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
+  padding: 18px;
+  border-radius: 32px;
+  border: 3px solid #1f2937;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
   min-width: 0;
   overflow-x: hidden;
 }

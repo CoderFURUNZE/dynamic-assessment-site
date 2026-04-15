@@ -48,6 +48,11 @@ const emit = defineEmits<{
   gap: 14px;
   align-items: flex-start;
   flex-wrap: wrap;
+  padding: 20px 22px;
+  border-radius: 28px;
+  border: 3px solid #1f2937;
+  background: radial-gradient(circle at top right, rgba(210, 238, 255, 0.72), transparent 42%), #fffdf6;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .detail-header__main {
@@ -56,16 +61,23 @@ const emit = defineEmits<{
 }
 
 .detail-header__eyebrow {
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #d7f9a8;
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--app-primary-deep);
+  color: #17325c;
 }
 
 .detail-title {
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 700;
-  color: var(--app-ink);
+  color: #17325c;
 }
 
 .detail-actions {
@@ -77,13 +89,21 @@ const emit = defineEmits<{
 
 .detail-actions__meta {
   padding: 0 12px;
-  min-height: 38px;
+  min-height: 42px;
   border-radius: 999px;
-  border: 1px solid var(--app-border);
+  border: 1px solid #c7daf6;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
   display: inline-flex;
   align-items: center;
-  color: var(--app-ink-soft);
+  color: #47607f;
   font-size: 12px;
   font-weight: 700;
+}
+
+.detail-actions :deep(.el-select__wrapper) {
+  min-height: 44px;
+  border-radius: 18px !important;
+  background: linear-gradient(180deg, #f9fbff 0%, #eef5ff 100%) !important;
+  box-shadow: 0 0 0 1px #c7daf6 inset !important;
 }
 </style>

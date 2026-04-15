@@ -46,19 +46,23 @@ const personaGrade = ref("通用");
 .admin-persona-page__panel {
   display: grid;
   gap: 16px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  box-shadow: none;
+  padding: 18px;
+  border-radius: 32px;
+  border: 3px solid #1f2937;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .admin-persona-step-card {
   display: grid;
   gap: 18px;
   padding: 22px 24px;
-  border: 1px solid #dfe9f7;
+  border: 1.5px solid #c6d8ef;
   border-radius: 24px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .admin-persona-step-card__header {
@@ -71,14 +75,14 @@ const personaGrade = ref("通用");
 .admin-persona-step-card__eyebrow {
   font-size: 12px;
   font-weight: 800;
-  color: #6b86aa;
+  color: #25645b;
 }
 
 .admin-persona-step-card__title {
   margin-top: 4px;
   font-size: 24px;
   font-weight: 800;
-  color: #183153;
+  color: #18463e;
 }
 
 .admin-persona-step-card__desc {
@@ -86,7 +90,7 @@ const personaGrade = ref("通用");
   max-width: 640px;
   font-size: 14px;
   line-height: 1.7;
-  color: #6c7f99;
+  color: #5d746c;
 }
 
 .admin-persona-step-card__badge {
@@ -95,9 +99,9 @@ const personaGrade = ref("通用");
   min-height: 34px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid #dce8f7;
-  background: #f3f8ff;
-  color: #37537d;
+  border: 1.5px solid #c6d8ef;
+  background: #eef5ff;
+  color: #355070;
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
@@ -117,7 +121,7 @@ const personaGrade = ref("通用");
 .admin-context__field span {
   font-size: 13px;
   font-weight: 700;
-  color: #516d90;
+  color: #4f6c61;
 }
 
 @media (max-width: 900px) {

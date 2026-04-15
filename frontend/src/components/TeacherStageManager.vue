@@ -239,44 +239,62 @@ onMounted(load);
 }
 
 .stage-manager__table-wrap {
+  position: relative;
   display: block;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 14px 16px 16px;
-  border: 1px solid #dfe9f7;
-  border-radius: 22px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 22px 20px 22px;
+  border: 2px solid #1f2937;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(210, 238, 255, 0.44), transparent 34%),
+    radial-gradient(circle at left center, rgba(255, 255, 255, 0.72), transparent 36%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 10px 0 rgba(31, 41, 55, 0.1);
+}
+
+.stage-manager__table-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 88px;
+  background: linear-gradient(180deg, rgba(215, 249, 168, 0.12), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 .stage-manager__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 0 2px 12px;
+  gap: 18px;
+  padding: 0 2px 18px;
+  margin-bottom: 2px;
+  position: relative;
+  z-index: 1;
 }
 
 .stage-manager__title-wrap {
   display: grid;
-  gap: 10px;
+  gap: 6px;
   min-width: 0;
   flex: 1;
 }
 
 .stage-manager__title {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
-  color: #1f3556;
-  line-height: 1.2;
+  color: #17325c;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
 }
 
 .stage-manager__subtitle {
   font-size: 13px;
   line-height: 1.6;
-  color: #6c7f99;
+  color: var(--app-text-soft);
 }
 
 .stage-manager__header-actions {
@@ -285,55 +303,102 @@ onMounted(load);
   justify-content: flex-end;
   gap: 12px;
   flex-shrink: 0;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .stage-manager__total {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 46px;
+  min-height: 44px;
   padding: 0 18px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #f7fbff 0%, #edf4ff 100%);
-  border: 1px solid #d8e5f4;
-  color: #37537d;
+  background: linear-gradient(180deg, #f5fbe8 0%, #eef8d9 100%);
+  border: 1px solid #cfe7a8;
+  color: #355a28;
   font-size: 14px;
   font-weight: 700;
   white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .stage-manager__course-select {
-  width: 340px;
+  width: 384px;
   max-width: 100%;
 }
 
 .stage-manager__header-actions :deep(.el-select__wrapper) {
-  min-height: 46px;
-  border-radius: 18px !important;
-  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%) !important;
-  box-shadow: 0 0 0 1px #d7e4f5 inset, 0 10px 20px rgba(80, 118, 183, 0.05) !important;
+  min-height: 44px;
+  border-radius: 16px !important;
+  background: linear-gradient(180deg, #fffdfb 0%, #fff7ee 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 1px #d8dfef !important;
 }
 
 .stage-manager__header-actions :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 1px #7ea9f6 inset, 0 0 0 3px rgba(87, 133, 231, 0.12), 0 12px 24px rgba(80, 118, 183, 0.08) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 1px rgba(104, 142, 202, 0.52),
+    0 0 0 4px rgba(104, 142, 202, 0.12),
+    0 14px 28px rgba(86, 111, 148, 0.08) !important;
 }
 
 .stage-manager__header-actions :deep(.el-select__placeholder),
 .stage-manager__header-actions :deep(.el-select__selected-item),
 .stage-manager__header-actions :deep(.el-select__caret) {
-  color: #5a6f8f !important;
+  color: #5f6f85 !important;
 }
 
 .stage-manager__toolbar-btn {
-  min-height: 46px;
+  min-height: 44px;
   padding-inline: 20px;
-  border-radius: 18px;
+  border-radius: 16px;
   font-weight: 700;
+  transition:
+    transform var(--app-duration) var(--app-ease-out),
+    box-shadow var(--app-duration) var(--app-ease-out),
+    border-color var(--app-duration) var(--app-ease-out),
+    background var(--app-duration) var(--app-ease-out);
+}
+
+.stage-manager__header-actions :deep(.el-button.stage-manager__toolbar-btn) {
+  margin-left: 0;
+  border-width: 1px;
+}
+
+.stage-manager__header-actions :deep(.el-button.stage-manager__toolbar-btn:hover) {
+  transform: translateY(-1px);
+}
+
+.stage-manager__header-actions :deep(.el-button.stage-manager__toolbar-btn.da-outline-button) {
+  border-color: #d6dfef;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
+  color: #29476a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.stage-manager__header-actions :deep(.el-button.stage-manager__toolbar-btn.da-outline-button:hover),
+.stage-manager__header-actions :deep(.el-button.stage-manager__toolbar-btn.da-outline-button:focus-visible) {
+  border-color: #c8d5eb;
+  background: linear-gradient(180deg, #fffefb 0%, #f8fbf1 100%);
+  color: #1f4f95;
+}
+
+.stage-manager__header-actions :deep(.el-button.stage-manager__toolbar-btn.da-primary-button) {
+  border-color: #c7e38e;
+  background: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%);
+  color: #23421f;
+  box-shadow: 0 10px 18px rgba(182, 214, 118, 0.26);
+}
+
+.stage-manager__header-actions :deep(.el-button.stage-manager__toolbar-btn.da-primary-button:hover),
+.stage-manager__header-actions :deep(.el-button.stage-manager__toolbar-btn.da-primary-button:focus-visible) {
+  box-shadow: 0 14px 24px rgba(182, 214, 118, 0.34);
 }
 
 .stage-manager__empty {
-  padding: 28px 0 20px;
+  padding: 36px 0 24px;
 }
 
 .stage-manager__row-actions {
@@ -349,10 +414,14 @@ onMounted(load);
   flex: 0 0 auto;
   min-width: 0;
   min-height: 36px;
-  padding: 0 16px;
+  padding: 0 15px;
   border-radius: 999px;
   font-weight: 700;
   box-shadow: none;
+  transition:
+    transform var(--app-duration) var(--app-ease-out),
+    background var(--app-duration) var(--app-ease-out),
+    border-color var(--app-duration) var(--app-ease-out);
 }
 
 .stage-manager__row-actions :deep(.el-button + .el-button) {
@@ -364,45 +433,49 @@ onMounted(load);
 }
 
 .stage-manager__row-actions :deep(.el-button.stage-manager__action-btn.da-outline-button) {
-  background: #ffffff;
-  border-color: #cfdcf1;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff8f1 100%);
+  border-color: #d6dfef;
   color: #1f4f95;
 }
 
 .stage-manager__row-actions :deep(.el-button.stage-manager__action-btn.da-outline-button:hover),
 .stage-manager__row-actions :deep(.el-button.stage-manager__action-btn.da-outline-button:focus-visible) {
-  background: #f6faff;
-  border-color: #b8cdec;
-  color: #1d4684;
+  background: linear-gradient(180deg, #fffefb 0%, #f7fbf0 100%);
+  border-color: #c8d5eb;
+  color: #173f79;
+  transform: translateY(-1px);
 }
 
 .stage-manager__row-actions :deep(.el-button.stage-manager__action-btn.da-danger-button) {
-  background: #ffffff;
-  border-color: #f1c4ca;
-  color: #d55b6a;
+  background: linear-gradient(180deg, #ffffff 0%, #fff8f8 100%);
+  border-color: rgba(239, 91, 99, 0.24);
+  color: #dc5f66;
 }
 
 .stage-manager__row-actions :deep(.el-button.stage-manager__action-btn.da-danger-button:hover),
 .stage-manager__row-actions :deep(.el-button.stage-manager__action-btn.da-danger-button:focus-visible) {
-  background: #fff8f8;
-  border-color: #e9b0b9;
-  color: #c94d5c;
+  background: linear-gradient(180deg, #fffdfd 0%, #fff1f2 100%);
+  border-color: rgba(239, 91, 99, 0.34);
+  color: #cf4d56;
+  transform: translateY(-1px);
 }
 
 .stage-manager__table-wrap :deep(.el-table) {
-  border-radius: 0 !important;
-  overflow: visible;
-  border: none !important;
-  box-shadow: none !important;
-  background: #ffffff !important;
+  border-radius: 24px !important;
+  overflow: hidden;
+  border: 1px solid #d9e3f2 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88) !important;
+  background: linear-gradient(180deg, #fffdfa 0%, #fffaf4 100%) !important;
   width: 100% !important;
   max-width: 100% !important;
+  margin-top: 2px;
 }
 
 .stage-manager__table-wrap :deep(.el-table__inner-wrapper) {
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
+  border-radius: 24px !important;
 }
 
 .stage-manager__table-wrap :deep(.el-table__header),
@@ -429,21 +502,23 @@ onMounted(load);
 .stage-manager__table-wrap :deep(.el-table--border::before),
 .stage-manager__table-wrap :deep(.el-table--border::after),
 .stage-manager__table-wrap :deep(.el-table__border-left-patch) {
-  display: none !important;
+  background: #dde6f2 !important;
 }
 
 .stage-manager__table-wrap :deep(.el-table th.el-table__cell) {
-  background: #f6faff !important;
-  color: #587394;
+  background:
+    linear-gradient(180deg, rgba(246, 250, 232, 0.92) 0%, rgba(251, 252, 244, 0.92) 100%) !important;
+  color: #17325c;
   font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
 .stage-manager__table-wrap :deep(.el-table td.el-table__cell),
 .stage-manager__table-wrap :deep(.el-table th.el-table__cell) {
-  padding-top: 16px;
-  padding-bottom: 16px;
-  border-right: 1px solid #edf3fb !important;
-  border-bottom: 1px solid #edf3fb !important;
+  padding-top: 17px;
+  padding-bottom: 17px;
+  border-right: 1px solid rgba(229, 234, 241, 0.9) !important;
+  border-bottom: 1px solid rgba(229, 234, 241, 0.9) !important;
 }
 
 .stage-manager__table-wrap :deep(.el-table tr td:last-child),
@@ -455,14 +530,19 @@ onMounted(load);
   border-bottom: none !important;
 }
 
+.stage-manager__table-wrap :deep(.el-table__body tr:nth-child(even) > td.el-table__cell) {
+  background: rgba(255, 251, 245, 0.92) !important;
+}
+
 .stage-manager__table-wrap :deep(.el-table__row:hover > td.el-table__cell) {
-  background: #f8fbff !important;
+  background: linear-gradient(180deg, #f8fbef 0%, #f2f8e2 100%) !important;
 }
 
 .stage-manager__table-wrap :deep(.el-table .cell) {
   color: #274263;
   overflow-wrap: anywhere;
   word-break: break-word;
+  line-height: 1.7;
 }
 
 .stage-manager__table-wrap :deep(.el-table__row .el-table__cell:first-child .cell) {
@@ -472,7 +552,12 @@ onMounted(load);
 
 .stage-manager__table-wrap :deep(.el-table__row .el-table__cell:nth-child(2) .cell) {
   font-weight: 700;
-  color: #24446f;
+  color: #1f4678;
+}
+
+.stage-manager__table-wrap :deep(.el-table__row .el-table__cell:nth-child(4) .cell) {
+  font-weight: 700;
+  color: #355a28;
 }
 
 @media (max-width: 900px) {
@@ -486,6 +571,11 @@ onMounted(load);
     align-self: stretch;
     flex-wrap: wrap;
     justify-content: flex-start;
+  }
+
+  .stage-manager__table-wrap {
+    padding: 18px 16px 18px;
+    border-radius: 24px;
   }
 
   .stage-manager__total {

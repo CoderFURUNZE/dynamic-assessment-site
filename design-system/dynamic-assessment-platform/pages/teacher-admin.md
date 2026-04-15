@@ -1,7 +1,7 @@
-# Teacher Page Overrides
+# Teacher Admin Page Overrides
 
 > **PROJECT:** Dynamic Assessment Platform
-> **Generated:** 2026-04-15 09:34:16
+> **Generated:** 2026-04-15 09:58:03
 > **Page Type:** Dashboard / Data View
 
 > ⚠️ **IMPORTANT:** Rules in this file **override** the Master file (`design-system/MASTER.md`).
@@ -44,7 +44,7 @@
 
 ## Recommendations
 
-- Effects: Smooth scroll, reveal on scroll, parallax images, text animations, page-flip transitions
+- Effects: Color gradient transitions on data change, cell highlighting on hover, tooltip reveal on click, smooth color animation
 - Layout: Reserve space for async content
 - Layout: Account for safe areas and other fixed elements
 - Layout: Understand what creates new stacking context

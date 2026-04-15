@@ -6,7 +6,13 @@ import { api, getWithCache } from "../api";
 import KnowledgeGraphWorkspace from "../components/KnowledgeGraphWorkspace.vue";
 import { resolveStudentSubject, saveStudentSubject } from "../utils/studentCourse";
 
-type Course = { id: number; code: string; title: string };
+type Course = {
+  id: number;
+  code: string;
+  title: string;
+  active?: boolean;
+  enroll_status?: string;
+};
 type KP = { id: number; code: string; title: string; chapter?: string };
 type WorkspaceState = {
   kpCount: number;
@@ -148,6 +154,8 @@ async function loadCourses() {
       id: Number(item.id),
       code: String(item.code || ""),
       title: String(item.title || ""),
+      active: item.active !== false,
+      enroll_status: String(item.enroll_status || ""),
     }));
     const routeSubject = String(route.query.subject || "").trim();
     const titles = new Set(courses.value.map((item) => item.title));

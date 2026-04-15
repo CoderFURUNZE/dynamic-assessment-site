@@ -202,14 +202,14 @@ function buildLabelColorMap(labels: string[], palette: string[]) {
 const abilityColorMap = computed(() =>
   buildLabelColorMap(
     Array.from(new Set(kps.value.flatMap((kp) => splitLabels(kp.ability_tag)))),
-    ["#15803d", "#16a34a", "#22c55e", "#4ade80", "#166534", "#14532d"],
+    ["#2f9f7f", "#47b089", "#65bf98", "#1f7a63", "#89ceb1", "#a3dcc3"],
   ),
 );
 
 const literacyColorMap = computed(() =>
   buildLabelColorMap(
     Array.from(new Set(kps.value.flatMap((kp) => splitLabels(kp.literacy_tag)))),
-    ["#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa", "#0369a1", "#0ea5e9"],
+    ["#b88f46", "#c79c54", "#d4ad6d", "#9d7840", "#dfbd84", "#e8cb99"],
   ),
 );
 
@@ -691,7 +691,7 @@ function ringStroke(level: "ability" | "literacy", kp: KP) {
   const labels = level === "ability" ? splitLabels(kp.ability_tag) : splitLabels(kp.literacy_tag);
   if (!labels.length) return "transparent";
   const map = level === "ability" ? abilityColorMap.value : literacyColorMap.value;
-  return map.get(labels[0]) || (level === "ability" ? "#22c55e" : "#2563eb");
+  return map.get(labels[0]) || (level === "ability" ? "#47b089" : "#c79c54");
 }
 
 function edgeTouchesHover(edge: Edge) {
@@ -701,11 +701,11 @@ function edgeTouchesHover(edge: Edge) {
 }
 
 function edgeStroke(edge: Edge) {
-  if (edgeTouchesHover(edge)) return "#2563eb";
-  if (edge.relation_type === "support") return "#46a57b";
-  if (edge.relation_type === "contains") return "#db9d37";
-  if (edge.relation_type === "related") return "rgba(74,120,213,0.6)";
-  return "rgba(71,85,105,0.78)";
+  if (edgeTouchesHover(edge)) return "#355a28";
+  if (edge.relation_type === "support") return "rgba(71,176,137,0.62)";
+  if (edge.relation_type === "contains") return "rgba(213,162,83,0.62)";
+  if (edge.relation_type === "related") return "rgba(184,143,70,0.58)";
+  return "rgba(103,121,154,0.6)";
 }
 
 function edgeDasharray(edge: Edge) {
@@ -1695,16 +1695,16 @@ onBeforeUnmount(() => {
       >
         <defs>
           <marker id="teacher-edge-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(100,116,139,0.55)" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(103,121,154,0.58)" />
           </marker>
           <marker id="teacher-edge-arrow-triangle" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-            <path d="M 1 1 L 9 5 L 1 9 z" fill="#46a57b" />
+            <path d="M 1 1 L 9 5 L 1 9 z" fill="#47b089" />
           </marker>
           <marker id="teacher-edge-arrow-open" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-            <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#db9d37" stroke-width="1.5" />
+            <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#d5a253" stroke-width="1.5" />
           </marker>
           <marker id="teacher-chapter-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(75,94,130,0.55)" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(103,121,154,0.5)" />
           </marker>
         </defs>
         <g :transform="`translate(${panX} ${panY})`">
@@ -1716,7 +1716,7 @@ onBeforeUnmount(() => {
             :y1="categoryPoint(edge.source_chapter).y"
             :x2="categoryPoint(edge.target_chapter).x"
             :y2="categoryPoint(edge.target_chapter).y"
-            :stroke="edge.relation_type === 'support' ? 'rgba(70,165,123,0.5)' : (edge.relation_type === 'related' ? 'rgba(74,120,213,0.42)' : 'rgba(75,94,130,0.52)')"
+            :stroke="edge.relation_type === 'support' ? 'rgba(71,176,137,0.46)' : (edge.relation_type === 'related' ? 'rgba(184,143,70,0.34)' : 'rgba(103,121,154,0.42)')"
             stroke-width="2.2"
             stroke-dasharray="6 6"
             :marker-end="edge.relation_type === 'related' ? undefined : 'url(#teacher-chapter-arrow)'"
@@ -1743,7 +1743,7 @@ onBeforeUnmount(() => {
             :y1="categoryKpLine(kp).y1"
             :x2="categoryKpLine(kp).x2"
             :y2="categoryKpLine(kp).y2"
-            stroke="rgba(100,116,139,0.4)"
+            stroke="rgba(179, 154, 117, 0.34)"
             stroke-width="1.2"
             stroke-linecap="round"
             stroke-dasharray="3 4"
@@ -1757,7 +1757,7 @@ onBeforeUnmount(() => {
             @click="selectCategory(category.key)"
             @mousedown="onNodeMouseDown($event, 'category', category.key)"
           >
-            <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#eef5ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#8fb8ff' : '#dbe5f1'" stroke-width="1.8" />
+            <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#f5fbe8' : '#fffdf8'" :stroke="selectedCategory === category.key ? '#cfe7a8' : '#d8e0d3'" stroke-width="2" />
             <text class="teacher-category-node__title" text-anchor="middle" y="-6">{{ category.title }}</text>
             <text class="teacher-category-node__meta" text-anchor="middle" y="22">{{ category.total }} 个知识点</text>
           </g>
@@ -1774,9 +1774,9 @@ onBeforeUnmount(() => {
           >
             <circle :r="nodeRadius(kp) + 18" fill="transparent" :stroke="ringStroke('literacy', kp)" :stroke-width="splitLabels(kp.literacy_tag).length ? 5 : 0" />
             <circle :r="nodeRadius(kp) + 10" fill="transparent" :stroke="ringStroke('ability', kp)" :stroke-width="splitLabels(kp.ability_tag).length ? 5 : 0" />
-            <circle :r="nodeRadius(kp) + 2" fill="transparent" stroke="#9db7e8" stroke-width="3.5" />
-            <circle :r="nodeRadius(kp) + 22" :fill="kp.id === selectedKp?.id ? 'rgba(70, 122, 235, 0.10)' : 'rgba(96,139,232,0.06)'" />
-            <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#f7fbff' : '#ffffff'" :stroke="kp.id === selectedKp?.id ? '#76a7f8' : '#dbe5f1'" stroke-width="2" />
+            <circle :r="nodeRadius(kp) + 2" fill="transparent" stroke="#cbbd9d" stroke-width="3.5" />
+            <circle :r="nodeRadius(kp) + 22" :fill="kp.id === selectedKp?.id ? 'rgba(215, 249, 168, 0.2)' : 'rgba(218, 206, 181, 0.1)'" />
+            <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#fffdf8' : '#fffefb'" :stroke="kp.id === selectedKp?.id ? '#cfe7a8' : '#d8e0d3'" stroke-width="2" />
             <text class="teacher-node__code" text-anchor="middle" y="-8">{{ kp.code }}</text>
             <text class="teacher-node__title" text-anchor="middle" y="16">{{ kp.title.slice(0, 10) }}</text>
             <g v-if="kpCoverageWarnLabels(kp.id).length" :transform="`translate(0, ${nodeRadius(kp) + 16})`">
@@ -2540,7 +2540,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   /* 与外层 .teacher-stage 圆角同心：内半径 = 外半径 − 内边距，避免底角“直角顶到”外框 */
   border-radius: 16px;
-  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+  background: linear-gradient(180deg, #fffbf6 0%, #fff8ef 100%);
   border: none;
   contain: layout style;
   isolation: isolate;
@@ -2592,7 +2592,7 @@ onBeforeUnmount(() => {
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 600;
-  color: #475569;
+  color: #5e6b7d;
   user-select: none;
   line-height: 1.35;
 }
@@ -2602,7 +2602,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__legend-details[open] .teacher-stage__legend-summary {
-  border-bottom: 1px solid #e8eef5;
+  border-bottom: 1px solid #ebe3d6;
 }
 
 .teacher-stage__legend-details .teacher-stage__legend {
@@ -2633,9 +2633,9 @@ onBeforeUnmount(() => {
   min-height: 34px;
   padding: 7px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #dce6f2;
-  color: #51657f;
+  background: rgba(255, 253, 249, 0.92);
+  border: 1px solid #e4ddd2;
+  color: #5f6f85;
   font-size: 12px;
   line-height: 1.4;
   display: inline-flex;
@@ -2653,13 +2653,13 @@ onBeforeUnmount(() => {
 
 .teacher-stage__legend-line--chapter {
   border-top-style: dashed;
-  border-top-color: rgba(75, 94, 130, 0.7);
+  border-top-color: rgba(184, 143, 70, 0.7);
 }
 
 .teacher-stage__legend-line--attach {
   border-top-style: dashed;
   border-top-width: 1.5px;
-  border-top-color: rgba(100, 116, 139, 0.7);
+  border-top-color: rgba(179, 154, 117, 0.7);
 }
 
 .teacher-stage__legend-rings {
@@ -2681,7 +2681,7 @@ onBeforeUnmount(() => {
 .teacher-stage__legend-rings .tr.ring--knowledge {
   width: 10px;
   height: 10px;
-  border-color: rgba(74, 123, 200, 0.95);
+  border-color: rgba(203, 189, 157, 0.96);
 }
 
 .teacher-stage__legend-rings .tr.ring--ability {
@@ -2693,7 +2693,7 @@ onBeforeUnmount(() => {
 .teacher-stage__legend-rings .tr.ring--literacy {
   width: 18px;
   height: 18px;
-  border-color: rgba(37, 99, 235, 0.88);
+  border-color: rgba(184, 143, 70, 0.88);
 }
 
 .teacher-stage__pill,
@@ -2701,9 +2701,9 @@ onBeforeUnmount(() => {
   min-height: 36px;
   padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid #dfe7f1;
-  background: #ffffff;
-  color: #35507f;
+  border: 1px solid #dde3ef;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
+  color: #29476a;
   font-size: 12px;
   font-weight: 700;
   display: inline-flex;
@@ -2718,14 +2718,14 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__button:hover {
-  background: #eff5ff;
+  background: linear-gradient(180deg, #fffefb 0%, #f8fbf1 100%);
 }
 
 .teacher-stage__button--primary {
-  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
-  border-color: var(--app-green);
-  color: #ffffff;
-  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+  background: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%);
+  border-color: #c7e38e;
+  color: #23421f;
+  box-shadow: 0 10px 20px rgba(182, 214, 118, 0.24);
 }
 
 .teacher-stage__actions {
@@ -2751,8 +2751,8 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__focus-btn {
-  border: 1px solid #d7e2f0;
-  background: #ffffff;
+  border: 1px solid #dde3ef;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
   color: #39506d;
   border-radius: 999px;
   padding: 0 14px;
@@ -2763,9 +2763,9 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__focus-btn--primary {
-  border-color: #4f86f6;
-  background: linear-gradient(180deg, #4a7df2 0%, #2cb67d 100%);
-  color: #ffffff;
+  border-color: #c7e38e;
+  background: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%);
+  color: #23421f;
 }
 
 .teacher-canvas {
@@ -2821,8 +2821,8 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 8px;
   border-radius: 20px;
-  background: #ffffff;
-  border: 1px solid #dfe7f1;
+  background: #fffdf9;
+  border: 1px solid #e3ddd3;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
 }
 
@@ -2843,8 +2843,8 @@ onBeforeUnmount(() => {
 .teacher-stage__menu button {
   padding: 0 12px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
-  color: #35507f;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
+  color: #29476a;
   font-size: 12px;
   font-weight: 700;
   transition: background 0.2s ease;
@@ -2856,7 +2856,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__menu button:hover {
-  background: #dfefff;
+  background: linear-gradient(180deg, #fffefb 0%, #f8fbf1 100%);
 }
 
 .teacher-stage__menu .danger {
@@ -2938,8 +2938,8 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 4px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #dfe7f1;
+  background: rgba(255, 253, 248, 0.96);
+  border: 1px solid #e4ddd2;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
   pointer-events: auto;
 }
@@ -2948,8 +2948,8 @@ onBeforeUnmount(() => {
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  background: #eff5ff;
-  color: #35507f;
+  background: #f3f6ea;
+  color: #355a28;
   font-size: 14px;
   transition: all 0.2s ease;
   display: inline-flex;
@@ -2959,12 +2959,12 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__zoom button:hover {
-  background: #dfefff;
+  background: #e7f0d2;
 }
 
 .teacher-stage__zoom span {
   font-size: 12px;
-  color: #35507f;
+  color: #5e6b7d;
   min-width: 70px;
   text-align: center;
 }
@@ -2978,8 +2978,8 @@ onBeforeUnmount(() => {
   text-align: center;
   border: none;
   border-radius: 16px;
-  background: rgba(248, 251, 255, 0.82);
-  color: #35507f;
+  background: rgba(255, 252, 247, 0.9);
+  color: #29476a;
   z-index: 3;
   pointer-events: auto;
 }
@@ -2993,16 +2993,16 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__empty-btn {
-  border: 1px solid #cfe0fb;
-  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
-  color: #ffffff;
+  border: 1px solid #c7e38e;
+  background: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%);
+  color: #23421f;
   border-radius: 999px;
   min-height: 42px;
   padding: 0 18px;
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+  box-shadow: 0 10px 20px rgba(182, 214, 118, 0.24);
 }
 
 .teacher-stage__empty-actions {
@@ -3014,9 +3014,9 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__empty-btn--ghost {
-  background: #ffffff;
-  color: #35507f;
-  border-color: #dbe5f1;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
+  color: #29476a;
+  border-color: #dde3ef;
   box-shadow: none;
 }
 
@@ -3529,9 +3529,11 @@ onBeforeUnmount(() => {
 .teacher-sidebar,
 .teacher-stage,
 .teacher-drawer {
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #dbe5f1;
-  box-shadow: var(--app-shadow-soft);
+  background:
+    radial-gradient(circle at top right, rgba(210, 238, 255, 0.52), transparent 36%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  border: 3px solid #1f2937;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .teacher-header {
@@ -3546,7 +3548,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage {
-  border-radius: 20px;
+  border-radius: 28px;
 }
 
 .teacher-stage__top {
@@ -3565,9 +3567,9 @@ onBeforeUnmount(() => {
   min-height: 32px;
   padding: 0 12px;
   border-radius: 999px;
-  background: #f5f9ff;
-  border-color: #d8e5f6;
-  color: #35507f;
+  background: linear-gradient(180deg, #f5fbe8 0%, #eef8d9 100%);
+  border-color: #cfe7a8;
+  color: #355a28;
 }
 
 .teacher-stage__button,
@@ -3586,22 +3588,22 @@ onBeforeUnmount(() => {
 .teacher-stage__menu button {
   min-height: 34px;
   padding-inline: 12px;
-  border: 1px solid #d8e5f6;
-  background: #ffffff;
-  color: #35507f;
+  border: 1px solid #dde3ef;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
+  color: #29476a;
 }
 
 .teacher-stage__focus-btn {
-  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
+  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
 }
 
 .teacher-stage__button--primary,
 .teacher-stage__focus-btn--primary,
 .teacher-drawer__primary {
-  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
-  border-color: var(--app-green);
-  color: #ffffff;
-  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+  background: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%);
+  border-color: #c7e38e;
+  color: #23421f;
+  box-shadow: 0 10px 20px rgba(182, 214, 118, 0.24);
 }
 
 .teacher-stage__legend {
@@ -3609,7 +3611,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__legend-item {
-  color: #5f738f;
+  color: #5f6f85;
 }
 
 .teacher-stage__legend-line,
@@ -3620,12 +3622,15 @@ onBeforeUnmount(() => {
 .teacher-stage__viewport {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  background: linear-gradient(180deg, #f9fbff 0%, #f1f6fc 100%);
+  background:
+    radial-gradient(circle at top left, rgba(215, 249, 168, 0.14), transparent 22%),
+    radial-gradient(circle at top right, rgba(233, 210, 170, 0.12), transparent 24%),
+    linear-gradient(180deg, #fffaf3 0%, #fff8ef 56%, #fffdf8 100%);
 }
 
 .teacher-stage__empty {
   background: rgba(255, 255, 255, 0.98);
-  border-color: #dbe5f1;
+  border-color: #e4ddd2;
 }
 
 .teacher-drawer {
@@ -3634,7 +3639,7 @@ onBeforeUnmount(() => {
 
 .teacher-drawer__header {
   padding: 14px 16px 10px;
-  border-bottom-color: #e6eef7;
+  border-bottom-color: #ebe3d6;
 }
 
 .teacher-drawer__content {
@@ -3679,13 +3684,14 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer__metric {
-  background: #f8fbff;
-  border-color: #dbe5f1;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border-color: #c6d8ef;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .teacher-drawer__tag {
-  background: #edf4ff;
-  border-color: #d8e5f6;
+  background: #eef5ff;
+  border-color: #c6d8ef;
   color: #35507f;
 }
 
@@ -3711,8 +3717,9 @@ onBeforeUnmount(() => {
 .teacher-stage__menu,
 .teacher-stage__zoom {
   border-radius: 18px;
-  border: 1px solid #dbe5f1;
-  background: rgba(255, 255, 255, 0.94);
+  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .teacher-tree__summary {
@@ -3749,6 +3756,6 @@ onBeforeUnmount(() => {
 
 .teacher-node:hover circle:last-of-type,
 .teacher-category-node:hover rect {
-  filter: drop-shadow(0 10px 18px rgba(59, 130, 246, 0.12));
+  filter: drop-shadow(0 10px 18px rgba(90, 147, 230, 0.14));
 }
 </style>

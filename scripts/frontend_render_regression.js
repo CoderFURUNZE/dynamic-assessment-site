@@ -32,8 +32,11 @@ async function login(page, baseUrl, mode, username, password, expectedPrefix) {
   });
   await page.locator("input").nth(0).fill(username);
   await page.locator("input").nth(1).fill(password);
-  await page.locator(".login-btn").click();
-  await page.waitForURL((url) => url.pathname.startsWith(expectedPrefix), { timeout: 15000 });
+  await page.locator(".login-submit, .login-btn, button[type='submit']").first().click();
+  await page.waitForURL((url) => url.pathname.startsWith(expectedPrefix), {
+    timeout: 15000,
+    waitUntil: "domcontentloaded",
+  });
   await page.waitForTimeout(1800);
 }
 

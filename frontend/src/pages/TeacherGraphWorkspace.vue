@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import { getRole } from "../token";
-import AdminIntroHero from "../components/AdminIntroHero.vue";
+import TeacherIntroHero from "../components/TeacherIntroHero.vue";
 import TeacherGraphWorkbench from "../components/TeacherGraphWorkbench.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
@@ -111,7 +111,7 @@ onMounted(async () => {
 
 <template>
   <div v-if="isTeacher" class="graph-page">
-    <AdminIntroHero
+    <TeacherIntroHero
       eyebrow="教师工作台"
       title="知识图谱"
       pill="内容建设"
@@ -126,7 +126,7 @@ onMounted(async () => {
           刷新图谱
         </el-button>
       </template>
-    </AdminIntroHero>
+    </TeacherIntroHero>
 
     <section class="graph-page__summary panel-card">
       <article class="graph-page__summary-card">
@@ -167,48 +167,66 @@ onMounted(async () => {
 
 .graph-page__summary,
 .graph-page__panel {
-  border-radius: 20px;
-  border: 1px solid color-mix(in srgb, var(--app-primary) 12%, var(--app-border));
-  background: #ffffff;
-  box-shadow: var(--app-shadow-soft);
+  border-radius: 28px;
+  border: 3px solid #1f2937;
+  background:
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.24), transparent 28%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .graph-page__summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  padding: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .graph-page__summary-card {
   display: grid;
-  gap: 6px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  border: 1px solid #dce6f5;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  gap: 12px;
+  padding: 22px 24px;
+  border-radius: 32px;
+  border: 3px solid #1f2937;
+  background:
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.18), transparent 26%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  min-height: 128px;
+  align-content: start;
 }
 
 .graph-page__summary-card span {
-  font-size: 12px;
-  color: var(--app-text-soft);
+  font-size: 14px;
+  font-weight: 700;
+  color: #4f5f75;
 }
 
 .graph-page__summary-card strong {
-  font-size: 16px;
-  line-height: 1.35;
+  font-size: 24px;
+  line-height: 1.25;
   color: var(--app-text-main);
 }
 
 .graph-page__panel {
-  padding: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .graph-page__panel-body {
   overflow: hidden;
   min-height: calc(100dvh - 212px);
-  background: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
-  border-radius: 16px;
+  background:
+    radial-gradient(circle at top right, rgba(214, 245, 234, 0.16), transparent 28%),
+    linear-gradient(180deg, #fffaf3 0%, #fffdf8 100%);
+  border-radius: 30px;
+  border: 3px solid #1f2937;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .graph-page__panel-body > * {
@@ -219,21 +237,21 @@ onMounted(async () => {
   width: 240px;
 }
 
-.graph-page :deep(.admin-intro-hero__actions .el-select__wrapper) {
+.graph-page :deep(.teacher-intro-hero__actions .el-select__wrapper) {
   min-height: 42px;
   border-radius: 18px !important;
   background: #ffffff !important;
-  box-shadow: 0 0 0 1px #d7e4f5 inset !important;
+  box-shadow: 0 0 0 1px #cfe7de inset !important;
 }
 
-.graph-page :deep(.admin-intro-hero__actions .el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 1px #7ea9f6 inset, 0 0 0 3px rgba(87, 133, 231, 0.12) !important;
+.graph-page :deep(.teacher-intro-hero__actions .el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #34d399 inset, 0 0 0 3px rgba(16, 185, 129, 0.12) !important;
 }
 
-.graph-page :deep(.admin-intro-hero__actions .el-select__placeholder),
-.graph-page :deep(.admin-intro-hero__actions .el-select__selected-item),
-.graph-page :deep(.admin-intro-hero__actions .el-select__caret) {
-  color: #5a6f8f !important;
+.graph-page :deep(.teacher-intro-hero__actions .el-select__placeholder),
+.graph-page :deep(.teacher-intro-hero__actions .el-select__selected-item),
+.graph-page :deep(.teacher-intro-hero__actions .el-select__caret) {
+  color: #25645b !important;
 }
 
 .graph-page__toolbar-btn {
@@ -241,11 +259,11 @@ onMounted(async () => {
   min-height: 42px;
   padding: 0 20px;
   border-radius: 999px;
-  border: 1px solid #d7e4f5;
+  border: 1px solid #cfe7de;
   background: #ffffff;
-  color: #274263;
+  color: #315f56;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
   box-shadow: none;
 }
 
@@ -257,8 +275,8 @@ onMounted(async () => {
 }
 
 .graph-page__toolbar-btn.graph-page__toolbar-btn--accent {
-  border-color: #b8cdf3;
-  background: linear-gradient(180deg, #ffffff 0%, #eff5ff 100%);
+  border-color: #8fd8c1;
+  background: linear-gradient(180deg, #ffffff 0%, #effbf6 100%);
 }
 
 @media (max-width: 960px) {

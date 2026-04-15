@@ -317,26 +317,28 @@ onMounted(loadCatalog);
 }
 
 .teacher-courses-page__panel,
-.teacher-courses-page__stat-card {
-  border-radius: 28px;
-  border: 1px solid #e3ebf5;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--app-shadow);
+.teacher-courses-page__stats {
+  border-radius: 32px;
+  border: 3px solid #1f2937;
+  background:
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.32), transparent 28%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
 }
 
 .teacher-courses-page__refresh-btn,
 .teacher-course-card__activate-btn {
   --el-button-text-color: #ffffff;
-  --el-button-bg-color: #5c8fff;
-  --el-button-border-color: #5c8fff;
+  --el-button-bg-color: #059669;
+  --el-button-border-color: #059669;
   --el-button-hover-text-color: #ffffff;
-  --el-button-hover-bg-color: #4d82f5;
-  --el-button-hover-border-color: #4d82f5;
-  --el-button-active-bg-color: #4577e6;
-  --el-button-active-border-color: #4577e6;
+  --el-button-hover-bg-color: #047857;
+  --el-button-hover-border-color: #047857;
+  --el-button-active-bg-color: #065f46;
+  --el-button-active-border-color: #065f46;
   min-width: 108px;
   padding-inline: 18px;
-  box-shadow: 0 10px 22px rgba(92, 143, 255, 0.22);
+  box-shadow: 0 10px 22px rgba(5, 150, 105, 0.2);
 }
 
 .teacher-course-card__actions {
@@ -355,53 +357,66 @@ onMounted(loadCatalog);
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .teacher-courses-page__stat-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 20px;
+  border-radius: 34px;
+  border: 3px solid #1f2937 !important;
+  background: linear-gradient(180deg, #fffaf3 0%, #fffdf8 100%) !important;
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12) !important;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 26px 28px;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-height: 132px;
 }
 
 .teacher-courses-page__stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 0 rgba(31, 41, 55, 0.14) !important;
 }
 
 .teacher-courses-page__stat-card.is-active {
-  border-color: #8eb7f7;
-  box-shadow: var(--app-shadow-lg);
+  border-color: #1f2937 !important;
+  background: linear-gradient(180deg, #fffaf3 0%, #fffdf8 100%) !important;
+  box-shadow: 0 14px 0 rgba(31, 41, 55, 0.14) !important;
 }
 
 .teacher-courses-page__stat-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  display: grid;
-  place-items: center;
-  color: #fff;
+  display: none;
 }
 
-.teacher-courses-page__stat-icon--on { background: linear-gradient(145deg, #3b82f6 0%, #10b981 100%); }
-.teacher-courses-page__stat-icon--pending { background: linear-gradient(145deg, #6366f1 0%, #4f8cff 100%); }
-.teacher-courses-page__stat-icon--hold { background: linear-gradient(145deg, #94a3b8 0%, #cbd5e1 100%); }
+.teacher-courses-page__stat-icon--on { background: linear-gradient(145deg, #059669 0%, #10b981 100%); }
+.teacher-courses-page__stat-icon--pending { background: linear-gradient(145deg, #0891b2 0%, #22d3ee 100%); }
+.teacher-courses-page__stat-icon--hold { background: linear-gradient(145deg, #64748b 0%, #94a3b8 100%); }
 
 .teacher-courses-page__stat-card span {
   display: block;
-  font-size: 12px;
-  color: var(--app-text-soft);
+  font-size: 13px;
+  font-weight: 700;
+  color: #506176;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .teacher-courses-page__stat-card strong {
-  font-size: 26px;
+  display: block;
+  margin-top: 8px;
+  font-size: 48px;
+  line-height: 1;
   color: var(--app-text-main);
 }
 
 .teacher-courses-page__panel {
   overflow: hidden;
+  padding: 0;
+  box-shadow: 0 14px 0 rgba(31, 41, 55, 0.12);
 }
 
 .teacher-courses-page__panel-head {
@@ -410,7 +425,10 @@ onMounted(loadCatalog);
   justify-content: space-between;
   gap: 16px;
   padding: 22px 24px;
-  border-bottom: 1px solid #edf2f7;
+  border-bottom: 1.5px solid #c6d8ef;
+  background:
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.18), transparent 28%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
 }
 
 .teacher-courses-page__panel-head h2 {
@@ -432,6 +450,9 @@ onMounted(loadCatalog);
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   padding: 22px 24px 24px;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.14), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
 }
 
 .teacher-course-card {
@@ -440,9 +461,12 @@ onMounted(loadCatalog);
   gap: 12px;
   padding: 22px;
   border-radius: 24px;
-  border: 1px solid #e6edf5;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: var(--app-shadow-sm);
+  border: 2px solid #1f2937;
+  background:
+    radial-gradient(circle at top left, rgba(201, 237, 255, 0.18), transparent 24%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 10px 0 rgba(31, 41, 55, 0.08);
+  min-width: 0;
 }
 
 .teacher-course-card__top {
@@ -456,8 +480,8 @@ onMounted(loadCatalog);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 800;
-  background: var(--app-primary-soft);
-  color: var(--app-primary-deep);
+  background: rgba(5, 150, 105, 0.1);
+  color: #047857;
 }
 
 .teacher-course-card h3 {
@@ -470,6 +494,7 @@ onMounted(loadCatalog);
   margin: 0;
   color: var(--app-text-soft);
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 
 .teacher-course-card__chips {
@@ -482,9 +507,10 @@ onMounted(loadCatalog);
   padding: 5px 10px;
   border-radius: 999px;
   font-size: 12px;
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #f4f9ff 0%, #edf6ff 100%);
+  color: #4b635a;
+  border: 1.5px solid #c6d8ef;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .teacher-course-card__chip--muted {
@@ -492,15 +518,15 @@ onMounted(loadCatalog);
 }
 
 .teacher-course-card__chip--ok {
-  background: rgba(16, 185, 129, 0.1);
+  background: linear-gradient(180deg, #f4fff8 0%, #effcf4 100%);
   color: #047857;
-  border-color: rgba(16, 185, 129, 0.28);
+  border-color: rgba(16, 185, 129, 0.34);
 }
 
 .teacher-course-card__chip--warn {
-  background: rgba(245, 158, 11, 0.12);
-  color: #b45309;
-  border-color: rgba(245, 158, 11, 0.35);
+  background: linear-gradient(180deg, #f4fbff 0%, #edf8ff 100%);
+  color: #0e7490;
+  border-color: rgba(8, 145, 178, 0.34);
 }
 
 @media (max-width: 1100px) {

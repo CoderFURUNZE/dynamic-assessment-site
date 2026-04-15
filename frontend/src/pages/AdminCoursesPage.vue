@@ -21,10 +21,13 @@ import AdminIntroHero from "../components/AdminIntroHero.vue";
 }
 
 .admin-courses-page__panel {
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  padding: 0;
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top right, rgba(201, 237, 255, 0.32), transparent 28%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  padding: 24px;
   min-width: 0;
   overflow-x: hidden;
 }

@@ -62,4 +62,21 @@ onMounted(loadCourses);
 .teacher-rules-panel {
   min-width: 0;
 }
+
+.teacher-page {
+  display: grid;
+  gap: 20px;
+}
+
+.teacher-rules-panel {
+  border: 3px solid #1f2937;
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at top right, rgba(210, 238, 255, 0.74), transparent 40%),
+    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+  box-shadow:
+    0 12px 0 rgba(31, 41, 55, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  padding: 24px;
+}
 </style>
