@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import TeacherStageImport from "../components/TeacherStageImport.vue";
-import TeacherIntroHero from "../components/TeacherIntroHero.vue";
+import TeacherWorkspaceHero from "../components/TeacherWorkspaceHero.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
 type Course = { id: number; code: string; title: string };
@@ -29,24 +29,28 @@ async function loadCourses() {
 }
 
 function syncQuery() {
+  const nextQuery = { ...buildTeacherSubjectQuery(subject.value), tab: "imports" };
+  const currentSubject = String(route.query.subject || "").trim();
+  const currentTab = String(route.query.tab || "stages").trim();
+  if (
+    route.path === "/teacher/evaluation"
+    && currentSubject === String(nextQuery.subject || "").trim()
+    && currentTab === "imports"
+  ) {
+    return;
+  }
   saveTeacherSubject(subject.value);
-  router.replace({
-    path: "/teacher/evaluation",
-    query: { ...buildTeacherSubjectQuery(subject.value), tab: "imports" },
-  });
+  router.replace({ path: "/teacher/evaluation", query: nextQuery });
 }
 
 function goResults() {
-  router.push({
-    path: "/teacher/evaluation",
-    query: { subject: subject.value || undefined, tab: "results" },
-  });
+  router.push({ path: "/teacher/evaluation", query: { ...buildTeacherSubjectQuery(subject.value), tab: "behavior" } });
 }
 
 function goHistory() {
   router.push({
     path: "/teacher/evaluation",
-    query: { subject: subject.value || undefined, tab: "imports", section: "history" },
+    query: { ...buildTeacherSubjectQuery(subject.value), tab: "imports", section: "history" },
   });
 }
 
@@ -64,25 +68,23 @@ onMounted(loadCourses);
 
 <template>
   <div class="imports-page">
-    <TeacherIntroHero
-      eyebrow="阶段评价"
+    <TeacherWorkspaceHero
+      v-model="subject"
       title="数据导入"
       pill="数据流转"
-      description="按课程与阶段导入系统汇总、人工文件或行为信号，再进入结果页核对最新画像与阶段判断。"
+      description="按课程和阶段导入汇总数据、整理文件或行为信号，再进入结果页查看最新画像。"
+      field-label="当前课程"
+      :courses="courses"
     >
-      <template #actions>
-        <div class="imports-page__hero-actions">
-          <div class="imports-page__field">
-            <label>当前课程</label>
-            <el-select v-model="subject" size="large" placeholder="请选择课程" class="imports-page__select">
-              <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
-            </el-select>
-          </div>
-          <button class="imports-page__btn" type="button" @click="goHistory">导入历史</button>
-          <button class="imports-page__btn imports-page__btn--primary" type="button" @click="goResults">去看结果</button>
-        </div>
+      <template #meta>
+        <span class="imports-page__meta-pill">{{ subject || "未选择课程" }}</span>
+        <span class="imports-page__meta-pill imports-page__meta-pill--muted">{{ grade }}</span>
       </template>
-    </TeacherIntroHero>
+      <template #actions>
+        <button class="imports-page__btn" type="button" @click="goHistory">导入历史</button>
+        <button class="imports-page__btn imports-page__btn--primary" type="button" @click="goResults">查看结果</button>
+      </template>
+    </TeacherWorkspaceHero>
 
     <section class="imports-page__panel">
       <TeacherStageImport
@@ -98,71 +100,70 @@ onMounted(loadCourses);
 <style scoped>
 .imports-page {
   display: grid;
-  gap: 20px;
+  gap: 24px;
 }
 
-.imports-page__hero-actions {
-  display: flex;
-  align-items: end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.imports-page__field {
-  display: grid;
-  gap: 8px;
-}
-
-.imports-page__field label {
-  font-size: 13px;
+.imports-page__meta-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(255, 255, 255, 0.82);
+  color: #334155;
+  font-size: 12px;
   font-weight: 700;
-  color: #25645b;
 }
 
-.imports-page__select {
-  width: 320px;
-  max-width: 100%;
-}
-
-.imports-page__hero-actions :deep(.el-select__wrapper) {
-  min-height: 44px;
-  border-radius: 14px !important;
-  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%) !important;
-  box-shadow: 0 0 0 1px #dde3ef inset !important;
+.imports-page__meta-pill--muted {
+  color: #64748b;
 }
 
 .imports-page__btn {
-  min-height: 44px;
-  padding: 0 18px;
-  border-radius: 999px;
-  border: 1px solid #dde3ef;
-  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
-  color: #315f56;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: #ffffff;
+  color: #334155;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .imports-page__btn--primary {
-  border-color: #c7e38e;
-  background: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%);
-  color: #23421f;
+  background: #16a34a;
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #fff;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+}
+
+.imports-page__btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(59, 130, 246, 0.28);
+}
+
+.imports-page__btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
 }
 
 .imports-page__panel {
   min-width: 0;
-  padding: 18px;
-  border-radius: 32px;
-  border: 3px solid #1f2937;
-  background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: #ffffff;
+  box-shadow:
+    0 12px 26px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
-@media (max-width: 1024px) {
-  .imports-page__hero-actions {
-    align-items: stretch;
+@media (prefers-reduced-motion: reduce) {
+  .imports-page__btn {
+    transition: none;
   }
 }
 </style>

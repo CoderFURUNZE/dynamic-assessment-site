@@ -52,6 +52,12 @@ const courseLifecycleLabel = computed(() => {
   return "待开课";
 });
 
+const courseModeLabel = computed(() => (isReadonlyCourse.value ? "只读查看" : "可继续建设"));
+
+const courseDescription = computed(
+  () => `${currentCourse.value?.title || "当前课程"} · 在这里维护课程知识点、章节关系与内容入口，保证图谱结构和教学内容保持一致。`
+);
+
 async function loadCourses() {
   try {
     const res = await api.get("/graph/courses");
@@ -64,6 +70,7 @@ async function loadCourses() {
 
 function syncQuery() {
   saveTeacherSubject(subject.value);
+  if (route.path === "/teacher/content" && String(route.query.subject || "").trim() === subject.value.trim()) return;
   router.replace({
     path: "/teacher/content",
     query: buildTeacherSubjectQuery(subject.value),
@@ -92,7 +99,7 @@ watch(
   (value) => {
     const next = String(value || "");
     if (next && next !== subject.value) subject.value = next;
-  },
+  }
 );
 
 watch(subject, () => {
@@ -111,12 +118,7 @@ onMounted(async () => {
 
 <template>
   <div v-if="isTeacher" class="graph-page">
-    <TeacherIntroHero
-      eyebrow="教师工作台"
-      title="知识图谱"
-      pill="内容建设"
-      :description="`${currentCourse?.title || '当前课程'} · 在这里维护课程知识点、章节关系与内容入口。`"
-    >
+    <TeacherIntroHero eyebrow="教师工作台" title="知识图谱" pill="内容建设" :description="courseDescription">
       <template #actions>
         <el-select v-model="subject" class="graph-page__select" placeholder="选择课程">
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
@@ -128,7 +130,7 @@ onMounted(async () => {
       </template>
     </TeacherIntroHero>
 
-    <section class="graph-page__summary panel-card">
+    <section class="graph-page__summary">
       <article class="graph-page__summary-card">
         <span>当前课程</span>
         <strong>{{ currentCourse?.title || "未选择课程" }}</strong>
@@ -139,19 +141,21 @@ onMounted(async () => {
       </article>
       <article class="graph-page__summary-card">
         <span>当前模式</span>
-        <strong>{{ isReadonlyCourse ? "只读查看" : "可继续建设" }}</strong>
+        <strong>{{ courseModeLabel }}</strong>
       </article>
     </section>
 
     <section class="graph-page__panel">
+      <div class="graph-page__panel-head">
+        <div>
+          <span class="graph-page__eyebrow">图谱编辑</span>
+          <h2>以课程图谱为中心维护知识结构</h2>
+          <p>节点、关系和内容入口统一从这张图出发，减少老师在多个页面间切换和重复维护。</p>
+        </div>
+      </div>
+
       <div class="graph-page__panel-body">
-        <TeacherGraphWorkbench
-          ref="workbenchRef"
-          embedded
-          :subject="subject"
-          :grade="grade"
-          :readonly="isReadonlyCourse"
-        />
+        <TeacherGraphWorkbench ref="workbenchRef" embedded :subject="subject" :grade="grade" :readonly="isReadonlyCourse" />
       </div>
     </section>
   </div>
@@ -162,71 +166,97 @@ onMounted(async () => {
   width: 100%;
   padding: 0 12px 12px;
   display: grid;
-  gap: 12px;
-}
-
-.graph-page__summary,
-.graph-page__panel {
-  border-radius: 28px;
-  border: 3px solid #1f2937;
-  background:
-    radial-gradient(circle at top right, rgba(201, 237, 255, 0.24), transparent 28%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  gap: 18px;
 }
 
 .graph-page__summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  gap: 14px;
+}
+
+.graph-page__summary-card,
+.graph-page__panel {
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background:
+    radial-gradient(circle at top right, rgba(219, 234, 254, 0.18), transparent 24%),
+    radial-gradient(circle at top left, rgba(220, 252, 231, 0.1), transparent 22%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
 }
 
 .graph-page__summary-card {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   padding: 22px 24px;
-  border-radius: 32px;
-  border: 3px solid #1f2937;
-  background:
-    radial-gradient(circle at top right, rgba(201, 237, 255, 0.18), transparent 26%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
-  min-height: 128px;
+  min-height: 122px;
   align-content: start;
 }
 
 .graph-page__summary-card span {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  color: #4f5f75;
+  color: #6a7280;
 }
 
 .graph-page__summary-card strong {
   font-size: 24px;
-  line-height: 1.25;
-  color: var(--app-text-main);
+  line-height: 1.2;
+  color: #1f2937;
+  letter-spacing: -0.03em;
 }
 
 .graph-page__panel {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+}
+
+.graph-page__panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.graph-page__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #eefbf3;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border: 1px solid rgba(34, 197, 94, 0.18);
+}
+
+.graph-page__panel-head h2 {
+  margin: 8px 0 0;
+  color: #1f2937;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.graph-page__panel-head p {
+  margin: 10px 0 0;
+  color: #6a7280;
+  line-height: 1.75;
+  max-width: 64ch;
 }
 
 .graph-page__panel-body {
   overflow: hidden;
-  min-height: calc(100dvh - 212px);
+  min-height: calc(100dvh - 278px);
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   background:
-    radial-gradient(circle at top right, rgba(214, 245, 234, 0.16), transparent 28%),
-    linear-gradient(180deg, #fffaf3 0%, #fffdf8 100%);
-  border-radius: 30px;
-  border: 3px solid #1f2937;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top right, rgba(219, 234, 254, 0.16), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
 }
 
 .graph-page__panel-body > * {
@@ -239,44 +269,46 @@ onMounted(async () => {
 
 .graph-page :deep(.teacher-intro-hero__actions .el-select__wrapper) {
   min-height: 42px;
-  border-radius: 18px !important;
+  border-radius: 14px !important;
   background: #ffffff !important;
-  box-shadow: 0 0 0 1px #cfe7de inset !important;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.22) inset !important;
 }
 
 .graph-page :deep(.teacher-intro-hero__actions .el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 1px #34d399 inset, 0 0 0 3px rgba(16, 185, 129, 0.12) !important;
+  box-shadow: 0 0 0 1px #60a5fa inset, 0 0 0 4px rgba(96, 165, 250, 0.14) !important;
 }
 
 .graph-page :deep(.teacher-intro-hero__actions .el-select__placeholder),
 .graph-page :deep(.teacher-intro-hero__actions .el-select__selected-item),
 .graph-page :deep(.teacher-intro-hero__actions .el-select__caret) {
-  color: #25645b !important;
+  color: #6b7280 !important;
 }
 
 .graph-page__toolbar-btn {
   min-width: 118px;
-  min-height: 42px;
+  min-height: 40px;
   padding: 0 20px;
   border-radius: 999px;
-  border: 1px solid #cfe7de;
+  border: 1px solid rgba(148, 163, 184, 0.22);
   background: #ffffff;
-  color: #315f56;
+  color: #475569;
   font-size: 14px;
-  font-weight: 800;
-  box-shadow: none;
+  font-weight: 700;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
 }
 
 .graph-page__toolbar-btn:hover,
 .graph-page__toolbar-btn:focus-visible {
-  border-color: #9fbef3;
-  background: #f8fbff;
-  color: #214d8f;
+  border-color: rgba(100, 116, 139, 0.34);
+  background: #f8fafc;
+  color: #1f2937;
 }
 
 .graph-page__toolbar-btn.graph-page__toolbar-btn--accent {
-  border-color: #8fd8c1;
-  background: linear-gradient(180deg, #ffffff 0%, #effbf6 100%);
+  border-color: rgba(34, 197, 94, 0.24);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
 }
 
 @media (max-width: 960px) {
@@ -294,8 +326,16 @@ onMounted(async () => {
     width: 100%;
   }
 
+  .graph-page__panel {
+    padding: 18px;
+  }
+
+  .graph-page__panel-head h2 {
+    font-size: 22px;
+  }
+
   .graph-page__panel-body {
-    min-height: calc(100dvh - 232px);
+    min-height: calc(100dvh - 316px);
   }
 }
 </style>

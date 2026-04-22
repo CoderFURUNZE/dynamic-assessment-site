@@ -2,6 +2,8 @@ const TEACHER_SUBJECT_KEY = "da_teacher_subject";
 
 type CourseLike = {
   title: string;
+  active?: boolean;
+  lifecycle_status?: string;
 };
 
 function normalizeSubjectCandidate(input: string) {
@@ -29,6 +31,18 @@ function resolveFromCourses(raw: string, courses: CourseLike[]) {
   return fuzzy?.title || "";
 }
 
+function isCourseAvailable(course?: CourseLike | null) {
+  if (!course) return false;
+  const lifecycle = String(course.lifecycle_status || "").trim().toLowerCase();
+  if (typeof course.active === "boolean" && !course.active) return false;
+  if (!lifecycle) return true;
+  return lifecycle === "active";
+}
+
+function pickDefaultCourse(courses: CourseLike[]) {
+  return courses.find((item) => isCourseAvailable(item))?.title || courses[0]?.title || "";
+}
+
 export function getSavedTeacherSubject() {
   return localStorage.getItem(TEACHER_SUBJECT_KEY) || "";
 }
@@ -47,10 +61,13 @@ export function resolveTeacherSubject(
   currentSubject: string,
   courses: CourseLike[]
 ) {
-  const candidates = [routeSubject, currentSubject, getSavedTeacherSubject(), courses[0]?.title || ""];
+  const preferredAvailable = courses.some((item) => isCourseAvailable(item));
+  const candidates = [routeSubject, currentSubject, getSavedTeacherSubject(), pickDefaultCourse(courses)];
   for (const item of candidates) {
     const value = resolveFromCourses(String(item || ""), courses);
     if (!value) continue;
+    const matched = courses.find((course) => course.title === value);
+    if (preferredAvailable && !isCourseAvailable(matched)) continue;
     return value;
   }
   return "";

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import TeacherEnrollmentReviewPage from "./TeacherEnrollmentReview.vue";
@@ -73,7 +73,10 @@ function switchTab(tab: ReviewTab) {
       </div>
     </section>
 
-    <component :is="currentComponent" />
+    <component
+      :is="currentComponent"
+      :key="`${currentTab}-${String(route.query.subject || '')}-${String(route.query.user_id || '')}`"
+    />
   </div>
 </template>
 
@@ -85,14 +88,15 @@ function switchTab(tab: ReviewTab) {
 
 .review-focus {
   display: grid;
-  gap: 18px;
-  padding: 22px 24px;
-  border: 3px solid #1f2937;
-  border-radius: 32px;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top left, rgba(239, 220, 179, 0.22), transparent 26%),
+    radial-gradient(circle at top right, rgba(191, 221, 254, 0.18), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
 }
 
 .review-focus > div:first-child {
@@ -101,26 +105,33 @@ function switchTab(tab: ReviewTab) {
 }
 
 .review-focus__label {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #eef6dc 0%, #fff2db 100%);
+  color: #586537;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--app-eyebrow);
 }
 
 .review-focus__title {
   margin: 0;
   font-size: 28px;
   line-height: 1.2;
-  color: var(--app-ink);
+  color: #1f2937;
 }
 
 .review-focus__desc {
   margin: 0;
   max-width: 760px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.8;
-  color: var(--app-ink-soft);
+  color: #6a7280;
 }
 
 .review-focus__actions {
@@ -130,37 +141,39 @@ function switchTab(tab: ReviewTab) {
 }
 
 .review-tab-card {
-  border: 1.5px solid #c6d8ef;
+  border: 1px solid rgba(191, 167, 132, 0.24);
   border-radius: 22px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 244, 229, 0.92));
   padding: 14px 16px;
   display: grid;
   gap: 4px;
   text-align: left;
   cursor: pointer;
-  transition: 0.2s ease;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .review-tab-card:hover {
   transform: translateY(-1px);
-  border-color: #8fd8c1;
+  border-color: rgba(34, 197, 94, 0.22);
 }
 
 .review-tab-card strong {
   font-size: 15px;
-  color: var(--app-ink);
+  color: #1f2937;
 }
 
 .review-tab-card span {
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
-  color: var(--app-ink-soft);
+  color: #6a7280;
 }
 
 .review-tab-card.active {
-  border-color: #1f2937;
-  background: radial-gradient(circle at top left, rgba(215, 249, 168, 0.38), transparent 58%), #fffdf6;
-  box-shadow: 0 10px 0 rgba(31, 41, 55, 0.08);
+  border-color: rgba(34, 197, 94, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(215, 249, 168, 0.22), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #eef8ff 100%);
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.08);
 }
 
 @media (max-width: 960px) {

@@ -318,12 +318,12 @@ onMounted(loadCatalog);
 
 .teacher-courses-page__panel,
 .teacher-courses-page__stats {
-  border-radius: 32px;
-  border: 3px solid #1f2937;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
   background:
-    radial-gradient(circle at top right, rgba(201, 237, 255, 0.32), transparent 28%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
 }
 
 .teacher-courses-page__refresh-btn,
@@ -338,7 +338,7 @@ onMounted(loadCatalog);
   --el-button-active-border-color: #065f46;
   min-width: 108px;
   padding-inline: 18px;
-  box-shadow: 0 10px 22px rgba(5, 150, 105, 0.2);
+  box-shadow: 0 8px 18px rgba(5, 150, 105, 0.18);
 }
 
 .teacher-course-card__actions {
@@ -364,28 +364,28 @@ onMounted(loadCatalog);
 }
 
 .teacher-courses-page__stat-card {
-  border-radius: 34px;
-  border: 3px solid #1f2937 !important;
-  background: linear-gradient(180deg, #fffaf3 0%, #fffdf8 100%) !important;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12) !important;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06) !important;
   display: grid;
   gap: 10px;
   align-content: start;
-  padding: 26px 28px;
+  padding: 22px 24px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
-  min-height: 132px;
+  min-height: 116px;
 }
 
 .teacher-courses-page__stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 0 rgba(31, 41, 55, 0.14) !important;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1) !important;
 }
 
 .teacher-courses-page__stat-card.is-active {
-  border-color: #1f2937 !important;
-  background: linear-gradient(180deg, #fffaf3 0%, #fffdf8 100%) !important;
-  box-shadow: 0 14px 0 rgba(31, 41, 55, 0.14) !important;
+  border-color: rgba(34, 197, 94, 0.28) !important;
+  background: #eefbf3 !important;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08) !important;
 }
 
 .teacher-courses-page__stat-icon {
@@ -408,7 +408,7 @@ onMounted(loadCatalog);
 .teacher-courses-page__stat-card strong {
   display: block;
   margin-top: 8px;
-  font-size: 48px;
+  font-size: 32px;
   line-height: 1;
   color: var(--app-text-main);
 }
@@ -416,7 +416,7 @@ onMounted(loadCatalog);
 .teacher-courses-page__panel {
   overflow: hidden;
   padding: 0;
-  box-shadow: 0 14px 0 rgba(31, 41, 55, 0.12);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
 }
 
 .teacher-courses-page__panel-head {
@@ -424,11 +424,11 @@ onMounted(loadCatalog);
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 22px 24px;
-  border-bottom: 1.5px solid #c6d8ef;
+  padding: 20px 22px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   background:
-    radial-gradient(circle at top right, rgba(201, 237, 255, 0.18), transparent 28%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.08), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .teacher-courses-page__panel-head h2 {
@@ -449,23 +449,23 @@ onMounted(loadCatalog);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  padding: 22px 24px 24px;
+  padding: 20px 22px 22px;
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.14), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.06), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .teacher-course-card {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 22px;
-  border-radius: 24px;
-  border: 2px solid #1f2937;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.18), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 10px 0 rgba(31, 41, 55, 0.08);
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.06), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.06);
   min-width: 0;
 }
 
@@ -479,9 +479,10 @@ onMounted(loadCatalog);
   padding: 4px 10px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 800;
-  background: rgba(5, 150, 105, 0.1);
-  color: #047857;
+  font-weight: 700;
+  background: #eefbf3;
+  color: #166534;
+  border: 1px solid rgba(34, 197, 94, 0.18);
 }
 
 .teacher-course-card h3 {
@@ -507,10 +508,9 @@ onMounted(loadCatalog);
   padding: 5px 10px;
   border-radius: 999px;
   font-size: 12px;
-  background: linear-gradient(180deg, #f4f9ff 0%, #edf6ff 100%);
-  color: #4b635a;
-  border: 1.5px solid #c6d8ef;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid rgba(148, 163, 184, 0.22);
 }
 
 .teacher-course-card__chip--muted {
@@ -518,14 +518,14 @@ onMounted(loadCatalog);
 }
 
 .teacher-course-card__chip--ok {
-  background: linear-gradient(180deg, #f4fff8 0%, #effcf4 100%);
-  color: #047857;
-  border-color: rgba(16, 185, 129, 0.34);
+  background: #eefbf3;
+  color: #166534;
+  border-color: rgba(34, 197, 94, 0.28);
 }
 
 .teacher-course-card__chip--warn {
-  background: linear-gradient(180deg, #f4fbff 0%, #edf8ff 100%);
-  color: #0e7490;
+  background: #eff8ff;
+  color: #0f766e;
   border-color: rgba(8, 145, 178, 0.34);
 }
 

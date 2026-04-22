@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -27,7 +27,13 @@ async function loadCourses() {
 
 function syncQuery() {
   saveTeacherSubject(subject.value);
-  router.replace({ path: "/teacher/evaluation", query: { ...buildTeacherSubjectQuery(subject.value), tab: "indicators" } });
+  const nextQuery = { ...buildTeacherSubjectQuery(subject.value), tab: "indicators" };
+  const currentSubject = String(route.query.subject || "").trim();
+  const currentTab = String(route.query.tab || "stages").trim();
+  if (route.path === "/teacher/evaluation" && currentSubject === String(nextQuery.subject || "").trim() && currentTab === "indicators") {
+    return;
+  }
+  router.replace({ path: "/teacher/evaluation", query: nextQuery });
 }
 
 watch(subject, () => syncQuery());
@@ -70,12 +76,15 @@ onMounted(loadCourses);
 
 .teacher-page__content {
   min-width: 0;
-  padding: 18px;
-  border-radius: 32px;
-  border: 3px solid #1f2937;
+  padding: 20px;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top left, rgba(191, 219, 254, 0.18), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(187, 247, 208, 0.18), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow:
+    0 12px 26px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 </style>

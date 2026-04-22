@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
@@ -1260,12 +1260,15 @@ watch(
 }
 
 .detail-card {
-  border-radius: 32px;
-  border: 3px solid #1f2937 !important;
+  border-radius: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%) !important;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12) !important;
+    radial-gradient(circle at top left, rgba(191, 219, 254, 0.18), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(187, 247, 208, 0.16), transparent 22%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  box-shadow:
+    0 18px 36px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88) !important;
   overflow: hidden;
 }
 
@@ -1282,8 +1285,8 @@ watch(
 .analysis-card,
 .tab-panel,
 .sub-card {
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 24px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
@@ -1297,15 +1300,15 @@ watch(
 }
 
 .core-panel--danger {
-  border-color: #fecaca;
+  border-color: #f0c2b7;
 }
 
 .core-panel--warning {
-  border-color: #fed7aa;
+  border-color: #eccb95;
 }
 
 .core-panel--success {
-  border-color: #bbf7d0;
+  border-color: #cfe3a5;
 }
 
 .core-panel__main {
@@ -1314,9 +1317,11 @@ watch(
 }
 
 .section-kicker {
-  font-size: 12px;
-  font-weight: 700;
-  color: #3b82f6;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
 }
 
 .section-title {
@@ -1335,7 +1340,7 @@ watch(
 
 .core-panel__headline h2 {
   margin: 0;
-  font-size: 36px;
+  font-size: 28px;
   line-height: 1.1;
   color: #0f172a;
 }
@@ -1347,33 +1352,33 @@ watch(
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
-  border: 1.5px solid #c6d8ef;
+  border: 1px solid rgba(148, 163, 184, 0.2);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .status-pill--danger {
-  color: #b91c1c;
-  background: linear-gradient(180deg, #fff7f7 0%, #fff1f1 100%);
-  border-color: #fecaca;
+  color: #b6544a;
+  background: linear-gradient(180deg, #fff7f0 0%, #fff1e9 100%);
+  border-color: #f0c2b7;
 }
 
 .status-pill--warning {
-  color: #c2410c;
-  background: linear-gradient(180deg, #fffaf2 0%, #fff4e6 100%);
-  border-color: #fed7aa;
+  color: #b27a25;
+  background: linear-gradient(180deg, #fff7eb 0%, #fff1df 100%);
+  border-color: #eccb95;
 }
 
 .status-pill--success {
-  color: #15803d;
-  background: linear-gradient(180deg, #f4fff8 0%, #effcf4 100%);
-  border-color: #bbf7d0;
+  color: #5c8b32;
+  background: linear-gradient(180deg, #f8fce9 0%, #f3f7df 100%);
+  border-color: #cfe3a5;
 }
 
 .core-panel__summary {
   margin: 0;
   font-size: 16px;
   line-height: 1.7;
-  color: #0f172a;
+  color: #334155;
 }
 
 .core-panel__support {
@@ -1395,7 +1400,7 @@ watch(
 .core-panel__side {
   min-width: 280px;
   padding: 18px 0 18px 24px;
-  border-left: 1.5px solid #c6d8ef;
+  border-left: 1.5px solid rgba(31, 41, 55, 0.14);
   display: grid;
   gap: 14px;
   align-content: start;
@@ -1424,8 +1429,8 @@ watch(
 
 .metric-card {
   padding: 20px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 20px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
   display: grid;
@@ -1549,8 +1554,8 @@ watch(
 .analysis-note {
   padding: 14px 16px;
   border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   color: #475569;
   line-height: 1.7;
   font-size: 14px;
@@ -1560,12 +1565,12 @@ watch(
   margin-bottom: 6px;
   font-size: 13px;
   font-weight: 700;
-  color: #2563eb;
+  color: #16a34a;
 }
 
 .analysis-note--accent {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: #f2fbe5;
+  border-color: rgba(34, 197, 94, 0.24);
 }
 
 .action-suggestion {
@@ -1593,7 +1598,7 @@ watch(
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: #2563eb;
+  background: #22c55e;
   flex: 0 0 auto;
 }
 
@@ -1601,8 +1606,8 @@ watch(
   width: 100%;
   padding: 14px 16px;
   border-radius: 18px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
   gap: 8px;
   text-align: left;
@@ -1616,8 +1621,8 @@ watch(
 }
 
 .stage-node.is-active {
-  border-color: #bfdbfe;
-  background: #f8fbff;
+  border-color: rgba(34, 197, 94, 0.24);
+  background: #f2fbe5;
 }
 
 .stage-node__top,
@@ -1641,7 +1646,7 @@ watch(
 
 .stage-node__top strong {
   font-size: 13px;
-  color: #2563eb;
+  color: #16a34a;
 }
 
 .stage-node__meta,
@@ -1674,14 +1679,14 @@ watch(
 .stage-node__bar span {
   display: block;
   height: 100%;
-  background: #3b82f6;
+  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
   border-radius: inherit;
 }
 .empty-strip {
   padding: 16px 18px;
   border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
 }
 
 .empty-strip--panel {
@@ -1726,7 +1731,7 @@ watch(
 }
 
 .detail-tabs :deep(.el-tabs__item.is-active) {
-  color: #2563eb;
+  color: #16a34a;
 }
 
 .tab-panel,
@@ -1755,10 +1760,10 @@ watch(
 
 .record-metric-card {
   border-radius: 18px;
-  border: 1.5px solid #c6d8ef;
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
   box-shadow: none;
   min-height: 128px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .record-metric-card--wide {
@@ -1786,9 +1791,9 @@ watch(
 .indicator-row__evidence span {
   padding: 5px 11px;
   border-radius: 999px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f4f9ff 0%, #edf6ff 100%);
-  color: #2563eb;
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
+  background: linear-gradient(180deg, #dff2fb 0%, #ebf8ff 100%);
+  color: #334155;
   font-size: 12px;
   font-weight: 700;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
@@ -1827,8 +1832,8 @@ watch(
 .recommendation-item {
   padding: 14px 16px;
   border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
 }
 
 .practice-summary__item {
@@ -1836,8 +1841,8 @@ watch(
   gap: 6px;
   min-height: 82px;
   align-content: center;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border-color: #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-color: rgba(31, 41, 55, 0.14);
   box-shadow: none;
 }
 
@@ -1893,10 +1898,10 @@ watch(
 }
 
 .record-table {
-  border: 1.5px solid #c6d8ef;
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
   border-radius: 18px;
   overflow: hidden;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: none;
 }
 
@@ -1915,8 +1920,8 @@ watch(
 .indicator-input-card {
   padding: 14px 16px;
   border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
 }
 
 .summary-metric {
@@ -1937,10 +1942,10 @@ watch(
 }
 
 .weak-list {
-  border: 1.5px solid #c6d8ef;
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
   border-radius: 18px;
   overflow: hidden;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   gap: 0;
 }
 
@@ -1962,7 +1967,7 @@ watch(
 .weak-item__progress span {
   display: block;
   height: 100%;
-  background: #f59e0b;
+  background: linear-gradient(90deg, #ffd6cb 0%, #f59e0b 100%);
 }
 
 .weak-item {
@@ -1988,7 +1993,7 @@ watch(
   height: 8px;
   margin-top: 7px;
   border-radius: 999px;
-  background: #3b82f6;
+  background: #22c55e;
 }
 
 .behavior-item__content {
@@ -2035,7 +2040,7 @@ watch(
 
 .video-progress-item__status strong {
   font-size: 15px;
-  color: #2563eb;
+  color: #16a34a;
 }
 
 .recommendation-item__reason {
@@ -2053,8 +2058,8 @@ watch(
 .teacher-indicators {
   padding: 20px;
   border-radius: 20px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
 }
 
 .teacher-tool__composer {
@@ -2119,9 +2124,9 @@ watch(
 .feedback-chip {
   padding: 8px 12px;
   border-radius: 999px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f4f9ff 0%, #edf6ff 100%);
-  color: #2563eb;
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
+  background: linear-gradient(180deg, #dff2fb 0%, #ebf8ff 100%);
+  color: #334155;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -2139,9 +2144,9 @@ watch(
 }
 
 .feedback-chip--tag.is-active {
-  border-color: #93c5fd;
-  background: linear-gradient(180deg, #eef6ff 0%, #e0efff 100%);
-  color: #2563eb;
+  border-color: rgba(34, 197, 94, 0.24);
+  background: linear-gradient(180deg, #f2fbe5 0%, #e6f7cb 100%);
+  color: #355a28;
 }
 
 .teacher-tool__actions {
@@ -2161,7 +2166,7 @@ watch(
 
 .teacher-indicators {
   padding: 14px 16px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .teacher-indicators__toggle {
@@ -2210,7 +2215,7 @@ watch(
 .detail-layout :deep(.el-table) {
   --el-table-border-color: #e5e7eb;
   --el-table-header-bg-color: #f8fafc;
-  --el-table-row-hover-bg-color: #f8fbff;
+  --el-table-row-hover-bg-color: #fff7ef;
   border-radius: 14px;
   overflow: hidden;
 }

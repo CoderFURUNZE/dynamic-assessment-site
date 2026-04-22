@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import type { Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -1754,7 +1754,7 @@ watch(
                 <article v-for="item in checklistItems" :key="item.key" class="check-list__item" :class="{ done: item.done }">
                   <div class="check-list__copy">
                     <strong>{{ item.label }}</strong>
-                    <span>{{ item.done ? item.detail : "寰呰ˉ鍏?" }}</span>
+                    <span>{{ item.done ? item.detail : "待补充" }}</span>
                   </div>
                   <div class="check-list__actions">
                     <span class="check-list__status">{{ item.done ? "已完成" : "待补充" }}</span>
@@ -2160,10 +2160,10 @@ watch(
 }
 
 .panel-shell {
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-  border: 1px solid var(--app-border);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(31, 41, 55, 0.14);
   border-radius: 22px;
-  box-shadow: 0 12px 30px rgba(31, 47, 68, 0.06);
+  box-shadow: 0 16px 32px rgba(31, 41, 55, 0.08);
 }
 
 .content-topbar {
@@ -2173,7 +2173,7 @@ watch(
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 18px;
-  background: linear-gradient(135deg, #eef4ff 0%, #f5fbf7 52%, #ffffff 100%);
+  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 52%, #eef6ff 100%);
 }
 
 .content-topbar__actions {
@@ -2198,9 +2198,9 @@ watch(
 }
 
 .content-back {
-  border: 1px solid var(--app-border);
-  background: #f7f9fc;
-  color: #39506d;
+  border: 1px solid rgba(31, 41, 55, 0.14);
+  background: linear-gradient(180deg, #dff2fb 0%, #ebf8ff 100%);
+  color: #1f2937;
   border-radius: 12px;
   padding: 11px 16px;
   font-weight: 700;
@@ -2215,7 +2215,7 @@ watch(
   margin: 4px 0 0;
   font-size: 24px;
   line-height: 1.25;
-  color: #11284a;
+  color: #1f2937;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
@@ -2231,8 +2231,8 @@ watch(
   padding: 16px 18px;
   border-radius: 16px;
   border: 1px solid var(--app-border);
-  background: linear-gradient(165deg, #fbfdff 0%, #f4f8fc 100%);
-  color: #445a78;
+  background: linear-gradient(165deg, #ffffff 0%, #eef6ff 100%);
+  color: #475569;
   text-align: right;
   max-width: 340px;
   flex-shrink: 0;
@@ -2249,7 +2249,7 @@ watch(
 .content-kp__title {
   font-size: 16px;
   font-weight: 800;
-  color: #1f2f44;
+  color: #1f2937;
   line-height: 1.35;
 }
 
@@ -2280,7 +2280,7 @@ watch(
 .content-meta__head h3 {
   margin: 0;
   font-size: 18px;
-  color: #18304f;
+  color: #1f2937;
 }
 
 .content-meta__head p {
@@ -2309,7 +2309,7 @@ watch(
 
 .content-create-empty strong {
   font-size: 16px;
-  color: #1f2f44;
+  color: #1f2937;
 }
 
 .content-create-empty span {
@@ -2339,9 +2339,9 @@ watch(
 }
 
 .summary-card--active {
-  border-color: rgba(47, 111, 237, 0.42);
-  box-shadow: 0 16px 36px rgba(47, 111, 237, 0.16);
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border-color: rgba(34, 197, 94, 0.28);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+  background: radial-gradient(circle at top right, rgba(215, 249, 168, 0.18), transparent 28%), linear-gradient(180deg, #ffffff 0%, #eef8ff 100%);
 }
 
 .summary-card__icon {
@@ -2359,8 +2359,8 @@ watch(
 }
 
 .summary-card__icon--practice {
-  background: linear-gradient(145deg, #e8f0ff 0%, #dce8ff 100%);
-  color: #2f6fed;
+  background: linear-gradient(145deg, #dff2fb 0%, #ebf8ff 100%);
+  color: #0f766e;
 }
 
 .summary-card__icon--basic {
@@ -2374,7 +2374,7 @@ watch(
 }
 
 .summary-card__icon--check {
-  background: linear-gradient(145deg, #fff4e5 0%, #ffe8cc 100%);
+  background: linear-gradient(145deg, #eef6ff 0%, #dbeafe 100%);
   color: #b86b00;
 }
 
@@ -2514,7 +2514,7 @@ watch(
   padding: 24px;
   display: grid;
   gap: 14px;
-  background: linear-gradient(135deg, #edf4ff 0%, #f8fbff 55%, #ffffff 100%);
+  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 55%, #eef6ff 100%);
 }
 
 .basic-hero__eyebrow {
@@ -2576,7 +2576,7 @@ watch(
   min-width: 44px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: #eef4ff;
+  background: #eef6ff;
   color: #2f6fed;
   font-size: 12px;
   font-weight: 800;
@@ -2725,7 +2725,7 @@ watch(
 
 .resource-card:hover {
   border-color: #cfe0ff;
-  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.08);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
 .resource-card__main {
@@ -2789,9 +2789,9 @@ watch(
   display: block;
   margin-top: 4px;
   color: #17314f;
-  font-size: 36px;
+  font-size: 30px;
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
 }
 
 .compact-score-card__text {
@@ -3448,18 +3448,21 @@ watch(
 
 .panel-shell {
   background:
-    radial-gradient(circle at top right, rgba(210, 238, 255, 0.58), transparent 38%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  border: 3px solid #1f2937;
-  border-radius: 30px;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top right, rgba(219, 234, 254, 0.22), transparent 28%),
+    radial-gradient(circle at top left, rgba(220, 252, 231, 0.1), transparent 22%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
 }
 
 .content-topbar {
   min-height: auto;
   padding: 20px 24px;
   gap: 16px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background:
+    radial-gradient(circle at top right, rgba(219, 234, 254, 0.22), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
 }
 
 .content-topbar__titles {
@@ -3474,19 +3477,21 @@ watch(
 .content-eyebrow {
   font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: #166534;
+  letter-spacing: 0.06em;
 }
 
 .content-title {
   margin: 0;
   font-size: 32px;
-  color: #0f172a;
+  color: #1f2937;
+  letter-spacing: -0.03em;
 }
 
 .content-subtitle {
   margin: 0;
   font-size: 14px;
-  color: #64748b;
+  color: #6a7280;
 }
 
 .content-back {
@@ -3502,17 +3507,20 @@ watch(
 .summary-card {
   min-height: 108px;
   padding: 20px;
-  border-radius: 24px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .summary-card--active {
-  border-color: #8fb8ff;
+  border-color: rgba(34, 197, 94, 0.24);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    0 0 0 3px rgba(59, 130, 246, 0.08);
+    0 16px 28px rgba(15, 23, 42, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(220, 252, 231, 0.2), transparent 26%),
+    linear-gradient(180deg, #ffffff 0%, #eefbf3 100%);
 }
 
 .summary-card__body {
@@ -3520,22 +3528,23 @@ watch(
 }
 
 .summary-card__label {
-  color: #64748b;
+  color: #6a7280;
 }
 
 .summary-card__value {
   font-size: 18px;
-  color: #0f172a;
+  color: #1f2937;
 }
 
 .summary-card__status {
-  color: #2563eb;
+  color: #16a34a;
   font-size: 12px;
   font-weight: 700;
 }
 
 .summary-card__desc {
   font-size: 13px;
+  color: #6a7280;
 }
 
 .content-workbench {
@@ -3571,9 +3580,9 @@ watch(
 }
 
 .basic-field-card {
-  border: 1.5px solid #c6d8ef;
-  border-radius: 20px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   padding: 18px 20px;
   display: grid;
   gap: 12px;
@@ -3586,8 +3595,8 @@ watch(
 .practice-order-item:hover,
 .relation-item:hover,
 .check-list__item:hover {
-  border-color: #cfe0ff;
-  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.08);
+  border-color: rgba(34, 197, 94, 0.24);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
 .basic-field-card__top {
@@ -3630,9 +3639,9 @@ watch(
   display: grid;
   gap: 12px;
   padding: 16px;
-  border: 1.5px solid #c6d8ef;
-  border-radius: 20px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
@@ -3655,9 +3664,9 @@ watch(
 .practice-toolbar__summary span {
   padding: 6px 12px;
   border-radius: 999px;
-  border: 1.5px solid #c6d8ef;
-  background: #eef5ff;
-  color: #587394;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #eff6ff;
+  color: #334155;
   font-size: 12px;
   font-weight: 700;
 }
@@ -3678,9 +3687,9 @@ watch(
 .practice-question-card,
 .practice-sidebar-card,
 .practice-order-item {
-  border: 1.5px solid #c6d8ef;
-  border-radius: 20px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
@@ -3822,6 +3831,7 @@ watch(
   gap: 14px;
   border-radius: 18px;
   background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .content-check-panel--practice {
@@ -3852,7 +3862,7 @@ watch(
   padding: 14px;
   gap: 6px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .compact-score-card--slim .compact-score-card__value {
@@ -3902,7 +3912,7 @@ watch(
 }
 
 .check-list__item.done {
-  background: linear-gradient(180deg, #eef5ff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #eef6ff 0%, #ffffff 100%);
   border-color: #bfd6ff;
 }
 

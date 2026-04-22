@@ -11,7 +11,6 @@ from sqlalchemy import or_
 
 from app.api.deps import require_role
 from app.api.routers import stage_support
-from app.api.routers import stage_routes_basic
 from app.db.models import (
     AuditLog,
     Course,
@@ -53,7 +52,6 @@ except Exception:  # pragma: no cover - dependency guard
 
 router = APIRouter(prefix="/stages", tags=["stages"])
 logger = logging.getLogger("app.audit")
-router.include_router(stage_routes_basic.router)
 
 
 STAGE_IMPORT_GUIDES: dict[StageMetricType, dict[str, object]] = {

@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch, withDefaults } from "vue";
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import {
@@ -277,7 +277,7 @@ const abilityColorMap = computed(() =>
 const literacyColorMap = computed(() =>
   buildLabelColorMap(
     Array.from(new Set(overlay.value.flatMap((item) => item.literacy_labels ?? []).concat(kps.value.flatMap((kp) => splitLabels(kp.literacy_tag))))),
-    ["#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa", "#0369a1", "#0ea5e9"],
+    ["#0f766e", "#14b8a6", "#38bdf8", "#7dd3fc", "#0891b2", "#22c55e"],
   ),
 );
 
@@ -813,11 +813,11 @@ function edgeTouchesHover(edge: GraphEdge) {
 }
 
 function edgeStroke(edge: GraphEdge) {
-  if (isPathEdge(edge)) return "#5a8ef0";
-  if (edgeTouchesHover(edge)) return "#2563eb";
+  if (isPathEdge(edge)) return "#22c55e";
+  if (edgeTouchesHover(edge)) return "#14b8a6";
   if (edge.relation_type === "support") return "#46a57b";
   if (edge.relation_type === "contains") return "#db9d37";
-  if (edge.relation_type === "related") return "rgba(74,120,213,0.6)";
+  if (edge.relation_type === "related") return "rgba(20, 184, 166, 0.52)";
   return "rgba(71,85,105,0.78)";
 }
 
@@ -845,7 +845,7 @@ function edgeMarker(edge: GraphEdge) {
 }
 
 function chapterEdgeStroke(edge: ChapterEdge) {
-  if (edge.relation_type === "related") return "rgba(74,120,213,0.42)";
+  if (edge.relation_type === "related") return "rgba(20, 184, 166, 0.36)";
   if (edge.relation_type === "support") return "rgba(70,165,123,0.5)";
   return "rgba(75,94,130,0.52)";
 }
@@ -869,7 +869,7 @@ function ringColor(level: "knowledge" | "ability" | "literacy", status?: string,
   const palette = {
     knowledge: { achieved: "#4a7bc8", in_progress: "#93b4e8", not_started: "#e3edf9" },
     ability: { achieved: "#16a34a", in_progress: "#4ade80", not_started: "#d9f5e0" },
-    literacy: { achieved: "#2563eb", in_progress: "#93c5fd", not_started: "#dbeafe" },
+    literacy: { achieved: "#14b8a6", in_progress: "#7dd3fc", not_started: "#dff2fb" },
   };
   const key = status === "achieved" || status === "in_progress" ? status : "not_started";
   return palette[level][key];
@@ -1617,7 +1617,7 @@ onBeforeUnmount(() => {
               @click="selectCategory(category.key)"
               @mousedown="onNodeMouseDown($event, 'category', category.key)"
             >
-              <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#eef5ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#8fb8ff' : '#dbe5f1'" stroke-width="1.8" />
+              <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#eef8ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#60a5fa' : 'rgba(31, 41, 55, 0.14)'" stroke-width="1.8" />
               <text
                 :class="props.embedded ? 'teacher-category-node__title workspace-category-node__title' : 'workspace-category-node__title'"
                 text-anchor="middle"
@@ -1647,11 +1647,11 @@ onBeforeUnmount(() => {
               <circle :r="nodeRadius(kp) + 18" :fill="'transparent'" :stroke="ringColor('literacy', effectiveOverlayMap.get(kp.id)?.literacy_status, effectiveOverlayMap.get(kp.id)?.literacy_labels || splitLabels(kp.literacy_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.literacy_enabled ? 5 : 0" />
               <circle :r="nodeRadius(kp) + 10" :fill="'transparent'" :stroke="ringColor('ability', effectiveOverlayMap.get(kp.id)?.ability_status, effectiveOverlayMap.get(kp.id)?.ability_labels || splitLabels(kp.ability_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.ability_enabled ? 5 : 0" />
               <circle :r="nodeRadius(kp) + 2" :fill="'transparent'" :stroke="ringColor('knowledge', effectiveOverlayMap.get(kp.id)?.knowledge_status)" :stroke-width="4" />
-              <circle :r="nodeRadius(kp) + 22" :fill="!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id)) ? 'rgba(70, 122, 235, 0.12)' : 'rgba(96,139,232,0.06)'" />
+              <circle :r="nodeRadius(kp) + 22" :fill="!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id)) ? 'rgba(34, 197, 94, 0.14)' : 'rgba(20, 184, 166, 0.08)'" />
               <circle
                 :r="nodeRadius(kp)"
-                :fill="kp.id === selectedKp?.id ? '#f7fbff' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#f8fbff' : '#ffffff')"
-                :stroke="kp.id === selectedKp?.id ? '#76a7f8' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#5a8ef0' : '#dbe5f1')"
+                :fill="kp.id === selectedKp?.id ? '#eef8ff' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#f8fbff' : '#ffffff')"
+                :stroke="kp.id === selectedKp?.id ? '#3b82f6' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#14b8a6' : 'rgba(31, 41, 55, 0.14)')"
                 :stroke-width="!isTeacherMode && isRecommended(kp.id) ? 2.6 : (!isTeacherMode && isPathNode(kp.id) ? 2.3 : 2)"
               />
               <text :class="props.embedded ? 'teacher-node__code workspace-node__code' : 'workspace-node__code'" text-anchor="middle" y="-8">
@@ -1661,11 +1661,11 @@ onBeforeUnmount(() => {
                 {{ kp.title.slice(0, 10) }}
               </text>
               <g v-if="!isTeacherMode && isRecommended(kp.id)">
-                <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#5a8ef0" />
+                <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#22c55e" />
                 <text class="workspace-node__badge" text-anchor="middle" y="-36">推荐</text>
               </g>
               <g v-else-if="!isTeacherMode && isPathNode(kp.id)">
-                <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#89aef5" />
+                <rect x="-24" y="-50" width="48" height="20" rx="10" fill="#14b8a6" />
                 <text class="workspace-node__badge" text-anchor="middle" y="-36">路径</text>
               </g>
             </g>
@@ -1908,11 +1908,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .workspace-shell {
-  background: #f7faff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   overflow: hidden;
   border-radius: 28px;
-  border: 1px solid #dfe7f1;
-  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(31, 41, 55, 0.14);
+  box-shadow: 0 20px 42px rgba(31, 41, 55, 0.08);
 }
 
 .workspace-shell--embedded {
@@ -1949,8 +1949,8 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 16px;
   padding: 18px 22px 14px;
-  border-bottom: 1px solid #e5edf6;
-  background: #f7faff;
+  border-bottom: 1px solid rgba(31, 41, 55, 0.08);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   flex-shrink: 0;
 }
 
@@ -1981,7 +1981,7 @@ onBeforeUnmount(() => {
 .workspace-title {
   font-size: 22px;
   font-weight: 800;
-  color: #243449;
+  color: #1f2937;
   margin: 0;
 }
 
@@ -2001,8 +2001,8 @@ onBeforeUnmount(() => {
 }
 
 .workspace-search :deep(.el-input__wrapper) {
-  background: #ffffff;
-  box-shadow: inset 0 0 0 1px #d8e2ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: inset 0 0 0 1px rgba(31, 41, 55, 0.14);
 }
 
 .workspace-search :deep(.el-input__inner) {
@@ -2016,10 +2016,10 @@ onBeforeUnmount(() => {
 .workspace-btn {
   min-height: 42px;
   padding: 0 16px;
-  border: 1px solid #d8e2ef;
+  border: 1px solid rgba(31, 41, 55, 0.14);
   border-radius: 999px;
-  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
-  color: #35507f;
+  background: linear-gradient(180deg, #dff2fb 0%, #ebf8ff 100%);
+  color: #1f2937;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -2032,14 +2032,14 @@ onBeforeUnmount(() => {
 }
 
 .workspace-btn:hover {
-  background: #eff5ff;
+  background: linear-gradient(180deg, #ebf8ff 0%, #dff2fb 100%);
 }
 
 .workspace-btn--primary {
   background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
   border-color: var(--app-green);
   color: #ffffff;
-  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
 }
 
 .workspace-content {
@@ -2083,9 +2083,9 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   padding: 16px;
   border-radius: 24px;
-  background: #ffffff;
-  border: 1px solid #dfe7f1;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
 }
 
 .workspace-sidebar--collapsed {
@@ -2101,10 +2101,10 @@ onBeforeUnmount(() => {
 .workspace-sidebar__toggle {
   width: 100%;
   min-height: 44px;
-  border: 1px solid #dbe5f0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 18px;
-  background: #f8fbff;
-  color: #35507f;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #334155;
   cursor: pointer;
 }
 
@@ -2119,12 +2119,12 @@ onBeforeUnmount(() => {
   padding: 14px;
   border-radius: 18px;
   border: 1px dashed #d7e2ef;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   color: #617792;
 }
 
 .workspace-tree__empty strong {
-  color: #243449;
+  color: #1f2937;
   font-size: 14px;
 }
 
@@ -2139,8 +2139,8 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 12px 14px;
   border-radius: 18px;
-  background: #f8fbff;
-  border: 1px solid #e1eaf2;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   color: #475569;
   font-size: 13px;
   cursor: pointer;
@@ -2148,14 +2148,14 @@ onBeforeUnmount(() => {
 }
 
 .workspace-tree__summary:hover {
-  background: #eef5ff;
-  border-color: #cfe0f6;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+  border-color: rgba(59, 130, 246, 0.24);
 }
 
 .workspace-tree__summary.active {
-  background: #edf4ff;
-  border-color: #a9c5ef;
-  color: #2459ab;
+  background: radial-gradient(circle at top left, rgba(187, 247, 208, 0.36), transparent 58%), #ffffff;
+  border-color: rgba(34, 197, 94, 0.28);
+  color: #166534;
 }
 
 .workspace-tree__count {
@@ -2185,13 +2185,13 @@ onBeforeUnmount(() => {
 }
 
 .workspace-tree__child:hover {
-  background: #f8fbff;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
 }
 
 .workspace-tree__child.active {
-  background: #edf4ff;
-  border-color: #a9c5ef;
-  color: #2459ab;
+  background: linear-gradient(180deg, #eef8ff 0%, #ffffff 100%);
+  border-color: rgba(34, 197, 94, 0.28);
+  color: #166534;
 }
 
 .workspace-stage {
@@ -2233,8 +2233,8 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 14px 16px;
   border-radius: 22px;
-  background: rgba(248, 251, 255, 0.92);
-  border: 1px solid #e1eaf2;
+  background: rgba(255, 250, 242, 0.92);
+  border: 1px solid rgba(31, 41, 55, 0.1);
   backdrop-filter: blur(8px);
 }
 
@@ -2316,7 +2316,7 @@ onBeforeUnmount(() => {
 .workspace-stage__legend-rings .ring--literacy {
   width: 18px;
   height: 18px;
-  border-color: rgba(37, 99, 235, 0.88);
+  border-color: rgba(20, 184, 166, 0.88);
 }
 
 .workspace-stage__pill,
@@ -2380,7 +2380,7 @@ onBeforeUnmount(() => {
 }
 
 .workspace-stage__learn-btn--ghost:hover {
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ebf8ff 0%, #dff2fb 100%);
 }
 
 .workspace-stage__viewport {
@@ -2393,8 +2393,8 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
   border-radius: max(0px, calc(28px - var(--graph-stage-viewport-inset-x)));
-  background: radial-gradient(circle at 24px 24px, rgba(79, 135, 255, 0.06) 1px, transparent 1px), radial-gradient(circle at 0 0, rgba(79, 135, 255, 0.03) 1px, transparent 1px), #f8fbff;
-  border: 1px solid #e8eef6;
+  background: radial-gradient(circle at 24px 24px, rgba(20, 184, 166, 0.05) 1px, transparent 1px), radial-gradient(circle at 0 0, rgba(34, 197, 94, 0.03) 1px, transparent 1px), #ffffff;
+  border: 1px solid rgba(31, 41, 55, 0.08);
   contain: layout;
   isolation: isolate;
 }
@@ -3353,7 +3353,7 @@ onBeforeUnmount(() => {
 .teacher-stage__legend-rings .tr.ring--literacy {
   width: 18px;
   height: 18px;
-  border-color: rgba(37, 99, 235, 0.88);
+  border-color: rgba(20, 184, 166, 0.88);
 }
 
 .teacher-stage__pill,
@@ -3580,7 +3580,7 @@ onBeforeUnmount(() => {
   padding: 12px;
   background:
     radial-gradient(circle at top left, rgba(201, 237, 255, 0.18), transparent 24%),
-    linear-gradient(180deg, #fffdf8 0%, #f4f8fd 100%);
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .workspace-header,
@@ -3588,8 +3588,8 @@ onBeforeUnmount(() => {
 .workspace-stage,
 .workspace-drawer {
   background: rgba(255, 255, 255, 0.96);
-  border: 2px solid #1f2937;
-  box-shadow: 6px 6px 0 rgba(31, 41, 55, 0.1);
+  border: 1px solid rgba(31, 41, 55, 0.14);
+  box-shadow: 0 16px 34px rgba(31, 41, 55, 0.08);
 }
 
 .workspace-header {
@@ -3597,7 +3597,7 @@ onBeforeUnmount(() => {
   padding: 18px 20px;
   background:
     radial-gradient(circle at top left, rgba(201, 237, 255, 0.24), transparent 24%),
-    linear-gradient(180deg, #fffdf8 0%, #fbfdff 100%);
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .workspace-sidebar {
@@ -3609,16 +3609,16 @@ onBeforeUnmount(() => {
 .workspace-stage {
   border-radius: 28px;
   background:
-    linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .workspace-stage__top {
   padding: 16px 18px;
   gap: 12px;
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.2), transparent 24%),
-    rgba(255, 255, 255, 0.84);
-  border-bottom: 1.5px solid #d8e5f6;
+    radial-gradient(circle at top left, rgba(215, 249, 168, 0.14), transparent 24%),
+    rgba(248, 251, 255, 0.94);
+  border-bottom: 1.5px solid rgba(31, 41, 55, 0.1);
 }
 
 .workspace-stage__stats,
@@ -3699,8 +3699,8 @@ onBeforeUnmount(() => {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.14), transparent 20%),
-    linear-gradient(180deg, #f9fbff 0%, #f1f6fc 100%);
+    radial-gradient(circle at top left, rgba(215, 249, 168, 0.1), transparent 20%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .workspace-stage__empty {
@@ -3765,7 +3765,7 @@ onBeforeUnmount(() => {
 .workspace-drawer__empty,
 .workspace-drawer__relation-tip {
   border-radius: 16px;
-  border: 1.5px solid #dbe5f1;
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
@@ -3775,31 +3775,31 @@ onBeforeUnmount(() => {
 }
 
 .workspace-drawer__tag {
-  background: #edf4ff;
-  border: 1.5px solid #d8e5f6;
-  color: #35507f;
+  background: linear-gradient(180deg, #dff2fb 0%, #ebf8ff 100%);
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
+  color: #1f2937;
   font-weight: 700;
 }
 
 .workspace-drawer__primary {
-  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   color: #ffffff;
   border-color: var(--app-green);
-  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
 }
 
 .workspace-drawer__secondary,
 .workspace-drawer__link-btn {
-  background: #f8fbff;
-  border-color: #dbe5f1;
+  background: linear-gradient(180deg, #dff2fb 0%, #ebf8ff 100%);
+  border-color: rgba(31, 41, 55, 0.14);
   color: #475569;
 }
 
 .workspace-drawer__secondary:hover,
 .workspace-drawer__link-btn:hover {
-  background: #e3f2fd;
-  border-color: #90caf9;
-  color: #1565c0;
+  background: linear-gradient(180deg, #ebf8ff 0%, #dff2fb 100%);
+  border-color: rgba(31, 41, 55, 0.18);
+  color: #1f2937;
 }
 
 .workspace-tree__summary,
@@ -3807,8 +3807,8 @@ onBeforeUnmount(() => {
 .workspace-stage__menu,
 .workspace-zoom {
   border-radius: 18px;
-  border: 1.5px solid #dbe5f1;
-  background: rgba(255, 255, 255, 0.94);
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .workspace-tree__summary {
@@ -3817,12 +3817,12 @@ onBeforeUnmount(() => {
 
 .workspace-tree__summary.active,
 .workspace-tree__child.active {
-  background: linear-gradient(180deg, #f4f8ff 0%, #edf4ff 100%);
-  border-color: #8fb8ff;
+  background: linear-gradient(180deg, #eef8ff 0%, #ffffff 100%);
+  border-color: rgba(34, 197, 94, 0.28);
 }
 
 .workspace-tree__child:hover {
-  background: #f7fbff;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
 }
 
 .workspace-stage__menu {
@@ -3845,7 +3845,7 @@ onBeforeUnmount(() => {
 
 .workspace-node:hover circle:last-of-type,
 .workspace-category-node:hover rect {
-  filter: drop-shadow(0 10px 18px rgba(59, 130, 246, 0.12));
+  filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.08));
 }
 </style>
 

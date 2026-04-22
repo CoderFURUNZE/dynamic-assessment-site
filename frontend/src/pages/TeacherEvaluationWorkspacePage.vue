@@ -26,7 +26,10 @@ const currentComponent = computed(() => {
 
 <template>
   <div class="teacher-evaluation-workspace">
-    <component :is="currentComponent" />
+    <component
+      :is="currentComponent"
+      :key="`${currentTab}-${String(route.query.subject || '')}-${String(route.query.stage_id || '')}`"
+    />
   </div>
 </template>
 

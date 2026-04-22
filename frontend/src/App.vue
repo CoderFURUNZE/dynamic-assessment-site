@@ -1,6 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import zhCn from "element-plus/es/locale/lang/zh-cn";
 import { ArrowLeft, Calendar, Expand, Fold, Monitor, SwitchButton, User } from "@element-plus/icons-vue";
 import { clearToken, getRole } from "./token";
 import { appNavigation, type AppNavItem } from "./layouts/appNavigation";
@@ -190,7 +191,8 @@ function goBackToMain() {
 </script>
 
 <template>
-  <div
+  <el-config-provider :locale="zhCn">
+    <div
     class="pro-shell"
     :class="{
       'pro-shell--auth': isAuthPage,
@@ -205,7 +207,7 @@ function goBackToMain() {
       <main class="pro-standalone">
         <router-view v-slot="{ Component }">
           <transition name="page-fade" mode="out-in">
-            <component :is="Component" />
+            <component :is="Component" :key="route.fullPath" />
           </transition>
         </router-view>
       </main>
@@ -215,7 +217,7 @@ function goBackToMain() {
       <main class="pro-auth">
         <router-view v-slot="{ Component }">
           <transition name="page-fade" mode="out-in">
-            <component :is="Component" />
+            <component :is="Component" :key="route.fullPath" />
           </transition>
         </router-view>
       </main>
@@ -224,13 +226,18 @@ function goBackToMain() {
     <template v-else-if="routeGroup === 'student' || routeGroup === 'teacher' || routeGroup === 'admin'">
       <section class="student-shell" :class="[`student-shell--${routeGroup}`]">
         <header class="student-shell__header">
-          <div class="student-shell__brand" @click="navigateTo(routeGroup === 'student' ? '/student/dashboard' : routeGroup === 'teacher' ? '/teacher/workspace' : '/admin/dashboard')">
-            <div class="student-shell__logo">DA</div>
+          <button
+            type="button"
+            class="student-shell__brand"
+            :aria-label="`返回${routeGroup === 'student' ? '学生首页' : routeGroup === 'teacher' ? '教师工作台' : '管理端首页'}`"
+            @click="navigateTo(routeGroup === 'student' ? '/student/dashboard' : routeGroup === 'teacher' ? '/teacher/workspace' : '/admin/dashboard')"
+          >
+            <div class="student-shell__logo">学</div>
             <div class="student-shell__brand-copy">
               <strong>动态评价系统</strong>
-              <span>{{ routeGroup === "student" ? "Student Learning Space" : routeGroup === "teacher" ? "Teacher Learning Space" : "Admin Control Center" }}</span>
+              <span>{{ routeGroup === "student" ? "学生学习空间" : routeGroup === "teacher" ? "教师教学工作台" : "管理控制中心" }}</span>
             </div>
-          </div>
+          </button>
 
           <div class="student-shell__nav-stack">
             <nav class="student-shell__nav student-shell__nav--primary">
@@ -288,18 +295,19 @@ function goBackToMain() {
         <main class="student-shell__content">
           <router-view v-slot="{ Component }">
             <transition name="page-fade" mode="out-in">
-              <component :is="Component" />
+              <component :is="Component" :key="route.fullPath" />
             </transition>
           </router-view>
         </main>
       </section>
     </template>
 
-    <button v-if="isStandaloneWorkspace" class="pro-standalone-back" @click="goBackToMain">
-      <el-icon><ArrowLeft /></el-icon>
-      <span>返回主工作台</span>
-    </button>
-  </div>
+      <button v-if="isStandaloneWorkspace" class="pro-standalone-back" @click="goBackToMain">
+        <el-icon><ArrowLeft /></el-icon>
+        <span>返回主工作台</span>
+      </button>
+    </div>
+  </el-config-provider>
 </template>
 
 <style scoped>
@@ -317,16 +325,16 @@ function goBackToMain() {
 
 .pro-shell--teacher {
   background:
-    radial-gradient(circle at top left, rgba(16, 185, 129, 0.12), transparent 24%),
-    radial-gradient(circle at 100% 0%, rgba(8, 145, 178, 0.12), transparent 22%),
-    linear-gradient(180deg, #eef8f4 0%, #f7fbf9 100%);
+    radial-gradient(circle at top left, rgba(255, 214, 203, 0.26), transparent 22%),
+    radial-gradient(circle at 100% 0%, rgba(184, 228, 246, 0.24), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .pro-shell--admin {
   background:
-    radial-gradient(circle at top left, rgba(5, 150, 105, 0.12), transparent 24%),
-    radial-gradient(circle at 100% 0%, rgba(8, 145, 178, 0.12), transparent 22%),
-    linear-gradient(180deg, #eff8f4 0%, #f8fbf9 100%);
+    radial-gradient(circle at top left, rgba(255, 214, 203, 0.24), transparent 22%),
+    radial-gradient(circle at 100% 0%, rgba(184, 228, 246, 0.22), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .pro-shell--standalone {
@@ -341,43 +349,51 @@ function goBackToMain() {
 }
 
 .student-shell {
-  max-width: 1240px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 18px 18px 28px;
+  padding: 14px 18px 30px;
 }
 
 .student-shell--teacher,
 .student-shell--admin {
-  max-width: 1360px;
+  max-width: 1280px;
 }
 
 .student-shell__header {
   position: sticky;
-  top: 14px;
+  top: 10px;
   z-index: 1000;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 18px;
+  align-items: center;
+  gap: 16px;
   padding: 14px 18px;
-  border-radius: 28px;
-  background: rgba(255, 253, 249, 0.92);
-  border: 3px solid #1f2937;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(34, 197, 94, 0.07), transparent 30%),
+    rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(16px);
 }
 
 .student-shell--teacher .student-shell__header,
 .student-shell--admin .student-shell__header {
-  background: rgba(255, 253, 249, 0.94);
-  border-color: #1f2937;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
 }
 
 .student-shell__brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
   cursor: pointer;
+  appearance: none;
   flex: 0 0 auto;
   min-width: 0;
 }
@@ -388,44 +404,54 @@ function goBackToMain() {
   border-radius: 14px;
   display: grid;
   place-items: center;
-  background: #ffd8cf;
-  border: 1.5px solid #c6d8ef;
-  font-family: "Fredoka", "Nunito", sans-serif;
+  background: linear-gradient(180deg, #ffd8cf 0%, #ffc9bc 100%);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  font-family: var(--el-font-family);
   font-weight: 700;
   color: #1d2433;
+  font-size: 18px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
 }
 
 .student-shell--teacher .student-shell__logo {
-  background: #d8f5ea;
+  background: linear-gradient(180deg, #d8f5ea 0%, #c5f0df 100%);
 }
 
 .student-shell--admin .student-shell__logo {
-  background: #dff3ff;
+  background: linear-gradient(180deg, #dff3ff 0%, #cae9ff 100%);
 }
 
 .student-shell__brand-copy {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .student-shell__brand-copy strong {
   color: #1d2433;
-  font-family: "Fredoka", "Nunito", sans-serif;
+  font-family: var(--el-font-family);
   font-size: 16px;
+  line-height: 1.1;
 }
 
 .student-shell__brand-copy span {
   color: #6d7483;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.1;
+}
+
+.student-shell__brand:focus-visible {
+  outline: none;
+  border-radius: 18px;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 
 .student-shell__nav-stack {
   min-width: 0;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-content: center;
-  padding-top: 2px;
+  padding-top: 0;
   justify-items: center;
 }
 
@@ -442,59 +468,81 @@ function goBackToMain() {
   min-height: 36px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1.5px solid #c6d8ef;
-  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: none;
   font: inherit;
   font-weight: 800;
   color: #445f7e;
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
 
 .student-shell__nav--primary {
-  gap: 10px;
+  gap: 8px;
 }
 
 .student-shell__nav-item--primary {
-  min-height: 38px;
-  padding-inline: 15px;
-  font-size: 13px;
+  min-height: 34px;
+  padding-inline: 14px;
+  font-size: 12px;
 }
 
 .student-shell__nav-item--secondary {
   min-height: 34px;
-  padding-inline: 13px;
-  font-size: 12px;
+  padding-inline: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #607694;
-  background: linear-gradient(180deg, #fbfdff 0%, #f4f9ff 100%);
+  background: #f8fafc;
+}
+
+.student-shell__nav-item:hover,
+.student-shell__nav-item:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+  background: #ffffff;
+  border-color: rgba(34, 197, 94, 0.24);
+  color: #166534;
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06);
 }
 
 .student-shell__nav-item.active {
-  background: #eaf8d3;
-  color: #16355c;
+  background: #eefbf3;
+  border-color: rgba(34, 197, 94, 0.28);
+  color: #166534;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.08);
 }
 
 .student-shell--teacher .student-shell__nav-item.active {
-  background: #dff6e6;
-  color: #174b39;
+  background: #eefbf3;
+  color: #166534;
 }
 
 .student-shell--admin .student-shell__nav-item.active {
-  background: #e1f3ec;
-  color: #1d4654;
+  background: #eef8ff;
+  border-color: rgba(56, 189, 248, 0.26);
+  color: #0f766e;
 }
 
 .student-shell__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   align-self: center;
   justify-self: end;
 }
 
 .student-shell__content {
-  padding-top: 20px;
+  padding-top: 18px;
+  display: grid;
+  gap: 18px;
 }
 
 .pro-standalone {
@@ -510,13 +558,14 @@ function goBackToMain() {
   flex-direction: column;
   padding: 18px 14px;
   background:
-    radial-gradient(circle at top left, rgba(96, 165, 250, 0.24), transparent 24%),
-    radial-gradient(circle at bottom left, rgba(34, 197, 94, 0.14), transparent 28%),
-    linear-gradient(180deg, #0f1f40 0%, #173269 54%, #1d4d8f 100%);
-  color: #d9e6fb;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 28px;
-  box-shadow: 0 24px 54px rgba(15, 23, 42, 0.2);
+    radial-gradient(circle at top left, rgba(219, 234, 254, 0.42), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(220, 252, 231, 0.34), transparent 28%),
+    rgba(255, 255, 255, 0.94);
+  color: #1f2937;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 24px;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
+  backdrop-filter: blur(18px);
   z-index: 1100;
   transition: width 0.22s ease, inset 0.22s ease;
 }
@@ -524,34 +573,36 @@ function goBackToMain() {
 .pro-shell--teacher .pro-sider,
 .pro-shell--admin .pro-sider {
   background:
-    radial-gradient(circle at top left, rgba(34, 211, 238, 0.16), transparent 22%),
-    radial-gradient(circle at bottom left, rgba(52, 211, 153, 0.14), transparent 24%),
-    linear-gradient(180deg, #0f3d36 0%, #14584e 56%, #1b6b5f 100%);
-  color: #ddf7ef;
+    radial-gradient(circle at top left, rgba(255, 214, 203, 0.3), transparent 22%),
+    radial-gradient(circle at bottom left, rgba(184, 228, 246, 0.22), transparent 26%),
+    linear-gradient(180deg, #fffdf9 0%, #fff7ef 100%);
+  color: #1f2937;
 }
 
 .pro-shell--teacher .pro-brand__logo,
 .pro-shell--admin .pro-brand__logo {
-  background: linear-gradient(135deg, #f8fffd 0%, #d6faef 100%);
-  color: #0f4f43;
-  box-shadow: 0 18px 28px rgba(6, 78, 59, 0.22);
+  background: linear-gradient(135deg, #d7f7c7 0%, #f2fbe5 100%);
+  color: #1f2937;
+  box-shadow: 4px 4px 0 rgba(31, 41, 55, 0.12);
 }
 
 .pro-shell--teacher .pro-brand__text strong,
 .pro-shell--admin .pro-brand__text strong {
-  color: #f4fff9;
+  color: #1f2937;
 }
 
 .pro-shell--teacher .pro-brand__text span,
 .pro-shell--admin .pro-brand__text span {
-  color: rgba(221, 247, 239, 0.72);
+  color: #6b7280;
 }
 
 .pro-shell--student .pro-sider {
-  background: #fffdf9;
+  background:
+    radial-gradient(circle at top left, rgba(219, 234, 254, 0.4), transparent 24%),
+    rgba(255, 255, 255, 0.95);
   color: #1d2433;
-  border: 2px solid #1d2433;
-  box-shadow: 8px 8px 0 #1d2433;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.09);
 }
 
 .pro-shell--student .pro-brand {
@@ -567,7 +618,7 @@ function goBackToMain() {
 
 .pro-shell--student .pro-brand__text strong {
   color: #1d2433;
-  font-family: "Fredoka", "Nunito", sans-serif;
+  font-family: var(--el-font-family);
 }
 
 .pro-shell--student .pro-brand__text span {
@@ -585,7 +636,7 @@ function goBackToMain() {
   padding: 10px 10px 18px;
   margin-bottom: 18px;
   cursor: pointer;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(31, 41, 55, 0.08);
 }
 
 .pro-brand__logo {
@@ -594,10 +645,10 @@ function goBackToMain() {
   border-radius: 16px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #ffffff 0%, #dbeafe 100%);
-  color: var(--app-primary-deep);
+  background: linear-gradient(135deg, #ffd6cb 0%, #fff4ef 100%);
+  color: #1f2937;
   font-weight: 800;
-  box-shadow: 0 18px 28px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
 }
 
 .pro-brand__text {
@@ -607,12 +658,13 @@ function goBackToMain() {
 
 .pro-brand__text strong {
   font-size: 17px;
-  color: #fff;
+  color: #1f2937;
+  font-family: var(--el-font-family);
 }
 
 .pro-brand__text span {
   font-size: 12px;
-  color: rgba(217, 230, 251, 0.72);
+  color: #6b7280;
 }
 
 .pro-menu {
@@ -644,14 +696,14 @@ function goBackToMain() {
   border: 0;
   border-radius: 16px;
   background: transparent;
-  color: rgba(217, 230, 251, 0.84);
+  color: #4b5563;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .pro-menu__item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: #dff2fb;
+  color: #1f2937;
 }
 
 .pro-shell--student .pro-menu__item {
@@ -664,22 +716,22 @@ function goBackToMain() {
 }
 
 .pro-menu__item.active {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0%, rgba(96, 165, 250, 0.22) 100%);
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.26);
+  background: #eefbf3;
+  color: #166534;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.18);
 }
 
 .pro-shell--teacher .pro-menu__item.active,
 .pro-shell--admin .pro-menu__item.active {
-  background: linear-gradient(90deg, rgba(240, 253, 250, 0.22) 0%, rgba(45, 212, 191, 0.24) 100%);
-  color: #f5fffb;
-  box-shadow: inset 0 0 0 1px rgba(153, 246, 228, 0.22);
+  background: linear-gradient(90deg, #f2fbe5 0%, #d7f7c7 100%);
+  color: #1f2937;
+  box-shadow: inset 0 0 0 1.5px rgba(31, 41, 55, 0.12);
 }
 
 .pro-shell--student .pro-menu__item.active {
-  background: #c8f7bb;
-  color: #1d2433;
-  box-shadow: inset 0 0 0 1.5px #1d2433;
+  background: #eef8ff;
+  color: #0f4c81;
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.2);
 }
 
 .pro-menu__item--child {
@@ -694,14 +746,14 @@ function goBackToMain() {
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.22);
 }
 
 .pro-shell--student .pro-menu__item--child {
   background: #ffffff;
-  border: 1.5px solid #1d2433;
-  box-shadow: 3px 3px 0 #1d2433;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
 }
 
 .pro-menu__icon {
@@ -735,28 +787,18 @@ function goBackToMain() {
   justify-content: space-between;
   margin: 14px 14px 0 0;
   padding: 14px 22px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(203, 215, 235, 0.84);
-  border-radius: 24px;
-  box-shadow: var(--app-shadow);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
 }
 
 .pro-shell--teacher .pro-header,
 .pro-shell--admin .pro-header {
-  background: rgba(250, 255, 252, 0.88);
-  border: 1px solid rgba(178, 230, 214, 0.9);
-  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.08);
-}
-
-.pro-shell--student .pro-header {
-  background: rgba(255, 253, 249, 0.92);
-  border: 2px solid #1d2433;
-  box-shadow: 8px 8px 0 #1d2433;
-}
-
-.pro-shell--teacher .pro-header {
-  border-color: rgba(94, 234, 212, 0.68);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
 }
 
 .pro-header__left,
@@ -784,7 +826,7 @@ function goBackToMain() {
 
 .pro-shell--student .pro-header__title span,
 .pro-shell--student .pro-header__title strong {
-  font-family: "Fredoka", "Nunito", sans-serif;
+  font-family: var(--el-font-family);
 }
 
 .pro-header__title strong {
@@ -799,106 +841,112 @@ function goBackToMain() {
   border-radius: 18px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(191, 219, 254, 0.95);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14) 0%, rgba(56, 189, 248, 0.16) 100%);
-  color: var(--app-primary-deep);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(135deg, #bfe3f5 0%, #ebf8ff 100%);
+  color: #1f2937;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
 }
 
 .pro-shell--student .pro-header__badge {
-  border: 1.5px solid #1d2433;
+  border: 1px solid rgba(148, 163, 184, 0.22);
   background: #dff3ff;
   color: #1d2433;
-  box-shadow: 3px 3px 0 #1d2433;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
 }
 
 .pro-shell--admin .pro-header__badge {
-  background: linear-gradient(135deg, rgba(5, 150, 105, 0.12) 0%, rgba(34, 211, 238, 0.14) 100%);
-  color: #0f766e;
+  background: linear-gradient(135deg, #bfe3f5 0%, #ebf8ff 100%);
+  color: #1f2937;
 }
 
 .pro-shell--teacher .pro-header__badge {
-  background: linear-gradient(135deg, rgba(5, 150, 105, 0.12) 0%, rgba(16, 185, 129, 0.14) 100%);
-  color: #0f766e;
+  background: linear-gradient(135deg, #bfe3f5 0%, #ebf8ff 100%);
+  color: #1f2937;
 }
 
 .pro-shell--teacher .pro-role-chip,
 .pro-shell--admin .pro-role-chip {
-  border-color: rgba(178, 230, 214, 0.95);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 253, 248, 0.98) 100%);
-  color: #325b53;
+  border-color: rgba(148, 163, 184, 0.24);
+  background: #eefbf3;
+  color: #166534;
+  box-shadow: none;
 }
 
 .pro-shell--teacher .pro-role-chip__dot,
 .pro-shell--admin .pro-role-chip__dot {
-  background: linear-gradient(135deg, #059669 0%, #0891b2 100%);
-  box-shadow: 0 0 0 5px rgba(5, 150, 105, 0.12);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.12);
 }
 
 .pro-shell--teacher .pro-icon-btn,
 .pro-shell--admin .pro-icon-btn {
-  border-color: rgba(178, 230, 214, 0.95);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 252, 248, 0.98) 100%);
-  color: #3a5d56;
+  border-color: rgba(148, 163, 184, 0.24);
+  background: #ffffff;
+  color: #334155;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
 }
 
 .pro-shell--teacher .pro-icon-btn:hover,
 .pro-shell--admin .pro-icon-btn:hover {
-  border-color: rgba(94, 234, 212, 0.95);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(221, 249, 242, 1) 100%);
-  color: #0f766e;
+  border-color: rgba(100, 116, 139, 0.34);
+  background: #ffffff;
+  color: #1f2937;
 }
 
 .pro-icon-btn {
   width: 40px;
   height: 40px;
   border-radius: 14px;
-  border: 1px solid rgba(203, 215, 235, 0.95);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.98) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: #ffffff;
   color: #526274;
   display: grid;
   place-items: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
 }
 
 .pro-shell--student .pro-icon-btn {
-  border: 1.5px solid #1d2433;
+  border: 1px solid rgba(148, 163, 184, 0.24);
   background: #ffffff;
   color: #1d2433;
-  box-shadow: 3px 3px 0 #1d2433;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
 }
 
 .pro-shell--student .pro-icon-btn:hover {
-  background: #dff3ff;
+  background: #ffffff;
   color: #1d2433;
 }
 
 .pro-icon-btn:hover {
-  border-color: rgba(144, 175, 230, 0.95);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(237, 243, 255, 1) 100%);
+  border-color: rgba(100, 116, 139, 0.34);
+  background: #ffffff;
   color: #2f5ea4;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
 }
 
 .pro-role-chip {
   min-height: 38px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid rgba(203, 215, 235, 0.95);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.98) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: #f8fafc;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
   font-weight: 700;
   color: #4f6278;
+  box-shadow: none;
 }
 
 .pro-shell--student .pro-role-chip {
-  border: 1.5px solid #1d2433;
-  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: #f8fafc;
   color: #1d2433;
-  box-shadow: 3px 3px 0 #1d2433;
+  box-shadow: none;
 }
 
 .pro-shell--admin .pro-role-chip__dot {
@@ -919,14 +967,14 @@ function goBackToMain() {
   min-height: 0;
   padding: 24px 14px 24px 0;
   overflow: auto;
-  background: radial-gradient(circle at top right, rgba(111, 193, 255, 0.08), transparent 24%), transparent;
+  background: radial-gradient(circle at top right, rgba(184, 228, 246, 0.16), transparent 24%), transparent;
 }
 
 .pro-shell--teacher .pro-content,
 .pro-shell--admin .pro-content {
   background:
-    radial-gradient(circle at top right, rgba(153, 246, 228, 0.22), transparent 24%),
-    radial-gradient(circle at bottom left, rgba(34, 211, 238, 0.08), transparent 20%),
+    radial-gradient(circle at top right, rgba(184, 228, 246, 0.2), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(255, 214, 203, 0.14), transparent 20%),
     transparent;
 }
 

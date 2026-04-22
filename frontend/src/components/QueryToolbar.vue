@@ -59,30 +59,36 @@ function updateValue(value: string) {
 <style scoped>
 .query-toolbar {
   width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.06), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(248, 251, 255, 0.9) 100%);
 }
 
 .query-toolbar__row {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
-  padding: 2px 0;
 }
 
 .query-toolbar__search {
+  flex: 1 1 min(100%, var(--query-input-width));
   width: min(100%, var(--query-input-width));
-  min-width: min(100%, 320px);
+  min-width: min(100%, 280px);
 }
 
 .query-toolbar__search :deep(.el-input__wrapper) {
-  min-height: 46px;
-  border-radius: 18px;
-  box-shadow: 0 0 0 1px #cfe0fb inset, 0 10px 22px rgba(80, 118, 183, 0.06) !important;
-  background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+  min-height: 44px;
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.24) inset !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .query-toolbar__search :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px #7aa8ff inset, 0 0 0 3px rgba(122, 168, 255, 0.12), 0 12px 24px rgba(80, 118, 183, 0.08) !important;
+  box-shadow: 0 0 0 1px #60a5fa inset, 0 0 0 4px rgba(96, 165, 250, 0.14) !important;
 }
 
 .query-toolbar__search :deep(.el-input__prefix-inner) {
@@ -99,22 +105,23 @@ function updateValue(value: string) {
 }
 
 .query-toolbar__btn {
-  min-width: 96px;
-  min-height: 46px;
-  padding-inline: 20px;
-  border-radius: 18px;
+  min-width: 78px;
+  min-height: 40px;
+  padding-inline: 14px;
+  border-radius: 12px;
   font-weight: 700;
 }
 
 .query-toolbar__btn--primary {
-  box-shadow: 0 10px 24px rgba(79, 140, 255, 0.2);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
 .query-toolbar__extras {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 @media (max-width: 768px) {
@@ -125,6 +132,11 @@ function updateValue(value: string) {
 
   .query-toolbar__extras {
     width: 100%;
+    margin-left: 0;
+  }
+
+  .query-toolbar__btn {
+    flex: 1 1 0;
   }
 }
 </style>

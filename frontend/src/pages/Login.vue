@@ -10,9 +10,7 @@ const router = useRouter();
 const route = useRoute();
 const loading = ref(false);
 
-const mode = computed<"student" | "staff">(() =>
-  route.path === "/login/staff" ? "staff" : "student",
-);
+const mode = computed<"student" | "staff">(() => (route.path === "/login/staff" ? "staff" : "student"));
 
 const loginForm = reactive({
   username: "",
@@ -22,27 +20,21 @@ const loginForm = reactive({
 
 const loginAccountLabel = computed(() => (mode.value === "student" ? "学号" : "工号 / 账号"));
 const loginAccountPlaceholder = computed(() =>
-  mode.value === "student" ? "请输入学号" : "请输入教师或管理员账号",
+  mode.value === "student" ? "请输入学生学号" : "请输入教师或管理员账号",
 );
 
-const cardTitle = computed(() =>
-  mode.value === "student" ? "学生登录" : "教师 / 管理员登录",
-);
-const cardSubtitle = computed(() =>
-  mode.value === "student"
-    ? "进入学习中心，查看当前任务、图谱与学习报告。"
-    : "进入教学与管理工作台，维护课程、评价流程与平台配置。",
-);
+const cardTitle = computed(() => (mode.value === "student" ? "学生登录" : "教师 / 管理员登录"));
+const cardSubtitle = computed(() => (mode.value === "student" ? "查看学习任务、报告和反馈。" : "进入课程、评价和学生分析。"));
 
 const sideHighlights = computed(() =>
   mode.value === "student"
     ? [
-        { title: "继续当前任务", text: "从首页 Hero 直接回到当前知识点与推荐行动。" },
-        { title: "统一学习模块", text: "学习报告、图谱和问卷保留原有能力，但视觉更统一。" },
+        { title: "学习更清晰", text: "任务、图谱和报告集中查看。" },
+        { title: "反馈更直接", text: "阶段变化和建议一目了然。" },
       ]
     : [
-        { title: "教学工作台", text: "课程运行、阶段评价、学生分析和审核流程共用同一壳层。" },
-        { title: "管理视角", text: "平台配置、课程管理与审计模块切换更清晰。" },
+        { title: "入口更集中", text: "课程、评价和分析统一进入。" },
+        { title: "操作更顺手", text: "教学与管理在同一工作台完成。" },
       ],
 );
 
@@ -108,15 +100,15 @@ async function submitLogin() {
 
     <main class="login-shell">
       <section class="login-hero">
-        <div class="login-hero__badge">{{ mode === "student" ? "学生入口" : "教师 / 管理入口" }}</div>
-        <h1>教育平台的统一入口。</h1>
+        <span class="login-hero__badge">{{ mode === "student" ? "学生入口" : "教师 / 管理入口" }}</span>
+        <h1>{{ mode === "student" ? "学生登录" : "教师 / 管理员登录" }}</h1>
         <p class="login-hero__lead">
-          保留现有登录逻辑与角色权限，只调整入口布局和视觉语言，让登录页和首页属于同一套产品系统。
+          {{ mode === "student" ? "进入学习空间，继续当前任务。" : "进入工作台，处理课程与评价。" }}
         </p>
 
-        <div class="login-hero__summary panel-card">
+        <div class="login-hero__summary">
           <span>当前入口</span>
-          <strong>{{ mode === "student" ? "学生学习中心" : "教师 / 管理后台" }}</strong>
+          <strong>{{ mode === "student" ? "学生学习空间" : "教师 / 管理工作台" }}</strong>
           <p>{{ cardSubtitle }}</p>
         </div>
 
@@ -131,7 +123,7 @@ async function submitLogin() {
       <section class="login-form-wrap">
         <div class="login-card">
           <header class="login-card__header">
-            <div class="login-card__eyebrow">欢迎回来</div>
+            <span class="login-card__eyebrow">欢迎回来</span>
             <h2>{{ cardTitle }}</h2>
             <p>{{ cardSubtitle }}</p>
           </header>
@@ -153,18 +145,14 @@ async function submitLogin() {
               role="tab"
               :aria-selected="mode === 'staff'"
             >
-              教师 / 管理员
+              教师 / 管理端
             </router-link>
           </div>
 
           <form class="login-form" @submit.prevent="submitLogin">
             <div class="form-group">
               <label>{{ loginAccountLabel }}</label>
-              <el-input
-                v-model="loginForm.username"
-                :placeholder="loginAccountPlaceholder"
-                :prefix-icon="User"
-              />
+              <el-input v-model="loginForm.username" :placeholder="loginAccountPlaceholder" :prefix-icon="User" />
             </div>
 
             <div class="form-group">
@@ -201,20 +189,20 @@ async function submitLogin() {
   padding: 20px;
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, rgba(180, 224, 255, 0.3), transparent 22%),
-    radial-gradient(circle at bottom right, rgba(178, 232, 220, 0.24), transparent 20%),
-    #f9f1e8;
+    radial-gradient(circle at top left, rgba(191, 221, 254, 0.34), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(255, 221, 184, 0.28), transparent 22%),
+    linear-gradient(180deg, #fff7ef 0%, #fbf7f1 100%);
 }
 
 .login-page__mesh {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+  filter: blur(24px);
   background:
     radial-gradient(circle at 0% 0%, rgba(201, 237, 255, 0.42), transparent 30%),
-    radial-gradient(circle at 100% 0%, rgba(185, 247, 176, 0.18), transparent 30%),
-    radial-gradient(circle at 100% 100%, rgba(255, 216, 207, 0.28), transparent 24%);
-  filter: blur(22px);
-  pointer-events: none;
+    radial-gradient(circle at 100% 0%, rgba(223, 246, 184, 0.22), transparent 24%),
+    radial-gradient(circle at 100% 100%, rgba(255, 216, 207, 0.3), transparent 22%);
 }
 
 .login-shell {
@@ -231,10 +219,10 @@ async function submitLogin() {
 
 .login-hero,
 .login-card {
-  border-radius: 30px;
-  border: 3px solid #1d2433;
-  box-shadow: 8px 8px 0 #1d2433;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
 }
 
 .login-hero {
@@ -243,49 +231,53 @@ async function submitLogin() {
   align-content: center;
   gap: 20px;
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.5), transparent 28%),
-    linear-gradient(180deg, #fffdfa 0%, #f8fbff 100%);
+    radial-gradient(circle at top left, rgba(219, 234, 254, 0.3), transparent 26%),
+    radial-gradient(circle at right center, rgba(220, 252, 231, 0.18), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
 .login-hero__badge,
 .login-card__eyebrow {
   display: inline-flex;
   width: fit-content;
-  padding: 8px 14px;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 14px;
   border-radius: 999px;
-  background: #c9ffb9;
-  color: #1d2433;
-  border: 2px solid #1d2433;
-  box-shadow: 4px 4px 0 #1d2433;
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  background: #eefbf3;
+  color: #166534;
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .login-hero h1 {
   margin: 0;
-  max-width: 11ch;
+  max-width: 8ch;
   font-size: clamp(42px, 5vw, 64px);
-  line-height: 1.02;
-  color: #1d2433;
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+  color: #1f2937;
 }
 
-.login-hero__lead {
-  max-width: 56ch;
+.login-hero__lead,
+.login-hero__summary p,
+.login-hero__card p,
+.login-card__header p {
   margin: 0;
-  font-size: 17px;
-  line-height: 1.9;
   color: #5f6777;
+  line-height: 1.8;
 }
 
 .login-hero__summary {
   padding: 22px;
   display: grid;
   gap: 8px;
-  border-radius: 24px;
-  border: 2px solid #1d2433;
-  background: linear-gradient(180deg, #f3f9ff 0%, #ffffff 100%);
-  box-shadow: 6px 6px 0 rgba(29, 36, 51, 0.12);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+  background: rgba(255, 255, 255, 0.84);
 }
 
 .login-hero__summary span {
@@ -297,14 +289,6 @@ async function submitLogin() {
 .login-hero__summary strong {
   font-size: 26px;
   line-height: 1.15;
-  color: #1d2433;
-}
-
-.login-hero__summary p,
-.login-hero__card p {
-  margin: 0;
-  color: #5f6777;
-  line-height: 1.8;
 }
 
 .login-hero__grid {
@@ -317,102 +301,70 @@ async function submitLogin() {
   display: grid;
   gap: 8px;
   padding: 20px;
-  border-radius: 24px;
-  border: 2px solid #1d2433;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
-  box-shadow: 6px 6px 0 rgba(29, 36, 51, 0.1);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+  background: rgba(255, 255, 255, 0.88);
 }
 
-.login-hero__card strong {
-  font-size: 18px;
-  color: #1d2433;
+.login-hero__card strong,
+.login-card__header h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  color: #1f2937;
 }
 
 .login-form-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
 }
 
 .login-card {
-  width: min(100%, 520px);
-  padding: 30px;
-  background:
-    radial-gradient(circle at top right, rgba(201, 237, 255, 0.4), transparent 28%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 34px 30px;
+  display: grid;
+  gap: 24px;
 }
 
-.login-card__header {
+.login-card__header,
+.login-form,
+.form-group {
   display: grid;
   gap: 10px;
-  margin-bottom: 24px;
-}
-
-.login-card__header h2 {
-  margin: 0;
-  font-size: 32px;
-  color: #1d2433;
-}
-
-.login-card__header p {
-  margin: 0;
-  color: #5f6777;
-  line-height: 1.8;
 }
 
 .role-selector {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: inline-flex;
+  width: fit-content;
   gap: 10px;
-  padding: 8px;
-  border-radius: 20px;
-  border: 2px solid #1d2433;
-  background: #eef8ff;
-  box-shadow: 4px 4px 0 rgba(29, 36, 51, 0.1);
-  margin-bottom: 24px;
+  align-items: center;
 }
 
 .role-tab {
-  min-height: 50px;
-  padding: 0 14px;
-  border-radius: 16px;
+  min-height: 34px;
+  min-width: 96px;
+  padding: 0 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  text-align: center;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #eff6ff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  color: #405266;
+  font-size: 13px;
+  font-weight: 700;
   text-decoration: none;
-  color: #4a5366;
-  border: 2px solid transparent;
-  font-weight: 800;
-  transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .role-tab.active {
-  background: #ffffff;
-  color: #17358f;
-  border-color: #1d2433;
-  box-shadow: 4px 4px 0 rgba(29, 36, 51, 0.12);
-}
-
-.role-tab:not(.active):hover {
-  transform: translate(-1px, -1px);
-  color: #1d2433;
-}
-
-.login-form {
-  display: grid;
-  gap: 18px;
-}
-
-.form-group {
-  display: grid;
-  gap: 8px;
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
 }
 
 .form-group label {
-  font-size: 14px;
-  font-weight: 800;
-  color: #1d2433;
+  font-size: 13px;
+  font-weight: 700;
+  color: #364152;
 }
 
 .form-footer {
@@ -424,78 +376,49 @@ async function submitLogin() {
 }
 
 .login-link {
-  color: #17358f;
-  font-weight: 800;
+  color: #4f6c8d;
+  font-weight: 700;
   text-decoration: none;
 }
 
 .login-submit {
-  min-height: 54px;
-  font-size: 15px;
+  width: 100%;
+  margin-top: 6px;
 }
 
-:deep(.login-form .el-input__wrapper) {
-  border-radius: 16px !important;
-  border: 2px solid #1d2433 !important;
-  background: #ffffff !important;
-  box-shadow: none !important;
-}
-
-:deep(.login-form .el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 3px rgba(80, 186, 255, 0.2) !important;
-}
-
-:deep(.login-form .el-input__inner) {
-  color: #1d2433 !important;
-  font-weight: 600;
-}
-
-:deep(.login-form .el-checkbox__label) {
-  color: #1d2433 !important;
-  font-weight: 700;
-}
-
-:deep(.login-form .el-checkbox__inner) {
-  border: 2px solid #1d2433 !important;
-  border-radius: 6px !important;
-}
-
-:deep(.login-submit.el-button--primary) {
-  border: 2px solid #1d2433 !important;
-  border-radius: 16px !important;
-  background: #32d25f !important;
-  background-image: none !important;
-  color: #10201a !important;
-  box-shadow: 4px 4px 0 #1d2433 !important;
-}
-
-:deep(.login-submit.el-button--primary:hover) {
-  transform: translate(-1px, -1px);
-  box-shadow: 6px 6px 0 #1d2433 !important;
-}
-
-@media (max-width: 1040px) {
+@media (max-width: 980px) {
   .login-shell {
     grid-template-columns: 1fr;
   }
-
-  .login-hero h1 {
-    max-width: none;
-  }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 640px) {
   .login-page {
     padding: 14px;
   }
 
   .login-hero,
   .login-card {
-    padding: 22px 20px;
+    padding: 22px 18px;
   }
 
-  .login-hero__grid {
+  .login-hero__grid,
+  .role-selector {
     grid-template-columns: 1fr;
+  }
+
+  .role-selector {
+    display: grid;
+    width: 100%;
+  }
+
+  .role-tab {
+    width: 100%;
+  }
+
+  .form-footer {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

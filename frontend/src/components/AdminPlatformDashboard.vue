@@ -177,12 +177,17 @@ onMounted(load);
 
 .chart-card {
   padding: 24px;
-  border-radius: 30px;
-  border: 3px solid #1f2937;
-  background: radial-gradient(circle at top right, rgba(210, 238, 255, 0.72), transparent 42%), #fffdf6;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background:
+    radial-gradient(circle at top right, rgba(191, 219, 254, 0.2), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(187, 247, 208, 0.14), transparent 22%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
   gap: 14px;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  box-shadow:
+    0 18px 36px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .chart-card__head {

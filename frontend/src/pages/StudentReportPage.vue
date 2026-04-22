@@ -118,6 +118,13 @@ onMounted(async () => {
 
 <style scoped>
 .student-report-page {
+  --report-theme-surface: #ffffff;
+  --report-theme-surface-soft: #f8fafc;
+  --report-theme-surface-muted: #f1f5f9;
+  --report-theme-surface-accent: #eefbf3;
+  --report-theme-border: rgba(148, 163, 184, 0.22);
+  --report-theme-border-strong: rgba(34, 197, 94, 0.26);
+  --report-theme-ink-soft: #64748b;
   display: grid;
   gap: 18px;
 }
@@ -125,10 +132,10 @@ onMounted(async () => {
 .student-report-page__hero,
 .student-report-page__highlight-card,
 .student-report-page__content {
-  border-radius: 32px;
-  border: 3px solid #1f2937;
-  background: #fffdf8;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
 
 .student-report-page__hero {
@@ -137,8 +144,9 @@ onMounted(async () => {
   gap: 18px;
   padding: 24px;
   background:
-    radial-gradient(circle at top left, rgba(94, 234, 212, 0.18), transparent 30%),
-    linear-gradient(180deg, #fff9f1 0%, #fffdf8 100%);
+    radial-gradient(circle at top left, rgba(219, 234, 254, 0.3), transparent 30%),
+    radial-gradient(circle at right bottom, rgba(220, 252, 231, 0.16), transparent 26%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
 .student-report-page__hero-copy {
@@ -152,12 +160,12 @@ onMounted(async () => {
   width: fit-content;
   padding: 6px 10px;
   border-radius: 999px;
-  background: #d7f9a8;
-  color: #1f2937;
+  background: #eefbf3;
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  color: #166534;
   font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 .student-report-page__hero-copy h1 {
@@ -166,14 +174,35 @@ onMounted(async () => {
   line-height: 1.05;
   letter-spacing: -0.04em;
   color: #1f2937;
+  position: relative;
+  color: transparent;
+}
+
+.student-report-page__hero-copy h1::after {
+  content: "学习报告";
+  position: absolute;
+  inset: 0;
+  color: #1f2937;
 }
 
 .student-report-page__hero-copy p,
 .student-report-page__content-head p {
   margin: 0;
   max-width: 58ch;
-  color: #5f6b7a;
+  color: #617792;
   line-height: 1.6;
+}
+
+.student-report-page__hero-copy p {
+  position: relative;
+  color: transparent;
+}
+
+.student-report-page__hero-copy p::after {
+  content: "查看结果与建议";
+  position: absolute;
+  inset: 0;
+  color: #617792;
 }
 
 .student-report-page__hero-panel {
@@ -181,15 +210,15 @@ onMounted(async () => {
   gap: 10px;
   align-content: start;
   padding: 18px;
-  border-radius: 24px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-radius: 18px;
+  border: 1px solid var(--report-theme-border);
+  background: linear-gradient(180deg, var(--report-theme-surface) 0%, var(--report-theme-surface-soft) 100%);
 }
 
 .student-report-page__hero-panel span,
 .student-report-page__highlight-card span {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--report-theme-ink-soft);
   font-weight: 700;
 }
 
@@ -200,7 +229,9 @@ onMounted(async () => {
 
 .student-report-page__hero-panel :deep(.el-select__wrapper) {
   min-height: 48px;
-  border-radius: 16px;
+  border-radius: 14px;
+  background: var(--report-theme-surface-soft) !important;
+  box-shadow: 0 0 0 1px var(--report-theme-border) inset !important;
 }
 
 .student-report-page__hero-actions {
@@ -210,9 +241,21 @@ onMounted(async () => {
 }
 
 .student-report-page__hero-actions :deep(.el-button) {
-  min-height: 44px;
+  min-height: 40px;
   padding-inline: 18px;
   border-radius: 14px;
+}
+
+.student-report-page__hero-actions :deep(.el-button:not(.el-button--primary)) {
+  border-color: var(--report-theme-border);
+  background: var(--report-theme-surface);
+  color: #475569;
+}
+
+.student-report-page__hero-actions :deep(.el-button--primary) {
+  border-color: var(--report-theme-border-strong);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
 }
 
 .student-report-page__highlights {
@@ -226,7 +269,7 @@ onMounted(async () => {
   gap: 8px;
   padding: 18px 20px;
   min-height: 106px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: linear-gradient(180deg, var(--report-theme-surface) 0%, var(--report-theme-surface-soft) 100%);
 }
 
 .student-report-page__highlight-card strong,
@@ -239,7 +282,7 @@ onMounted(async () => {
 
 .student-report-page__content {
   padding: 20px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  background: linear-gradient(180deg, var(--report-theme-surface) 0%, #f8fafc 100%);
 }
 
 .student-report-page__content-head {
@@ -248,6 +291,209 @@ onMounted(async () => {
   gap: 16px;
   align-items: flex-end;
   margin-bottom: 18px;
+}
+
+.student-report-page :deep(.report-shell) {
+  border-color: var(--report-theme-border);
+  background: linear-gradient(180deg, var(--report-theme-surface-soft) 0%, var(--report-theme-surface) 100%);
+}
+
+.student-report-page :deep(.report-shell .el-card__header) {
+  border-bottom-color: var(--report-theme-border);
+  background: linear-gradient(180deg, var(--report-theme-surface-accent) 0%, var(--report-theme-surface-soft) 100%);
+}
+
+.student-report-page :deep(.report-hero) {
+  background: linear-gradient(180deg, var(--report-theme-surface) 0%, var(--report-theme-surface-soft) 100%);
+}
+
+.student-report-page :deep(.hero-label),
+.student-report-page :deep(.hero-stage),
+.student-report-page :deep(.hero-text) {
+  color: var(--report-theme-ink-soft);
+}
+
+.student-report-page :deep(.hero-title) {
+  color: #243449;
+}
+
+.student-report-page :deep(.hero-tag) {
+  border-color: var(--report-theme-border);
+  background: var(--report-theme-surface-accent);
+  color: #166534;
+}
+
+.student-report-page :deep(.hero-metric) {
+  border-color: var(--report-theme-border);
+  background: linear-gradient(180deg, var(--report-theme-surface) 0%, var(--report-theme-surface-soft) 100%);
+}
+
+.student-report-page :deep(.hero-metric span) {
+  color: var(--report-theme-ink-soft);
+}
+
+.student-report-page :deep(.hero-metric strong) {
+  color: #243449;
+}
+
+.student-report-page :deep(.report-ability-provenance) {
+  border-color: var(--report-theme-border);
+  --el-collapse-header-bg-color: var(--report-theme-surface-soft);
+}
+
+.student-report-page :deep(.detail-tabs .el-tabs__item) {
+  border-color: var(--report-theme-border);
+  background: var(--report-theme-surface-soft);
+  color: var(--report-theme-ink-soft);
+}
+
+.student-report-page :deep(.detail-tabs .el-tabs__item.is-active) {
+  background: var(--report-theme-surface-accent);
+  border-color: var(--report-theme-border-strong);
+  color: #166534;
+  box-shadow: 0 8px 14px rgba(15, 23, 42, 0.06);
+}
+
+.student-report-page :deep(.dimension-board),
+.student-report-page :deep(.stage-board),
+.student-report-page :deep(.config-board),
+.student-report-page :deep(.feedback-board),
+.student-report-page :deep(.advice-board) {
+  background: linear-gradient(180deg, var(--report-theme-surface-soft) 0%, var(--report-theme-surface) 100%);
+}
+
+.student-report-page :deep(.dimension-item),
+.student-report-page :deep(.kal-card),
+.student-report-page :deep(.stage-card),
+.student-report-page :deep(.feedback-card),
+.student-report-page :deep(.advice-card),
+.student-report-page :deep(.radar-card),
+.student-report-page :deep(.timeline-card),
+.student-report-page :deep(.portrait-card),
+.student-report-page :deep(.summary-card),
+.student-report-page :deep(.score-card) {
+  border-color: var(--report-theme-border);
+  background: linear-gradient(180deg, var(--report-theme-surface) 0%, var(--report-theme-surface-soft) 100%);
+}
+
+.student-report-page :deep(.board-title),
+.student-report-page :deep(.kal-card__title),
+.student-report-page :deep(.config-item__title),
+.student-report-page :deep(.mi-card__title),
+.student-report-page :deep(.feedback-tag) {
+  color: #243449;
+}
+
+.student-report-page :deep(.dimension-top),
+.student-report-page :deep(.stage-card__index),
+.student-report-page :deep(.stage-card__metrics),
+.student-report-page :deep(.config-item__meta),
+.student-report-page :deep(.config-item__hint),
+.student-report-page :deep(.questionnaire-row__value),
+.student-report-page :deep(.questionnaire-row__hint),
+.student-report-page :deep(.feedback-meta),
+.student-report-page :deep(.mi-intro),
+.student-report-page :deep(.mi-card__meta),
+.student-report-page :deep(.mi-item__top),
+.student-report-page :deep(.mi-item__meta),
+.student-report-page :deep(.report-tip-inline),
+.student-report-page :deep(.empty-help__text),
+.student-report-page :deep(.report-empty__tip) {
+  color: var(--report-theme-ink-soft);
+}
+
+.student-report-page :deep(.dimension-bar),
+.student-report-page :deep(.mi-item__bar) {
+  background: #dbeafe;
+}
+
+.student-report-page :deep(.config-item__chips span),
+.student-report-page :deep(.feedback-tag) {
+  background: var(--report-theme-surface-accent);
+  border-color: var(--report-theme-border);
+  color: #243449;
+}
+
+.student-report-page :deep(.config-item),
+.student-report-page :deep(.mi-card),
+.student-report-page :deep(.mi-item),
+.student-report-page :deep(.advice-item),
+.student-report-page :deep(.hero-metric) {
+  border-color: var(--report-theme-border);
+  background: linear-gradient(180deg, var(--report-theme-surface) 0%, var(--report-theme-surface-soft) 100%);
+}
+
+.student-report-page :deep(.mi-card__score) {
+  color: #8a6a34;
+}
+
+.student-report-page :deep(.report-empty),
+.student-report-page :deep(.empty-help),
+.student-report-page :deep(.empty-help--compact) {
+  background: transparent;
+}
+
+.student-report-page :deep(.empty-help .el-empty),
+.student-report-page :deep(.report-empty .el-empty) {
+  --el-empty-fill-color-0: #f8fbff;
+  --el-empty-fill-color-1: #eef6ff;
+  --el-empty-fill-color-2: #dbeafe;
+  --el-empty-fill-color-3: #c7ddfb;
+  --el-empty-fill-color-4: #b7d3f8;
+  --el-empty-fill-color-5: #a8cbf4;
+  --el-empty-fill-color-6: #98c3f0;
+  --el-empty-fill-color-7: #86efac;
+  --el-empty-fill-color-8: #bfdbfe;
+  --el-empty-fill-color-9: #eaf3ff;
+}
+
+.student-report-page :deep(.portrait-card),
+.student-report-page :deep(.timeline-card),
+.student-report-page :deep(.radar-card) {
+  border-color: var(--report-theme-border);
+  background: linear-gradient(180deg, var(--report-theme-surface) 0%, var(--report-theme-surface-soft) 100%);
+}
+
+.student-report-page :deep(.portrait-card .el-empty),
+.student-report-page :deep(.timeline-card .el-empty),
+.student-report-page :deep(.radar-card .el-empty) {
+  --el-empty-fill-color-0: #f8fbff;
+  --el-empty-fill-color-1: #eef6ff;
+  --el-empty-fill-color-2: #dbeafe;
+  --el-empty-fill-color-3: #c7ddfb;
+  --el-empty-fill-color-4: #b7d3f8;
+  --el-empty-fill-color-5: #a8cbf4;
+  --el-empty-fill-color-6: #98c3f0;
+  --el-empty-fill-color-7: #86efac;
+  --el-empty-fill-color-8: #bfdbfe;
+  --el-empty-fill-color-9: #eaf3ff;
+}
+
+.student-report-page :deep(.questionnaire-row .el-input__wrapper),
+.student-report-page :deep(.questionnaire-row .el-textarea__inner) {
+  background: var(--report-theme-surface-soft) !important;
+  box-shadow: 0 0 0 1.5px var(--report-theme-border) inset !important;
+}
+
+.student-report-page :deep(.questionnaire-row .el-radio-button__inner) {
+  border-color: var(--report-theme-border);
+  background: var(--report-theme-surface-soft);
+  color: var(--report-theme-ink-soft);
+}
+
+.student-report-page :deep(.questionnaire-row .el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: linear-gradient(135deg, #edf7cf 0%, #fff1de 100%);
+  border-color: var(--report-theme-border-strong);
+  color: #243449;
+  box-shadow: none;
+}
+
+.student-report-page__hero-copy h1::after {
+  content: "学习报告";
+}
+
+.student-report-page__hero-copy p::after {
+  content: "查看结果与建议";
 }
 
 @media (max-width: 900px) {

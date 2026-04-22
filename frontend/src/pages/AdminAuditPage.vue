@@ -237,12 +237,12 @@ onMounted(load);
 
 .audit-page__panel {
   padding: 18px 18px 16px;
-  border: 3px solid #1f2937;
-  border-radius: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
   background:
-    radial-gradient(circle at top right, rgba(201, 237, 255, 0.32), transparent 28%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top right, rgba(219, 234, 254, 0.32), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
 
 .audit-page__table-wrap {
@@ -277,7 +277,7 @@ onMounted(load);
 .audit-page__table-title {
   font-size: 18px;
   font-weight: 800;
-  color: #18463e;
+  color: #0f172a;
 }
 
 .audit-page__table-title-wrap :deep(.query-toolbar) {
@@ -296,9 +296,9 @@ onMounted(load);
   min-height: 34px;
   padding: 0 14px;
   border-radius: 999px;
-  background: #f2fbf7;
-  border: 1px solid #d6ece3;
-  color: #2f6157;
+  background: #eefbf3;
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  color: #166534;
   font-size: 13px;
   font-weight: 700;
 }
@@ -326,8 +326,8 @@ onMounted(load);
 }
 
 .audit-page__table-wrap :deep(.el-table th.el-table__cell) {
-  background: #f4fbf8 !important;
-  color: #417065;
+  background: #f8fafc !important;
+  color: #475569;
   font-weight: 800;
 }
 
@@ -335,8 +335,8 @@ onMounted(load);
 .audit-page__table-wrap :deep(.el-table th.el-table__cell) {
   padding-top: 16px;
   padding-bottom: 16px;
-  border-right: 1px solid #edf3fb !important;
-  border-bottom: 1px solid #edf3fb !important;
+  border-right: 1px solid rgba(226, 232, 240, 0.9) !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9) !important;
 }
 
 .audit-page__table-wrap :deep(.el-table tr td:last-child),

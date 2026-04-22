@@ -311,15 +311,15 @@ watch(
 .questionnaire-pane {
   overflow: hidden;
   border-radius: 28px;
-  border: 2px solid #1f2937;
-  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
+  border: 1px solid rgba(31, 41, 55, 0.14);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 16px 34px rgba(31, 41, 55, 0.08);
 }
 
 .questionnaire-pane :deep(.el-card__header) {
   padding: 16px 20px 12px;
-  border-bottom: 1px solid #cfe0f5;
-  background: linear-gradient(180deg, #f5f9ff 0%, #f8fbff 100%);
+  border-bottom: 1px solid #e0d2bb;
+  background: linear-gradient(180deg, #fff1de 0%, #fff8ef 100%);
 }
 
 .questionnaire-pane :deep(.el-card__body) {
@@ -351,7 +351,7 @@ watch(
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  color: #4f6782;
+  color: #7a6545;
 }
 
 .questionnaire-pane__empty {
@@ -371,10 +371,10 @@ watch(
 }
 
 .questionnaire-summary {
-  border: 1.5px solid #c6d8ef;
+  border: 1.5px solid #e0d2bb;
   border-radius: 22px;
   padding: 14px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
   gap: 12px;
   min-width: 0;
@@ -389,9 +389,9 @@ watch(
 }
 
 .questionnaire-summary__card {
-  border: 1.5px solid #c6d8ef;
+  border: 1.5px solid #e0d2bb;
   border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   padding: 12px 14px;
   display: grid;
   gap: 4px;
@@ -402,19 +402,19 @@ watch(
 
 .questionnaire-summary__card span {
   font-size: 12px;
-  color: #5d7694;
+  color: #7a6545;
 }
 
 .questionnaire-summary__card strong {
   font-size: 16px;
-  color: #2a456b;
+  color: #4f3d24;
   overflow-wrap: anywhere;
 }
 
 .questionnaire-summary__chart {
-  border: 1.5px solid #c6d8ef;
+  border: 1.5px solid #e0d2bb;
   border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   padding: 12px 14px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   min-width: 0;
@@ -424,13 +424,13 @@ watch(
 .questionnaire-summary__title {
   font-size: 13px;
   font-weight: 700;
-  color: #37557f;
+  color: #243449;
   margin-bottom: 8px;
 }
 
 .questionnaire-summary__empty {
   font-size: 12px;
-  color: #68819e;
+  color: #8a7555;
 }
 
 .dimension-bars {
@@ -448,28 +448,28 @@ watch(
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
-  color: #4a6485;
+  color: #6f5a3a;
 }
 
 .dimension-bars__track {
   height: 10px;
   border-radius: 999px;
-  background: #e7eef8;
+  background: #dbeafe;
   overflow: hidden;
 }
 
 .dimension-bars__value {
   height: 100%;
   border-radius: inherit;
-  background: #6d92cf;
+  background: linear-gradient(90deg, #60a5fa 0%, #86efac 100%);
 }
 
 .questionnaire-group {
-  border: 2px solid #1f2937;
+  border: 1px solid rgba(31, 41, 55, 0.14);
   border-radius: 26px;
   padding: 16px;
-  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 16px 34px rgba(31, 41, 55, 0.08);
   min-width: 0;
   max-width: 100%;
 }
@@ -477,7 +477,7 @@ watch(
 .questionnaire-group__title {
   font-size: 14px;
   font-weight: 700;
-  color: #2e4668;
+  color: #243449;
   margin-bottom: 10px;
 }
 
@@ -487,10 +487,10 @@ watch(
 }
 
 .questionnaire-item {
-  border: 1.5px solid #c6d8ef;
+  border: 1.5px solid #e0d2bb;
   border-radius: 20px;
   padding: 12px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
   gap: 8px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -503,7 +503,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: #476182;
+  color: #7a6545;
   font-size: 12px;
   min-width: 0;
 }
@@ -514,7 +514,7 @@ watch(
 
 .questionnaire-item__question-title {
   font-size: 12px;
-  color: #587294;
+  color: #6f5a3a;
   font-weight: 700;
 }
 
@@ -524,12 +524,12 @@ watch(
 }
 
 .question-row {
-  border: 1.5px solid #c6d8ef;
+  border: 1.5px solid #e0d2bb;
   border-radius: 16px;
   padding: 10px;
   display: grid;
   gap: 6px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   min-width: 0;
   max-width: 100%;
@@ -537,7 +537,7 @@ watch(
 
 .question-row__text {
   font-size: 12px;
-  color: #2d486d;
+  color: #4f3d24;
   overflow-wrap: anywhere;
 }
 
@@ -547,12 +547,12 @@ watch(
   justify-content: flex-start;
   gap: 10px;
   font-size: 12px;
-  color: #486487;
+  color: #7a6545;
 }
 
 .questionnaire-item__hint {
   font-size: 12px;
-  color: #6d7f98;
+  color: #8a7555;
   line-height: 1.5;
 }
 
@@ -568,27 +568,39 @@ watch(
 
 .questionnaire-pane :deep(.el-radio-button__inner) {
   border-radius: 999px;
-  border: 1.5px solid #c6d8ef;
-  background: #f8fbff;
-  color: #4f6988;
+  border: 1.5px solid #e0d2bb;
+  background: #fff8ef;
+  color: #7a6545;
   font-size: 12px;
   padding: 6px 12px;
   transition: all 0.2s ease;
 }
 
 .questionnaire-pane :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background: #e8f1ff;
-  border-color: #96b6e2;
-  color: #1f3a5c;
+  background: linear-gradient(135deg, #edf7cf 0%, #fff1de 100%);
+  border-color: #ccb78f;
+  color: #4f3d24;
   box-shadow: 0 6px 10px rgba(31, 41, 55, 0.08);
 }
 
 .questionnaire-pane :deep(.el-textarea__inner) {
   border-radius: 16px;
-  border: 1.5px solid #c6d8ef;
-  background: #f8fbff;
+  border: 1.5px solid #e0d2bb;
+  background: #fff8ef;
   color: #1f2937;
   box-shadow: none;
+}
+
+.questionnaire-pane :deep(.el-button:not(.el-button--primary)) {
+  border-color: #e0d2bb;
+  background: #ffffff;
+  color: #243449;
+}
+
+.questionnaire-pane :deep(.el-button--primary) {
+  border-color: #ccb78f;
+  background: linear-gradient(135deg, #edf7cf 0%, #fff1de 100%);
+  color: #4f3d24;
 }
 
 @media (max-width: 1100px) {

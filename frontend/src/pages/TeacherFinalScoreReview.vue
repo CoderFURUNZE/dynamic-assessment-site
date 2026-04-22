@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
+import { DataAnalysis, EditPen, Medal, User } from "@element-plus/icons-vue";
 import { api } from "../api";
 import WorkspaceTopbar from "../components/WorkspaceTopbar.vue";
 import HintButton from "../components/HintButton.vue";
@@ -51,6 +52,15 @@ const termSummary = computed(() => detail.value?.profile?.term_summary ?? {});
 const recommendationClosure = computed(() => detail.value?.recommendation_closure ?? {});
 const selectedStudent = computed(() => students.value.find((item) => item.user_id === selectedUserId.value) ?? null);
 const canConfirmFinalScore = computed(() => Number(termSummary.value?.stage_count || 0) > 0);
+const confirmedCount = computed(() => students.value.filter((item) => item.confirmed_score != null).length);
+const metaText = computed(() => `当前课程：${subject.value || "未选择"} · 已确认 ${confirmedCount.value}/${students.value.length}`);
+
+const summaryCards = computed(() => [
+  { label: "建议得分", value: `${toPercent(termSummary.value?.final_score_reference)}%`, icon: DataAnalysis, tone: "blue" },
+  { label: "已采样阶段", value: String(termSummary.value?.stage_count || 0), icon: EditPen, tone: "amber" },
+  { label: "最终等级", value: detail.value?.final_score_confirmation?.confirmed_level || form.confirmedLevel || "待确认", icon: Medal, tone: "green" },
+  { label: "当前学生", value: selectedStudent.value?.full_name || selectedStudent.value?.username || "未选择", icon: User, tone: "neutral" },
+]);
 
 function toPercent(value?: number | null) {
   return Math.round(Number(value || 0) * 100);
@@ -77,12 +87,19 @@ async function loadCourses() {
 function syncQuery() {
   saveTeacherSubject(subject.value);
   const routeUserId = String(route.query.user_id || "").trim();
+  const nextUserId = selectedUserId.value ? String(selectedUserId.value) : routeUserId || undefined;
+  if (
+    route.path === "/teacher/review" &&
+    String(route.query.subject || "") === subject.value &&
+    String(route.query.tab || "") === "final" &&
+    String(route.query.user_id || "") === String(nextUserId || "")
+  ) {
+    return;
+  }
   router.replace({
     path: "/teacher/review",
     query: {
-      ...buildTeacherSubjectQuery(subject.value, {
-        user_id: selectedUserId.value ? String(selectedUserId.value) : routeUserId || undefined,
-      }),
+      ...buildTeacherSubjectQuery(subject.value, { user_id: nextUserId }),
       tab: "final",
     },
   });
@@ -170,7 +187,7 @@ watch(
   }
 );
 
-watch(selectedUserId, async (value) => {
+watch(selectedUserId, async () => {
   syncQuery();
   await loadDetail();
 });
@@ -187,14 +204,14 @@ onMounted(async () => {
     <WorkspaceTopbar
       v-model="subject"
       :courses="courses"
-      badge="Teacher Final Review"
-      title="老师最终评分确认页"
-      subtitle="按学期阶段趋势、期末雷达图和推荐收口情况，给出老师最终确认分。"
-      :meta-text="`当前课程：${subject || '未选择'}，已确认 ${students.filter((item) => item.confirmed_score != null).length}/${students.length}`"
+      badge="Final Review"
+      title="最终评分确认"
+      subtitle="结合阶段趋势、期末画像与推荐收口结果，形成教师最终确认结论。"
+      :meta-text="metaText"
     >
       <el-button @click="router.push({ path: '/teacher/workspace', query: buildTeacherSubjectQuery(subject) })">返回课程工作台</el-button>
-      <HintButton tip="单独处理课程报名审核。" @click="router.push({ path: '/teacher/review', query: { ...buildTeacherSubjectQuery(subject), tab: 'enrollment' } })">
-        去报名审核页
+      <HintButton tip="切换到报名审核页，查看课程准入记录。" @click="router.push({ path: '/teacher/review', query: { ...buildTeacherSubjectQuery(subject), tab: 'enrollment' } })">
+        报名审核
       </HintButton>
       <el-button type="primary" @click="loadDetail">刷新详情</el-button>
     </WorkspaceTopbar>
@@ -202,16 +219,21 @@ onMounted(async () => {
     <div class="final-review-layout">
       <aside class="final-review-sidebar panel-card" v-loading="listLoading">
         <div class="sidebar-head">
-          <div>
-            <div class="sidebar-head__eyebrow">Student List</div>
-            <div class="sidebar-head__title">学生名单</div>
-            <div class="sidebar-head__subtitle">先选学生，再确认期末成绩。</div>
-          </div>
+          <span class="section-eyebrow">学生列表</span>
+          <h2>按学生完成学期收口</h2>
+          <p>先选学生，再确认最终得分、等级与教师说明。</p>
         </div>
+
+        <div class="sidebar-stats">
+          <div><small>已确认</small><strong>{{ confirmedCount }}</strong></div>
+          <div><small>待确认</small><strong>{{ Math.max(students.length - confirmedCount, 0) }}</strong></div>
+        </div>
+
         <div class="student-list">
           <button
             v-for="item in students"
             :key="item.user_id"
+            type="button"
             class="student-item"
             :class="{ active: item.user_id === selectedUserId }"
             @click="selectedUserId = item.user_id"
@@ -230,41 +252,68 @@ onMounted(async () => {
 
       <main class="final-review-main" v-loading="detailLoading">
         <template v-if="detail">
+          <section class="overview-card panel-card">
+            <div class="overview-card__head">
+              <div>
+                <span class="section-eyebrow">收口概览</span>
+                <h2>{{ selectedStudent?.full_name || selectedStudent?.username || "未选择学生" }}</h2>
+                <p>将阶段评价、推荐结果与教师观察合并为课程期末结论。</p>
+              </div>
+              <div class="overview-card__badges">
+                <span>{{ selectedStudent?.class_name || "未分班" }}</span>
+                <span>{{ selectedStudent?.persona_label || "未生成画像" }}</span>
+                <span>{{ selectedStudent?.risk_level || "未标记风险" }}</span>
+              </div>
+            </div>
+
+            <div class="summary-grid">
+              <article v-for="item in summaryCards" :key="item.label" class="summary-card" :class="`summary-card--${item.tone}`">
+                <div class="summary-card__icon">
+                  <el-icon><component :is="item.icon" /></el-icon>
+                </div>
+                <div class="summary-card__body">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.value }}</strong>
+                </div>
+              </article>
+            </div>
+          </section>
+
           <section class="detail-grid">
             <el-card class="panel-card" shadow="never">
               <template #header>期末画像雷达图</template>
               <PortraitRadarChart
                 :items="finalDimensions"
                 title="学期最终五维结果"
-                subtitle="系统根据各阶段快照汇总得到的期末结果"
-                accent="#2f7a6d"
+                subtitle="系统根据各阶段快照汇总得到的期末画像"
+                accent="#22c55e"
               />
             </el-card>
 
             <el-card class="panel-card" shadow="never">
-              <template #header>最终评分确认</template>
+              <template #header>教师确认表单</template>
               <div class="confirm-form">
                 <div class="confirm-form__row">
                   <label>学生</label>
                   <div>{{ detail.student?.full_name || detail.student?.username }}</div>
                 </div>
                 <div class="confirm-form__row">
-                  <label>确认分</label>
+                  <label>确认分数</label>
                   <el-input-number v-model="form.confirmedScorePercent" :min="0" :max="100" :step="1" />
                 </div>
                 <div class="confirm-form__row">
                   <label>等级</label>
-                  <el-select v-model="form.confirmedLevel" placeholder="选择等级">
+                  <el-select v-model="form.confirmedLevel" placeholder="请选择等级">
                     <el-option v-for="item in levelOptions" :key="item" :label="item" :value="item" />
                   </el-select>
                 </div>
                 <div class="confirm-form__row confirm-form__row--stack">
                   <label>推荐链路收口说明</label>
-                  <el-input v-model="form.recommendationSummary" type="textarea" :rows="3" placeholder="总结推荐链路最后收口情况" />
+                  <el-input v-model="form.recommendationSummary" type="textarea" :rows="3" placeholder="总结推荐链路最后的收口情况" />
                 </div>
                 <div class="confirm-form__row confirm-form__row--stack">
-                  <label>老师确认说明</label>
-                  <el-input v-model="form.comment" type="textarea" :rows="4" placeholder="填写最终评分依据、教学观察或补充说明" />
+                  <label>教师确认说明</label>
+                  <el-input v-model="form.comment" type="textarea" :rows="4" placeholder="填写最终评分依据、课堂观察或补充说明" />
                 </div>
                 <div class="confirm-form__actions">
                   <el-button type="primary" :loading="saving" :disabled="!canConfirmFinalScore" @click="saveConfirmation">确认并归档</el-button>
@@ -293,14 +342,14 @@ onMounted(async () => {
             </el-card>
 
             <el-card class="panel-card" shadow="never">
-              <template #header>推荐链路最后收口</template>
+              <template #header>推荐链路最终收口</template>
               <div class="closure-panel">
                 <div class="closure-panel__item">
-                  <span>最后一次推荐时间</span>
+                  <span>最近推荐时间</span>
                   <strong>{{ recommendationClosure.latest_created_at ? recommendationClosure.latest_created_at.replace("T", " ").slice(0, 16) : "暂无" }}</strong>
                 </div>
                 <div class="closure-panel__item">
-                  <span>最后推荐目标</span>
+                  <span>最近推荐目标</span>
                   <strong>{{ recommendationClosure.latest_target_kp_id || "暂无" }}</strong>
                 </div>
                 <div class="closure-panel__item closure-panel__item--wide">
@@ -317,7 +366,7 @@ onMounted(async () => {
         </template>
 
         <el-card v-else class="panel-card empty-card" shadow="never">
-          <div></div>
+          <div class="empty-state">当前课程还没有可确认的期末评分数据。</div>
         </el-card>
       </main>
     </div>
@@ -327,74 +376,109 @@ onMounted(async () => {
 <style scoped>
 .final-review-page {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .panel-card {
-  border: 3px solid #1f2937;
-  border-radius: 32px;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top right, rgba(191, 221, 254, 0.18), transparent 24%),
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.08), transparent 22%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
+}
+
+.section-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #eef6dc 0%, #fff2db 100%);
+  color: #586537;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  width: fit-content;
 }
 
 .final-review-layout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 16px;
 }
 
 .final-review-sidebar {
-  padding: 18px;
-  border: 3px solid #1f2937;
-  background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  padding: 20px;
 }
 
-.sidebar-head__eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 800;
-  color: #5d8666;
+.sidebar-head h2,
+.overview-card__head h2 {
+  margin: 6px 0 0;
+  color: #1f2937;
+  font-size: 24px;
+  line-height: 1.15;
 }
 
-.sidebar-head__title {
+.sidebar-head p,
+.overview-card__head p {
+  margin: 8px 0 0;
+  color: #6a7280;
+  line-height: 1.7;
+}
+
+.sidebar-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sidebar-stats > div {
+  padding: 14px 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(191, 167, 132, 0.24);
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 244, 229, 0.92));
+}
+
+.sidebar-stats small {
+  color: #6a7280;
+}
+
+.sidebar-stats strong {
+  display: block;
   margin-top: 8px;
-  font-size: 22px;
-  font-weight: 800;
-  color: #1f5130;
-}
-
-.sidebar-head__subtitle {
-  display: none;
+  color: #1f2937;
+  font-size: 24px;
 }
 
 .student-list {
-  margin-top: 14px;
   display: grid;
   gap: 10px;
 }
 
 .student-item {
-  border: 1.5px solid #c6d8ef;
-  border-radius: 22px;
-  padding: 14px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   display: grid;
   gap: 8px;
+  padding: 14px 16px;
   text-align: left;
+  border-radius: 22px;
+  border: 1px solid rgba(191, 167, 132, 0.24);
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 244, 229, 0.92));
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .student-item.active {
-  border-color: rgba(78, 138, 96, 0.48);
-  background: linear-gradient(180deg, rgba(223, 243, 227, 0.98), rgba(243, 250, 245, 0.98));
-  box-shadow: 0 14px 30px rgba(42, 109, 61, 0.12);
+  border-color: rgba(34, 197, 94, 0.24);
+  background:
+    radial-gradient(circle at top right, rgba(215, 249, 168, 0.22), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #eef8ff 100%);
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.08);
 }
 
 .student-item__main,
@@ -404,26 +488,129 @@ onMounted(async () => {
 }
 
 .student-item strong {
-  color: #1f5130;
+  color: #1f2937;
 }
 
 .student-item span {
-  color: #5b715e;
+  color: #6a7280;
   font-size: 13px;
 }
 
 .final-review-main {
   display: grid;
+  gap: 18px;
+}
+
+.overview-card {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+}
+
+.overview-card__head {
+  display: flex;
+  justify-content: space-between;
   gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.overview-card__badges {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.overview-card__badges span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(191, 167, 132, 0.34);
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+  color: #8a6740;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.summary-card {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(191, 167, 132, 0.24);
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 244, 229, 0.92));
+}
+
+.summary-card__icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.summary-card__body {
+  display: grid;
+  gap: 6px;
+}
+
+.summary-card__body span {
+  color: #6a7280;
+  font-size: 13px;
+}
+
+.summary-card__body strong {
+  color: #1f2937;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.summary-card--blue .summary-card__icon {
+  color: #334155;
+  background: rgba(191, 227, 245, 0.45);
+}
+
+.summary-card--amber .summary-card__icon {
+  color: #b45309;
+  background: rgba(253, 230, 138, 0.32);
+}
+
+.summary-card--green .summary-card__icon {
+  color: #15803d;
+  background: rgba(187, 247, 208, 0.3);
+}
+
+.summary-card--neutral .summary-card__icon {
+  color: #475569;
+  background: rgba(226, 232, 240, 0.52);
 }
 
 .detail-grid {
   display: grid;
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
 }
 
-.detail-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.final-review-main :deep(.el-card__header) {
+  padding: 24px 24px 0;
+  border-bottom: 0;
+  color: #1f2937;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.final-review-main :deep(.el-card__body) {
+  padding: 20px 24px 24px;
 }
 
 .confirm-form {
@@ -443,8 +630,8 @@ onMounted(async () => {
 }
 
 .confirm-form__row label {
+  color: #6a7280;
   font-size: 13px;
-  color: #5b715e;
   font-weight: 700;
 }
 
@@ -459,24 +646,28 @@ onMounted(async () => {
   gap: 12px;
 }
 
-.timeline-item {
-  border: 1.5px solid #c6d8ef;
+.timeline-item,
+.closure-panel__item {
   border-radius: 22px;
-  padding: 14px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid rgba(191, 167, 132, 0.24);
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 244, 229, 0.92));
+  padding: 14px 16px;
 }
 
 .timeline-item__title {
+  color: #1f2937;
   font-weight: 700;
-  color: #1f5130;
 }
 
 .timeline-item__meta,
-.timeline-item__desc {
+.timeline-item__desc,
+.closure-panel__item span,
+.empty-text,
+.empty-state {
   margin-top: 6px;
-  color: #5b715e;
+  color: #6a7280;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .closure-panel {
@@ -486,10 +677,6 @@ onMounted(async () => {
 }
 
 .closure-panel__item {
-  border: 1.5px solid #c6d8ef;
-  border-radius: 22px;
-  padding: 14px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
   display: grid;
   gap: 8px;
 }
@@ -498,55 +685,50 @@ onMounted(async () => {
   grid-column: 1 / -1;
 }
 
-.closure-panel__item span {
-  color: #5b715e;
-  font-size: 13px;
-}
-
 .closure-panel__item strong {
-  color: #1f5130;
+  color: #1f2937;
   line-height: 1.7;
 }
 
-.empty-card,
-.empty-text {
-  color: #5b715e;
+.empty-card {
+  padding: 24px;
 }
 
-.final-review-page :deep(.el-card__header) {
-  padding: 24px 24px 0;
-  border-bottom: none;
-  color: #1f5130;
-  font-weight: 800;
-}
-
-.final-review-page :deep(.el-card__body) {
-  padding: 20px 24px 24px;
-}
-
-.final-review-page :deep(.el-select__wrapper),
-.final-review-page :deep(.el-textarea__inner),
-.final-review-page :deep(.el-input__wrapper),
-.final-review-page :deep(.el-input-number),
-.final-review-page :deep(.el-input-number .el-input__wrapper) {
-  border-radius: 18px;
-  box-shadow: 0 0 0 1px rgba(140, 173, 149, 0.3) inset;
-  background: rgba(245, 250, 246, 0.96);
-}
-
-.final-review-page :deep(.el-button--primary) {
-  border-color: rgba(51, 122, 71, 0.8);
-  background: linear-gradient(135deg, #2f7a45, #2aa887);
-}
-
-.final-review-page :deep(.el-button:not(.el-button--primary)) {
-  border-radius: 999px;
-}
-
-@media (max-width: 1100px) {
-  .final-review-layout,
-  .detail-grid {
+@media (max-width: 1200px) {
+  .final-review-layout {
     grid-template-columns: 1fr;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .overview-card,
+  .final-review-sidebar {
+    padding: 18px;
+  }
+
+  .detail-grid,
+  .closure-panel,
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-head h2,
+  .overview-card__head h2 {
+    font-size: 22px;
+  }
+
+  .confirm-form__row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .student-item {
+    transition: none;
   }
 }
 </style>

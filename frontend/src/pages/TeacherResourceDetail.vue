@@ -60,7 +60,7 @@ const resourceTypeOptions = [
   { value: "doc", label: "补充资料", icon: Document, desc: "适合资料包、附件和实验文档。" },
   { value: "ppt", label: "课件", icon: Document, desc: "适合讲稿、课件和课堂展示材料。" },
   { value: "example", label: "案例示例", icon: Reading, desc: "适合案例解析、实验示例和代码样例。" },
-  { value: "link", label: "外部链接", icon: Link, desc: "适合网页、外部平台和阅读链接。" },
+  { value: "link", label: "外部链接", icon: Link, desc: "适合网页、外部平台和在线阅读链接。" },
   { value: "book", label: "推荐书籍", icon: Reading, desc: "适合课后阅读和拓展书单。" },
 ];
 
@@ -157,7 +157,7 @@ watch(resourceId, loadDetail, { immediate: true });
     <div class="teacher-resource-page__inner">
       <header class="resource-hero">
         <div class="resource-hero__left">
-          <button class="back-button" @click="backToWorkspace">返回图谱</button>
+          <button class="back-button" @click="backToWorkspace">返回内容工作台</button>
           <div class="hero-copy">
             <div class="hero-eyebrow">教师资源配置</div>
             <h1>资源详情与配置</h1>
@@ -198,7 +198,7 @@ watch(resourceId, loadDetail, { immediate: true });
           <aside class="resource-side">
             <button class="side-tab" :class="{ active: activeTab === 'basic' }" @click="activeTab = 'basic'">
               <strong>基础信息</strong>
-              <small>改标题、分类、标签和地址</small>
+              <small>维护标题、分类、标签和地址</small>
             </button>
             <button class="side-tab" :class="{ active: activeTab === 'preview' }" @click="activeTab = 'preview'">
               <strong>资源预览</strong>
@@ -206,7 +206,7 @@ watch(resourceId, loadDetail, { immediate: true });
             </button>
             <button class="side-tab" :class="{ active: activeTab === 'guide' }" @click="activeTab = 'guide'">
               <strong>使用说明</strong>
-              <small>帮助老师明确资源该怎么配</small>
+              <small>帮助老师明确这个资源怎么用</small>
             </button>
           </aside>
 
@@ -215,7 +215,7 @@ watch(resourceId, loadDetail, { immediate: true });
               <div class="panel-head">
                 <div>
                   <h3>基础信息</h3>
-                  <p>系统自动识别资源类型，老师只需要维护标题、分类、标签和说明。</p>
+                  <p>系统会自动识别资源类型，老师只需要维护标题、分类、标签和说明。</p>
                 </div>
                 <div class="panel-actions">
                   <el-button @click="openPreview" :disabled="!previewAvailable">预览资源</el-button>
@@ -255,13 +255,13 @@ watch(resourceId, loadDetail, { immediate: true });
                   </el-radio-group>
                 </el-form-item>
                 <el-form-item v-if="detail.source_kind === 'external'" label="资源 URL / 外部地址">
-                  <el-input v-model="form.url" placeholder="可填写视频地址、文档地址、网页链接或网盘地址" />
+                  <el-input v-model="form.url" placeholder="可填写视频、文档、网页或网盘地址" />
                 </el-form-item>
                 <el-form-item label="标签">
                   <el-input v-model="form.tags" placeholder="例如：阶段一、重点、补充阅读" />
                 </el-form-item>
                 <el-form-item label="描述">
-                  <el-input v-model="form.description" type="textarea" :rows="3" placeholder="告诉学生怎么使用这份资源" />
+                  <el-input v-model="form.description" type="textarea" :rows="3" placeholder="告诉学生应该如何使用这份资源" />
                 </el-form-item>
               </el-form>
             </section>
@@ -270,7 +270,7 @@ watch(resourceId, loadDetail, { immediate: true });
               <div class="panel-head">
                 <div>
                   <h3>资源预览</h3>
-                  <p>这里不做复杂播放器，只提供老师快速检查链接和跳转。</p>
+                  <p>这里只提供老师快速检查链接和跳转，不做复杂播放器。</p>
                 </div>
               </div>
 
@@ -297,14 +297,14 @@ watch(resourceId, loadDetail, { immediate: true });
               <div class="panel-head">
                 <div>
                   <h3>老师使用说明</h3>
-                  <p>把资源配置页的用途说明清楚，后续答辩和交接都更方便。</p>
+                  <p>把资源配置页的用途说明清楚，后续答辩和交接都会更方便。</p>
                 </div>
               </div>
 
               <div class="guide-list">
                 <div class="guide-item">
                   <strong>1. 视频资源</strong>
-                  <p>适合放讲解视频、实验演示和录播课程，学生点击学习时优先进入这里。</p>
+                  <p>适合放讲解视频、实验演示和录播课程，学生点击学习时会优先进入这里。</p>
                 </div>
                 <div class="guide-item">
                   <strong>2. 文档资料</strong>
@@ -316,7 +316,7 @@ watch(resourceId, loadDetail, { immediate: true });
                 </div>
                 <div class="guide-item danger">
                   <strong>4. 删除资源</strong>
-                  <p>删除后学生端将无法再看到这个资源入口，请确认不再使用再删除。</p>
+                  <p>删除后学生端将无法再看到这个资源入口，请确认不再使用后再删除。</p>
                 </div>
               </div>
 
@@ -353,13 +353,14 @@ watch(resourceId, loadDetail, { immediate: true });
 .resource-overview,
 .resource-layout {
   background:
-    radial-gradient(circle at top right, rgba(210, 238, 255, 0.72), transparent 42%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  border: 3px solid #1f2937;
-  border-radius: 30px;
+    radial-gradient(circle at top right, rgba(191, 219, 254, 0.2), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(187, 247, 208, 0.14), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
   box-shadow:
-    0 12px 0 rgba(31, 41, 55, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    0 12px 26px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .resource-hero {
@@ -367,24 +368,24 @@ watch(resourceId, loadDetail, { immediate: true });
   justify-content: space-between;
   align-items: flex-start;
   gap: 18px;
-  padding: 28px;
+  padding: 22px;
 }
 
 .resource-hero__left {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .back-button {
   width: fit-content;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  color: #35557f;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #334155;
   border-radius: 999px;
-  height: 42px;
+  height: 40px;
   padding: 0 18px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   display: inline-flex;
@@ -394,45 +395,45 @@ watch(resourceId, loadDetail, { immediate: true });
 }
 
 .hero-eyebrow {
-  color: #587394;
-  font-size: 13px;
+  color: #2563eb;
+  font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .hero-copy h1 {
-  margin: 8px 0 10px;
-  font-size: 34px;
-  line-height: 1.1;
-  color: #17325c;
+  margin: 6px 0 8px;
+  font-size: 28px;
+  line-height: 1.15;
+  color: #0f172a;
 }
 
 .hero-copy p {
   margin: 0;
   max-width: 640px;
-  font-size: 16px;
-  line-height: 1.7;
-  color: #587394;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #64748b;
 }
 
 .hero-kp-card {
   min-width: 260px;
   padding: 18px 20px;
   border-radius: 22px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border: 1.5px solid #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   display: grid;
   gap: 8px;
 }
 
 .hero-kp-card span,
 .hero-kp-card small {
-  color: #587394;
+  color: #64748b;
 }
 
 .hero-kp-card strong {
-  color: #17325c;
+  color: #0f172a;
   font-size: 19px;
 }
 
@@ -445,21 +446,21 @@ watch(resourceId, loadDetail, { immediate: true });
 
 .overview-card {
   padding: 18px;
-  border: 1.5px solid #c6d8ef;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 22px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
   gap: 8px;
 }
 
 .overview-card span {
-  color: #587394;
+  color: #64748b;
   font-size: 13px;
   font-weight: 700;
 }
 
 .overview-card strong {
-  color: #17325c;
+  color: #0f172a;
   font-size: 24px;
   line-height: 1.25;
 }
@@ -478,9 +479,9 @@ watch(resourceId, loadDetail, { immediate: true });
 }
 
 .side-tab {
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-radius: 20px;
   padding: 16px 18px;
   text-align: left;
   cursor: pointer;
@@ -490,18 +491,18 @@ watch(resourceId, loadDetail, { immediate: true });
 
 .side-tab strong {
   font-size: 18px;
-  color: #17325c;
+  color: #0f172a;
 }
 
 .side-tab small {
-  color: #587394;
+  color: #64748b;
   font-size: 13px;
 }
 
 .side-tab.active {
-  background: radial-gradient(circle at top left, rgba(215, 249, 168, 0.42), transparent 58%), #fffdf6;
-  border-color: #1f2937;
-  box-shadow: 0 10px 24px rgba(31, 41, 55, 0.1);
+  background: radial-gradient(circle at top left, rgba(187, 247, 208, 0.36), transparent 58%), #ffffff;
+  border-color: rgba(34, 197, 94, 0.24);
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.08);
 }
 
 .resource-main {
@@ -509,9 +510,9 @@ watch(resourceId, loadDetail, { immediate: true });
 }
 
 .panel-card {
-  border: 1.5px solid #c6d8ef;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 24px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   padding: 22px;
   display: grid;
   gap: 20px;
@@ -529,12 +530,12 @@ watch(resourceId, loadDetail, { immediate: true });
 .panel-head h3 {
   margin: 0 0 6px;
   font-size: 26px;
-  color: #17325c;
+  color: #0f172a;
 }
 
 .panel-head p {
   margin: 0;
-  color: #587394;
+  color: #64748b;
   line-height: 1.7;
 }
 
@@ -551,93 +552,82 @@ watch(resourceId, loadDetail, { immediate: true });
 }
 
 .type-card {
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border-radius: 20px;
   padding: 18px;
   text-align: left;
   display: grid;
   gap: 8px;
-  cursor: pointer;
+  cursor: default;
 }
 
 .type-card.active {
-  border-color: #1f2937;
-  background: radial-gradient(circle at top left, rgba(215, 249, 168, 0.42), transparent 58%), #fffdf6;
-  box-shadow: 0 10px 24px rgba(31, 41, 55, 0.1);
+  border-color: rgba(34, 197, 94, 0.24);
+  background: radial-gradient(circle at top left, rgba(187, 247, 208, 0.36), transparent 58%), #ffffff;
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.08);
 }
 
 .type-card__icon {
   width: 22px;
   height: 22px;
-  color: #4f7fff;
+  color: #16a34a;
 }
 
 .type-card strong {
-  color: #17325c;
+  color: #0f172a;
   font-size: 18px;
 }
 
 .type-card small {
-  color: #587394;
+  color: #64748b;
   line-height: 1.6;
+}
+
+.resource-meta-card {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.resource-meta-card > div {
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: #ffffff;
+  display: grid;
+  gap: 8px;
+}
+
+.resource-meta-card span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.resource-meta-card strong {
+  color: #0f172a;
+  line-height: 1.5;
 }
 
 .resource-form {
   max-width: 820px;
 }
 
-.resource-meta-card {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1.5px solid #c6d8ef;
-  border-radius: 20px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-}
-
-.resource-meta-card div {
-  display: grid;
-  gap: 4px;
-}
-
-.resource-meta-card span {
-  font-size: 12px;
-  color: #587394;
-}
-
-.resource-meta-card strong {
-  color: #17325c;
-  word-break: break-all;
-}
-
 .preview-box {
-  min-height: 320px;
-  border: 1.5px solid #c6d8ef;
-  border-radius: 24px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  min-height: 240px;
+  border: 1px dashed rgba(148, 163, 184, 0.28);
+  border-radius: 22px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  display: grid;
+  place-items: center;
+  text-align: center;
   padding: 24px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 18px;
 }
 
 .preview-box.empty {
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.preview-box strong {
-  color: #17325c;
-  font-size: 22px;
-}
-
-.preview-box span,
-.preview-box small {
-  color: #587394;
+  color: #64748b;
+  gap: 10px;
 }
 
 .preview-meta {
@@ -645,9 +635,29 @@ watch(resourceId, loadDetail, { immediate: true });
   gap: 10px;
 }
 
+.preview-meta span {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.preview-meta strong {
+  color: #0f172a;
+  font-size: 24px;
+}
+
+.preview-meta small {
+  color: #64748b;
+  word-break: break-all;
+}
+
 .preview-actions {
   display: flex;
-  gap: 12px;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
   flex-wrap: wrap;
 }
 
@@ -657,105 +667,79 @@ watch(resourceId, loadDetail, { immediate: true });
 }
 
 .guide-item {
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border-radius: 20px;
-  padding: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: #ffffff;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .guide-item strong {
-  color: #17325c;
-  font-size: 18px;
+  color: #0f172a;
 }
 
 .guide-item p {
   margin: 0;
-  color: #587394;
-  line-height: 1.75;
+  color: #64748b;
+  line-height: 1.7;
 }
 
 .guide-item.danger {
-  background: #fff8f7;
-  border-color: #f1c6be;
+  border-color: rgba(248, 113, 113, 0.22);
+  background: linear-gradient(180deg, #fff7f7 0%, #ffffff 100%);
 }
 
 .danger-zone {
-  border: 1.5px solid #f1c6be;
-  background: #fff9f8;
-  border-radius: 24px;
-  padding: 18px 20px;
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  flex-wrap: wrap;
+  padding: 18px 20px;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: 20px;
+  background: linear-gradient(180deg, #fff7f7 0%, #ffffff 100%);
 }
 
 .danger-zone strong {
-  color: #8a3e36;
+  color: #991b1b;
 }
 
 .danger-zone p {
   margin: 6px 0 0;
-  color: #9f6b65;
-}
-
-.teacher-resource-page :deep(.el-input__wrapper),
-.teacher-resource-page :deep(.el-textarea__inner),
-.teacher-resource-page :deep(.el-button) {
-  border-radius: 16px;
-}
-
-.teacher-resource-page :deep(.el-input__wrapper),
-.teacher-resource-page :deep(.el-textarea__inner) {
-  box-shadow: 0 0 0 1px #c6d8ef inset;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-}
-
-.teacher-resource-page :deep(.el-button--primary) {
-  border-color: rgba(51, 122, 71, 0.8);
-  background: linear-gradient(135deg, #2f7a45, #2aa887);
+  color: #7f1d1d;
+  line-height: 1.6;
 }
 
 @media (max-width: 1100px) {
-  .resource-overview {
+  .resource-overview,
+  .resource-meta-card {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .resource-layout {
     grid-template-columns: 1fr;
   }
-
-  .type-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .resource-meta-card {
-    grid-template-columns: 1fr;
-  }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .teacher-resource-page {
-    padding: 14px;
+    padding: 16px;
   }
 
   .resource-hero {
-    padding: 20px;
+    flex-direction: column;
   }
 
-  .hero-copy h1 {
-    font-size: 28px;
-  }
-
-  .hero-copy p {
-    font-size: 15px;
-  }
-
-  .resource-overview {
+  .resource-overview,
+  .type-grid,
+  .resource-meta-card {
     grid-template-columns: 1fr;
+  }
+
+  .danger-zone {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>

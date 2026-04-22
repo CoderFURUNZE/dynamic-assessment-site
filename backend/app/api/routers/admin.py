@@ -4053,7 +4053,13 @@ def list_persona_students(
 ):
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(session=session, admin=admin, course=course)
-    students = session.exec(select(User).where(User.role == UserRole.student).order_by(User.id)).all()
+    student_stmt = select(User).where(User.role == UserRole.student)
+    if course is not None and course.id is not None:
+        active_student_ids = _active_course_student_ids(session, course_id=int(course.id))
+        if not active_student_ids:
+            return {"items": []}
+        student_stmt = student_stmt.where(User.id.in_(active_student_ids))
+    students = session.exec(student_stmt.order_by(User.id)).all()
     items = []
     for student in students:
         if student.id is None:
@@ -4488,6 +4494,10 @@ def analytics_student_detail(
 ):
     course = _resolve_course_for_subject(session, subject=subject, grade=grade, admin=admin)
     _check_teacher_subject_access(session=session, admin=admin, course=course)
+    if course is not None and course.id is not None:
+        active_student_ids = set(_active_course_student_ids(session, course_id=int(course.id)))
+        if user_id not in active_student_ids:
+            raise HTTPException(status_code=404, detail="Student not enrolled in this course")
     return _build_student_detail_payload(
         session,
         user_id=user_id,

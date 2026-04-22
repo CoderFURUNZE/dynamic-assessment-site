@@ -5,7 +5,12 @@ import AdminDimensionManager from "../components/AdminDimensionManager.vue";
 
 <template>
   <div class="admin-dimensions-page">
-    <AdminIntroHero eyebrow="评价配置" title="维度指标" pill="指标池" description="统一维护一级维度和二级指标，为动态评价和画像分析提供稳定的指标口径。" />
+    <AdminIntroHero
+      eyebrow="评价配置"
+      title="维度与指标"
+      pill="指标口径"
+      description="统一维护一级维度和二级指标，为动态评价和画像分析提供稳定、可追踪的指标基础。"
+    />
 
     <section class="admin-dimensions-page__panel">
       <AdminDimensionManager />
@@ -21,11 +26,14 @@ import AdminDimensionManager from "../components/AdminDimensionManager.vue";
 
 .admin-dimensions-page__panel {
   padding: 20px;
-  border-radius: 32px;
-  border: 3px solid #1f2937;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top left, rgba(191, 219, 254, 0.22), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(187, 247, 208, 0.16), transparent 22%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow:
+    0 12px 26px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 </style>

@@ -16,18 +16,21 @@ import AdminIntroHero from "../components/AdminIntroHero.vue";
 <style scoped>
 .admin-courses-page {
   display: grid;
-  gap: 20px;
+  gap: 18px;
   min-width: 0;
 }
 
 .admin-courses-page__panel {
-  border: 3px solid #1f2937;
-  border-radius: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 20px;
   background:
-    radial-gradient(circle at top right, rgba(201, 237, 255, 0.32), transparent 28%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
-  padding: 24px;
+    radial-gradient(circle at top right, rgba(191, 219, 254, 0.22), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(187, 247, 208, 0.16), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow:
+    0 12px 26px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  padding: 20px;
   min-width: 0;
   overflow-x: hidden;
 }

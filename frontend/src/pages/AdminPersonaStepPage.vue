@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
@@ -141,12 +141,15 @@ onMounted(loadSubjectOptions);
   display: grid;
   gap: 18px;
   padding: 22px 24px;
-  border: 3px solid #1f2937;
-  border-radius: 32px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 20px;
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top left, rgba(191, 219, 254, 0.22), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(187, 247, 208, 0.16), transparent 22%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow:
+    0 12px 26px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .admin-persona-step-card__header {
@@ -159,14 +162,14 @@ onMounted(loadSubjectOptions);
 .admin-persona-step-card__eyebrow {
   font-size: 12px;
   font-weight: 800;
-  color: #25645b;
+  color: #2563eb;
 }
 
 .admin-persona-step-card__title {
   margin-top: 4px;
   font-size: 24px;
   font-weight: 800;
-  color: #18463e;
+  color: #0f172a;
 }
 
 .admin-persona-step-card__badge {
@@ -175,9 +178,9 @@ onMounted(loadSubjectOptions);
   min-height: 34px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1.5px solid #c6d8ef;
-  background: #eef5ff;
-  color: #355070;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: #f8fafc;
+  color: #475569;
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
@@ -197,7 +200,7 @@ onMounted(loadSubjectOptions);
 .admin-context__field span {
   font-size: 13px;
   font-weight: 700;
-  color: #4f6c61;
+  color: #475569;
 }
 
 .admin-context__select {

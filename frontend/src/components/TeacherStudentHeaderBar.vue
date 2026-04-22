@@ -49,10 +49,15 @@ const emit = defineEmits<{
   align-items: flex-start;
   flex-wrap: wrap;
   padding: 20px 22px;
-  border-radius: 28px;
-  border: 3px solid #1f2937;
-  background: radial-gradient(circle at top right, rgba(210, 238, 255, 0.72), transparent 42%), #fffdf6;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background:
+    radial-gradient(circle at top left, rgba(191, 219, 254, 0.18), transparent 28%),
+    radial-gradient(circle at right center, rgba(187, 247, 208, 0.16), transparent 22%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow:
+    0 18px 36px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .detail-header__main {
@@ -68,16 +73,20 @@ const emit = defineEmits<{
   min-height: 32px;
   padding: 0 12px;
   border-radius: 999px;
-  background: #d7f9a8;
+  background: rgba(187, 247, 208, 0.42);
   font-size: 12px;
   font-weight: 800;
-  color: #17325c;
+  color: #166534;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .detail-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #17325c;
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+  color: #0f172a;
 }
 
 .detail-actions {
@@ -91,19 +100,19 @@ const emit = defineEmits<{
   padding: 0 12px;
   min-height: 42px;
   border-radius: 999px;
-  border: 1px solid #c7daf6;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: inline-flex;
   align-items: center;
-  color: #47607f;
+  color: #475569;
   font-size: 12px;
   font-weight: 700;
 }
 
 .detail-actions :deep(.el-select__wrapper) {
   min-height: 44px;
-  border-radius: 18px !important;
-  background: linear-gradient(180deg, #f9fbff 0%, #eef5ff 100%) !important;
-  box-shadow: 0 0 0 1px #c7daf6 inset !important;
+  border-radius: 14px !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.2) inset !important;
 }
 </style>

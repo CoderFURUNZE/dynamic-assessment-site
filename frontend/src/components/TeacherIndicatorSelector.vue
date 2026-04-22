@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
@@ -306,13 +306,15 @@ onMounted(loadSelection);
 
 .indicator-master-wrap {
   padding: 18px;
-  border: 3px solid #1f2937;
-  border-radius: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 24px;
   background:
-    radial-gradient(circle at top right, rgba(210, 238, 255, 0.34), transparent 42%),
-    radial-gradient(circle at top left, rgba(215, 249, 168, 0.16), transparent 28%),
-    #fffdf6;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top right, rgba(191, 219, 254, 0.2), transparent 42%),
+    radial-gradient(circle at top left, rgba(187, 247, 208, 0.16), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow:
+    0 18px 36px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .indicator-master {
@@ -330,9 +332,9 @@ onMounted(loadSelection);
 
 .dimension-card {
   min-height: 86px;
-  border: 1px solid #d9e2ee;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 22px;
-  background: linear-gradient(180deg, #fffdf9 0%, #fff8f0 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   padding: 18px 18px;
   display: flex;
   align-items: center;
@@ -341,20 +343,20 @@ onMounted(loadSelection);
 }
 
 .dimension-card:hover {
-  border-color: #d8dfc7;
-  box-shadow: 0 10px 20px rgba(121, 110, 84, 0.08);
+  border-color: rgba(59, 130, 246, 0.24);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
 }
 
 .dimension-card.is-active {
-  border-color: #1f2937;
-  background: radial-gradient(circle at top left, rgba(215, 249, 168, 0.48), transparent 55%), #fffdf6;
-  box-shadow: 0 10px 0 rgba(31, 41, 55, 0.1);
+  border-color: rgba(34, 197, 94, 0.24);
+  background: radial-gradient(circle at top left, rgba(187, 247, 208, 0.4), transparent 55%), #ffffff;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
 }
 
 .dimension-card__title {
   font-size: 15px;
   font-weight: 800;
-  color: #17325c;
+  color: #1f2937;
   line-height: 1.5;
 }
 
@@ -368,7 +370,7 @@ onMounted(loadSelection);
   justify-content: space-between;
   gap: 12px;
   padding: 2px 0 16px;
-  border-bottom: 1px solid #e8e1d6;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .indicator-detail-header__main {
@@ -378,7 +380,7 @@ onMounted(loadSelection);
 .indicator-detail-header__title {
   font-size: 18px;
   font-weight: 800;
-  color: #17325c;
+  color: #1f2937;
 }
 
 .indicator-detail-header__meta {
@@ -409,19 +411,19 @@ onMounted(loadSelection);
 }
 
 .indicator-toolbar :deep(.el-select__wrapper) {
-  min-height: 50px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%) !important;
+  min-height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 0 0 1px #dde3ef !important;
+    0 0 0 1px rgba(148, 163, 184, 0.2) !important;
 }
 
 .indicator-toolbar :deep(.el-select__wrapper.is-focused) {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 0 0 1px rgba(184, 143, 70, 0.42),
-    0 0 0 4px rgba(184, 143, 70, 0.12) !important;
+    0 0 0 1px rgba(59, 130, 246, 0.32),
+    0 0 0 4px rgba(59, 130, 246, 0.12) !important;
 }
 
 .indicator-toolbar :deep(.el-select__selected-item),
@@ -431,33 +433,33 @@ onMounted(loadSelection);
 }
 
 .indicator-toolbar :deep(.el-button.indicator-toolbar__save) {
-  --el-button-bg-color: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%);
-  --el-button-border-color: #c7e38e;
-  --el-button-text-color: #23421f;
-  --el-button-hover-bg-color: #e7f4c2;
-  --el-button-hover-border-color: #b7d97c;
-  --el-button-hover-text-color: #1f3b1b;
-  --el-button-active-bg-color: #d8efad;
-  --el-button-active-border-color: #afd26f;
-  --el-button-active-text-color: #1f3b1b;
-  --el-button-disabled-bg-color: #edf5dd;
-  --el-button-disabled-border-color: #d7e3b8;
-  --el-button-disabled-text-color: #799060;
-  min-height: 50px;
+  --el-button-bg-color: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  --el-button-border-color: rgba(34, 197, 94, 0.3);
+  --el-button-text-color: #ffffff;
+  --el-button-hover-bg-color: #16a34a;
+  --el-button-hover-border-color: rgba(22, 163, 74, 0.34);
+  --el-button-hover-text-color: #ffffff;
+  --el-button-active-bg-color: #15803d;
+  --el-button-active-border-color: rgba(21, 128, 61, 0.36);
+  --el-button-active-text-color: #ffffff;
+  --el-button-disabled-bg-color: #dcfce7;
+  --el-button-disabled-border-color: #bbf7d0;
+  --el-button-disabled-text-color: #6b7280;
+  min-height: 44px;
   padding: 0 22px;
-  border-radius: 18px;
-  border: 1px solid #c7e38e;
-  background: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%) !important;
-  color: #23421f !important;
-  box-shadow: 0 10px 20px rgba(182, 214, 118, 0.24);
+  border-radius: 14px;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
   font-weight: 800;
 }
 
 .indicator-toolbar :deep(.el-button.indicator-toolbar__save:hover),
 .indicator-toolbar :deep(.el-button.indicator-toolbar__save:focus-visible) {
-  border-color: #b7d97c;
-  background: linear-gradient(180deg, #f1fad7 0%, #d8efad 100%) !important;
-  color: #1f3b1b !important;
+  border-color: rgba(22, 163, 74, 0.34);
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  color: #ffffff !important;
 }
 
 .indicator-list {
@@ -472,11 +474,11 @@ onMounted(loadSelection);
   gap: 16px;
   align-items: start;
   padding: 18px 20px;
-  border: 1px solid #e5ddd1;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 24px;
   background:
-    radial-gradient(circle at top left, rgba(215, 249, 168, 0.08), transparent 26%),
-    linear-gradient(180deg, #fffdf9 0%, #fff8f1 100%);
+    radial-gradient(circle at top left, rgba(191, 219, 254, 0.12), transparent 26%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: none;
 }
 
@@ -500,7 +502,7 @@ onMounted(loadSelection);
 .indicator-list__title {
   font-size: 18px;
   font-weight: 700;
-  color: #17325c;
+  color: #1f2937;
 }
 
 .indicator-list__code {
@@ -631,7 +633,7 @@ onMounted(loadSelection);
 
 .indicator-list :deep(.el-checkbox__input .el-checkbox__inner) {
   border-color: #cbbd9d;
-  background: #fffdf8;
+  background: #ffffff;
 }
 
 .indicator-list :deep(.el-checkbox__input.is-disabled .el-checkbox__inner) {

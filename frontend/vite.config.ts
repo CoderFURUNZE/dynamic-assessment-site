@@ -1,8 +1,16 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import Components from "unplugin-vue-components/vite";
+import { ElementPlusResolver } from "unplugin-vue-components/resolvers";
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    Components({
+      dts: false,
+      resolvers: [ElementPlusResolver({ importStyle: "css" })],
+    }),
+  ],
   server: {
     port: 5173,
     proxy: {
@@ -28,7 +36,6 @@ export default defineConfig({
         manualChunks: {
           // 将第三方库单独打包
           vendor: ['vue', 'vue-router'],
-          elementPlus: ['element-plus'],
           axios: ['axios'],
         },
       },

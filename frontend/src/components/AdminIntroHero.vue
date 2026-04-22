@@ -28,16 +28,17 @@ defineProps<{
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  min-height: 156px;
+  min-height: 140px;
   padding: 28px;
   gap: 20px;
   flex-wrap: wrap;
   background:
-    radial-gradient(circle at top right, rgba(201, 237, 255, 0.3), transparent 28%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  border: 3px solid #1f2937;
-  border-radius: 32px;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 28%),
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
 }
 
 .admin-intro-hero__main {
@@ -57,44 +58,44 @@ defineProps<{
   margin: 0;
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #1f2937;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #166534;
   display: inline-flex;
   width: fit-content;
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 999px;
-  background: #d7f9a8;
+  background: #eefbf3;
+  border: 1px solid rgba(34, 197, 94, 0.16);
 }
 
 .admin-intro-hero__title {
   margin: 0;
-  font-size: clamp(28px, 3vw, 40px);
+  font-size: clamp(28px, 3vw, 36px);
   line-height: 1.08;
-  color: #1d2433;
-  font-family: "Fredoka", "Nunito", sans-serif;
+  color: #0f172a;
+  font-family: var(--el-font-family);
+  font-weight: 800;
 }
 
 .admin-intro-hero__pill {
-  min-height: 34px;
-  padding: 0 14px;
+  min-height: 30px;
+  padding: 0 12px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
-  border: 1.5px solid #c6d8ef;
-  background: #f6faff;
-  color: #29476a;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #f8fafc;
+  color: #475569;
   font-size: 12px;
   font-weight: 700;
-  box-shadow: none;
 }
 
 .admin-intro-hero__description {
   margin: 0;
   max-width: 62ch;
-  color: #636b7a;
+  color: #64748b;
   font-size: 15px;
-  line-height: 1.8;
+  line-height: 1.75;
 }
 
 .admin-intro-hero__actions {

@@ -25,11 +25,11 @@ import AdminIntroHero from "../components/AdminIntroHero.vue";
 
 .admin-dashboard-page__panel {
   padding: 26px;
-  border-radius: 32px;
+  border-radius: 22px;
   background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.22), transparent 24%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  border: 3px solid #1f2937;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top left, rgba(219, 234, 254, 0.22), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
 </style>

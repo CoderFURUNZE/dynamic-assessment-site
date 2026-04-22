@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -1757,7 +1757,7 @@ onBeforeUnmount(() => {
             @click="selectCategory(category.key)"
             @mousedown="onNodeMouseDown($event, 'category', category.key)"
           >
-            <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#f5fbe8' : '#fffdf8'" :stroke="selectedCategory === category.key ? '#cfe7a8' : '#d8e0d3'" stroke-width="2" />
+            <rect x="-112" y="-44" width="224" height="88" rx="20" :fill="selectedCategory === category.key ? '#eef8ff' : '#ffffff'" :stroke="selectedCategory === category.key ? '#93c5fd' : '#d8e5f6'" stroke-width="2" />
             <text class="teacher-category-node__title" text-anchor="middle" y="-6">{{ category.title }}</text>
             <text class="teacher-category-node__meta" text-anchor="middle" y="22">{{ category.total }} 个知识点</text>
           </g>
@@ -1775,8 +1775,8 @@ onBeforeUnmount(() => {
             <circle :r="nodeRadius(kp) + 18" fill="transparent" :stroke="ringStroke('literacy', kp)" :stroke-width="splitLabels(kp.literacy_tag).length ? 5 : 0" />
             <circle :r="nodeRadius(kp) + 10" fill="transparent" :stroke="ringStroke('ability', kp)" :stroke-width="splitLabels(kp.ability_tag).length ? 5 : 0" />
             <circle :r="nodeRadius(kp) + 2" fill="transparent" stroke="#cbbd9d" stroke-width="3.5" />
-            <circle :r="nodeRadius(kp) + 22" :fill="kp.id === selectedKp?.id ? 'rgba(215, 249, 168, 0.2)' : 'rgba(218, 206, 181, 0.1)'" />
-            <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#fffdf8' : '#fffefb'" :stroke="kp.id === selectedKp?.id ? '#cfe7a8' : '#d8e0d3'" stroke-width="2" />
+            <circle :r="nodeRadius(kp) + 22" :fill="kp.id === selectedKp?.id ? 'rgba(147, 197, 253, 0.22)' : 'rgba(219, 234, 254, 0.16)'" />
+            <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#eef8ff' : '#ffffff'" :stroke="kp.id === selectedKp?.id ? '#93c5fd' : '#d8e5f6'" stroke-width="2" />
             <text class="teacher-node__code" text-anchor="middle" y="-8">{{ kp.code }}</text>
             <text class="teacher-node__title" text-anchor="middle" y="16">{{ kp.title.slice(0, 10) }}</text>
             <g v-if="kpCoverageWarnLabels(kp.id).length" :transform="`translate(0, ${nodeRadius(kp) + 16})`">
@@ -2161,10 +2161,10 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   gap: 16px;
   padding: 18px 20px 14px;
-  background: #ffffff;
-  border-radius: 24px;
-  border: 1px solid #dfe7f1;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
 }
 
 .teacher-workbench--fullscreen .teacher-title {
@@ -2235,10 +2235,10 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   padding: 18px 20px 14px;
   gap: 16px;
-  border-radius: 24px;
-  background: linear-gradient(135deg, #f7fbff 0%, #eef5ff 52%, #ffffff 100%);
-  border: 1px solid color-mix(in srgb, var(--app-primary) 14%, #dfe7f1);
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 52%, #eef6ff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
 }
 
 .teacher-heading {
@@ -2249,7 +2249,7 @@ onBeforeUnmount(() => {
 .teacher-title {
   font-size: 22px;
   font-weight: 800;
-  color: #243449;
+  color: #1f2937;
   margin: 0;
   line-height: 1.25;
 }
@@ -2268,9 +2268,9 @@ onBeforeUnmount(() => {
   min-height: 34px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid #dbe6f2;
-  background: #f4f8fc;
-  color: #536883;
+  border: 1px solid rgba(31, 41, 55, 0.14);
+  background: linear-gradient(180deg, #dff2fb 0%, #ebf8ff 100%);
+  color: #334155;
   font-size: 12px;
   font-weight: 700;
 }
@@ -2304,9 +2304,9 @@ onBeforeUnmount(() => {
 }
 
 .teacher-search :deep(.el-input__wrapper) {
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: none;
-  border: 1px solid #dce6f2;
+  border: 1px solid rgba(31, 41, 55, 0.14);
   border-radius: 14px;
 }
 
@@ -2319,8 +2319,8 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border: 1px solid var(--app-border);
   border-radius: 999px;
-  background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
-  color: #39506d;
+  background: linear-gradient(180deg, #dff2fb 0%, #ebf8ff 100%);
+  color: #1f2937;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -2332,11 +2332,11 @@ onBeforeUnmount(() => {
   border-color: var(--app-green);
   background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
   color: #ffffff;
-  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.18);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
 }
 
 .teacher-btn:hover {
-  background: #eff5ff;
+  background: linear-gradient(180deg, #ebf8ff 0%, #dff2fb 100%);
 }
 
 .teacher-content {
@@ -2369,10 +2369,10 @@ onBeforeUnmount(() => {
   overflow-x: hidden;
   overflow-y: auto;
   padding: 16px;
-  border-radius: 24px;
-  background: #ffffff;
-  border: 1px solid #dfe7f1;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
   color: var(--app-text-soft);
   z-index: 4;
 }
@@ -2405,10 +2405,10 @@ onBeforeUnmount(() => {
 
 .teacher-tree__create {
   min-height: 40px;
-  border: 1px solid #dfe7f1;
+  border: 1px solid rgba(31, 41, 55, 0.14);
   border-radius: 16px;
-  background: #f8fbff;
-  color: #2459ab;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #1f2937;
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
@@ -2416,7 +2416,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-tree__create:hover {
-  background: #e0ecff;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
 }
 
 .teacher-tree__empty {
@@ -2445,7 +2445,7 @@ onBeforeUnmount(() => {
   align-items: center;
   padding: 12px 14px;
   border-radius: 18px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1px solid #dfe7f1;
   color: #475569;
   font-size: 13px;
@@ -2454,7 +2454,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-tree__summary:hover {
-  background: #eef5ff;
+  background: linear-gradient(180deg, #eef8ff 0%, #ffffff 100%);
   border-color: #cfe0f6;
 }
 
@@ -2498,7 +2498,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-tree__child:hover {
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .teacher-tree__child.active {
@@ -2576,9 +2576,9 @@ onBeforeUnmount(() => {
 .teacher-stage__top-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 10px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 8px 12px;
   min-width: 0;
 }
 
@@ -2622,7 +2622,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .teacher-stage__legend {
@@ -2936,11 +2936,11 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px;
+  padding: 5px;
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.96);
-  border: 1px solid #e4ddd2;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  background: linear-gradient(180deg, rgba(255, 253, 249, 0.98) 0%, rgba(255, 247, 239, 0.98) 100%);
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
+  box-shadow: 0 10px 22px rgba(31, 41, 55, 0.08);
   pointer-events: auto;
 }
 
@@ -2948,8 +2948,9 @@ onBeforeUnmount(() => {
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  background: #f3f6ea;
+  background: linear-gradient(180deg, #f2fbe5 0%, #e4f6c6 100%);
   color: #355a28;
+  border: 1px solid rgba(31, 41, 55, 0.08);
   font-size: 14px;
   transition: all 0.2s ease;
   display: inline-flex;
@@ -2959,14 +2960,15 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__zoom button:hover {
-  background: #e7f0d2;
+  background: linear-gradient(180deg, #f6fde9 0%, #dcf2b7 100%);
 }
 
 .teacher-stage__zoom span {
   font-size: 12px;
-  color: #5e6b7d;
-  min-width: 70px;
+  color: #6b7280;
+  min-width: 78px;
   text-align: center;
+  font-weight: 800;
 }
 
 .teacher-stage__empty {
@@ -2974,35 +2976,42 @@ onBeforeUnmount(() => {
   inset: 0;
   display: grid;
   place-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 24px;
   text-align: center;
   border: none;
-  border-radius: 16px;
-  background: rgba(255, 252, 247, 0.9);
-  color: #29476a;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 214, 203, 0.18), transparent 22%),
+    radial-gradient(circle at bottom right, rgba(184, 228, 246, 0.2), transparent 24%),
+    rgba(255, 252, 247, 0.96);
+  color: #1f2937;
   z-index: 3;
   pointer-events: auto;
 }
 
 .teacher-stage__empty strong {
-  font-size: 18px;
+  font-size: 22px;
+  line-height: 1.2;
 }
 
 .teacher-stage__empty span {
-  color: #90a0b6;
+  max-width: 34rem;
+  color: #6b7280;
+  line-height: 1.7;
 }
 
 .teacher-stage__empty-btn {
-  border: 1px solid #c7e38e;
-  background: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%);
-  color: #23421f;
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
   border-radius: 999px;
   min-height: 42px;
   padding: 0 18px;
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 10px 20px rgba(182, 214, 118, 0.24);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
 }
 
 .teacher-stage__empty-actions {
@@ -3014,10 +3023,10 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__empty-btn--ghost {
-  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
-  color: #29476a;
-  border-color: #dde3ef;
-  box-shadow: none;
+  background: linear-gradient(180deg, #dff2fb 0%, #bfe3f5 100%);
+  color: #334155;
+  border-color: rgba(31, 41, 55, 0.16);
+  box-shadow: 0 4px 0 rgba(31, 41, 55, 0.12);
 }
 
 .teacher-drawer {
@@ -3146,7 +3155,7 @@ onBeforeUnmount(() => {
 .teacher-drawer__metric {
   padding: 12px;
   border-radius: 18px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1px solid #dfe7f1;
 }
 
@@ -3177,7 +3186,7 @@ onBeforeUnmount(() => {
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid #dfe7f1;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
   gap: 4px;
 }
@@ -3197,7 +3206,7 @@ onBeforeUnmount(() => {
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid #dfe7f1;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   color: #51657f;
   font-size: 13px;
   line-height: 1.7;
@@ -3530,17 +3539,22 @@ onBeforeUnmount(() => {
 .teacher-stage,
 .teacher-drawer {
   background:
-    radial-gradient(circle at top right, rgba(210, 238, 255, 0.52), transparent 36%),
-    linear-gradient(180deg, #fff9f2 0%, #fffdf8 100%);
-  border: 3px solid #1f2937;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+    radial-gradient(circle at top right, rgba(191, 219, 254, 0.18), transparent 34%),
+    radial-gradient(circle at top left, rgba(187, 247, 208, 0.12), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow:
+    0 18px 36px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .teacher-header {
   border-radius: 28px;
   padding: 18px 20px;
-  background: linear-gradient(135deg, #f7fbff 0%, #eef5ff 52%, #ffffff 100%);
-  border-color: color-mix(in srgb, var(--app-primary) 14%, #dbe5f1);
+  background:
+    radial-gradient(circle at top left, rgba(191, 219, 254, 0.22), transparent 30%),
+    radial-gradient(circle at right bottom, rgba(187, 247, 208, 0.16), transparent 24%),
+    linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .teacher-sidebar {
@@ -3552,8 +3566,8 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__top {
-  padding: 10px 12px 8px;
-  gap: 8px;
+  padding: 8px 12px 4px;
+  gap: 6px;
   background: transparent;
   border-bottom: none;
 }
@@ -3567,9 +3581,9 @@ onBeforeUnmount(() => {
   min-height: 32px;
   padding: 0 12px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #f5fbe8 0%, #eef8d9 100%);
-  border-color: #cfe7a8;
-  color: #355a28;
+  background: rgba(187, 247, 208, 0.4);
+  border-color: rgba(34, 197, 94, 0.22);
+  color: #166534;
 }
 
 .teacher-stage__button,
@@ -3588,22 +3602,22 @@ onBeforeUnmount(() => {
 .teacher-stage__menu button {
   min-height: 34px;
   padding-inline: 12px;
-  border: 1px solid #dde3ef;
-  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
-  color: #29476a;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #334155;
 }
 
 .teacher-stage__focus-btn {
-  background: linear-gradient(180deg, #fffdfa 0%, #fff7ef 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .teacher-stage__button--primary,
 .teacher-stage__focus-btn--primary,
 .teacher-drawer__primary {
-  background: linear-gradient(180deg, #edf9cf 0%, #dff2b4 100%);
-  border-color: #c7e38e;
-  color: #23421f;
-  box-shadow: 0 10px 20px rgba(182, 214, 118, 0.24);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #ffffff;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
 }
 
 .teacher-stage__legend {
@@ -3623,9 +3637,9 @@ onBeforeUnmount(() => {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   background:
-    radial-gradient(circle at top left, rgba(215, 249, 168, 0.14), transparent 22%),
-    radial-gradient(circle at top right, rgba(233, 210, 170, 0.12), transparent 24%),
-    linear-gradient(180deg, #fffaf3 0%, #fff8ef 56%, #fffdf8 100%);
+    radial-gradient(circle at top left, rgba(191, 219, 254, 0.14), transparent 22%),
+    radial-gradient(circle at top right, rgba(187, 247, 208, 0.12), transparent 24%),
+    linear-gradient(180deg, #f8fbff 0%, #f5faff 56%, #ffffff 100%);
 }
 
 .teacher-stage__empty {
@@ -3639,7 +3653,7 @@ onBeforeUnmount(() => {
 
 .teacher-drawer__header {
   padding: 14px 16px 10px;
-  border-bottom-color: #ebe3d6;
+  border-bottom-color: rgba(148, 163, 184, 0.18);
 }
 
 .teacher-drawer__content {
@@ -3659,21 +3673,22 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 8px;
   border-radius: 18px;
-  background: #f6faff;
-  border: 1px solid #dfe9f5;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .teacher-drawer__tabs button {
   min-height: 34px;
   border-radius: 12px;
-  border-color: #d8e5f6;
+  border-color: rgba(148, 163, 184, 0.18);
   background: #ffffff;
+  color: #475569;
 }
 
 .teacher-drawer__tabs button.active {
-  background: linear-gradient(180deg, #3f7af0 0%, var(--app-green) 100%);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   color: #ffffff;
-  border-color: var(--app-green);
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .teacher-drawer__metric,
@@ -3684,27 +3699,27 @@ onBeforeUnmount(() => {
 }
 
 .teacher-drawer__metric {
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border-color: #c6d8ef;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-color: rgba(148, 163, 184, 0.18);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .teacher-drawer__tag {
-  background: #eef5ff;
-  border-color: #c6d8ef;
-  color: #35507f;
+  background: #f8fafc;
+  border-color: rgba(148, 163, 184, 0.18);
+  color: #475569;
 }
 
 .teacher-drawer__secondary {
-  background: #f8fbff;
-  border-color: #dbe5f1;
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.18);
   color: #475569;
 }
 
 .teacher-drawer__secondary:hover {
-  background: #e3f2fd;
-  border-color: #90caf9;
-  color: #1565c0;
+  background: #f8fbff;
+  border-color: rgba(59, 130, 246, 0.24);
+  color: #1d4ed8;
 }
 
 .teacher-drawer__relation-item button {
@@ -3717,8 +3732,8 @@ onBeforeUnmount(() => {
 .teacher-stage__menu,
 .teacher-stage__zoom {
   border-radius: 18px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
@@ -3728,12 +3743,12 @@ onBeforeUnmount(() => {
 
 .teacher-tree__summary.active,
 .teacher-tree__child.active {
-  background: linear-gradient(180deg, #f4f8ff 0%, #edf4ff 100%);
-  border-color: #8fb8ff;
+  background: radial-gradient(circle at top left, rgba(187, 247, 208, 0.36), transparent 58%), #ffffff;
+  border-color: rgba(34, 197, 94, 0.24);
 }
 
 .teacher-tree__child:hover {
-  background: #f7fbff;
+  background: #f8fbff;
 }
 
 .teacher-stage__menu {
@@ -3743,9 +3758,9 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__menu button {
-  border: 1px solid #d8e5f6;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   background: #ffffff;
-  color: #35507f;
+  color: #475569;
 }
 
 .teacher-stage__menu .danger {

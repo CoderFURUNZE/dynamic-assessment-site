@@ -47,13 +47,16 @@ defineProps<{
 <style scoped>
 .report-hero {
   padding: 20px 22px;
-  border-radius: 34px;
-  background: linear-gradient(180deg, #fffdfa 0%, #ffffff 100%);
-  color: #1f2937;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(219, 234, 254, 0.36), transparent 28%),
+    radial-gradient(circle at left bottom, rgba(220, 252, 231, 0.18), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  color: #0f172a;
   display: grid;
   gap: 16px;
-  border: 3px solid #1f2937;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
 
 .hero-head {
@@ -70,22 +73,22 @@ defineProps<{
 
 .hero-label {
   font-size: 12px;
-  color: #5f7ea3;
-  font-weight: 800;
+  color: #166534;
+  font-weight: 700;
 }
 
 .hero-title {
-  font-size: clamp(28px, 4vw, 42px);
-  line-height: 1.04;
+  font-size: clamp(26px, 3.8vw, 36px);
+  line-height: 1.08;
   letter-spacing: -0.04em;
   font-weight: 800;
-  color: #16355c;
+  color: #0f172a;
 }
 
 .hero-tag {
-  border: 1.5px solid #b6cae6;
-  background: #eef5ff;
-  color: #355070;
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  background: #eefbf3;
+  color: #166534;
 }
 
 .hero-stage {
@@ -93,7 +96,7 @@ defineProps<{
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
-  color: #537095;
+  color: #64748b;
   line-height: 1.6;
 }
 
@@ -102,7 +105,7 @@ defineProps<{
 }
 
 .hero-text {
-  color: #537095;
+  color: #64748b;
   line-height: 1.7;
   font-size: 14px;
 }
@@ -116,23 +119,24 @@ defineProps<{
 .hero-metric {
   min-height: 98px;
   padding: 18px 20px;
-  border-radius: 22px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f8fbff 0%, #fdfefe 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   display: grid;
   gap: 10px;
   align-content: center;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
 }
 
 .hero-metric span {
   font-size: 12px;
-  color: #5f7ea3;
-  font-weight: 800;
+  color: #64748b;
+  font-weight: 700;
 }
 
 .hero-metric strong {
   font-size: 20px;
-  color: #0f2d53;
+  color: #0f172a;
   font-weight: 800;
 }
 

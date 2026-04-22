@@ -252,7 +252,7 @@ const labelPoints = computed(() => {
   gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #f8fbff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1px solid var(--app-border);
 }
 

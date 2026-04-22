@@ -402,7 +402,7 @@ watch(
               <span v-if="stageComparison.previous">上一阶段：{{ stageComparison.previous.stage_title }}</span>
               <span>掌握度变化：{{ stageComparison.deltaMastery >= 0 ? "+" : "" }}{{ Math.round(stageComparison.deltaMastery * 100) }}%</span>
             </div>
-            <div style="padding: 12px; border-radius: 14px; border: 1px solid #e1e8ef; background:#f8fbff; color:#41566f; line-height:1.7;">
+            <div style="padding: 12px; border-radius: 14px; border: 1px solid rgba(31, 41, 55, 0.12); background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); color:#475569; line-height:1.7;">
               通过最近阶段的评分变化，系统会判断当前画像是否稳定，并决定下一步推荐是否更保守或更激进。
             </div>
           </div>
@@ -417,7 +417,7 @@ watch(
             <div
               v-for="item in portraitTimeline"
               :key="`${item.updated_at}-${item.stage_title || item.persona_label}`"
-              style="padding: 12px; border-radius: 14px; border: 1px solid #e1e8ef; background: #f8fbff; display: grid; gap: 6px;"
+              style="padding: 12px; border-radius: 14px; border: 1px solid rgba(31, 41, 55, 0.12); background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%); display: grid; gap: 6px;"
             >
               <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
                 <strong style="color: var(--app-ink);">{{ item.stage_title || item.persona_label }}</strong>
@@ -534,15 +534,17 @@ watch(
 .overview-shell {
   overflow: hidden;
   border-radius: 28px;
-  border: 2px solid #1f2937;
-  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow:
+    0 18px 36px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .overview-shell :deep(.el-card__header) {
   padding: 16px 20px 12px;
-  border-bottom: 1px solid #cfe0f5;
-  background: linear-gradient(180deg, #f5f9ff 0%, #f8fbff 100%);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .overview-shell :deep(.el-card__body) {
@@ -551,28 +553,28 @@ watch(
 
 .overview-shell :deep(.el-radio-button__inner) {
   border-radius: 999px;
-  border: 1.5px solid #c6d8ef;
-  background: #f8fbff;
-  color: #4c6787;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #334155;
   padding: 6px 12px;
 }
 
 .overview-shell :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background: #e8f1ff;
-  border-color: #96b6e2;
-  color: #1f3a5c;
-  box-shadow: 0 8px 14px rgba(31, 41, 55, 0.08);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #ffffff;
+  box-shadow: 0 12px 20px rgba(15, 23, 42, 0.08);
 }
 
 .overview-shell :deep(.el-button) {
   border-radius: 999px !important;
-  border: 1.5px solid #c6d8ef !important;
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
 }
 
 .overview-shell :deep(.el-card) {
   border-radius: 22px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 

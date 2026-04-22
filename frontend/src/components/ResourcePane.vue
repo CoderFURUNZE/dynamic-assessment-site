@@ -488,17 +488,17 @@ onBeforeUnmount(() => {
 .resource-shell {
   overflow: hidden;
   border-radius: 28px;
-  border: 2px solid #1f2937;
-  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.08), 0 20px 32px rgba(31, 41, 55, 0.08);
+  border: 1px solid rgba(31, 41, 55, 0.14);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 16px 34px rgba(31, 41, 55, 0.08);
 }
 
 .resource-shell :deep(.el-card__header) {
   padding: 16px 20px 12px;
-  border-bottom: 1px solid #cfe0f5;
-  background: linear-gradient(180deg, #f5f9ff 0%, #f8fbff 100%);
+  border-bottom: 1px solid rgba(31, 41, 55, 0.1);
+  background: linear-gradient(180deg, #f4f8ff 0%, #ffffff 100%);
   font-weight: 800;
-  color: #16355c;
+  color: #1f2937;
 }
 
 .resource-shell :deep(.el-card__body) {
@@ -521,18 +521,18 @@ onBeforeUnmount(() => {
 .resource-pane__tabs :deep(.el-tabs__item) {
   min-height: 42px;
   border-radius: 999px;
-  border: 1.5px solid #c6d8ef;
-  background: #f8fbff;
-  color: #4c6787;
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
+  background: linear-gradient(180deg, #dff2fb 0%, #ebf8ff 100%);
+  color: #1f2937;
   padding: 6px 16px;
   margin-right: 8px;
   transition: all 0.2s ease;
 }
 
 .resource-pane__tabs :deep(.el-tabs__item.is-active) {
-  background: #e8f1ff;
-  border-color: #96b6e2;
-  color: #1f3a5c;
+  background: linear-gradient(180deg, #eef8ff 0%, #ffffff 100%);
+  border-color: rgba(34, 197, 94, 0.28);
+  color: #166534;
   box-shadow: 0 8px 14px rgba(31, 41, 55, 0.08);
 }
 
@@ -554,7 +554,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--app-border);
   border-radius: 16px;
   padding: 14px;
-  background: #fafcff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
   gap: 12px;
 }
@@ -585,9 +585,9 @@ onBeforeUnmount(() => {
 }
 
 .resource-pane__resource {
-  border: 1.5px solid #c6d8ef;
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
   border-radius: 18px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   padding: 14px;
   display: grid;
   gap: 8px;
@@ -599,8 +599,8 @@ onBeforeUnmount(() => {
 }
 
 .resource-pane__resource.active {
-  border-color: #96b6e2;
-  background: #eef5ff;
+  border-color: rgba(34, 197, 94, 0.28);
+  background: linear-gradient(180deg, #eef8ff 0%, #ffffff 100%);
   box-shadow: 0 10px 18px rgba(31, 41, 55, 0.08);
   transform: translateY(-1px);
 }
@@ -628,9 +628,9 @@ onBeforeUnmount(() => {
 }
 
 .resource-pane__preview {
-  border: 1.5px solid #c6d8ef;
+  border: 1.5px solid rgba(31, 41, 55, 0.14);
   border-radius: 22px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   padding: 16px;
   min-width: 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);

@@ -55,10 +55,10 @@ function handleChange(value: string) {
 
 <style scoped>
 .workspace-topbar {
-  border-radius: 28px;
-  border: 3px solid #1f2937;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
-  background: linear-gradient(180deg, #fff8ef 0%, #fffdf8 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.07);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   overflow: hidden;
 }
 
@@ -66,20 +66,20 @@ function handleChange(value: string) {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
-  gap: 16px;
-  padding: 14px 18px 12px;
+  gap: 14px;
+  padding: 16px 18px 14px;
 }
 
 .workspace-topbar__icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
   display: grid;
   place-items: center;
-  color: #355070;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-  border: 1.5px solid #c6d8ef;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  color: #1f2937;
+  background: linear-gradient(180deg, #eefbf3 0%, #f8fcff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .workspace-topbar__icon :deep(svg) {
@@ -96,28 +96,27 @@ function handleChange(value: string) {
 
 .workspace-topbar__badge {
   font-size: 11px;
-  text-transform: uppercase;
-  color: #1f2937;
-  font-weight: 800;
-  background: #d7f9a8;
-  padding: 5px 10px;
+  color: #166534;
+  font-weight: 700;
+  background: #eefbf3;
+  padding: 4px 10px;
   border-radius: 999px;
   width: fit-content;
-  border: 0;
+  border: 1px solid rgba(34, 197, 94, 0.16);
 }
 
 .workspace-topbar__title {
-  font-size: 24px;
-  line-height: 1.1;
+  font-size: 20px;
+  line-height: 1.2;
   font-weight: 800;
-  color: #16355c;
-  letter-spacing: -0.03em;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
 .workspace-topbar__subtitle {
   font-size: 13px;
-  line-height: 1.6;
-  color: #60758f;
+  line-height: 1.5;
+  color: #64748b;
 }
 
 .workspace-topbar__actions {
@@ -135,69 +134,71 @@ function handleChange(value: string) {
 }
 
 .workspace-topbar__actions :deep(.el-select__wrapper) {
-  min-height: 44px;
-  border-radius: 18px !important;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%) !important;
-  box-shadow: 0 0 0 1.5px #c6d8ef inset !important;
+  min-height: 40px;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.28) inset !important;
 }
 
 .workspace-topbar__actions :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 1px #7ea9f6 inset, 0 0 0 3px rgba(87, 133, 231, 0.12), 0 12px 24px rgba(80, 118, 183, 0.08) !important;
+  box-shadow: 0 0 0 1px #60a5fa inset, 0 0 0 4px rgba(96, 165, 250, 0.14) !important;
 }
 
 .workspace-topbar__actions :deep(.el-select__placeholder),
 .workspace-topbar__actions :deep(.el-select__selected-item),
 .workspace-topbar__actions :deep(.el-select__caret) {
-  color: #5a6f8f !important;
+  color: #6b7280 !important;
 }
 
 .workspace-topbar__actions :deep(.el-button) {
-  min-width: 118px;
-  min-height: 44px;
-  padding: 0 20px;
-  border-radius: 999px !important;
-  border: 1.5px solid #c6d8ef !important;
+  min-width: 104px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 12px !important;
+  border: 1px solid rgba(148, 163, 184, 0.24) !important;
   background: #ffffff !important;
   background-image: none !important;
-  color: #274263 !important;
+  color: #334155 !important;
   font-size: 14px;
   font-weight: 700;
-  box-shadow: none !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04) !important;
 }
 
 .workspace-topbar__actions :deep(.el-button:hover),
 .workspace-topbar__actions :deep(.el-button:focus-visible) {
-  border-color: #9fbef3 !important;
-  background: #f8fbff !important;
+  border-color: rgba(100, 116, 139, 0.34) !important;
+  background: #ffffff !important;
   background-image: none !important;
-  color: #214d8f !important;
+  color: #1f2937 !important;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08) !important;
 }
 
 .workspace-topbar__actions :deep(.el-button--primary) {
-  border-color: #96b6e2 !important;
-  background: linear-gradient(180deg, #eef5ff 0%, #ffffff 100%) !important;
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
   background-image: none !important;
-  color: #16355c !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08) !important;
 }
 
 .workspace-topbar__actions :deep(.el-button.is-disabled),
 .workspace-topbar__actions :deep(.el-button.is-disabled:hover) {
   border-color: #e3eaf5 !important;
-  background: #f8fbff !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   background-image: none !important;
   color: #afbdd0 !important;
 }
 
 .workspace-topbar__meta {
   margin-top: 0;
-  color: #60758f;
+  color: #6b7280;
   font-size: 12px;
   padding: 10px 18px 12px;
   display: flex;
   align-items: center;
   gap: var(--app-space-2);
-  border-top: 1px solid #cfe0f5;
-  background: linear-gradient(180deg, #f5f9ff 0%, #f8fbff 100%);
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  background: #fbfdff;
 }
 
 .workspace-topbar__meta::before {

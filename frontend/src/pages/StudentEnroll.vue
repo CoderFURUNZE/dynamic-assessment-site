@@ -344,6 +344,13 @@ onMounted(loadAll);
 
 <style scoped>
 .enroll-page {
+  --enroll-theme-surface: #ffffff;
+  --enroll-theme-surface-soft: #f8fafc;
+  --enroll-theme-surface-muted: #f1f5f9;
+  --enroll-theme-surface-accent: #eefbf3;
+  --enroll-theme-border: rgba(148, 163, 184, 0.22);
+  --enroll-theme-border-strong: rgba(34, 197, 94, 0.26);
+  --enroll-theme-ink-soft: #64748b;
   display: grid;
   gap: 18px;
   padding-bottom: 12px;
@@ -356,10 +363,10 @@ onMounted(loadAll);
 .enroll-table-card,
 .enroll-records-card,
 .enroll-page__tab-strip {
-  border-radius: 32px;
-  border: 3px solid #1f2937;
-  background: #fffdf8;
-  box-shadow: 0 12px 0 rgba(31, 41, 55, 0.12);
+  border-radius: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
 }
 
 .enroll-page__hero {
@@ -368,8 +375,9 @@ onMounted(loadAll);
   gap: 18px;
   padding: 22px 24px;
   background:
-    radial-gradient(circle at top left, rgba(94, 234, 212, 0.18), transparent 28%),
-    linear-gradient(180deg, #fff8ef 0%, #fffdf8 100%);
+    radial-gradient(circle at top left, rgba(219, 234, 254, 0.42), transparent 30%),
+    radial-gradient(circle at right bottom, rgba(220, 252, 231, 0.22), transparent 24%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
 
 .enroll-page__hero-copy {
@@ -383,27 +391,58 @@ onMounted(loadAll);
   width: fit-content;
   padding: 6px 10px;
   border-radius: 999px;
-  background: #d7f9a8;
+  background: #eefbf3;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #1f2937;
+  text-transform: none;
+  color: #166534;
+  border: 1px solid rgba(34, 197, 94, 0.18);
 }
 
 .enroll-page__hero h1 {
   margin: 0;
+  font-size: 0;
+  line-height: 0;
+  letter-spacing: 0;
+}
+
+.enroll-page__hero-copy h1::before {
+  content: "课程加入";
+  display: block;
   font-size: clamp(28px, 4vw, 42px);
-  color: #1f2937;
   line-height: 1.05;
   letter-spacing: -0.04em;
+  color: #1f2937;
 }
 
 .enroll-page__hero p {
   margin: 0;
-  line-height: 1.6;
-  color: #5f6b7a;
+  color: var(--enroll-theme-ink-soft);
+}
+
+.enroll-page__hero-copy > p {
+  font-size: 0;
+  line-height: 0;
+}
+
+.enroll-page__hero-copy > p::before {
+  content: "搜索课程，提交申请，查看状态";
+  display: block;
   font-size: 14px;
+  line-height: 1.6;
+}
+
+.enroll-page__hero-panel > p {
+  font-size: 0;
+  line-height: 0;
+}
+
+.enroll-page__hero-panel > p::before {
+  content: "先搜索，再申请";
+  display: block;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .enroll-page__hero-panel {
@@ -411,9 +450,9 @@ onMounted(loadAll);
   gap: 10px;
   align-content: start;
   padding: 18px;
-  border-radius: 24px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-radius: 18px;
+  border: 1px solid var(--enroll-theme-border);
+  background: linear-gradient(180deg, var(--enroll-theme-surface) 0%, var(--enroll-theme-surface-soft) 100%);
 }
 
 .enroll-page__hero-panel span,
@@ -421,12 +460,19 @@ onMounted(loadAll);
 .enroll-record-item__grid span {
   font-size: 12px;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--enroll-theme-ink-soft);
 }
 
 .enroll-page__hero-panel strong {
   font-size: 20px;
   color: #1f2937;
+}
+
+.enroll-page__hero-panel :deep(.el-select__wrapper) {
+  min-height: 42px;
+  border-radius: 14px;
+  background: var(--enroll-theme-surface-soft) !important;
+  box-shadow: 0 0 0 1px var(--enroll-theme-border) inset !important;
 }
 
 .enroll-page__hero-actions {
@@ -447,7 +493,7 @@ onMounted(loadAll);
   display: grid;
   gap: 8px;
   min-height: 96px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: linear-gradient(180deg, var(--enroll-theme-surface) 0%, var(--enroll-theme-surface-soft) 100%);
 }
 
 .enroll-page__stat-card strong {
@@ -464,20 +510,21 @@ onMounted(loadAll);
 }
 
 .enroll-page__tab-pill {
-  border: 1.5px solid #c6d8ef;
-  background: #ffffff;
-  color: #29476a;
+  border: 1px solid var(--enroll-theme-border);
+  background: var(--enroll-theme-surface);
+  color: #475569;
   border-radius: 999px;
-  padding: 12px 16px;
+  padding: 10px 16px;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
   transition: transform 0.18s ease, background-color 0.18s ease;
 }
 
 .enroll-page__tab-pill.active {
-  background: #eef6ff;
-  color: #16355c;
+  background: #eefbf3;
+  color: #166534;
+  border-color: var(--enroll-theme-border-strong);
 }
 
 .enroll-page__toolbar {
@@ -485,7 +532,7 @@ onMounted(loadAll);
   grid-template-columns: minmax(0, 1fr);
   padding: 16px;
   align-items: stretch;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  background: linear-gradient(180deg, var(--enroll-theme-surface) 0%, #f8fafc 100%);
 }
 
 .enroll-page__list,
@@ -499,7 +546,7 @@ onMounted(loadAll);
   padding: 20px 22px;
   display: grid;
   gap: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  background: linear-gradient(180deg, var(--enroll-theme-surface) 0%, #f8fafc 100%);
 }
 
 .enroll-course-card__top,
@@ -522,12 +569,18 @@ onMounted(loadAll);
   color: #1f2937;
 }
 
+.enroll-page :deep(.el-tag) {
+  border-color: var(--enroll-theme-border);
+  background: var(--enroll-theme-surface-soft);
+  color: #475569;
+}
+
 .enroll-course-card__top p,
 .enroll-course-card__desc,
 .notice-item p,
 .notice-item small {
   margin: 0;
-  color: #5f6b7a;
+  color: var(--enroll-theme-ink-soft);
   line-height: 1.6;
 }
 
@@ -537,7 +590,7 @@ onMounted(loadAll);
 
 .enroll-course-card__meta {
   font-size: 12px;
-  color: #5f6b7a;
+  color: var(--enroll-theme-ink-soft);
   line-height: 1.6;
 }
 
@@ -550,19 +603,19 @@ onMounted(loadAll);
 .enroll-course-card__chips span {
   padding: 5px 10px;
   border-radius: 999px;
-  border: 1.5px solid #c6d8ef;
-  background: #f8fbff;
+  border: 1px solid var(--enroll-theme-border);
+  background: var(--enroll-theme-surface-soft);
   font-size: 12px;
-  color: #58718f;
+  color: #475569;
 }
 
 .enroll-course-card__apply {
   display: grid;
   gap: 12px;
   padding: 16px;
-  border-radius: 20px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border-radius: 16px;
+  border: 1px solid var(--enroll-theme-border);
+  background: linear-gradient(180deg, var(--enroll-theme-surface-soft) 0%, var(--enroll-theme-surface) 100%);
 }
 
 .enroll-course-card__reason-head {
@@ -591,20 +644,53 @@ onMounted(loadAll);
 }
 
 .enroll-course-card__apply :deep(.el-input__wrapper) {
-  border-radius: 16px;
-  min-height: 46px;
+  border-radius: 14px;
+  min-height: 42px;
+  background: var(--enroll-theme-surface-soft) !important;
+  box-shadow: 0 0 0 1px var(--enroll-theme-border) inset !important;
 }
 
 .enroll-course-card__apply :deep(.el-button) {
-  border-radius: 16px;
-  min-height: 46px;
+  border-radius: 14px;
+  min-height: 42px;
   padding-inline: 18px;
+}
+
+.enroll-page__hero-actions :deep(.el-button),
+.enroll-course-card__apply :deep(.el-button:not(.el-button--primary)),
+.enroll-page__toolbar :deep(.query-toolbar__btn:not(.query-toolbar__btn--primary)) {
+  border-color: var(--enroll-theme-border);
+  background: linear-gradient(180deg, var(--enroll-theme-surface) 0%, var(--enroll-theme-surface-soft) 100%);
+  color: #475569;
+}
+
+.enroll-page__hero-actions :deep(.el-button--primary),
+.enroll-course-card__apply :deep(.el-button--primary),
+.enroll-page__toolbar :deep(.query-toolbar__btn--primary) {
+  border-color: var(--enroll-theme-border-strong);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.enroll-page__toolbar :deep(.query-toolbar__search .el-input__wrapper) {
+  background: var(--enroll-theme-surface-soft) !important;
+  box-shadow: 0 0 0 1px var(--enroll-theme-border) inset !important;
+}
+
+.enroll-page__toolbar :deep(.query-toolbar__search .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #60a5fa inset, 0 0 0 4px rgba(96, 165, 250, 0.14) !important;
+}
+
+.enroll-page__toolbar :deep(.query-toolbar__search .el-input__prefix-inner),
+.enroll-page__toolbar :deep(.query-toolbar__search .el-input__inner::placeholder) {
+  color: var(--enroll-theme-ink-soft);
 }
 
 .enroll-table-card,
 .enroll-records-card {
   padding: 18px 20px;
-  background: #ffffff;
+  background: linear-gradient(180deg, var(--enroll-theme-surface) 0%, var(--enroll-theme-surface-soft) 100%);
 }
 
 .enroll-table-card__head {
@@ -621,7 +707,7 @@ onMounted(loadAll);
 }
 
 .enroll-table-card__head span {
-  color: #6b7280;
+  color: var(--enroll-theme-ink-soft);
   font-size: 13px;
 }
 
@@ -630,14 +716,14 @@ onMounted(loadAll);
   display: grid;
   gap: 12px;
   padding: 18px;
-  border-radius: 22px;
-  border: 1.5px solid #c6d8ef;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-radius: 18px;
+  border: 1px solid var(--enroll-theme-border);
+  background: linear-gradient(180deg, var(--enroll-theme-surface) 0%, var(--enroll-theme-surface-soft) 100%);
 }
 
 .enroll-record-item__top p {
   margin: 4px 0 0;
-  color: #6b7280;
+  color: var(--enroll-theme-ink-soft);
   font-size: 13px;
 }
 
@@ -649,7 +735,7 @@ onMounted(loadAll);
 
 .enroll-record-item__grid p {
   margin: 4px 0 0;
-  color: #4b5563;
+  color: var(--enroll-theme-ink-soft);
   line-height: 1.6;
 }
 
@@ -659,8 +745,20 @@ onMounted(loadAll);
 }
 
 .empty {
-  color: #7c8da2;
+  color: var(--enroll-theme-ink-soft);
   padding: 6px 0;
+}
+
+.enroll-page__hero-copy h1::before {
+  content: "课程加入";
+}
+
+.enroll-page__hero-copy > p::before {
+  content: "搜索课程，提交申请，查看状态";
+}
+
+.enroll-page__hero-panel > p::before {
+  content: "先搜索，再申请";
 }
 
 @media (max-width: 980px) {
