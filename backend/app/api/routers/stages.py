@@ -7,7 +7,7 @@ from io import BytesIO, StringIO
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from sqlmodel import Session, select
-from sqlalchemy import or_
+from sqlalchemy import false, or_
 
 from app.api.deps import require_role
 from app.api.routers import stage_support
@@ -357,20 +357,25 @@ def _internal_stage_rows(session: Session, *, course: Course, stage: CourseStage
     ]
     start, end = _stage_window(stage)
 
-    video_rows = session.exec(
-        select(VideoProgress).where(
-            VideoProgress.user_id.in_(student_ids),
-            VideoProgress.updated_at >= start,
-            VideoProgress.updated_at <= end,
-        )
-    ).all()
-    practice_rows = session.exec(
-        select(PracticeAttempt).where(
-            PracticeAttempt.user_id.in_(student_ids),
-            PracticeAttempt.created_at >= start,
-            PracticeAttempt.created_at <= end,
-        )
-    ).all()
+    video_rows = []
+    practice_rows = []
+    if kp_ids:
+        video_rows = session.exec(
+            select(VideoProgress).where(
+                VideoProgress.user_id.in_(student_ids),
+                VideoProgress.kp_id.in_(kp_ids),
+                VideoProgress.updated_at >= start,
+                VideoProgress.updated_at <= end,
+            )
+        ).all()
+        practice_rows = session.exec(
+            select(PracticeAttempt).where(
+                PracticeAttempt.user_id.in_(student_ids),
+                PracticeAttempt.kp_id.in_(kp_ids),
+                PracticeAttempt.created_at >= start,
+                PracticeAttempt.created_at <= end,
+            )
+        ).all()
     recommendation_rows = session.exec(
         select(RecommendationLog).where(
             RecommendationLog.user_id.in_(student_ids),
@@ -487,6 +492,7 @@ _BEHAVIOR_POSITIVE_WEIGHTS = {
     "graph_view": 0.9,
     "recommendation_open": 0.7,
     "recommendation_click": 0.7,
+    "recommend_click": 0.7,
     "video_progress": 1.0,
     "video_play": 0.8,
     "video_complete": 1.2,
@@ -582,7 +588,7 @@ def _behavior_stage_rows(session: Session, *, course: Course, stage: CourseStage
     if kp_ids:
         behavior_stmt = behavior_stmt.where(or_(LearningBehaviorEvent.course_id == int(course.id), LearningBehaviorEvent.kp_id.in_(kp_ids)))
     else:
-        behavior_stmt = behavior_stmt.where(or_(LearningBehaviorEvent.course_id == int(course.id), LearningBehaviorEvent.course_id.is_(None)))
+        behavior_stmt = behavior_stmt.where(LearningBehaviorEvent.course_id == int(course.id))
     behavior_rows = session.exec(behavior_stmt).all()
 
     expression_stmt = select(ExpressionEvent).where(
@@ -592,6 +598,8 @@ def _behavior_stage_rows(session: Session, *, course: Course, stage: CourseStage
     )
     if kp_ids:
         expression_stmt = expression_stmt.where(ExpressionEvent.kp_id.in_(kp_ids))
+    else:
+        expression_stmt = expression_stmt.where(false())
     expression_rows = session.exec(expression_stmt).all()
 
     behavior_map: dict[int, list[LearningBehaviorEvent]] = {}
@@ -755,7 +763,7 @@ def _apply_behavior_stage_rows(
     if kp_ids:
         behavior_stmt = behavior_stmt.where(or_(LearningBehaviorEvent.course_id == int(course.id), LearningBehaviorEvent.kp_id.in_(kp_ids)))
     else:
-        behavior_stmt = behavior_stmt.where(or_(LearningBehaviorEvent.course_id == int(course.id), LearningBehaviorEvent.course_id.is_(None)))
+        behavior_stmt = behavior_stmt.where(LearningBehaviorEvent.course_id == int(course.id))
     behavior_rows = session.exec(behavior_stmt).all()
 
     expression_stmt = select(ExpressionEvent).where(
@@ -765,6 +773,8 @@ def _apply_behavior_stage_rows(
     )
     if kp_ids:
         expression_stmt = expression_stmt.where(ExpressionEvent.kp_id.in_(kp_ids))
+    else:
+        expression_stmt = expression_stmt.where(false())
     expression_rows = session.exec(expression_stmt).all()
 
     per_student_day: dict[tuple[int, datetime.date], dict[str, object]] = {}
@@ -1654,6 +1664,17 @@ def upload_stage_data(
     for index, row in enumerate(rows, start=2):
         try:
             student = stage_support.find_user(session, row)
+            if student.role != UserRole.student:
+                raise ValueError("import user is not a student")
+            enrollment = session.exec(
+                select(Enrollment.id).where(
+                    Enrollment.student_id == int(student.id),
+                    Enrollment.course_id == course_id,
+                    Enrollment.status == EnrollmentStatus.active,
+                )
+            ).first()
+            if enrollment is None:
+                raise ValueError("student is not enrolled in this course")
             kp = stage_support.find_kp(session, subject=stage.subject, grade=stage.grade, row=row)
             score_value = stage_support.to_float(row.get("score"), default=0.0)
             completion_value = stage_support.to_ratio(row.get("completion_ratio") or row.get("completion_value"))

@@ -339,15 +339,16 @@ def list_teacher_course_catalog(
             activation.teaching_status.value
             if activation is not None and hasattr(activation.teaching_status, "value")
             else str(getattr(activation, "teaching_status", "") or "")
-        ) or None
-        is_activated = activation is not None
+        ) or (TeacherCourseStatus.not_started.value if assigned_teacher_id == int(user.id) else None)
+        is_assigned = activation is not None or assigned_teacher_id == int(user.id)
+        is_activated = is_assigned and teaching_status != TeacherCourseStatus.not_started.value
         rows.append(
             {
                 **_course_payload(course),
                 "activated": is_activated,
                 "platform_status": _course_lifecycle_value(course),
                 "teaching_status": teaching_status,
-                "can_activate": platform_available and assigned_teacher_id == int(user.id) and not is_activated,
+                "can_activate": platform_available and is_assigned and not is_activated,
                 "can_start": False,
                 "can_finish": is_activated and teaching_status == TeacherCourseStatus.teaching.value,
                 "can_exit": is_activated and teaching_status == TeacherCourseStatus.finished.value,
@@ -370,14 +371,14 @@ def activate_teacher_course(
         raise HTTPException(status_code=404, detail="课程不存在")
     if not _is_course_platform_open(course):
         raise HTTPException(status_code=400, detail="课程当前不可激活")
-    if course.teacher_id is None or int(course.teacher_id) != int(user.id):
-        raise HTTPException(status_code=403, detail="该课程未分配给当前教师，无法激活")
     existing = session.exec(
         select(CourseTeacherActivation).where(
             CourseTeacherActivation.course_id == course_id,
             CourseTeacherActivation.teacher_id == int(user.id),
         )
     ).first()
+    if existing is None and (course.teacher_id is None or int(course.teacher_id) != int(user.id)):
+        raise HTTPException(status_code=403, detail="该课程未分配给当前教师，无法激活")
     if existing is None:
         session.add(
             CourseTeacherActivation(

@@ -62,6 +62,10 @@ function notifyBackendUnavailable() {
   }, 1200);
 }
 
+function isRequestTimeout(error: unknown): boolean {
+  return isAxiosError(error) && (error.code === "ECONNABORTED" || String(error.message || "").toLowerCase().includes("timeout"));
+}
+
 // 重试机制
 const MAX_RETRIES = 3;
 const defaultApiBaseUrl =
@@ -152,7 +156,7 @@ api.interceptors.response.use((response) => {
   } else if (error.request) {
     // 请求已发出但没有收到响应
     console.error('API Error: No response received');
-    if (isAxiosError(error)) {
+    if (isAxiosError(error) && !isRequestTimeout(error)) {
       notifyBackendUnavailable();
     }
   } else {

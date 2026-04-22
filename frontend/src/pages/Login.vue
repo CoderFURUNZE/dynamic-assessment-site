@@ -18,10 +18,8 @@ const loginForm = reactive({
   remember: true,
 });
 
-const loginAccountLabel = computed(() => (mode.value === "student" ? "学号" : "工号 / 账号"));
-const loginAccountPlaceholder = computed(() =>
-  mode.value === "student" ? "请输入学生学号" : "请输入教师或管理员账号",
-);
+const loginAccountLabel = computed(() => "用户名");
+const loginAccountPlaceholder = computed(() => (mode.value === "student" ? "请输入学生用户名" : "请输入教师或管理员用户名"));
 
 const cardTitle = computed(() => (mode.value === "student" ? "学生登录" : "教师 / 管理员登录"));
 const cardSubtitle = computed(() => (mode.value === "student" ? "查看学习任务、报告和反馈。" : "进入课程、评价和学生分析。"));

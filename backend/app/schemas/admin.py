@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserOut(BaseModel):
@@ -171,6 +171,8 @@ class CourseOut(BaseModel):
     lifecycle_status: str = "draft"
     teacher_id: int | None = None
     teacher_name: str = ""
+    teacher_ids: list[int] = Field(default_factory=list)
+    teacher_names: list[str] = Field(default_factory=list)
     archived_at: datetime | None = None
 
 
@@ -181,6 +183,7 @@ class CourseIn(BaseModel):
     active: bool = True
     lifecycle_status: str = "draft"
     teacher_id: int | None = None
+    teacher_ids: list[int] = Field(default_factory=list)
 
 
 class CourseUpdateIn(BaseModel):
@@ -190,6 +193,7 @@ class CourseUpdateIn(BaseModel):
     active: bool | None = None
     lifecycle_status: str | None = None
     teacher_id: int | None = None
+    teacher_ids: list[int] | None = None
     archived_at: datetime | None = None
 
 

@@ -1,4 +1,0 @@
-[    1648ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/admin/kp-resources/1/detail:0
-[    1648ms] [ERROR] API Error: 404 {detail: Resource not found} @ http://localhost:5173/src/api.ts:33
-[    2294ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8000/api/admin/kp-resources/1/detail:0
-[    2294ms] [ERROR] API Error: 404 {detail: Resource not found} @ http://localhost:5173/src/api.ts:33

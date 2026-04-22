@@ -857,22 +857,32 @@ function nodeRadius(kp: GraphKp) {
   return base;
 }
 
-function ringColor(level: "knowledge" | "ability" | "literacy", status?: string, labels?: string[]) {
+function dimensionBadgeFill(level: "knowledge" | "ability" | "literacy", labels?: string[]) {
   if (level === "ability") {
     const label = labels?.[0];
     if (label && abilityColorMap.value.has(label)) return abilityColorMap.value.get(label) as string;
+    return "#24a36f";
   }
   if (level === "literacy") {
     const label = labels?.[0];
     if (label && literacyColorMap.value.has(label)) return literacyColorMap.value.get(label) as string;
+    return "#d58b2a";
   }
-  const palette = {
-    knowledge: { achieved: "#4a7bc8", in_progress: "#93b4e8", not_started: "#e3edf9" },
-    ability: { achieved: "#16a34a", in_progress: "#4ade80", not_started: "#d9f5e0" },
-    literacy: { achieved: "#14b8a6", in_progress: "#7dd3fc", not_started: "#dff2fb" },
-  };
-  const key = status === "achieved" || status === "in_progress" ? status : "not_started";
-  return palette[level][key];
+  return "#3978d8";
+}
+
+function dimensionBadgeOpacity(status?: string, enabled = true) {
+  if (!enabled) return 0.2;
+  if (status === "achieved" || status === "mastered") return 1;
+  if (status === "in_progress" || status === "learning") return 0.72;
+  return 0.42;
+}
+
+function dimensionBadgeStroke(status?: string, enabled = true) {
+  if (!enabled) return "rgba(148, 163, 184, 0.58)";
+  if (status === "achieved" || status === "mastered") return "rgba(15, 23, 42, 0.24)";
+  if (status === "in_progress" || status === "learning") return "rgba(15, 23, 42, 0.18)";
+  return "rgba(100, 116, 139, 0.28)";
 }
 
 async function openResource(item: { id: number; kp_id: number; url: string }, action: "visit" | "download" = "visit") {
@@ -1520,12 +1530,12 @@ onBeforeUnmount(() => {
                   蓝色虚线：推荐路径；同名能力/素养标签共用同色环，便于分组
                 </span>
                 <span class="workspace-stage__legend-item">
-                  <i class="workspace-stage__legend-rings">
-                    <span class="ring ring--literacy"></span>
-                    <span class="ring ring--ability"></span>
-                    <span class="ring ring--knowledge"></span>
+                  <i class="workspace-stage__legend-dimensions">
+                    <span class="dim dim--knowledge">知</span>
+                    <span class="dim dim--ability">能</span>
+                    <span class="dim dim--literacy">素</span>
                   </i>
-                  三层环：知识掌握（内·蓝）/ 能力（中·绿）/ 素养（外·蓝）
+                  节点徽标：知识 / 能力 / 素养；颜色区分维度，深浅表示达成状态
                 </span>
               </div>
             </div>
@@ -1644,9 +1654,6 @@ onBeforeUnmount(() => {
               @mouseenter="hoveredKpId = kp.id"
               @mouseleave="hoveredKpId = null"
             >
-              <circle :r="nodeRadius(kp) + 18" :fill="'transparent'" :stroke="ringColor('literacy', effectiveOverlayMap.get(kp.id)?.literacy_status, effectiveOverlayMap.get(kp.id)?.literacy_labels || splitLabels(kp.literacy_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.literacy_enabled ? 5 : 0" />
-              <circle :r="nodeRadius(kp) + 10" :fill="'transparent'" :stroke="ringColor('ability', effectiveOverlayMap.get(kp.id)?.ability_status, effectiveOverlayMap.get(kp.id)?.ability_labels || splitLabels(kp.ability_tag))" :stroke-width="effectiveOverlayMap.get(kp.id)?.ability_enabled ? 5 : 0" />
-              <circle :r="nodeRadius(kp) + 2" :fill="'transparent'" :stroke="ringColor('knowledge', effectiveOverlayMap.get(kp.id)?.knowledge_status)" :stroke-width="4" />
               <circle :r="nodeRadius(kp) + 22" :fill="!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id)) ? 'rgba(34, 197, 94, 0.14)' : 'rgba(20, 184, 166, 0.08)'" />
               <circle
                 :r="nodeRadius(kp)"
@@ -1654,6 +1661,20 @@ onBeforeUnmount(() => {
                 :stroke="kp.id === selectedKp?.id ? '#3b82f6' : ((!isTeacherMode && (isRecommended(kp.id) || isPathNode(kp.id))) ? '#14b8a6' : 'rgba(31, 41, 55, 0.14)')"
                 :stroke-width="!isTeacherMode && isRecommended(kp.id) ? 2.6 : (!isTeacherMode && isPathNode(kp.id) ? 2.3 : 2)"
               />
+              <g class="workspace-node__dimensions" :transform="`translate(0, ${-nodeRadius(kp) - 28})`">
+                <g transform="translate(-38, 0)">
+                  <rect x="-13" y="-10" width="26" height="20" rx="10" :fill="dimensionBadgeFill('knowledge')" :opacity="dimensionBadgeOpacity(effectiveOverlayMap.get(kp.id)?.knowledge_status, effectiveOverlayMap.get(kp.id)?.knowledge_enabled !== false)" :stroke="dimensionBadgeStroke(effectiveOverlayMap.get(kp.id)?.knowledge_status, effectiveOverlayMap.get(kp.id)?.knowledge_enabled !== false)" stroke-width="1.2" />
+                  <text class="workspace-node__dimension-label" text-anchor="middle" y="5">知</text>
+                </g>
+                <g transform="translate(0, 0)">
+                  <rect x="-13" y="-10" width="26" height="20" rx="10" :fill="dimensionBadgeFill('ability', effectiveOverlayMap.get(kp.id)?.ability_labels || splitLabels(kp.ability_tag))" :opacity="dimensionBadgeOpacity(effectiveOverlayMap.get(kp.id)?.ability_status, effectiveOverlayMap.get(kp.id)?.ability_enabled !== false)" :stroke="dimensionBadgeStroke(effectiveOverlayMap.get(kp.id)?.ability_status, effectiveOverlayMap.get(kp.id)?.ability_enabled !== false)" stroke-width="1.2" />
+                  <text class="workspace-node__dimension-label" text-anchor="middle" y="5">能</text>
+                </g>
+                <g transform="translate(38, 0)">
+                  <rect x="-13" y="-10" width="26" height="20" rx="10" :fill="dimensionBadgeFill('literacy', effectiveOverlayMap.get(kp.id)?.literacy_labels || splitLabels(kp.literacy_tag))" :opacity="dimensionBadgeOpacity(effectiveOverlayMap.get(kp.id)?.literacy_status, effectiveOverlayMap.get(kp.id)?.literacy_enabled !== false)" :stroke="dimensionBadgeStroke(effectiveOverlayMap.get(kp.id)?.literacy_status, effectiveOverlayMap.get(kp.id)?.literacy_enabled !== false)" stroke-width="1.2" />
+                  <text class="workspace-node__dimension-label" text-anchor="middle" y="5">素</text>
+                </g>
+              </g>
               <text :class="props.embedded ? 'teacher-node__code workspace-node__code' : 'workspace-node__code'" text-anchor="middle" y="-8">
                 {{ kp.code }}
               </text>
@@ -2285,39 +2306,29 @@ onBeforeUnmount(() => {
   border-top-width: 3px;
 }
 
-.workspace-stage__legend-rings {
-  width: 28px;
-  height: 18px;
-  position: relative;
+.workspace-stage__legend-dimensions {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 3px;
   flex: 0 0 auto;
 }
 
-.workspace-stage__legend-rings .ring {
-  position: absolute;
+.workspace-stage__legend-dimensions .dim {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
-  border: 2px solid transparent;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
 }
 
-.workspace-stage__legend-rings .ring--knowledge {
-  width: 10px;
-  height: 10px;
-  border-color: rgba(74, 123, 200, 0.95);
-}
-
-.workspace-stage__legend-rings .ring--ability {
-  width: 14px;
-  height: 14px;
-  border-color: rgba(22, 163, 74, 0.9);
-}
-
-.workspace-stage__legend-rings .ring--literacy {
-  width: 18px;
-  height: 18px;
-  border-color: rgba(20, 184, 166, 0.88);
-}
+.workspace-stage__legend-dimensions .dim--knowledge { background: #3978d8; }
+.workspace-stage__legend-dimensions .dim--ability { background: #24a36f; }
+.workspace-stage__legend-dimensions .dim--literacy { background: #d58b2a; }
 
 .workspace-stage__pill,
 .workspace-stage__focus {

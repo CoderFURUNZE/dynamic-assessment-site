@@ -801,11 +801,24 @@ video {
 .hint-button__inner.el-button--primary,
 .hint-button__inner.el-button--success,
 .hint-button__inner.el-button--warning {
-  border-color: transparent !important;
-  background: var(--app-gradient-cta) !important;
+  border-color: #16a34a !important;
+  background: #18b152 !important;
   background-image: none !important;
   color: #ffffff !important;
   box-shadow: 0 8px 18px rgba(34, 197, 94, 0.24) !important;
+}
+
+.hint-button__inner.el-button--primary:hover,
+.hint-button__inner.el-button--primary:focus-visible,
+.hint-button__inner.el-button--success:hover,
+.hint-button__inner.el-button--success:focus-visible,
+.hint-button__inner.el-button--warning:hover,
+.hint-button__inner.el-button--warning:focus-visible {
+  border-color: #15803d !important;
+  background: #16a34a !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(34, 197, 94, 0.28) !important;
 }
 
 .hint-button__inner.el-button--danger {
@@ -821,6 +834,32 @@ video {
   background: #fff7f8 !important;
   background-image: none !important;
   color: #a43f50 !important;
+}
+
+.hint-button__inner.is-disabled,
+.hint-button__inner.is-disabled:hover,
+.hint-button__inner.is-disabled:focus-visible {
+  border-color: rgba(148, 163, 184, 0.42) !important;
+  background: #f1f5f9 !important;
+  background-image: none !important;
+  color: #64748b !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  cursor: not-allowed;
+}
+
+.hint-button__inner.el-button--primary.is-disabled,
+.hint-button__inner.el-button--primary.is-disabled:hover,
+.hint-button__inner.el-button--success.is-disabled,
+.hint-button__inner.el-button--success.is-disabled:hover,
+.hint-button__inner.el-button--warning.is-disabled,
+.hint-button__inner.el-button--warning.is-disabled:hover {
+  border-color: #9fd8b5 !important;
+  background: #dff6e8 !important;
+  background-image: none !important;
+  color: #22764a !important;
+  box-shadow: none !important;
 }
 
 .dashboard-hero,

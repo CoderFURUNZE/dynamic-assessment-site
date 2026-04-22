@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, or_
+from sqlalchemy import false, func, or_
 from sqlmodel import Session, select
 
 from app.api.deps import assert_student_kp_access, assert_student_subject_access, get_current_user
@@ -408,20 +408,19 @@ def profile(
         LearningBehaviorEvent.user_id == user.id,
         LearningBehaviorEvent.created_at >= since_30d,
     )
-    if course_id is not None:
+    if course_id is not None and kp_ids:
         behavior_scope_stmt = behavior_scope_stmt.where(
             or_(
                 LearningBehaviorEvent.course_id == course_id,
-                LearningBehaviorEvent.event_type == "login",
-            )
-        )
-    if kp_ids:
-        behavior_scope_stmt = behavior_scope_stmt.where(
-            or_(
                 LearningBehaviorEvent.kp_id.in_(kp_ids),
-                LearningBehaviorEvent.event_type == "login",
             )
         )
+    elif course_id is not None:
+        behavior_scope_stmt = behavior_scope_stmt.where(LearningBehaviorEvent.course_id == course_id)
+    elif kp_ids:
+        behavior_scope_stmt = behavior_scope_stmt.where(LearningBehaviorEvent.kp_id.in_(kp_ids))
+    else:
+        behavior_scope_stmt = behavior_scope_stmt.where(false())
     behavior_rows_30d = session.exec(
         behavior_scope_stmt.order_by(LearningBehaviorEvent.created_at.desc()).limit(800)
     ).all()

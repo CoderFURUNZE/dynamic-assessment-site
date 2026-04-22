@@ -626,10 +626,11 @@ onMounted(refreshWorkspace);
   overflow: hidden;
   min-height: var(--graph-panel-height);
   height: var(--graph-panel-height);
-  padding: 14px;
-  background:
-    radial-gradient(circle at top left, rgba(219, 234, 254, 0.2), transparent 26%),
-    linear-gradient(180deg, var(--graph-theme-surface-soft) 0%, var(--graph-theme-surface) 100%);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   min-width: 0;
 }
 
@@ -775,17 +776,20 @@ onMounted(refreshWorkspace);
 }
 
 .graph-page :deep(.workspace-shell) {
-  padding: 12px;
+  padding: 0;
   height: 100%;
-  background:
-    radial-gradient(circle at top left, rgba(241, 226, 198, 0.18), transparent 24%),
-    linear-gradient(180deg, var(--graph-theme-surface) 0%, var(--graph-theme-surface-soft) 100%);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .graph-page :deep(.workspace-shell--embedded .workspace-content) {
   min-height: 100%;
   height: 100%;
   max-height: 100%;
+  padding: 0;
+  background: transparent;
 }
 
 .graph-page :deep(.workspace-shell--embedded .workspace-stage) {

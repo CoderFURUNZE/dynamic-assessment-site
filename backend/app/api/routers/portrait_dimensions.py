@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from app.api.deps import require_role, teacher_has_course_access
+from app.api.deps import assert_student_subject_access, require_role, teacher_has_course_access
 from app.api.routers import stage_support
 from app.db.models import (
     Course,
@@ -47,6 +47,13 @@ def _ensure_course_permission(session: Session, user: User, course: Course) -> N
     if user.role == UserRole.teacher and teacher_has_course_access(session=session, teacher_id=int(user.id), course=course):
         return
     raise HTTPException(status_code=403, detail="No permission for this course")
+
+
+def _ensure_course_student(session: Session, *, user_id: int, course: Course) -> None:
+    target = session.get(User, user_id)
+    if target is None or target.role != UserRole.student:
+        raise HTTPException(status_code=400, detail="Target user is not a student")
+    assert_student_subject_access(session, user_id, course.title)
 
 
 def _course_indicator_rows_for_teacher(*, session: Session, course_id: int) -> list[dict]:
@@ -335,6 +342,10 @@ def get_teacher_indicator_input(
 ):
     course = _get_course_or_404(session, course_id)
     _ensure_course_permission(session, user, course)
+    stage = session.get(CourseStage, stage_id)
+    if stage is None or int(stage.course_id) != course_id:
+        raise HTTPException(status_code=400, detail="Stage does not belong to this course")
+    _ensure_course_student(session, user_id=int(user_id), course=course)
     rows = _course_indicator_rows_for_teacher(session=session, course_id=course_id)
     existing = session.exec(
         select(TeacherPortraitIndicatorInput).where(
@@ -370,6 +381,10 @@ def save_teacher_indicator_input(
 ):
     course = _get_course_or_404(session, course_id)
     _ensure_course_permission(session, user, course)
+    stage = session.get(CourseStage, payload.stage_id)
+    if stage is None or int(stage.course_id) != course_id:
+        raise HTTPException(status_code=400, detail="Stage does not belong to this course")
+    _ensure_course_student(session, user_id=int(payload.user_id), course=course)
     valid_rows = _course_indicator_rows_for_teacher(session=session, course_id=course_id)
     valid_by_indicator = {int(row["indicator"].id): row for row in valid_rows}
     existing = session.exec(
@@ -435,6 +450,7 @@ def get_questionnaire_indicator_input(
         raise HTTPException(status_code=403, detail="No permission for this user")
     if user.role in {UserRole.admin, UserRole.teacher}:
         _ensure_course_permission(session, user, course)
+    _ensure_course_student(session, user_id=int(target_user_id), course=course)
 
     rows = _course_indicator_rows_for_questionnaire(session=session, course_id=course_id)
     existing = session.exec(
@@ -474,6 +490,7 @@ def save_questionnaire_indicator_input(
         raise HTTPException(status_code=403, detail="No permission for this user")
     if user.role in {UserRole.admin, UserRole.teacher}:
         _ensure_course_permission(session, user, course)
+    _ensure_course_student(session, user_id=int(target_user_id), course=course)
 
     valid_rows = _course_indicator_rows_for_questionnaire(session=session, course_id=course_id)
     valid_by_indicator = {int(row["indicator"].id): row for row in valid_rows}

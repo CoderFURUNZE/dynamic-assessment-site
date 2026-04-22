@@ -14,6 +14,8 @@ type Course = {
   lifecycle_status?: string;
   teacher_id?: number | null;
   teacher_name?: string;
+  teacher_ids?: number[];
+  teacher_names?: string[];
   teaching_teacher_count?: number;
   finished_teacher_count?: number;
   teaching_teacher_names?: string[];
@@ -40,7 +42,7 @@ const form = reactive({
   description: "",
   active: true,
   lifecycle_status: "draft",
-  teacher_id: null as number | null,
+  teacher_ids: [] as number[],
 });
 
 const lifecycleOptions = [
@@ -94,7 +96,7 @@ function openAdd() {
   form.description = "";
   form.active = true;
   form.lifecycle_status = "draft";
-  form.teacher_id = null;
+  form.teacher_ids = [];
   dialogOpen.value = true;
 }
 
@@ -106,7 +108,7 @@ function openEdit(row: Course) {
   form.description = row.description;
   form.active = row.active;
   form.lifecycle_status = row.lifecycle_status || (row.active ? "active" : "draft");
-  form.teacher_id = row.teacher_id ?? null;
+  form.teacher_ids = row.teacher_ids?.length ? [...row.teacher_ids] : row.teacher_id ? [row.teacher_id] : [];
   dialogOpen.value = true;
 }
 
@@ -118,7 +120,8 @@ async function save() {
     description: form.description,
     active: form.active,
     lifecycle_status: form.lifecycle_status,
-    teacher_id: form.teacher_id ?? null,
+    teacher_ids: form.teacher_ids,
+    teacher_id: form.teacher_ids[0] ?? null,
   };
   if (!payload.code || !payload.title) {
     ElMessage.warning("课程编码和课程名称不能为空");
@@ -297,7 +300,7 @@ Promise.all([loadTeacherOptions(), load()]);
                 <span class="course-setting__label">平台状态</span>
                 <span class="course-setting__pill" :class="lifecycleClass(row.lifecycle_status)">{{ lifecycleLabel(row.lifecycle_status) }}</span>
               </div>
-              <span class="course-setting__item">指定教师：{{ row.teacher_name || '暂未指定' }}</span>
+              <span class="course-setting__item">指定教师：{{ row.teacher_names?.length ? row.teacher_names.join('、') : (row.teacher_name || '暂未指定') }}</span>
               <span class="course-setting__item">
                 教师授课：{{ row.teaching_teacher_count ?? 0 }} 位授课中，{{ row.finished_teacher_count ?? 0 }} 位已结课
               </span>
@@ -327,7 +330,7 @@ Promise.all([loadTeacherOptions(), load()]);
       <el-pagination background layout="prev, pager, next" :page-size="pageSize" :total="total" v-model:current-page="page" @current-change="load" />
     </div>
 
-    <el-dialog v-model="dialogOpen" :title="isEdit ? '编辑课程' : '新增课程'" width="560px">
+    <el-dialog v-model="dialogOpen" :title="isEdit ? '编辑课程' : '新增课程'" width="680px">
       <el-form label-width="90px">
         <el-form-item label="课程编码"><el-input v-model="form.code" placeholder="唯一编码，学生可凭此加入" /></el-form-item>
         <el-form-item label="课程名称"><el-input v-model="form.title" placeholder="例如：数据结构" /></el-form-item>
@@ -338,7 +341,17 @@ Promise.all([loadTeacherOptions(), load()]);
           </el-select>
         </el-form-item>
         <el-form-item label="指定教师">
-          <el-select v-model="form.teacher_id" clearable filterable placeholder="请选择授课教师" style="width: 100%">
+          <el-select
+            v-model="form.teacher_ids"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            :max-collapse-tags="3"
+            clearable
+            filterable
+            placeholder="请选择授课教师"
+            style="width: 100%"
+          >
             <el-option v-for="item in teacherOptions" :key="item.id" :label="item.label" :value="item.id" />
           </el-select>
         </el-form-item>

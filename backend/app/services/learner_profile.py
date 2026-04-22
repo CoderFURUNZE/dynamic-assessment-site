@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from statistics import mean
 from typing import Any
 
-from sqlalchemy import func, or_
+from sqlalchemy import false, func, or_
 from sqlmodel import Session, desc, select
 
 from app.db.models import (
@@ -48,6 +48,9 @@ PERSONA_LABELS = {
     PersonaType.procrastinating: "拖延风险型",
     PersonaType.steady: "平稳发展型",
 }
+
+PLATFORM_PERSONA_SUBJECT = "平台默认模板"
+PLATFORM_PERSONA_GRADE = "通用"
 
 DEFAULT_PERSONA_THRESHOLDS: dict[str, float] = {
     "procrastinating_e": 0.4,
@@ -816,7 +819,19 @@ def get_or_create_persona_rule(session: Session, *, subject: str, grade: str) ->
         select(LearnerPersonaRule).where(LearnerPersonaRule.subject == subject, LearnerPersonaRule.grade == grade)
     ).first()
     if rule is None:
+        template = None
+        if subject != PLATFORM_PERSONA_SUBJECT or grade != PLATFORM_PERSONA_GRADE:
+            template = session.exec(
+                select(LearnerPersonaRule).where(
+                    LearnerPersonaRule.subject == PLATFORM_PERSONA_SUBJECT,
+                    LearnerPersonaRule.grade == PLATFORM_PERSONA_GRADE,
+                )
+            ).first()
         rule = LearnerPersonaRule(subject=subject, grade=grade)
+        if template is not None:
+            rule.thresholds_json = template.thresholds_json
+            rule.weights_json = template.weights_json
+            rule.strategy_json = template.strategy_json
         session.add(rule)
         session.commit()
         session.refresh(rule)
@@ -1730,6 +1745,7 @@ def _course_mastery(
         .order_by(KnowledgePoint.chapter, KnowledgePoint.id)
     ).all()
     kp_ids = [int(k.id) for k in kps if k.id is not None]
+    course_id = resolve_course_id(session, subject=subject)
     mastery_map: dict[int, Mastery] = {}
     if not kp_ids:
         return 0.0, list(kps), mastery_map
@@ -1836,13 +1852,19 @@ def recalculate_profile_snapshot(
         LearningBehaviorEvent.user_id == user_id,
         LearningBehaviorEvent.created_at >= since_30d,
     ]
-    if kp_ids:
+    if kp_ids and course_id is not None:
         behavior_where.append(
             or_(
                 LearningBehaviorEvent.kp_id.in_(kp_ids),
-                LearningBehaviorEvent.event_type == "login",
+                LearningBehaviorEvent.course_id == course_id,
             )
         )
+    elif kp_ids:
+        behavior_where.append(LearningBehaviorEvent.kp_id.in_(kp_ids))
+    elif course_id is not None:
+        behavior_where.append(LearningBehaviorEvent.course_id == course_id)
+    else:
+        behavior_where.append(false())
     behavior_rows = session.exec(
         select(LearningBehaviorEvent)
         .where(*behavior_where)

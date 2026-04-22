@@ -5,7 +5,7 @@ import AdminUserManager from "../components/AdminUserManager.vue";
 
 <template>
   <div class="admin-users-page">
-    <AdminIntroHero eyebrow="基础管理" title="用户管理" pill="账号维护" />
+    <AdminIntroHero eyebrow="基础管理" title="学生管理" pill="学生账号" />
 
     <section class="admin-users-page__panel">
       <AdminUserManager mode="users" />

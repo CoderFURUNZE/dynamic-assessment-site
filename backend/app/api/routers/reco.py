@@ -29,7 +29,7 @@ def _handle_reco(
     log_behavior_event(
         session,
         user_id=user.id,
-        event_type="recommend_click",
+        event_type="recommendation_click",
         subject=kp.subject,
         grade=kp.grade,
         kp_id=kp_id,

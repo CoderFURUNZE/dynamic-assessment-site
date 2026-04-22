@@ -64,7 +64,7 @@ from app.db.models import (
     AuditLog,
 )
 from app.db.session import get_session
-from sqlalchemy import Integer, func, or_, delete
+from sqlalchemy import Integer, false, func, or_, delete
 from app.schemas.admin import (
     KnowledgeEdgeIn,
     KnowledgeEdgeOut,
@@ -346,6 +346,56 @@ def _ensure_teacher_id(session: Session, teacher_id: int | None) -> int | None:
     if teacher is None or teacher.role != UserRole.teacher:
         raise HTTPException(status_code=400, detail="teacher_id must reference a teacher user")
     return int(teacher.id)
+
+
+def _normalize_teacher_ids(session: Session, teacher_ids: list[int] | None, fallback_teacher_id: int | None = None) -> list[int]:
+    raw_ids = list(teacher_ids or [])
+    if not raw_ids and fallback_teacher_id is not None:
+        raw_ids = [fallback_teacher_id]
+    normalized: list[int] = []
+    for raw_id in raw_ids:
+        teacher_id = _ensure_teacher_id(session, int(raw_id) if raw_id is not None else None)
+        if teacher_id is not None and teacher_id not in normalized:
+            normalized.append(int(teacher_id))
+    return normalized
+
+
+def _course_teacher_ids(session: Session, course: Course) -> list[int]:
+    if course.id is None:
+        return [int(course.teacher_id)] if course.teacher_id is not None else []
+    rows = session.exec(
+        select(CourseTeacherActivation).where(CourseTeacherActivation.course_id == int(course.id))
+    ).all()
+    teacher_ids = [int(row.teacher_id) for row in rows if row.teacher_id is not None]
+    if course.teacher_id is not None and int(course.teacher_id) not in teacher_ids:
+        teacher_ids.insert(0, int(course.teacher_id))
+    return teacher_ids
+
+
+def _sync_course_teacher_assignments(session: Session, course: Course, teacher_ids: list[int]) -> None:
+    if course.id is None:
+        return
+    course_id = int(course.id)
+    existing_rows = session.exec(
+        select(CourseTeacherActivation).where(CourseTeacherActivation.course_id == course_id)
+    ).all()
+    existing_map = {int(row.teacher_id): row for row in existing_rows if row.teacher_id is not None}
+    target_ids = set(teacher_ids)
+    for teacher_id in teacher_ids:
+        existing = existing_map.get(int(teacher_id))
+        if existing is None:
+            session.add(
+                CourseTeacherActivation(
+                    course_id=course_id,
+                    teacher_id=int(teacher_id),
+                    teaching_status=TeacherCourseStatus.not_started,
+                    finished_at=None,
+                    updated_at=datetime.utcnow(),
+                )
+            )
+    for teacher_id, existing in existing_map.items():
+        if teacher_id not in target_ids and existing.teaching_status == TeacherCourseStatus.not_started:
+            session.delete(existing)
 
 
 def _sync_course_class_enrollments(session: Session, course: Course) -> None:
@@ -692,20 +742,19 @@ def _build_student_detail_payload(
         LearningBehaviorEvent.user_id == user_id,
         LearningBehaviorEvent.created_at >= since_30d,
     )
-    if course_id is not None:
+    if course_id is not None and kp_ids:
         behavior_scope_stmt = behavior_scope_stmt.where(
             or_(
                 LearningBehaviorEvent.course_id == course_id,
-                LearningBehaviorEvent.course_id.is_(None),
-            )
-        )
-    if kp_ids:
-        behavior_scope_stmt = behavior_scope_stmt.where(
-            or_(
                 LearningBehaviorEvent.kp_id.in_(kp_ids),
-                LearningBehaviorEvent.kp_id.is_(None),
             )
         )
+    elif course_id is not None:
+        behavior_scope_stmt = behavior_scope_stmt.where(LearningBehaviorEvent.course_id == course_id)
+    elif kp_ids:
+        behavior_scope_stmt = behavior_scope_stmt.where(LearningBehaviorEvent.kp_id.in_(kp_ids))
+    else:
+        behavior_scope_stmt = behavior_scope_stmt.where(false())
     scoped_behavior_rows = session.exec(
         behavior_scope_stmt.order_by(LearningBehaviorEvent.created_at.desc()).limit(600)
     ).all()
@@ -929,7 +978,7 @@ def _relation_type_value(value) -> str:
     return RelationType.prerequisite.value
 
 
-def _course_to_out(course: Course, *, teacher_name: str = "") -> CourseOut:
+def _course_to_out(course: Course, *, teacher_name: str = "", teacher_ids: list[int] | None = None, teacher_names: list[str] | None = None) -> CourseOut:
     return CourseOut(
         id=int(course.id or 0),
         code=course.code,
@@ -939,6 +988,8 @@ def _course_to_out(course: Course, *, teacher_name: str = "") -> CourseOut:
         lifecycle_status=course.lifecycle_status.value if hasattr(course.lifecycle_status, "value") else str(course.lifecycle_status or "draft"),
         teacher_id=int(course.teacher_id) if course.teacher_id is not None else None,
         teacher_name=teacher_name,
+        teacher_ids=teacher_ids or ([int(course.teacher_id)] if course.teacher_id is not None else []),
+        teacher_names=teacher_names or ([teacher_name] if teacher_name else []),
         archived_at=course.archived_at,
     )
 
@@ -1624,9 +1675,18 @@ def list_courses(
 
     payload_items = []
     for item in items:
-        assigned_teacher_name = teacher_name_map.get(int(item.teacher_id or 0), "") if item.teacher_id is not None else ""
-        base = _course_to_out(item, teacher_name=assigned_teacher_name).model_dump()
         activations = activation_map.get(int(item.id or 0), [])
+        assigned_teacher_ids = [int(row.teacher_id) for row in activations if row.teacher_id is not None]
+        if item.teacher_id is not None and int(item.teacher_id) not in assigned_teacher_ids:
+            assigned_teacher_ids.insert(0, int(item.teacher_id))
+        assigned_teacher_names = [teacher_name_map.get(teacher_id, f"教师{teacher_id}") for teacher_id in assigned_teacher_ids]
+        assigned_teacher_name = assigned_teacher_names[0] if assigned_teacher_names else ""
+        base = _course_to_out(
+            item,
+            teacher_name=assigned_teacher_name,
+            teacher_ids=assigned_teacher_ids,
+            teacher_names=assigned_teacher_names,
+        ).model_dump()
         teaching_names = [
             teacher_name_map.get(int(row.teacher_id), f"教师{row.teacher_id}")
             for row in activations
@@ -1662,7 +1722,8 @@ def create_course(
     exists = session.exec(select(Course).where(Course.code == code)).first()
     if exists:
         raise HTTPException(status_code=400, detail="Course code exists")
-    teacher_id = _ensure_teacher_id(session, payload.teacher_id)
+    teacher_ids = _normalize_teacher_ids(session, payload.teacher_ids, payload.teacher_id)
+    teacher_id = teacher_ids[0] if teacher_ids else None
     try:
         lifecycle_status = CourseLifecycleStatus(str(payload.lifecycle_status or "draft").strip().lower())
     except ValueError:
@@ -1679,12 +1740,13 @@ def create_course(
     session.add(course)
     session.commit()
     session.refresh(course)
+    _sync_course_teacher_assignments(session, course, teacher_ids)
+    session.commit()
     _log_action(session, admin, "course_create", f"code={code} title={title}")
-    teacher_name = ""
-    if teacher_id is not None:
-        teacher = session.get(User, teacher_id)
-        teacher_name = teacher.full_name or teacher.username if teacher is not None else ""
-    return _course_to_out(course, teacher_name=teacher_name)
+    teacher_rows = session.exec(select(User).where(User.id.in_(teacher_ids))).all() if teacher_ids else []
+    teacher_name_map = {int(row.id): row.full_name or row.username for row in teacher_rows if row.id is not None}
+    teacher_names = [teacher_name_map.get(teacher_id, f"教师{teacher_id}") for teacher_id in teacher_ids]
+    return _course_to_out(course, teacher_name=teacher_names[0] if teacher_names else "", teacher_ids=teacher_ids, teacher_names=teacher_names)
 
 
 @router.put("/courses/{course_id}", response_model=CourseOut)
@@ -1727,17 +1789,26 @@ def update_course(
             course.active = True
     if payload.archived_at is not None:
         course.archived_at = payload.archived_at
-    if payload.teacher_id is not None:
-        course.teacher_id = _ensure_teacher_id(session, payload.teacher_id)
+    if payload.teacher_ids is not None:
+        teacher_ids = _normalize_teacher_ids(session, payload.teacher_ids, payload.teacher_id)
+        course.teacher_id = teacher_ids[0] if teacher_ids else None
+    elif payload.teacher_id is not None:
+        teacher_ids = _normalize_teacher_ids(session, None, payload.teacher_id)
+        course.teacher_id = teacher_ids[0] if teacher_ids else None
+    else:
+        teacher_ids = _course_teacher_ids(session, course)
     session.add(course)
     session.commit()
     session.refresh(course)
+    if payload.teacher_ids is not None or payload.teacher_id is not None:
+        _sync_course_teacher_assignments(session, course, teacher_ids)
+        session.commit()
     _log_action(session, admin, "course_update", f"id={course_id} code={course.code}")
-    teacher_name = ""
-    if course.teacher_id is not None:
-        teacher = session.get(User, int(course.teacher_id))
-        teacher_name = teacher.full_name or teacher.username if teacher is not None else ""
-    return _course_to_out(course, teacher_name=teacher_name)
+    teacher_ids = _course_teacher_ids(session, course)
+    teacher_rows = session.exec(select(User).where(User.id.in_(teacher_ids))).all() if teacher_ids else []
+    teacher_name_map = {int(row.id): row.full_name or row.username for row in teacher_rows if row.id is not None}
+    teacher_names = [teacher_name_map.get(teacher_id, f"教师{teacher_id}") for teacher_id in teacher_ids]
+    return _course_to_out(course, teacher_name=teacher_names[0] if teacher_names else "", teacher_ids=teacher_ids, teacher_names=teacher_names)
 
 
 @router.delete("/courses/{course_id}")

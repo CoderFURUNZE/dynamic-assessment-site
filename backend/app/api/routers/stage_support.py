@@ -277,6 +277,8 @@ def find_kp(session: Session, *, subject: str, grade: str, row: dict[str, str]) 
         kp = session.get(KnowledgePoint, int(kp_id))
         if kp is None:
             raise ValueError(f"kp_id not found: {kp_id}")
+        if kp.subject != subject or kp.grade != grade:
+            raise ValueError(f"kp_id does not belong to current course: {kp_id}")
         return kp
     if kp_code:
         kp = session.exec(select(KnowledgePoint).where(KnowledgePoint.code == kp_code, KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)).first()

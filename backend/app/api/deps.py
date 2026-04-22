@@ -141,6 +141,7 @@ def get_teacher_activated_course_ids(session: Session, teacher_id: int) -> set[i
     rows = session.exec(
         select(CourseTeacherActivation.course_id).where(
             CourseTeacherActivation.teacher_id == teacher_id,
+            CourseTeacherActivation.teaching_status != TeacherCourseStatus.not_started,
         )
     ).all()
     return {int(row) for row in rows if row is not None}

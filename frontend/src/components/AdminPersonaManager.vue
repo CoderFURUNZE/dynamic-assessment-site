@@ -245,12 +245,24 @@ function selectPreset(presetKey: Exclude<PresetKey, "custom">) {
 }
 
 function getRulesPayload() {
+  const stageDimensionPayload = Object.fromEntries(
+    dimensionOptions.map((item) => [
+      item.key,
+      {
+        enabled: stageDimensions[item.key].enabled,
+        weight: stageDimensions[item.key].enabled ? stageDimensions[item.key].weight : 0,
+      },
+    ]),
+  ) as Record<string, { enabled: boolean; weight: number }>;
   return {
     preset: selectedPreset.value,
     subject: props.subject,
     grade: props.grade,
     thresholds: { ...thresholds },
-    stage_dimensions: Object.fromEntries(dimensionOptions.map((item) => [item.key, { enabled: stageDimensions[item.key].enabled, weight: stageDimensions[item.key].enabled ? stageDimensions[item.key].weight : 0 }])) as Record<string, { enabled: boolean; weight: number }>,
+    weights: {
+      stage_dimensions: stageDimensionPayload,
+    },
+    stage_dimensions: stageDimensionPayload,
     strategies: { ...strategies },
     weight_text: weightText.value,
   };
@@ -269,9 +281,10 @@ async function loadRules() {
     selectedPreset.value = resolvePresetFromPayload(data.preset);
     fillState(thresholds, data.thresholds);
     fillState(strategies, data.strategies);
-    if (data.stage_dimensions) {
+    const loadedStageDimensions = data.weights?.stage_dimensions ?? data.stage_dimensions;
+    if (loadedStageDimensions) {
       dimensionOptions.forEach((item) => {
-        const next = data.stage_dimensions[item.key];
+        const next = loadedStageDimensions[item.key];
         if (next) {
           stageDimensions[item.key].enabled = Boolean(next.enabled);
           stageDimensions[item.key].weight = Number(next.weight ?? 0);
@@ -482,8 +495,7 @@ watch(
             <span class="persona-collapse-hint__desc">选择上方风格卡后，自动展开对应维度和策略信息。</span>
           </div>
         </div>
-        <transition name="persona-expand">
-          <div v-if="rulesConfigExpanded" class="persona-grid persona-grid--two">
+        <div v-show="rulesConfigExpanded" class="persona-grid persona-grid--two persona-grid--settings">
             <section class="persona-section">
               <div class="section-title section-title--with-icon">
                 <el-icon><DataAnalysis /></el-icon>
@@ -554,8 +566,7 @@ watch(
                 </div>
               </div>
             </section>
-          </div>
-        </transition>
+        </div>
       </div>
     </section>
 
@@ -794,21 +805,11 @@ watch(
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   text-align: left;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  animation: personaFadeUp 0.45s ease both;
-}
-
-.persona-preset-card:nth-child(2) {
-  animation-delay: 0.08s;
-}
-
-.persona-preset-card:nth-child(3) {
-  animation-delay: 0.16s;
+  transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
 }
 
 .persona-preset-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
+  transform: translateY(-2px);
 }
 
 .persona-preset-card__head {
@@ -848,7 +849,7 @@ watch(
 .persona-preset-card.is-active {
   border-color: rgba(34, 197, 94, 0.24);
   background: radial-gradient(circle at top left, rgba(187, 247, 208, 0.4), transparent 55%), #ffffff;
-  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
   transform: translateY(-2px);
 }
 
@@ -955,6 +956,11 @@ watch(
   gap: 16px;
 }
 
+.persona-grid--settings {
+  contain: layout paint;
+  content-visibility: auto;
+}
+
 .persona-section {
   display: grid;
   gap: 16px;
@@ -962,12 +968,11 @@ watch(
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 24px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.16s ease;
 }
 
 .persona-section:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
+  border-color: rgba(34, 197, 94, 0.22);
 }
 
 .persona-threshold-cards {
@@ -1109,41 +1114,6 @@ watch(
   display: flex;
   align-items: center;
   line-height: 1;
-}
-
-.persona-expand-enter-active,
-.persona-expand-leave-active {
-  overflow: hidden;
-  transition:
-    max-height 0.28s ease,
-    opacity 0.24s ease,
-    transform 0.24s ease;
-  transform-origin: top center;
-}
-
-.persona-expand-enter-from,
-.persona-expand-leave-to {
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(-8px) scaleY(0.98);
-}
-
-.persona-expand-enter-to,
-.persona-expand-leave-from {
-  max-height: 1600px;
-  opacity: 1;
-  transform: translateY(0) scaleY(1);
-}
-
-@keyframes personaFadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .persona-readonly__grid {

@@ -66,6 +66,11 @@ const pendingImportFile = ref<File | null>(null);
 const importPreview = ref<ImportPreview | null>(null);
 const importResult = ref<ImportResult | null>(null);
 
+function isTimeoutError(error: unknown) {
+  const e = error as { code?: string; message?: string };
+  return e?.code === "ECONNABORTED" || String(e?.message || "").toLowerCase().includes("timeout");
+}
+
 const form = reactive({
   id: 0,
   username: "",
@@ -89,17 +94,25 @@ const createForm = reactive({
   password: "",
 });
 
-const titleText = computed(() => (props.mode === "teachers" ? "教师管理" : "用户管理"));
-const roleFilter = computed(() => (props.mode === "teachers" ? "teacher" : ""));
-const createLabel = computed(() => (props.mode === "teachers" ? "新增教师" : "新增用户"));
+const isTeacherMode = computed(() => props.mode === "teachers");
+const listTitle = computed(() => (isTeacherMode.value ? "教师列表" : "学生列表"));
+const editTitle = computed(() => (isTeacherMode.value ? "编辑教师" : "编辑学生"));
+const roleFilter = computed(() => (isTeacherMode.value ? "teacher" : "student"));
+const targetRole = computed(() => (isTeacherMode.value ? "teacher" : "student"));
+const createLabel = computed(() => (isTeacherMode.value ? "新增教师" : "新增学生"));
 const importRole = computed(() => (props.mode === "teachers" ? "teacher" : "student"));
 const importLabel = computed(() => (props.mode === "teachers" ? "导入教师" : "导入学生"));
+const isEditingTeacher = computed(() => isTeacherMode.value);
+const isCreatingTeacher = computed(() => isTeacherMode.value);
+const editIdentityNoLabel = computed(() => (isEditingTeacher.value ? "教职工号" : "学号"));
+const createIdentityNoLabel = computed(() => (isCreatingTeacher.value ? "教职工号" : "学号"));
+const searchPlaceholder = computed(() => (isTeacherMode.value ? "请输入用户名、姓名、教职工号或手机号" : "请输入用户名、姓名、学号或班级"));
 const filteredUsers = computed(() => {
   const q = keyword.value.trim().toLowerCase();
   return users.value.filter((row) => {
     const matchesKeyword = !q || [row.username, row.full_name, row.student_no, row.class_name, row.phone || ""].join(" ").toLowerCase().includes(q);
     const matchesStatus = statusFilter.value === "all" || (statusFilter.value === "active" ? row.active : !row.active);
-    return matchesKeyword && matchesStatus;
+    return row.role === targetRole.value && matchesKeyword && matchesStatus;
   });
 });
 
@@ -146,11 +159,11 @@ function openCreate() {
 async function save() {
   try {
     await api.put(`/admin/users/${form.id}`, {
-      role: props.mode === "teachers" ? "teacher" : form.role,
+      role: targetRole.value,
       active: form.active,
       full_name: form.full_name,
       student_no: form.student_no,
-      class_name: form.class_name,
+      class_name: isEditingTeacher.value ? "" : form.class_name,
       phone: form.phone || undefined,
       password: form.password || undefined,
     });
@@ -166,11 +179,11 @@ async function createUser() {
   try {
     await api.post("/admin/users", {
       username: createForm.username,
-      role: props.mode === "teachers" ? "teacher" : createForm.role,
+      role: targetRole.value,
       active: createForm.active,
       full_name: createForm.full_name,
       student_no: createForm.student_no,
-      class_name: createForm.class_name,
+      class_name: isCreatingTeacher.value ? "" : createForm.class_name,
       phone: createForm.phone || undefined,
       password: createForm.password,
     });
@@ -247,6 +260,7 @@ async function handleImportChange(event: Event) {
     form.append("file", file);
     const { data } = await api.post("/admin/users/import/preview", form, {
       headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
     });
     pendingImportFile.value = file;
     importPreview.value = data;
@@ -268,6 +282,7 @@ async function confirmImport() {
     form.append("file", pendingImportFile.value);
     const { data } = await api.post("/admin/users/import", form, {
       headers: { "Content-Type": "multipart/form-data" },
+      timeout: 60000,
     });
     importResult.value = data;
     importResultDialogOpen.value = true;
@@ -276,6 +291,11 @@ async function confirmImport() {
     ElMessage.success(`导入完成：成功 ${data.success_rows} 条，失败 ${data.failed_rows} 条，新增 ${data.created_rows} 条，更新 ${data.updated_rows} 条`);
     await load();
   } catch (e: any) {
+    if (isTimeoutError(e)) {
+      ElMessage.warning("导入处理时间较长，已刷新列表，请以列表数据为准");
+      await load();
+      return;
+    }
     ElMessage.error(e?.response?.data?.detail ?? "批量导入失败");
   } finally {
     importLoading.value = false;
@@ -291,13 +311,13 @@ watch(() => props.mode, () => { page.value = 1; load(); });
     <div class="admin-user-card__table-wrap">
       <div class="admin-user-card__table-header">
         <div class="admin-user-card__table-title-wrap">
-          <div class="admin-user-card__table-title">用户列表</div>
+          <div class="admin-user-card__table-title">{{ listTitle }}</div>
           <div class="admin-user-card__table-controls">
             <div class="admin-user-card__table-query-group">
               <QueryToolbar
                 v-model="keyword"
-                placeholder="请输入用户名、姓名、学号或班级"
-                hint="请输入用户名、姓名、学号或班级"
+                :placeholder="searchPlaceholder"
+                :hint="searchPlaceholder"
                 input-width="420px"
                 :show-reset="false"
                 @search="searchUsers"
@@ -311,7 +331,7 @@ watch(() => props.mode, () => { page.value = 1; load(); });
                 <el-option label="仅启用" value="active" />
                 <el-option label="仅禁用" value="inactive" />
               </el-select>
-              <HintButton tip="重新加载用户列表" @click="load" :loading="loading">刷新</HintButton>
+              <HintButton :tip="`重新加载${listTitle}`" @click="load" :loading="loading">刷新</HintButton>
               <HintButton tip="下载批量导入模板" @click="downloadTemplate">下载模板</HintButton>
               <HintButton tip="上传 CSV 或 XLSX 批量导入" @click="triggerImport" :loading="importLoading">{{ importLabel }}</HintButton>
               <HintButton tip="新建一条账号记录" @click="openCreate">{{ createLabel }}</HintButton>
@@ -330,7 +350,7 @@ watch(() => props.mode, () => { page.value = 1; load(); });
       >
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="username" label="用户名" width="140" />
-        <el-table-column label="角色" width="100">
+        <el-table-column v-if="isTeacherMode" label="角色" width="100">
           <template #default="{ row }">
             <span
               class="admin-user-card__role-pill"
@@ -388,11 +408,11 @@ watch(() => props.mode, () => { page.value = 1; load(); });
       />
     </div>
     
-    <el-dialog v-model="dialogOpen" title="编辑用户" width="520px">
+    <el-dialog v-model="dialogOpen" :title="editTitle" width="520px">
       <el-form label-width="90px">
         <el-form-item label="用户名"><el-input v-model="form.username" disabled /></el-form-item>
-        <el-form-item label="角色">
-          <el-select v-model="form.role" style="width: 100%" :disabled="props.mode === 'teachers'">
+        <el-form-item v-if="isTeacherMode" label="角色">
+          <el-select v-model="form.role" style="width: 100%" disabled>
             <el-option label="admin" value="admin" />
             <el-option label="teacher" value="teacher" />
             <el-option label="student" value="student" />
@@ -400,22 +420,24 @@ watch(() => props.mode, () => { page.value = 1; load(); });
         </el-form-item>
         <el-form-item label="状态"><el-switch v-model="form.active" active-text="启用" inactive-text="禁用" /></el-form-item>
         <el-form-item label="姓名"><el-input v-model="form.full_name" /></el-form-item>
-        <el-form-item label="学号"><el-input v-model="form.student_no" /></el-form-item>
-        <el-form-item label="班级"><el-input v-model="form.class_name" /></el-form-item>
+        <el-form-item :label="editIdentityNoLabel"><el-input v-model="form.student_no" /></el-form-item>
+        <el-form-item v-if="!isEditingTeacher" label="班级"><el-input v-model="form.class_name" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="form.phone" placeholder="留空表示未绑定" /></el-form-item>
         <el-form-item label="重置密码"><el-input v-model="form.password" placeholder="留空则不修改" show-password /></el-form-item>
       </el-form>
       <template #footer>
+        <div class="admin-user-card__dialog-footer">
         <HintButton @click="dialogOpen = false">取消</HintButton>
         <HintButton type="primary" @click="save">保存</HintButton>
+        </div>
       </template>
     </el-dialog>
 
     <el-dialog v-model="createDialogOpen" :title="createLabel" width="520px">
       <el-form label-width="90px">
         <el-form-item label="用户名"><el-input v-model="createForm.username" /></el-form-item>
-        <el-form-item label="角色">
-          <el-select v-model="createForm.role" style="width: 100%" :disabled="props.mode === 'teachers'">
+        <el-form-item v-if="isTeacherMode" label="角色">
+          <el-select v-model="createForm.role" style="width: 100%" disabled>
             <el-option label="teacher" value="teacher" />
             <el-option label="student" value="student" />
             <el-option label="admin" value="admin" />
@@ -423,14 +445,16 @@ watch(() => props.mode, () => { page.value = 1; load(); });
         </el-form-item>
         <el-form-item label="状态"><el-switch v-model="createForm.active" active-text="启用" inactive-text="禁用" /></el-form-item>
         <el-form-item label="姓名"><el-input v-model="createForm.full_name" /></el-form-item>
-        <el-form-item label="学号"><el-input v-model="createForm.student_no" /></el-form-item>
-        <el-form-item label="班级"><el-input v-model="createForm.class_name" /></el-form-item>
+        <el-form-item :label="createIdentityNoLabel"><el-input v-model="createForm.student_no" /></el-form-item>
+        <el-form-item v-if="!isCreatingTeacher" label="班级"><el-input v-model="createForm.class_name" /></el-form-item>
         <el-form-item label="手机号"><el-input v-model="createForm.phone" placeholder="留空表示未绑定" /></el-form-item>
         <el-form-item label="初始密码"><el-input v-model="createForm.password" show-password /></el-form-item>
       </el-form>
       <template #footer>
+        <div class="admin-user-card__dialog-footer">
         <HintButton @click="createDialogOpen = false">取消</HintButton>
         <HintButton type="primary" @click="createUser">创建</HintButton>
+        </div>
       </template>
     </el-dialog>
 
@@ -476,10 +500,12 @@ watch(() => props.mode, () => { page.value = 1; load(); });
         </div>
       </template>
       <template #footer>
+        <div class="admin-user-card__dialog-footer">
         <HintButton @click="previewDialogOpen = false">取消</HintButton>
         <HintButton type="primary" :disabled="Boolean(importPreview && importPreview.valid_rows === 0)" :loading="importLoading" @click="confirmImport">
           确认导入
         </HintButton>
+        </div>
       </template>
     </el-dialog>
 
@@ -517,7 +543,9 @@ watch(() => props.mode, () => { page.value = 1; load(); });
         </div>
       </template>
       <template #footer>
+        <div class="admin-user-card__dialog-footer">
         <HintButton type="primary" @click="importResultDialogOpen = false">关闭</HintButton>
+        </div>
       </template>
     </el-dialog>
   </el-card>
@@ -783,6 +811,17 @@ watch(() => props.mode, () => { page.value = 1; load(); });
 .admin-user-card__preview-list--error { border-color: #f0d0d0; background: #fff8f8; color: #b44b4b; }
 .admin-user-card__row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .admin-user-card__pager { display: flex; justify-content: flex-end; margin-top: 12px; }
+.admin-user-card__dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+.admin-user-card__dialog-footer :deep(.hint-button__inner) {
+  min-width: 82px;
+  min-height: 44px;
+  padding-inline: 22px;
+}
 @media (max-width: 768px) {
   .admin-user-card__status,
   .admin-user-card__table-title-wrap :deep(.query-toolbar) { width: 100%; max-width: 100%; }

@@ -1,6 +1,0 @@
-[     365ms] [ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://localhost:8000/api/graph/node/1:0
-[     365ms] [ERROR] API Error: 403 {detail: 你尚未通过该课程审核，暂时无法进入课程} @ http://localhost:5173/src/api.ts:33
-[    2273ms] [ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://localhost:8000/api/graph/node/1:0
-[    2274ms] [ERROR] API Error: 403 {detail: 你尚未通过该课程审核，暂时无法进入课程} @ http://localhost:5173/src/api.ts:33
-[    2470ms] [ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://localhost:8000/api/graph/node/1:0
-[    2470ms] [ERROR] API Error: 403 {detail: 你尚未通过该课程审核，暂时无法进入课程} @ http://localhost:5173/src/api.ts:33

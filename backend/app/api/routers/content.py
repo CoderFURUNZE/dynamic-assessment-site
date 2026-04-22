@@ -67,6 +67,8 @@ def track_resource_visit(
     resource = session.get(LearningResource, payload.resource_id)
     if resource is None or resource.kp_id != payload.kp_id:
         raise HTTPException(status_code=400, detail="Invalid resource")
+    if getattr(user, "role", None) == "student":
+        assert_student_kp_access(session, int(user.id), payload.kp_id)
     event_type = "resource_download" if str(payload.action or "").strip() == "download" else "resource_visit"
     log_behavior_event(
         session,
@@ -195,6 +197,8 @@ def upsert_video_progress(
     resource = session.get(LearningResource, payload.resource_id)
     if resource is None or resource.kp_id != payload.kp_id or resource.type.value != "video":
         raise HTTPException(status_code=400, detail="Invalid video resource")
+    if getattr(user, "role", None) == "student":
+        assert_student_kp_access(session, int(user.id), payload.kp_id)
 
     progress = session.exec(
         select(VideoProgress).where(VideoProgress.user_id == user.id, VideoProgress.resource_id == payload.resource_id)
@@ -208,7 +212,9 @@ def upsert_video_progress(
 
     progress.duration_seconds = max(progress.duration_seconds, float(payload.duration_seconds or 0.0))
     progress.last_position_seconds = float(max(0.0, payload.position_seconds))
-    progress.watched_seconds = float(max(0.0, progress.watched_seconds + float(payload.watched_delta_seconds or 0.0)))
+    playback_rate = max(0.25, min(4.0, float(payload.playback_rate or 1.0)))
+    watched_delta = max(0.0, min(30.0 * playback_rate, float(payload.watched_delta_seconds or 0.0)))
+    progress.watched_seconds = float(max(0.0, progress.watched_seconds + watched_delta))
 
     if progress.duration_seconds > 0:
         ratio = progress.watched_seconds / progress.duration_seconds
