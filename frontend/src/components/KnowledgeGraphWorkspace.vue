@@ -135,7 +135,7 @@ type StudentWorkspaceViewState = {
 };
 
 const DEFAULT_CANVAS_SCALE = 0.58;
-const MIN_CANVAS_SCALE = 0.5;
+const MIN_CANVAS_SCALE = 0.2;
 const MAX_CANVAS_SCALE = 4;
 const SCALE_STEP = 0.2;
 
@@ -296,6 +296,13 @@ const categoryNodes = computed<CategoryNode[]>(() =>
     .sort((a, b) => a.key.localeCompare(b.key, "zh-Hans-CN")),
 );
 
+const visibleCategoryNodes = computed(() => {
+  if (isTeacherMode.value || activeChapter.value === "全部") return categoryNodes.value;
+  return categoryNodes.value.filter((item) => item.key === activeChapter.value);
+});
+
+const visibleCategoryKeySet = computed(() => new Set(visibleCategoryNodes.value.map((item) => item.key)));
+
 const filteredKps = computed(() => {
   const kw = search.value.trim().toLowerCase();
   return kps.value.filter((kp) => {
@@ -351,7 +358,7 @@ const filteredEdgeCount = computed(() => {
 
 /** 顶部统计反映当前筛选结果，不受“是否展开全部节点”影响 */
 const canvasStageStats = computed(() => ({
-  categories: categoryNodes.value.length,
+  categories: visibleCategoryNodes.value.length,
   points: filteredKps.value.length,
   edges: filteredEdgeCount.value,
 }));
@@ -419,10 +426,12 @@ const visibleEdges = computed(() => {
 const visibleChapterEdges = computed<ChapterEdge[]>(() => {
   const seen = new Set<string>();
   const list: ChapterEdge[] = [];
+  const categoryKeys = visibleCategoryKeySet.value;
   for (const edge of visibleEdges.value) {
     const source = kps.value.find((item) => item.id === edge.prereq_id)?.chapter || "未分章";
     const target = kps.value.find((item) => item.id === edge.next_id)?.chapter || "未分章";
     if (source === target) continue;
+    if (!categoryKeys.has(source) || !categoryKeys.has(target)) continue;
     const key = `${source}->${target}:${edge.relation_type || "prerequisite"}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -708,7 +717,7 @@ function restoreStudentViewState() {
     selectedType.value = parsed.selectedType === "category" ? "category" : "kp";
     selectedId.value = Number.isFinite(Number(parsed.selectedId)) ? Number(parsed.selectedId) : null;
     selectedCategory.value = typeof parsed.selectedCategory === "string" ? parsed.selectedCategory : null;
-    showAllKps.value = isTeacherMode.value ? true : parsed.showAllKps !== false;
+    showAllKps.value = true;
     return true;
   } catch {
     return false;
@@ -756,10 +765,18 @@ function normalizeStudentSelectionState() {
     changed = true;
   }
 
+  if (!isTeacherMode.value && showAllKps.value && activeChapter.value === "全部" && firstChapter) {
+    selectedType.value = "category";
+    selectedCategory.value = firstChapter;
+    activeChapter.value = firstChapter;
+    showAllKps.value = true;
+    changed = true;
+  }
+
   if (!showAllKps.value && !selectedId.value && !selectedCategory.value) {
     selectedType.value = "category";
     selectedCategory.value = firstChapter;
-    activeChapter.value = firstChapter || "全部";
+    activeChapter.value = "全部";
     changed = true;
   }
   return changed;
@@ -958,10 +975,30 @@ async function load() {
   }
   loading.value = true;
   try {
-    const res = await api.get(`/graph/map?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`);
-    kps.value = res.data.base?.kps ?? [];
-    edges.value = res.data.base?.edges ?? [];
-    overlay.value = res.data.overlay ?? [];
+    let baseKps: GraphKp[] = [];
+    let baseEdges: GraphEdge[] = [];
+    let overlayRows: OverlayNode[] = [];
+    let chapterLayout: Record<string, { x: number; y: number }> = {};
+    try {
+      const res = await api.get(`/graph/map?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`);
+      baseKps = res.data.base?.kps ?? [];
+      baseEdges = res.data.base?.edges ?? [];
+      overlayRows = res.data.overlay ?? [];
+      chapterLayout = (res.data.base?.chapter_layout ?? {}) as Record<string, { x: number; y: number }>;
+    } catch (mapError) {
+      const [kpRes, edgeRes] = await Promise.all([
+        api.get("/graph/kps", { params: { subject: props.subject, grade: props.grade } }),
+        api.get("/graph/edges", { params: { subject: props.subject, grade: props.grade } }),
+      ]);
+      baseKps = kpRes.data ?? [];
+      baseEdges = edgeRes.data ?? [];
+      overlayRows = [];
+      chapterLayout = {};
+      console.warn("Graph map overlay failed; rendering base graph fallback.", mapError);
+    }
+    kps.value = baseKps;
+    edges.value = baseEdges;
+    overlay.value = overlayRows;
 
     const normalizedPersisted = normalizePersistedKpPositions(kps.value);
 
@@ -972,8 +1009,7 @@ async function load() {
     const det = buildDeterministicGraphLayout(
       kps.value.map((kp) => ({ id: kp.id, code: kp.code, chapter: kp.chapter })),
     );
-    const serverChapters = (res.data.base?.chapter_layout ?? {}) as Record<string, { x: number; y: number }>;
-    categoryPositions.value = mergeChapterLayout(det.categoryPositions, serverChapters);
+    categoryPositions.value = mergeChapterLayout(det.categoryPositions, chapterLayout);
 
     syncCategoryPositions();
     syncKpPositions();
@@ -1054,7 +1090,7 @@ async function loadNodeDetail(id: number | null) {
     return;
   }
   try {
-    const res = await api.get(`/graph/node/${id}`);
+    const res = await api.get(`/graph/node/${id}`, { skipGlobalLoading: true } as any);
     nodeDetail.value = res.data;
   } catch (e: any) {
     nodeDetail.value = null;
@@ -1068,6 +1104,10 @@ function selectKp(id: number) {
   selectedType.value = "kp";
   selectedId.value = id;
   selectedCategory.value = selectedKp.value?.chapter || kps.value.find((item) => item.id === id)?.chapter || null;
+  if (!isTeacherMode.value && selectedCategory.value) {
+    activeChapter.value = selectedCategory.value;
+    showAllKps.value = true;
+  }
   drawerOpen.value = true;
   emit("select-kp", id);
   centerOnPoint(kpPoint(id));
@@ -1087,13 +1127,32 @@ function openContentFromSelected() {
 }
 
 function selectCategory(chapter: string) {
+  const shouldCollapseStudentChapter =
+    !isTeacherMode.value &&
+    showAllKps.value &&
+    selectedType.value === "category" &&
+    selectedCategory.value === chapter &&
+    activeChapter.value === chapter;
+
   selectedType.value = "category";
   selectedCategory.value = chapter;
   selectedId.value = null;
   nodeDetail.value = null;
-  activeChapter.value = chapter;
+  activeChapter.value = shouldCollapseStudentChapter ? "全部" : chapter;
+  showAllKps.value = !shouldCollapseStudentChapter;
   drawerOpen.value = true;
-  centerOnPoint(categoryPoint(chapter));
+  if (isTeacherMode.value) {
+    centerOnPoint(categoryPoint(chapter));
+    return;
+  }
+  nextTick(() => {
+    fitViewportRetryCount = 0;
+    if (shouldCollapseStudentChapter) {
+      fitCategoryNodesToViewport();
+      return;
+    }
+    fitVisibleToViewport();
+  });
 }
 
 function toggleAllKps() {
@@ -1153,6 +1212,15 @@ function fitVisibleToViewport() {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
+  for (const item of visibleCategoryNodes.value) {
+    const p = categoryPoint(item.key);
+    const halfW = 132;
+    const halfH = 56;
+    minX = Math.min(minX, p.x - halfW);
+    maxX = Math.max(maxX, p.x + halfW);
+    minY = Math.min(minY, p.y - halfH);
+    maxY = Math.max(maxY, p.y + halfH);
+  }
   for (const kp of visibleKps.value) {
     const p = kpPoint(kp.id);
     const r = nodeRadius(kp) + 28;
@@ -1176,7 +1244,7 @@ function fitVisibleToViewport() {
 }
 
 function fitCategoryNodesToViewport() {
-  if (!stageRef.value || categoryNodes.value.length === 0) return;
+  if (!stageRef.value || visibleCategoryNodes.value.length === 0) return;
   const sw0 = stageRef.value.clientWidth;
   const sh0 = stageRef.value.clientHeight;
   if (sw0 < 48 || sh0 < 48) return;
@@ -1184,7 +1252,7 @@ function fitCategoryNodesToViewport() {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const item of categoryNodes.value) {
+  for (const item of visibleCategoryNodes.value) {
     const p = categoryPoint(item.key);
     const halfW = 130;
     const halfH = 54;
@@ -1209,10 +1277,22 @@ function fitCategoryNodesToViewport() {
 
 function resetViewport() {
   canvasScale.value = DEFAULT_CANVAS_SCALE;
-  activeChapter.value = "全部";
   search.value = "";
   syncCategoryPositions();
   syncKpPositions();
+  if (!isTeacherMode.value) {
+    const targetChapter = selectedCategory.value || selectedKp.value?.chapter || categoryNodes.value[0]?.key || "全部";
+    activeChapter.value = targetChapter;
+    selectedType.value = selectedId.value ? "kp" : "category";
+    selectedCategory.value = targetChapter === "全部" ? null : targetChapter;
+    showAllKps.value = true;
+    nextTick(() => {
+      fitViewportRetryCount = 0;
+      fitVisibleToViewport();
+    });
+    return;
+  }
+  activeChapter.value = "全部";
   nextTick(() => {
     if (selectedType.value === "kp" && selectedId.value) {
       centerOnPoint(kpPoint(selectedId.value));
@@ -1452,7 +1532,7 @@ onBeforeUnmount(() => {
               <span>{{ item.title }}</span>
               <span class="workspace-tree__count">{{ item.children.length }}</span>
             </div>
-            <div class="workspace-tree__children" v-if="activeChapter === item.key || activeChapter === '全部'">
+            <div class="workspace-tree__children" v-if="activeChapter === item.key || (isTeacherMode && activeChapter === '全部')">
               <button
                 v-for="kp in item.children"
                 :key="kp.id"
@@ -1512,7 +1592,7 @@ onBeforeUnmount(() => {
           <div class="workspace-stage__top">
             <div class="workspace-stage__top-main">
               <div class="workspace-stage__stats">
-                <span class="workspace-stage__pill">分类 {{ categoryNodes.length }}</span>
+                <span class="workspace-stage__pill">分类 {{ visibleCategoryNodes.length }}</span>
                 <span class="workspace-stage__pill">知识点 {{ visibleKps.length }}</span>
                 <span class="workspace-stage__pill">{{ selectedType === "kp" ? "当前知识点" : "当前分类" }}</span>
               </div>
@@ -1540,7 +1620,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <div class="workspace-stage__focus">
-                            <button class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
+              <button v-if="isTeacherMode" class="workspace-stage__learn-btn workspace-stage__learn-btn--ghost" @click.stop="toggleAllKps">
                 {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
               </button>
               <button v-if="selectedType === 'kp' && selectedKp" class="workspace-stage__learn-btn" @click.stop="openContentFromSelected">
@@ -1620,7 +1700,7 @@ onBeforeUnmount(() => {
             />
 
             <g
-              v-for="category in categoryNodes"
+              v-for="category in visibleCategoryNodes"
               :key="category.key"
               :class="props.embedded ? 'teacher-category-node workspace-category-node' : 'workspace-category-node'"
               :transform="`translate(${categoryPoint(category.key).x}, ${categoryPoint(category.key).y})`"
@@ -2433,6 +2513,18 @@ onBeforeUnmount(() => {
 .workspace-node__code {
   fill: #243449;
   font-weight: 500;
+  pointer-events: none;
+}
+
+.workspace-node__dimensions {
+  pointer-events: none;
+  filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.16));
+}
+
+.workspace-node__dimension-label {
+  fill: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
   pointer-events: none;
 }
 
@@ -3333,38 +3425,11 @@ onBeforeUnmount(() => {
   max-width: 100%;
 }
 
-.teacher-stage__legend-rings {
-  width: 18px;
-  height: 18px;
-  position: relative;
+.teacher-stage__legend-dimensions {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 3px;
   flex: 0 0 auto;
-}
-
-.teacher-stage__legend-rings .tr {
-  position: absolute;
-  border-radius: 999px;
-  border: 2px solid transparent;
-}
-
-.teacher-stage__legend-rings .tr.ring--knowledge {
-  width: 10px;
-  height: 10px;
-  border-color: rgba(74, 123, 200, 0.95);
-}
-
-.teacher-stage__legend-rings .tr.ring--ability {
-  width: 14px;
-  height: 14px;
-  border-color: rgba(22, 163, 74, 0.9);
-}
-
-.teacher-stage__legend-rings .tr.ring--literacy {
-  width: 18px;
-  height: 18px;
-  border-color: rgba(20, 184, 166, 0.88);
 }
 
 .teacher-stage__pill,
@@ -3702,7 +3767,7 @@ onBeforeUnmount(() => {
 }
 
 .workspace-stage__legend-line,
-.workspace-stage__legend-rings {
+.workspace-stage__legend-dimensions {
   opacity: 0.85;
 }
 

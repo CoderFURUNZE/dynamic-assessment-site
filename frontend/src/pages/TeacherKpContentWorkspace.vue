@@ -3794,30 +3794,68 @@ watch(
 }
 
 .relation-create--stacked {
-  gap: 12px;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .relation-create__grid {
   display: grid;
-  grid-template-columns: minmax(200px, 0.8fr) minmax(240px, 0.9fr) minmax(0, 1.4fr);
+  grid-template-columns: minmax(180px, 0.75fr) minmax(300px, 1fr) minmax(280px, 1.25fr);
   gap: 14px;
+  align-items: end;
+}
+
+.relation-create__grid :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.relation-create__grid :deep(.el-segmented) {
+  width: 100%;
+}
+
+.relation-create__grid :deep(.el-segmented__item) {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.relation-create__grid :deep(.el-segmented__item-label) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .relation-create__actions--split {
   justify-content: space-between;
   align-items: center;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .relation-create__helper {
   margin: 0;
   display: grid;
   gap: 4px;
+  min-width: 0;
   color: #64748b;
   font-size: 13px;
+  line-height: 1.65;
 }
 
 .relation-create__helper span {
   color: #94a3b8;
+}
+
+.relation-create__actions--split :deep(.el-button) {
+  min-width: 112px;
+  min-height: 42px;
+  border-radius: 12px;
+  font-weight: 800;
 }
 
 .relation-panel {
@@ -3970,6 +4008,15 @@ watch(
   .practice-toolbar__group,
   .resource-card {
     grid-template-columns: 1fr;
+  }
+
+  .relation-create__actions--split {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .relation-create__actions--split :deep(.el-button) {
+    width: 100%;
   }
 
   .resource-card__meta {

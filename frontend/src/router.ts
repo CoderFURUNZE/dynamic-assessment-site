@@ -9,6 +9,7 @@ export const router = createRouter({
 function persistLastRoute(fullPath: string) {
   const username = getUsername();
   if (!username) return;
+  if (fullPath.startsWith("/student/graph-fullscreen") || fullPath.startsWith("/teacher/graph-fullscreen")) return;
   localStorage.setItem(`da_last_route_${username}`, fullPath);
 }
 
@@ -16,6 +17,7 @@ const StudentDashboardPage = () => import("./pages/StudentDashboardPage.vue");
 const StudentQuestionnairePage = () => import("./pages/StudentQuestionnairePage.vue");
 const StudentReportPage = () => import("./pages/StudentReportPage.vue");
 const StudentGraphWorkspacePage = () => import("./pages/StudentGraphWorkspace.vue");
+const StudentGraphFullscreenPage = () => import("./pages/StudentGraphFullscreenPage.vue");
 const StudentKpContentWorkspacePage = () => import("./pages/StudentKpContentWorkspace.vue");
 const StudentEnrollPage = () => import("./pages/StudentEnroll.vue");
 
@@ -29,6 +31,7 @@ const AdminAuditPage = () => import("./pages/AdminAuditPage.vue");
 
 const TeacherWorkspacePage = () => import("./pages/TeacherCoursesPage.vue");
 const TeacherGraphWorkspacePage = () => import("./pages/TeacherGraphWorkspace.vue");
+const TeacherGraphFullscreenPage = () => import("./pages/TeacherGraphFullscreenPage.vue");
 const TeacherEvaluationWorkspacePage = () => import("./pages/TeacherEvaluationWorkspacePage.vue");
 const TeacherStudentsWorkspacePage = () => import("./pages/TeacherStudentsWorkspacePage.vue");
 const TeacherReviewWorkspacePage = () => import("./pages/TeacherReviewWorkspacePage.vue");
@@ -86,6 +89,11 @@ router.addRoute({
   path: "/student/graph-workspace",
   component: StudentGraphWorkspacePage,
   meta: { title: "知识图谱" },
+});
+router.addRoute({
+  path: "/student/graph-fullscreen",
+  component: StudentGraphFullscreenPage,
+  meta: { title: "全屏学习图谱", standaloneWorkspace: true },
 });
 router.addRoute({
   path: "/student/enroll",
@@ -211,6 +219,11 @@ router.addRoute({
   meta: { title: "内容建设" },
 });
 router.addRoute({
+  path: "/teacher/graph-fullscreen",
+  component: TeacherGraphFullscreenPage,
+  meta: { title: "全屏编辑图谱", standaloneWorkspace: true },
+});
+router.addRoute({
   path: "/teacher/evaluation",
   component: TeacherEvaluationWorkspacePage,
   meta: { title: "阶段评价" },
@@ -287,6 +300,12 @@ router.beforeEach((to) => {
   if (to.path === "/start" || to.path.startsWith("/login")) return true;
   if (!getToken()) return "/login/student";
   const role = getRole();
+  if (to.path === "/student/graph-fullscreen") {
+    return true;
+  }
+  if (to.path === "/teacher/graph-fullscreen" && role === "student") {
+    return { path: "/student/graph-fullscreen", query: to.query };
+  }
   if (to.path.startsWith("/admin")) {
     if (role === "student") return "/student/dashboard";
     if (role === "teacher") return "/teacher/workspace";

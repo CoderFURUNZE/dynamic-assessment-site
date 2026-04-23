@@ -114,6 +114,7 @@ const emit = defineEmits<{
       selectedCategory: string | null;
     },
   ): void;
+  (e: "open-fullscreen"): void;
 }>();
 
 const loading = ref(false);
@@ -123,14 +124,14 @@ const activeChapter = ref("全部");
 const selectedType = ref<"kp" | "category">("kp");
 const selectedId = ref<number | null>(null);
 const selectedCategory = ref<string | null>(null);
-const showAllKps = ref(props.fullscreen);
+const showAllKps = ref(false);
 const graphEditorOpen = ref(false);
 const linkSelectionMode = ref<null | "forward" | "backward" | "related" | "support" | "contains">(null);
 const categoryLinkMode = ref<null | "prerequisite" | "related" | "support">(null);
 const drawerOpen = ref(true);
 const detailTab = ref<"overview" | "relations" | "content">("overview");
 const DEFAULT_CANVAS_SCALE = 0.58;
-const MIN_CANVAS_SCALE = 0.5;
+const MIN_CANVAS_SCALE = 0.2;
 const MAX_CANVAS_SCALE = 4;
 const SCALE_STEP = 0.2;
 const canvasScale = ref(DEFAULT_CANVAS_SCALE);
@@ -150,6 +151,7 @@ const dragOriginX = ref(0);
 const dragOriginY = ref(0);
 const kpPositions = ref<Record<number, Point>>({});
 const categoryPositions = ref<Record<string, Point>>({});
+const manualKpPositionIds = ref<Set<number>>(new Set());
 const kps = ref<KP[]>([]);
 const edges = ref<Edge[]>([]);
 const chapterEdges = ref<ChapterEdge[]>([]);
@@ -157,8 +159,9 @@ const kpCoverageMap = ref<
   Record<number, { resource_count: number; question_count: number; task_count: number; has_quiz: boolean }>
 >({});
 const showIncompleteOnly = ref(false);
+const fullscreenRelationFilter = ref<"all" | "prerequisite" | "related" | "support" | "contains">("all");
+const fullscreenFocusFilter = ref<"all" | "important" | "difficult" | "incomplete">("all");
 const mutingViewStatePersist = ref(false);
-const legacyLayoutWarned = ref(false);
 const useLegacyFallbackLayout = ref(false);
 const hoveredKpId = ref<number | null>(null);
 
@@ -232,6 +235,20 @@ const filteredKps = computed(() => {
 const visibleKps = computed(() => {
   if (!showAllKps.value) return [];
   let list: KP[] = filteredKps.value;
+  if (props.fullscreen) {
+    if (fullscreenFocusFilter.value === "important") {
+      list = list.filter((kp) => (kp.importance ?? 0.5) >= 0.72);
+    } else if (fullscreenFocusFilter.value === "difficult") {
+      list = list.filter((kp) => (kp.difficulty ?? 0.5) >= 0.68);
+    } else if (fullscreenFocusFilter.value === "incomplete") {
+      list = list.filter((kp) => {
+        const c = kpCoverageMap.value[kp.id];
+        const rc = c?.resource_count ?? 0;
+        const qc = c?.question_count ?? 0;
+        return rc === 0 || qc === 0;
+      });
+    }
+  }
   if (showIncompleteOnly.value) {
     list = list.filter((kp) => {
       const c = kpCoverageMap.value[kp.id];
@@ -361,13 +378,37 @@ const stageStats = computed(() => ({
 const hasGraphData = computed(() => kps.value.length > 0);
 const categoryKeys = computed(() => new Set(categoryNodes.value.map((item) => item.key)));
 const visibleChapterEdges = computed(() =>
-  chapterEdges.value.filter(
-    (edge) => categoryKeys.value.has(edge.source_chapter) && categoryKeys.value.has(edge.target_chapter),
-  ),
+  chapterEdges.value.filter((edge) => {
+    if (!categoryKeys.value.has(edge.source_chapter) || !categoryKeys.value.has(edge.target_chapter)) return false;
+    if (!props.fullscreen || fullscreenRelationFilter.value === "all") return true;
+    return edge.relation_type === fullscreenRelationFilter.value;
+  }),
 );
 
 function chapterPositionStorageKey() {
   return `da_teacher_category_pos_v2_${props.subject}_${props.grade}`;
+}
+
+function manualKpPositionStorageKey() {
+  return `da_teacher_manual_kp_pos_v1_${props.subject}_${props.grade}`;
+}
+
+function loadManualKpPositionIds() {
+  try {
+    const raw = localStorage.getItem(manualKpPositionStorageKey());
+    const parsed = raw ? JSON.parse(raw) : [];
+    manualKpPositionIds.value = new Set(Array.isArray(parsed) ? parsed.map(Number).filter(Number.isFinite) : []);
+  } catch {
+    manualKpPositionIds.value = new Set();
+  }
+}
+
+function saveManualKpPositionIds() {
+  localStorage.setItem(manualKpPositionStorageKey(), JSON.stringify(Array.from(manualKpPositionIds.value)));
+}
+
+function markKpPositionManual(kpId: number) {
+  manualKpPositionIds.value = new Set([...manualKpPositionIds.value, kpId]);
 }
 
 function viewStateStorageKey() {
@@ -586,13 +627,72 @@ function normalizePersistedKpPositions(rows: KP[]) {
 }
 
 const visibleEdges = computed(() => {
-  const ids = new Set(visibleKps.value.map((kp) => kp.id));
-  return edges.value.filter((edge) => ids.has(edge.prereq_id) && ids.has(edge.next_id));
+  const ids = renderedKpIds.value;
+  return edges.value.filter((edge) => {
+    if (!ids.has(edge.prereq_id) || !ids.has(edge.next_id)) return false;
+    if (!props.fullscreen || fullscreenRelationFilter.value === "all") return true;
+    return edge.relation_type === fullscreenRelationFilter.value;
+  });
 });
+
+const teacherSearchMatchIds = computed(() => {
+  const kw = search.value.trim().toLowerCase();
+  if (!kw) return new Set<number>();
+  return new Set(
+    kps.value
+      .filter((kp) => `${kp.code} ${kp.title} ${kp.description || ""} ${kp.chapter || ""}`.toLowerCase().includes(kw))
+      .map((kp) => kp.id),
+  );
+});
+
+function isTeacherSearchMatch(kp: KP) {
+  return teacherSearchMatchIds.value.has(kp.id);
+}
+
+const viewportWorldBounds = computed(() => {
+  const scale = canvasScale.value || 1;
+  const buffer = Math.max(240, 180 / scale);
+  return {
+    minX: (0 - panX.value) / scale - buffer,
+    maxX: (viewportWidth.value - panX.value) / scale + buffer,
+    minY: (0 - panY.value) / scale - buffer,
+    maxY: (viewportHeight.value - panY.value) / scale + buffer,
+  };
+});
+
+function pointInsideViewport(point: Point, radius = 96) {
+  const bounds = viewportWorldBounds.value;
+  return (
+    point.x + radius >= bounds.minX
+    && point.x - radius <= bounds.maxX
+    && point.y + radius >= bounds.minY
+    && point.y - radius <= bounds.maxY
+  );
+}
+
+const renderedKps = computed(() => {
+  if (!showAllKps.value) return [];
+  if (viewportWidth.value <= 0 || viewportHeight.value <= 0) return visibleKps.value;
+  return visibleKps.value.filter((kp) => {
+    if (kp.id === selectedId.value) return true;
+    if (draggingNode.value?.type === "kp" && Number(draggingNode.value.id) === kp.id) return true;
+    return pointInsideViewport(displayKpPoint(kp.id), nodeRadius(kp) + 48);
+  });
+});
+
+const renderedKpIds = computed(() => new Set(renderedKps.value.map((kp) => kp.id)));
+const renderedCategoryKpLines = computed(() => (showDenseGraphDetails.value ? renderedKps.value : []));
+const showDenseGraphDetails = computed(() => !draggingCanvas.value && !draggingNode.value && canvasScale.value >= 0.72 && renderedKps.value.length <= 90);
+
+const kpById = computed(() => new Map(kps.value.map((kp) => [kp.id, kp])));
+
+function shouldRenderNodeDetails(kp: KP) {
+  return kp.id === selectedKp.value?.id || showDenseGraphDetails.value;
+}
 
 const selectedLayout = computed(() => {
   if (!selectedKp.value) return null;
-  return kpPoint(selectedKp.value.id);
+  return displayKpPoint(selectedKp.value.id);
 });
 
 const selectedMenuStyle = computed(() => {
@@ -620,11 +720,36 @@ function kpPoint(id: number) {
   return kpPositions.value[id] ?? defaultKpPositions.value[id] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y };
 }
 
+function focusedKpPoint(kp: KP) {
+  const chapter = kp.chapter || "未分章";
+  if (!showAllKps.value || activeChapter.value !== chapter) return kpPoint(kp.id);
+  if (draggingNode.value?.type === "kp" && Number(draggingNode.value.id) === kp.id) return kpPoint(kp.id);
+  if (manualKpPositionIds.value.has(kp.id)) return kpPoint(kp.id);
+  const anchor = categoryPoint(chapter);
+  const siblings = kps.value
+    .filter((item) => (item.chapter || "未分章") === chapter)
+    .sort((a, b) => String(a.code || "").localeCompare(String(b.code || ""), "zh-Hans-CN"));
+  const index = Math.max(0, siblings.findIndex((item) => item.id === kp.id));
+  const columns = Math.min(5, Math.max(1, Math.ceil(Math.sqrt(siblings.length))));
+  const gapX = 176;
+  const gapY = 156;
+  const col = index % columns;
+  const row = Math.floor(index / columns);
+  return {
+    x: anchor.x - ((columns - 1) * gapX) / 2 + col * gapX + (row % 2 === 0 ? 0 : 18),
+    y: anchor.y + 170 + row * gapY,
+  };
+}
+
+function displayKpPoint(id: number) {
+  return kpPoint(id);
+}
+
 function edgeLine(edge: Edge) {
-  const from = kpPoint(edge.prereq_id);
-  const to = kpPoint(edge.next_id);
-  const fromKp = kps.value.find((item) => item.id === edge.prereq_id);
-  const toKp = kps.value.find((item) => item.id === edge.next_id);
+  const from = displayKpPoint(edge.prereq_id);
+  const to = displayKpPoint(edge.next_id);
+  const fromKp = kpById.value.get(edge.prereq_id);
+  const toKp = kpById.value.get(edge.next_id);
   const fromRadius = fromKp ? nodeRadius(fromKp) + 8 : 72;
   const toRadius = toKp ? nodeRadius(toKp) + 8 : 72;
   const dx = to.x - from.x;
@@ -642,7 +767,7 @@ function edgeLine(edge: Edge) {
 
 function categoryKpLine(kp: KP) {
   const from = categoryPoint(kp.chapter || "未分章");
-  const to = kpPoint(kp.id);
+  const to = displayKpPoint(kp.id);
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const dist = Math.hypot(dx, dy) || 1;
@@ -687,11 +812,22 @@ function nodeRadius(kp: KP) {
   return kp.id === selectedKp.value?.id ? base + 10 : base;
 }
 
-function ringStroke(level: "ability" | "literacy", kp: KP) {
-  const labels = level === "ability" ? splitLabels(kp.ability_tag) : splitLabels(kp.literacy_tag);
-  if (!labels.length) return "transparent";
-  const map = level === "ability" ? abilityColorMap.value : literacyColorMap.value;
-  return map.get(labels[0]) || (level === "ability" ? "#47b089" : "#c79c54");
+function dimensionBadgeFill(level: "knowledge" | "ability" | "literacy", kp: KP) {
+  if (level === "ability") {
+    const label = splitLabels(kp.ability_tag)[0];
+    return (label && abilityColorMap.value.get(label)) || "#24a36f";
+  }
+  if (level === "literacy") {
+    const label = splitLabels(kp.literacy_tag)[0];
+    return (label && literacyColorMap.value.get(label)) || "#d58b2a";
+  }
+  return "#3978d8";
+}
+
+function dimensionBadgeOpacity(level: "knowledge" | "ability" | "literacy", kp: KP) {
+  if (level === "knowledge") return kp.knowledge_tag || kp.title ? 1 : 0.28;
+  if (level === "ability") return splitLabels(kp.ability_tag).length ? 1 : 0.28;
+  return splitLabels(kp.literacy_tag).length ? 1 : 0.28;
 }
 
 function edgeTouchesHover(edge: Edge) {
@@ -784,7 +920,7 @@ function selectKp(id: number) {
   drawerOpen.value = true;
   detailTab.value = "overview";
   syncFormFromSelected();
-  centerOnPoint(kpPoint(id));
+  centerOnPoint(displayKpPoint(id));
 }
 
 function selectCategory(chapter: string) {
@@ -792,14 +928,34 @@ function selectCategory(chapter: string) {
     createChapterEdge(selectedCategory.value, chapter);
     return;
   }
+  const supportsCategoryToggle = props.fullscreen || props.embedded;
+  if (supportsCategoryToggle && selectedType.value === "category" && selectedCategory.value === chapter && showAllKps.value && activeChapter.value === chapter) {
+    showAllKps.value = false;
+    selectedType.value = "category";
+    selectedCategory.value = chapter;
+    selectedId.value = null;
+    graphEditorOpen.value = false;
+    drawerOpen.value = false;
+    detailTab.value = "overview";
+    centerOnPoint(categoryPoint(chapter));
+    return;
+  }
   selectedType.value = "category";
   selectedCategory.value = chapter;
   selectedId.value = null;
   graphEditorOpen.value = false;
-  drawerOpen.value = true;
+  drawerOpen.value = !props.fullscreen;
   detailTab.value = "overview";
   activeChapter.value = chapter;
-  centerOnPoint(categoryPoint(chapter));
+  if (supportsCategoryToggle) showAllKps.value = true;
+  if (supportsCategoryToggle) {
+    nextTick(() => {
+      viewportFitRetryCount.value = 0;
+      fitVisibleToViewport();
+    });
+  } else {
+    centerOnPoint(categoryPoint(chapter));
+  }
 }
 
 function toggleAllKps() {
@@ -936,7 +1092,10 @@ function resetViewport() {
   categoryLinkMode.value = null;
   syncCategoryPositions();
   syncKpPositions();
-  persistViewState();
+  nextTick(() => {
+    viewportFitRetryCount.value = 0;
+    fitStageToViewport();
+  });
 }
 
 function scheduleViewportFit(next: "categories" | "visible") {
@@ -965,7 +1124,7 @@ function fitVisibleToViewport() {
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const kp of visibleKps.value) {
-    const p = kpPoint(kp.id);
+    const p = displayKpPoint(kp.id);
     const r = nodeRadius(kp) + 28;
     minX = Math.min(minX, p.x - r);
     maxX = Math.max(maxX, p.x + r);
@@ -1055,7 +1214,7 @@ function onStageMouseDown(event: MouseEvent) {
 
 function onNodeMouseDown(event: MouseEvent, type: "kp" | "category", id: number | string) {
   event.stopPropagation();
-  const origin = type === "kp" ? kpPoint(Number(id)) : categoryPoint(String(id));
+  const origin = type === "kp" ? displayKpPoint(Number(id)) : categoryPoint(String(id));
   draggingNode.value = { type, id, origin };
   dragStartX.value = event.clientX;
   dragStartY.value = event.clientY;
@@ -1067,14 +1226,16 @@ function onWindowMouseMove(event: MouseEvent) {
     const dy = (event.clientY - dragStartY.value) / canvasScale.value;
 
     if (draggingNode.value.type === "kp") {
-      const current = kps.value.find((kp) => kp.id === Number(draggingNode.value?.id));
+      const kpId = Number(draggingNode.value.id);
+      markKpPositionManual(kpId);
+      const current = kps.value.find((kp) => kp.id === kpId);
       const radius = (current ? nodeRadius(current) : 80) + 18;
       const newX = Math.max(radius, Math.min(CANVAS_WIDTH - radius, draggingNode.value.origin.x + dx));
       const newY = Math.max(radius, Math.min(CANVAS_HEIGHT - radius, draggingNode.value.origin.y + dy));
 
       kpPositions.value = {
         ...kpPositions.value,
-        [Number(draggingNode.value.id)]: {
+        [kpId]: {
           x: newX,
           y: newY,
         },
@@ -1114,6 +1275,7 @@ async function stopDragging() {
     if (kpId && point) {
       try {
         await api.put(`/admin/kps/${kpId}/position`, { x: point.x, y: point.y });
+        saveManualKpPositionIds();
       } catch {
         ElMessage.warning("节点位置保存失败，请重试");
       }
@@ -1128,8 +1290,8 @@ async function stopDragging() {
           grade: props.grade,
           chapters: categoryPositions.value,
         });
-      } catch {
-        ElMessage.warning("分类位置同步到服务器失败，已保存在本机缓存");
+      } catch (error) {
+        console.warn("Chapter layout sync failed; using local cache fallback.", error);
       }
     }
   }
@@ -1173,6 +1335,7 @@ async function load() {
   if (!props.subject) return;
   loading.value = true;
   try {
+    loadManualKpPositionIds();
     const viewRestored = !props.fullscreen && !props.embedded && restoreViewState();
     const [kpRes, edgeRes, chapterEdgeRes, covRes, layoutRes] = await Promise.all([
       api.get(`/graph/kps?subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`),
@@ -1199,10 +1362,7 @@ async function load() {
 
     const normalizedPersisted = normalizePersistedKpPositions(kps.value);
     if (useLegacyFallbackLayout.value) {
-      if (!legacyLayoutWarned.value) {
-        legacyLayoutWarned.value = true;
-        ElMessage.info("检测到旧版图谱坐标，已自动使用新版分离布局");
-      }
+      console.info("Detected legacy graph coordinates; using separated graph layout fallback.");
     }
     kpPositions.value = normalizedPersisted;
 
@@ -1247,7 +1407,7 @@ async function load() {
     }
     const normalizedChanged = normalizeWorkbenchSelectionState();
     if (normalizedChanged) {
-      if (selectedType.value === "kp" && selectedId.value) centerOnPoint(kpPoint(selectedId.value));
+      if (selectedType.value === "kp" && selectedId.value) centerOnPoint(displayKpPoint(selectedId.value));
       else if (selectedCategory.value) centerOnPoint(categoryPoint(selectedCategory.value));
     }
     nextTick(() => {
@@ -1480,9 +1640,9 @@ watch(
       panY.value = 0;
       activeChapter.value = "全部";
       search.value = "";
-      showAllKps.value = true;
+      showAllKps.value = !props.fullscreen;
       selectedType.value = "kp";
-      drawerOpen.value = true;
+      drawerOpen.value = !props.fullscreen;
       detailTab.value = "overview";
     }
     mutingViewStatePersist.value = false;
@@ -1621,6 +1781,49 @@ onBeforeUnmount(() => {
         </div>
       </aside>
 
+      <aside v-if="props.fullscreen" class="teacher-fullscreen-nav">
+        <div class="teacher-fullscreen-nav__tabs">
+          <span class="active">导航</span>
+        </div>
+        <div class="teacher-fullscreen-nav__search">
+          <span class="teacher-fullscreen-nav__search-icon">⌕</span>
+          <input
+            v-model="search"
+            type="search"
+            placeholder="检索分类或知识点"
+            @keydown.enter.prevent="runTeacherSearch"
+          />
+          <button v-if="search" type="button" @click="resetTeacherSearch">清空</button>
+        </div>
+        <div class="teacher-fullscreen-nav__tree">
+          <div v-for="item in treeNodes" :key="item.key" class="teacher-fullscreen-nav__group">
+            <button
+              type="button"
+              class="teacher-fullscreen-nav__item"
+              :class="{ active: selectedCategory === item.key }"
+              @click="selectCategory(item.key)"
+            >
+              <span class="teacher-fullscreen-nav__arrow">{{ selectedCategory === item.key && showAllKps ? "▾" : "▸" }}</span>
+              <span class="teacher-fullscreen-nav__name">{{ item.title }}</span>
+              <span class="teacher-fullscreen-nav__count">{{ item.children.length }}</span>
+            </button>
+            <div v-if="selectedCategory === item.key && showAllKps" class="teacher-fullscreen-nav__children">
+              <button
+                v-for="kp in item.children"
+                :key="kp.id"
+                type="button"
+                class="teacher-fullscreen-nav__child"
+                :class="{ active: kp.id === selectedKp?.id, match: isTeacherSearchMatch(kp) }"
+                @click.stop="selectKp(kp.id)"
+              >
+                <span>{{ kp.title }}</span>
+                <small>{{ kp.code }}</small>
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
     <section
       class="teacher-stage"
       :class="{ 'teacher-stage--dragging': draggingCanvas }"
@@ -1637,6 +1840,7 @@ onBeforeUnmount(() => {
             {{ showAllKps ? "仅显示方形节点" : "展开全部节点" }}
           </button>
           <button class="teacher-stage__button teacher-stage__button--primary" :disabled="props.readonly" @click="resetCreateForm(selectedCategoryNode?.key || activeChapter === '全部' ? '' : activeChapter)">新增知识点</button>
+          <button v-if="props.embedded && !props.fullscreen" class="teacher-stage__button" @click="emit('open-fullscreen')">全屏图谱</button>
           <button class="teacher-stage__button" @click="fitVisibleToViewport">适应画布</button>
           <button class="teacher-stage__button" @click="resetViewport">重置画布</button>
           <button v-if="inlineEditorEnabled" class="teacher-stage__button" @click="detailTab = 'relations'; drawerOpen = true">管理当前关系</button>
@@ -1670,12 +1874,12 @@ onBeforeUnmount(() => {
               细虚线：分类与知识点归属，同色环表示同类能力/素养
             </span>
             <span class="teacher-stage__legend-item">
-              <i class="teacher-stage__legend-rings">
-                <span class="tr ring--literacy"></span>
-                <span class="tr ring--ability"></span>
-                <span class="tr ring--knowledge"></span>
+              <i class="teacher-stage__legend-dimensions">
+                <span class="td td--knowledge">知</span>
+                <span class="td td--ability">能</span>
+                <span class="td td--literacy">素</span>
               </i>
-              三层环（与学生端一致）：知识（内）/ 能力（中）/ 素养（外）；同标签同色
+              节点徽标：知识 / 能力 / 素养；置灰表示该维度未配置，能力/素养同标签同色
             </span>
           </div>
         </details>
@@ -1737,7 +1941,7 @@ onBeforeUnmount(() => {
           />
 
           <line
-            v-for="kp in visibleKps"
+            v-for="kp in renderedCategoryKpLines"
             :key="`cat-${kp.id}`"
             :x1="categoryKpLine(kp).x1"
             :y1="categoryKpLine(kp).y1"
@@ -1763,29 +1967,48 @@ onBeforeUnmount(() => {
           </g>
 
           <g
-            v-for="kp in visibleKps"
+            v-for="kp in renderedKps"
             :key="kp.id"
-            class="teacher-node"
-            :transform="`translate(${kpPoint(kp.id).x}, ${kpPoint(kp.id).y})`"
+            :class="['teacher-node', { 'teacher-node--search-match': isTeacherSearchMatch(kp) }]"
+            :transform="`translate(${displayKpPoint(kp.id).x}, ${displayKpPoint(kp.id).y})`"
             @click="selectKp(kp.id)"
             @mousedown="onNodeMouseDown($event, 'kp', kp.id)"
             @mouseenter="hoveredKpId = kp.id"
             @mouseleave="hoveredKpId = null"
           >
-            <circle :r="nodeRadius(kp) + 18" fill="transparent" :stroke="ringStroke('literacy', kp)" :stroke-width="splitLabels(kp.literacy_tag).length ? 5 : 0" />
-            <circle :r="nodeRadius(kp) + 10" fill="transparent" :stroke="ringStroke('ability', kp)" :stroke-width="splitLabels(kp.ability_tag).length ? 5 : 0" />
-            <circle :r="nodeRadius(kp) + 2" fill="transparent" stroke="#cbbd9d" stroke-width="3.5" />
-            <circle :r="nodeRadius(kp) + 22" :fill="kp.id === selectedKp?.id ? 'rgba(147, 197, 253, 0.22)' : 'rgba(219, 234, 254, 0.16)'" />
-            <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#eef8ff' : '#ffffff'" :stroke="kp.id === selectedKp?.id ? '#93c5fd' : '#d8e5f6'" stroke-width="2" />
+            <circle :r="nodeRadius(kp) + 22" :fill="isTeacherSearchMatch(kp) ? 'rgba(245, 158, 11, 0.2)' : (kp.id === selectedKp?.id ? 'rgba(147, 197, 253, 0.22)' : 'rgba(219, 234, 254, 0.16)')" />
+            <circle :r="nodeRadius(kp)" :fill="kp.id === selectedKp?.id ? '#eef8ff' : (isTeacherSearchMatch(kp) ? '#fff7ed' : '#ffffff')" :stroke="isTeacherSearchMatch(kp) ? '#f59e0b' : (kp.id === selectedKp?.id ? '#93c5fd' : '#d8e5f6')" :stroke-width="isTeacherSearchMatch(kp) ? 3 : 2" />
+            <g v-if="shouldRenderNodeDetails(kp)" class="teacher-node__dimensions" :transform="`translate(0, ${-nodeRadius(kp) - 28})`">
+              <g transform="translate(-38, 0)">
+                <rect x="-13" y="-10" width="26" height="20" rx="10" :fill="dimensionBadgeFill('knowledge', kp)" :opacity="dimensionBadgeOpacity('knowledge', kp)" stroke="rgba(15, 23, 42, 0.2)" stroke-width="1.2" />
+                <text class="teacher-node__dimension-label" text-anchor="middle" y="5">知</text>
+              </g>
+              <g transform="translate(0, 0)">
+                <rect x="-13" y="-10" width="26" height="20" rx="10" :fill="dimensionBadgeFill('ability', kp)" :opacity="dimensionBadgeOpacity('ability', kp)" stroke="rgba(15, 23, 42, 0.2)" stroke-width="1.2" />
+                <text class="teacher-node__dimension-label" text-anchor="middle" y="5">能</text>
+              </g>
+              <g transform="translate(38, 0)">
+                <rect x="-13" y="-10" width="26" height="20" rx="10" :fill="dimensionBadgeFill('literacy', kp)" :opacity="dimensionBadgeOpacity('literacy', kp)" stroke="rgba(15, 23, 42, 0.2)" stroke-width="1.2" />
+                <text class="teacher-node__dimension-label" text-anchor="middle" y="5">素</text>
+              </g>
+            </g>
             <text class="teacher-node__code" text-anchor="middle" y="-8">{{ kp.code }}</text>
             <text class="teacher-node__title" text-anchor="middle" y="16">{{ kp.title.slice(0, 10) }}</text>
-            <g v-if="kpCoverageWarnLabels(kp.id).length" :transform="`translate(0, ${nodeRadius(kp) + 16})`">
+            <g v-if="shouldRenderNodeDetails(kp) && kpCoverageWarnLabels(kp.id).length" :transform="`translate(0, ${nodeRadius(kp) + 16})`">
               <text class="teacher-node__warn" text-anchor="middle" y="0">{{ kpCoverageWarnLabels(kp.id).join(" · ") }}</text>
             </g>
           </g>
           </g>
         </g>
       </svg>
+
+      <div v-if="props.fullscreen && selectedKp" class="teacher-stage__selected-action">
+        <div>
+          <strong>{{ selectedKp.title }}</strong>
+          <span>{{ selectedKp.code }}</span>
+        </div>
+        <button :disabled="props.readonly" @click.stop="openContentFromSelected">编辑知识点</button>
+      </div>
 
       <div
         v-if="selectedKp && selectedLayout"
@@ -1823,6 +2046,21 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="teacher-stage__bottom">
+        <div v-if="props.fullscreen" class="teacher-stage__fullscreen-filters">
+          <div class="teacher-stage__filter-group">
+            <button :class="{ active: fullscreenRelationFilter === 'all' }" @click="fullscreenRelationFilter = 'all'">全部关系</button>
+            <button :class="{ active: fullscreenRelationFilter === 'prerequisite' }" @click="fullscreenRelationFilter = 'prerequisite'">前后关系</button>
+            <button :class="{ active: fullscreenRelationFilter === 'related' }" @click="fullscreenRelationFilter = 'related'">关联关系</button>
+            <button :class="{ active: fullscreenRelationFilter === 'support' }" @click="fullscreenRelationFilter = 'support'">支撑关系</button>
+            <button :class="{ active: fullscreenRelationFilter === 'contains' }" @click="fullscreenRelationFilter = 'contains'">父子关系</button>
+          </div>
+          <div class="teacher-stage__filter-group teacher-stage__filter-group--focus">
+            <button :class="{ active: fullscreenFocusFilter === 'all' }" @click="fullscreenFocusFilter = 'all'">全部</button>
+            <button :class="{ active: fullscreenFocusFilter === 'important' }" @click="fullscreenFocusFilter = 'important'">重点</button>
+            <button :class="{ active: fullscreenFocusFilter === 'difficult' }" @click="fullscreenFocusFilter = 'difficult'">难点</button>
+            <button :class="{ active: fullscreenFocusFilter === 'incomplete' }" @click="fullscreenFocusFilter = 'incomplete'">待完善</button>
+          </div>
+        </div>
         <div class="teacher-stage__zoom">
           <button @click="zoomOut">-</button>
           <span>缩放 {{ Math.round(canvasScale * 100) }}%</span>
@@ -1841,7 +2079,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div v-else-if="!loading && visibleKps.length === 0" class="teacher-stage__empty">
+      <div v-else-if="!loading && showAllKps && visibleKps.length === 0" class="teacher-stage__empty">
         <strong>{{ showAllKps ? "当前没有可显示的知识点" : "当前仅显示方形节点" }}</strong>
         <span>
           {{
@@ -2354,6 +2592,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-content--fullscreen {
+  position: relative;
   flex: 1;
   min-height: 0;
 }
@@ -2381,6 +2620,200 @@ onBeforeUnmount(() => {
   position: static;
   width: auto;
   box-shadow: none;
+}
+
+.teacher-fullscreen-nav {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: 240px;
+  max-height: calc(100% - 28px);
+  overflow: hidden;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.98) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  color: #1f2937;
+  z-index: 14;
+  pointer-events: auto;
+}
+
+.teacher-fullscreen-nav__tabs {
+  display: flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: #eef5ff;
+  border: 1px solid rgba(147, 197, 253, 0.28);
+}
+
+.teacher-fullscreen-nav__tabs span {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 800;
+  width: 100%;
+}
+
+.teacher-fullscreen-nav__tabs span.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #4f8df7 0%, #2563eb 100%);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+}
+
+.teacher-fullscreen-nav__search {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #f8fbff;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.teacher-fullscreen-nav__search-icon {
+  color: #64748b;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.teacher-fullscreen-nav__search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.teacher-fullscreen-nav__search input::placeholder {
+  color: #94a3b8;
+}
+
+.teacher-fullscreen-nav__search button {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.teacher-fullscreen-nav__tree {
+  display: grid;
+  gap: 4px;
+  overflow: auto;
+  max-height: 184px;
+  padding-right: 2px;
+}
+
+.teacher-fullscreen-nav__group {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.teacher-fullscreen-nav__item {
+  min-height: 31px;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 7px;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+}
+
+.teacher-fullscreen-nav__item:hover,
+.teacher-fullscreen-nav__item.active {
+  background: #eef5ff;
+}
+
+.teacher-fullscreen-nav__arrow {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.teacher-fullscreen-nav__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.teacher-fullscreen-nav__count {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.teacher-fullscreen-nav__children {
+  display: grid;
+  gap: 4px;
+  max-height: 128px;
+  overflow: auto;
+  padding: 2px 0 4px 21px;
+}
+
+.teacher-fullscreen-nav__child {
+  min-height: 30px;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 7px;
+  background: rgba(248, 251, 255, 0.94);
+  color: #475569;
+  cursor: pointer;
+  padding: 0 8px;
+  text-align: left;
+}
+
+.teacher-fullscreen-nav__child:hover,
+.teacher-fullscreen-nav__child.active {
+  border-color: rgba(59, 130, 246, 0.34);
+  background: #eef5ff;
+  color: #1d4ed8;
+}
+
+.teacher-fullscreen-nav__child.match {
+  border-color: rgba(245, 158, 11, 0.46);
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.teacher-fullscreen-nav__child span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.teacher-fullscreen-nav__child small {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .teacher-tree {
@@ -2616,6 +3049,9 @@ onBeforeUnmount(() => {
   bottom: calc(var(--graph-stage-pad) + 12px);
   z-index: 9;
   pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .teacher-stage__actions {
@@ -2662,39 +3098,29 @@ onBeforeUnmount(() => {
   border-top-color: rgba(179, 154, 117, 0.7);
 }
 
-.teacher-stage__legend-rings {
-  width: 18px;
-  height: 18px;
-  position: relative;
+.teacher-stage__legend-dimensions {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  gap: 3px;
   flex: 0 0 auto;
 }
 
-.teacher-stage__legend-rings .tr {
-  position: absolute;
+.teacher-stage__legend-dimensions .td {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
-  border: 2px solid transparent;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
 }
 
-.teacher-stage__legend-rings .tr.ring--knowledge {
-  width: 10px;
-  height: 10px;
-  border-color: rgba(203, 189, 157, 0.96);
-}
-
-.teacher-stage__legend-rings .tr.ring--ability {
-  width: 14px;
-  height: 14px;
-  border-color: rgba(22, 163, 74, 0.9);
-}
-
-.teacher-stage__legend-rings .tr.ring--literacy {
-  width: 18px;
-  height: 18px;
-  border-color: rgba(184, 143, 70, 0.88);
-}
+.teacher-stage__legend-dimensions .td--knowledge { background: #3978d8; }
+.teacher-stage__legend-dimensions .td--ability { background: #24a36f; }
+.teacher-stage__legend-dimensions .td--literacy { background: #d58b2a; }
 
 .teacher-stage__pill,
 .teacher-stage__button {
@@ -2794,6 +3220,18 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.teacher-node__dimensions {
+  pointer-events: none;
+  filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.16));
+}
+
+.teacher-node__dimension-label {
+  fill: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
 .teacher-category-node__title,
 .teacher-node__title {
   font-size: 15px;
@@ -2811,6 +3249,67 @@ onBeforeUnmount(() => {
   font-weight: 700;
   fill: #c2410c;
   pointer-events: none;
+}
+
+.teacher-stage__selected-action {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 16;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(520px, calc(100% - 320px));
+  padding: 10px 12px 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
+  color: #1f2937;
+  pointer-events: auto;
+}
+
+.teacher-stage__selected-action div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.teacher-stage__selected-action strong,
+.teacher-stage__selected-action span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teacher-stage__selected-action strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.teacher-stage__selected-action span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.teacher-stage__selected-action button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.teacher-stage__selected-action button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .teacher-stage__menu {
@@ -2942,6 +3441,62 @@ onBeforeUnmount(() => {
   border: 1.5px solid rgba(31, 41, 55, 0.14);
   box-shadow: 0 10px 22px rgba(31, 41, 55, 0.08);
   pointer-events: auto;
+}
+
+.teacher-stage__fullscreen-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.teacher-stage__filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+}
+
+.teacher-stage__filter-group--focus {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.teacher-stage__filter-group button {
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.teacher-stage__filter-group button:hover {
+  background: #f1f5f9;
+}
+
+.teacher-stage__filter-group button.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+}
+
+.teacher-stage__filter-group--focus button.active:nth-child(2) {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+}
+
+.teacher-stage__filter-group--focus button.active:nth-child(3) {
+  background: linear-gradient(135deg, #c87911 0%, #a16207 100%);
+}
+
+.teacher-stage__filter-group--focus button.active:nth-child(4) {
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
 }
 
 .teacher-stage__zoom button {
@@ -3629,7 +4184,7 @@ onBeforeUnmount(() => {
 }
 
 .teacher-stage__legend-line,
-.teacher-stage__legend-rings {
+.teacher-stage__legend-dimensions {
   opacity: 0.85;
 }
 

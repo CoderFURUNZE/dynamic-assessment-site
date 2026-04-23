@@ -131,6 +131,14 @@ function resetWorkspaceState() {
   currentKpId.value = null;
   reco.value = null;
   pathInfo.value = null;
+  workspaceState.value = {
+    kpCount: 0,
+    categoryCount: 0,
+    filteredCount: 0,
+    selectedType: "kp",
+    selectedKpId: null,
+    selectedCategory: null,
+  };
 }
 
 function syncQuery() {
@@ -176,6 +184,12 @@ async function loadKps() {
     resetWorkspaceState();
     return;
   }
+  workspaceState.value = {
+    ...workspaceState.value,
+    kpCount: 0,
+    categoryCount: 0,
+    filteredCount: 0,
+  };
   try {
     const data = await getWithCache("/graph/kps", { subject: subject.value, grade: grade.value });
     kps.value = Array.isArray(data) ? data : [];
@@ -194,7 +208,7 @@ async function loadRecommendation() {
     return;
   }
   try {
-    const res = await api.get(`/reco?kp_id=${currentKpId.value}`);
+    const res = await api.get(`/reco?kp_id=${currentKpId.value}`, { skipGlobalLoading: true } as any);
     reco.value = res.data ?? null;
   } catch {
     reco.value = null;
@@ -207,7 +221,7 @@ async function loadPathInfo() {
     return;
   }
   try {
-    const res = await api.get(`/graph/path/${currentKpId.value}`);
+    const res = await api.get(`/graph/path/${currentKpId.value}`, { skipGlobalLoading: true } as any);
     pathInfo.value = res.data ?? null;
   } catch {
     pathInfo.value = null;
@@ -217,8 +231,7 @@ async function loadPathInfo() {
 async function refreshWorkspace() {
   await loadCourses();
   await loadKps();
-  await loadRecommendation();
-  await loadPathInfo();
+  await Promise.all([loadRecommendation(), loadPathInfo()]);
 }
 
 async function handleCourseChange() {
@@ -226,8 +239,7 @@ async function handleCourseChange() {
   reco.value = null;
   pathInfo.value = null;
   await loadKps();
-  await loadRecommendation();
-  await loadPathInfo();
+  await Promise.all([loadRecommendation(), loadPathInfo()]);
   syncQuery();
 }
 
@@ -247,6 +259,19 @@ function openCurrentLearning() {
     return;
   }
   openStudentKpContent(currentKpId.value);
+}
+
+function openFullscreenGraph() {
+  const preview = String(route.query.preview || "");
+  const resolved = router.resolve({
+    path: "/student/graph-fullscreen",
+    query: {
+      subject: subject.value || undefined,
+      kp: currentKpId.value ? String(currentKpId.value) : undefined,
+      preview: preview || undefined,
+    },
+  });
+  window.open(resolved.href, "_blank", "noopener,noreferrer");
 }
 
 function openRecommendedLearning() {
@@ -273,8 +298,7 @@ watch(
       subject.value = next;
       await loadCourses();
       await loadKps();
-      await loadRecommendation();
-      await loadPathInfo();
+      await Promise.all([loadRecommendation(), loadPathInfo()]);
     }
   },
 );
@@ -284,8 +308,7 @@ watch(
   async (value, oldValue) => {
     if (value === oldValue) return;
     syncQuery();
-    await loadRecommendation();
-    await loadPathInfo();
+    await Promise.all([loadRecommendation(), loadPathInfo()]);
   },
 );
 
@@ -316,6 +339,7 @@ onMounted(refreshWorkspace);
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
         <button class="graph-page__toolbar-btn" type="button" @click="refreshWorkspace">刷新</button>
+        <button class="graph-page__toolbar-btn" type="button" @click="openFullscreenGraph">全屏图谱</button>
         <button class="graph-page__toolbar-btn graph-page__toolbar-btn--primary" type="button" @click="openCurrentLearning">
           去学习
         </button>
@@ -336,6 +360,7 @@ onMounted(refreshWorkspace);
       <section class="graph-page__workspace">
         <KnowledgeGraphWorkspace
           embedded
+          actor-mode="student"
           :subject="subject"
           :grade="grade"
           :current-kp-id="currentKpId"

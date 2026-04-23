@@ -94,6 +94,14 @@ function goBack() {
   router.push({ path: "/teacher/workspace", query: buildTeacherSubjectQuery(subject.value) });
 }
 
+function openFullscreenGraph() {
+  const resolved = router.resolve({
+    path: "/teacher/graph-fullscreen",
+    query: buildTeacherSubjectQuery(subject.value),
+  });
+  window.open(resolved.href, "_blank", "noopener,noreferrer");
+}
+
 watch(
   () => route.query.subject,
   (value) => {
@@ -155,7 +163,14 @@ onMounted(async () => {
       </div>
 
       <div class="graph-page__panel-body">
-        <TeacherGraphWorkbench ref="workbenchRef" embedded :subject="subject" :grade="grade" :readonly="isReadonlyCourse" />
+        <TeacherGraphWorkbench
+          ref="workbenchRef"
+          embedded
+          :subject="subject"
+          :grade="grade"
+          :readonly="isReadonlyCourse"
+          @open-fullscreen="openFullscreenGraph"
+        />
       </div>
     </section>
   </div>

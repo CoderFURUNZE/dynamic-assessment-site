@@ -140,6 +140,17 @@ const pageSection = computed(() => {
   return currentSection.value?.label || (routeGroup.value === "student" ? "学生端" : routeGroup.value === "teacher" ? "教师端" : routeGroup.value === "admin" ? "管理端" : "");
 });
 
+const routeViewKey = computed(() => {
+  if (
+    route.path.startsWith("/student/graph-workspace")
+    || route.path.startsWith("/student/graph-fullscreen")
+    || route.path.startsWith("/teacher/graph-fullscreen")
+  ) {
+    return route.path;
+  }
+  return route.fullPath;
+});
+
 function logout() {
   clearToken();
   router.push("/login/student");
@@ -207,7 +218,7 @@ function goBackToMain() {
       <main class="pro-standalone">
         <router-view v-slot="{ Component }">
           <transition name="page-fade" mode="out-in">
-            <component :is="Component" :key="route.fullPath" />
+            <component :is="Component" :key="routeViewKey" />
           </transition>
         </router-view>
       </main>
@@ -295,7 +306,7 @@ function goBackToMain() {
         <main class="student-shell__content">
           <router-view v-slot="{ Component }">
             <transition name="page-fade" mode="out-in">
-              <component :is="Component" :key="route.fullPath" />
+              <component :is="Component" :key="routeViewKey" />
             </transition>
           </router-view>
         </main>
@@ -489,18 +500,23 @@ function goBackToMain() {
 }
 
 .student-shell__nav-item--primary {
-  min-height: 34px;
-  padding-inline: 14px;
+  min-height: 36px;
+  padding-inline: 16px;
   font-size: 12px;
+  color: #24415f;
+  background: #ffffff;
+  border-color: rgba(71, 85, 105, 0.2);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
 }
 
 .student-shell__nav-item--secondary {
-  min-height: 34px;
+  min-height: 32px;
   padding-inline: 12px;
   font-size: 11px;
-  font-weight: 700;
-  color: #607694;
-  background: #f8fafc;
+  font-weight: 750;
+  color: #64748b;
+  background: #f7fafc;
+  border-color: rgba(148, 163, 184, 0.18);
 }
 
 .student-shell__nav-item:hover,
@@ -514,21 +530,59 @@ function goBackToMain() {
 }
 
 .student-shell__nav-item.active {
-  background: #eefbf3;
-  border-color: rgba(34, 197, 94, 0.28);
-  color: #166534;
   box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.08);
 }
 
-.student-shell--teacher .student-shell__nav-item.active {
-  background: #eefbf3;
-  color: #166534;
+.student-shell__nav-item--primary.active {
+  background: #eef6ff;
+  border-color: rgba(37, 99, 235, 0.32);
+  color: #1d4ed8;
+  box-shadow:
+    inset 0 0 0 1px rgba(37, 99, 235, 0.08),
+    0 8px 18px rgba(37, 99, 235, 0.08);
 }
 
-.student-shell--admin .student-shell__nav-item.active {
+.student-shell__nav-item--secondary.active {
+  background: #ecfdf3;
+  border-color: rgba(34, 197, 94, 0.26);
+  color: #15803d;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.08);
+}
+
+.student-shell--student .student-shell__nav-item--primary.active {
+  background: #eef6ff;
+  border-color: rgba(37, 99, 235, 0.3);
+  color: #1d4ed8;
+}
+
+.student-shell--student .student-shell__nav-item--secondary.active {
+  background: #ecfdf3;
+  border-color: rgba(34, 197, 94, 0.24);
+  color: #15803d;
+}
+
+.student-shell--teacher .student-shell__nav-item--primary.active {
+  background: #eef6ff;
+  border-color: rgba(37, 99, 235, 0.3);
+  color: #1d4ed8;
+}
+
+.student-shell--teacher .student-shell__nav-item--secondary.active {
+  background: #ecfdf3;
+  border-color: rgba(34, 197, 94, 0.26);
+  color: #15803d;
+}
+
+.student-shell--admin .student-shell__nav-item--primary.active {
   background: #eef8ff;
   border-color: rgba(56, 189, 248, 0.26);
-  color: #0f766e;
+  color: #0369a1;
+}
+
+.student-shell--admin .student-shell__nav-item--secondary.active {
+  background: #ecfdf3;
+  border-color: rgba(34, 197, 94, 0.24);
+  color: #15803d;
 }
 
 .student-shell__actions {

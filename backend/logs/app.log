@@ -661,3 +661,4 @@
 2026-04-22 15:11:13,083 INFO app.audit actor=admin role=admin action=course_update detail=id=3 code=MATH-PR-003
 2026-04-22 15:11:16,789 INFO app.audit actor=admin role=admin action=course_update detail=id=2 code=MATH-LA-002
 2026-04-22 15:11:20,550 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=MATH-GA-001
+2026-04-22 15:31:08,716 INFO app.audit actor=admin role=admin action=course_update detail=id=3 code=MATH-PR-003

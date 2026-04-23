@@ -80,20 +80,24 @@ const api = axios.create({
   timeout: 10000, // 10秒超时
 });
 
+function shouldSkipGlobalLoading(config: unknown): boolean {
+  return Boolean((config as { skipGlobalLoading?: boolean } | undefined)?.skipGlobalLoading);
+}
+
 // 请求拦截器
 api.interceptors.request.use((config) => {
-  startLoading();
+  if (!shouldSkipGlobalLoading(config)) startLoading();
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 }, (error) => {
-  endLoading();
+  if (!shouldSkipGlobalLoading(error?.config)) endLoading();
   return Promise.reject(error);
 });
 
 // 响应拦截器
 api.interceptors.response.use((response) => {
-  endLoading();
+  if (!shouldSkipGlobalLoading(response.config)) endLoading();
   // 缓存 GET 请求的响应
   if (response.config.method === 'get' && !shouldBypassCache(response.config.url)) {
     const cacheKey = response.config.url + '?' + new URLSearchParams(response.config.params || {}).toString();
@@ -104,7 +108,7 @@ api.interceptors.response.use((response) => {
   }
   return response;
 }, (error) => {
-  endLoading();
+  if (!shouldSkipGlobalLoading(error?.config)) endLoading();
   const status = error.response?.status;
   if (status === 401) {
     const reqUrl = `${error.config?.baseURL ?? ""}${error.config?.url ?? ""}`;
