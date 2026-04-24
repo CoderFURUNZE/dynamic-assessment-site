@@ -197,8 +197,18 @@ def _assert_student_subject_access(session: Session, user_id: int, subject: str)
 
     student = session.get(User, user_id)
     has_unavailable_course = False
+    has_completed_course = False
     for course in courses:
         if course.id is None:
+            continue
+        completed = session.exec(
+            select(CourseCompletionRecord.id).where(
+                CourseCompletionRecord.student_id == user_id,
+                CourseCompletionRecord.course_id == int(course.id),
+            )
+        ).first()
+        if completed is not None:
+            has_completed_course = True
             continue
         enrollment = session.exec(
             select(Enrollment).where(
@@ -224,6 +234,8 @@ def _assert_student_subject_access(session: Session, user_id: int, subject: str)
         if not is_course_open_for_students(session, course):
             has_unavailable_course = True
 
+    if has_completed_course:
+        raise HTTPException(status_code=403, detail="课程已完成，当前仅可查看学习报告，不能继续进入课程学习")
     if has_unavailable_course:
         raise HTTPException(status_code=403, detail="??????????????????????????")
     raise HTTPException(status_code=403, detail="???????????????????")
@@ -315,7 +327,21 @@ def list_courses(
             return []
         stmt = stmt.where(Course.id.in_(set(enrolled_course_ids)))
     courses = session.exec(stmt).all()
-    return [_course_payload(c, teacher_name="") for c in courses]
+    completed_course_ids: set[int] = set()
+    if user.role == UserRole.student:
+        completed_rows = session.exec(
+            select(CourseCompletionRecord.course_id).where(CourseCompletionRecord.student_id == int(user.id))
+        ).all()
+        completed_course_ids = {int(item) for item in completed_rows if item is not None}
+    items = []
+    for course in courses:
+        payload = _course_payload(course, teacher_name="")
+        if user.role == UserRole.student and course.id is not None:
+            completed = int(course.id) in completed_course_ids
+            payload["completed"] = completed
+            payload["learning_available"] = (not completed) and is_course_open_for_students(session, course)
+        items.append(payload)
+    return items
 
 
 @router.get("/teacher/course-catalog")
@@ -351,6 +377,7 @@ def list_teacher_course_catalog(
                 "can_activate": platform_available and is_assigned and not is_activated,
                 "can_start": False,
                 "can_finish": is_activated and teaching_status == TeacherCourseStatus.teaching.value,
+                "can_restore": platform_available and is_assigned and teaching_status == TeacherCourseStatus.finished.value,
                 "can_exit": is_activated and teaching_status == TeacherCourseStatus.finished.value,
                 "has_teaching_teacher": course_has_teaching_teacher(session, course_id) if course_id is not None else False,
             }
@@ -450,6 +477,51 @@ def finish_teacher_course(
     session.add(activation)
     session.commit()
     return {"ok": True, "teaching_status": TeacherCourseStatus.finished.value}
+
+
+@router.post("/teacher/courses/{course_id}/restore")
+def restore_teacher_course(
+    course_id: int,
+    session: Session = Depends(get_session),
+    user=Depends(get_current_user),
+):
+    if user.role != UserRole.teacher:
+        raise HTTPException(status_code=403, detail="Only teachers can restore courses")
+    course = session.get(Course, course_id)
+    if course is None:
+        raise HTTPException(status_code=404, detail="课程不存在")
+    if not _is_course_platform_open(course):
+        raise HTTPException(status_code=400, detail="课程当前未开放，不能恢复授课")
+    activation = session.exec(
+        select(CourseTeacherActivation).where(
+            CourseTeacherActivation.course_id == course_id,
+            CourseTeacherActivation.teacher_id == int(user.id),
+        )
+    ).first()
+    if activation is None:
+        raise HTTPException(status_code=400, detail="请先激活课程")
+
+    activation.teaching_status = TeacherCourseStatus.teaching
+    activation.finished_at = None
+    activation.updated_at = datetime.utcnow()
+    session.add(activation)
+
+    course.enroll_status = CourseEnrollStatus.open
+    session.add(course)
+
+    completion_rows = session.exec(
+        select(CourseCompletionRecord).where(CourseCompletionRecord.course_id == course_id)
+    ).all()
+    cleared_count = len(completion_rows)
+    for row in completion_rows:
+        session.delete(row)
+
+    session.commit()
+    return {
+        "ok": True,
+        "teaching_status": TeacherCourseStatus.teaching.value,
+        "completion_records_cleared": cleared_count,
+    }
 
 
 @router.delete("/teacher/courses/{course_id}/activation")

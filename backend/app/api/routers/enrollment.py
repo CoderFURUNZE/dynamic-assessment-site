@@ -339,6 +339,42 @@ def my_applications(
     return {"items": items, "page": page, "page_size": page_size}
 
 
+@router.delete("/my/applications/{application_id}")
+def cancel_my_application(
+    application_id: int,
+    session: Session = Depends(get_session),
+    user=Depends(require_role(UserRole.student)),
+):
+    application = session.get(CourseApplication, application_id)
+    if application is None or int(application.student_id) != int(user.id):
+        raise HTTPException(status_code=404, detail="报名申请不存在")
+    if application.status != ApplicationStatus.pending:
+        raise HTTPException(status_code=400, detail="只有审核中的报名申请可以取消")
+
+    active_enrollment = session.exec(
+        select(Enrollment).where(
+            Enrollment.application_id == application_id,
+            Enrollment.student_id == int(user.id),
+            Enrollment.course_id == int(application.course_id),
+            Enrollment.status == EnrollmentStatus.active,
+        )
+    ).first()
+    if active_enrollment is not None:
+        raise HTTPException(status_code=400, detail="该申请已生成选课记录，不能取消")
+
+    course = session.get(Course, application.course_id)
+    session.delete(application)
+    if course is not None:
+        push_course_notification(
+            session,
+            user_id=int(user.id),
+            title=f"《{course.title}》报名申请已取消",
+            content="你已撤回审核中的报名申请，如需加入该课程可以重新提交申请。",
+        )
+    session.commit()
+    return {"ok": True}
+
+
 @router.get("/my/notifications")
 def my_notifications(
     session: Session = Depends(get_session),

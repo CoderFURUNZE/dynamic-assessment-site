@@ -19,6 +19,8 @@ type Course = {
   title: string;
   active?: boolean;
   enroll_status?: string;
+  completed?: boolean;
+  learning_available?: boolean;
 };
 
 type RecoData = {
@@ -223,6 +225,8 @@ async function loadCourses() {
       title: String(item.title || ""),
       active: item.active !== false,
       enroll_status: String(item.enroll_status || ""),
+      completed: item.completed === true,
+      learning_available: item.learning_available !== false,
     }));
     subject.value = resolveStudentSubject(String(route.query.subject || ""), subject.value, courses.value);
   } catch (e: any) {

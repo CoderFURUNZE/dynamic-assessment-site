@@ -605,8 +605,8 @@ def _purge_course_related_rows(session: Session, *, course_id: int) -> None:
     )
     session.exec(delete(LearningBehaviorEvent).where(LearningBehaviorEvent.course_id == course_id))
     session.exec(delete(CourseCompletionRecord).where(CourseCompletionRecord.course_id == course_id))
-    session.exec(delete(CourseApplication).where(CourseApplication.course_id == course_id))
     session.exec(delete(Enrollment).where(Enrollment.course_id == course_id))
+    session.exec(delete(CourseApplication).where(CourseApplication.course_id == course_id))
     session.exec(
         delete(CoursePrerequisite).where(
             or_(
@@ -618,6 +618,44 @@ def _purge_course_related_rows(session: Session, *, course_id: int) -> None:
     session.exec(delete(CourseTeacherActivation).where(CourseTeacherActivation.course_id == course_id))
     session.exec(delete(CourseStage).where(CourseStage.course_id == course_id))
     session.flush()
+
+
+def _all_active_students_final_confirmed(session: Session, *, course_id: int) -> bool:
+    active_student_ids = set(_active_course_student_ids(session, course_id=course_id))
+    if not active_student_ids:
+        return False
+    confirmed_user_ids = {
+        int(item)
+        for item in session.exec(
+            select(TeacherFinalScoreConfirmation.user_id).where(
+                TeacherFinalScoreConfirmation.course_id == course_id,
+                TeacherFinalScoreConfirmation.user_id.in_(list(active_student_ids)),
+            )
+        ).all()
+        if item is not None
+    }
+    return confirmed_user_ids.issuperset(active_student_ids)
+
+
+def _course_has_active_students(session: Session, *, course_id: int) -> bool:
+    return bool(_active_course_student_ids(session, course_id=course_id))
+
+
+def _mark_course_teaching_finished(session: Session, *, course: Course) -> None:
+    if course.id is None:
+        return
+    now = datetime.utcnow()
+    activation_rows = session.exec(
+        select(CourseTeacherActivation).where(CourseTeacherActivation.course_id == int(course.id))
+    ).all()
+    for activation in activation_rows:
+        if activation.teaching_status != TeacherCourseStatus.finished:
+            activation.teaching_status = TeacherCourseStatus.finished
+            activation.finished_at = now
+            activation.updated_at = now
+            session.add(activation)
+    course.enroll_status = CourseEnrollStatus.closed
+    session.add(course)
 
 
 def _build_student_detail_payload(
@@ -823,6 +861,11 @@ def _build_student_detail_payload(
             )
         ).first()
     latest_recommendation = recommendation_items[0] if recommendation_items else None
+    latest_target_kp = (
+        session.get(KnowledgePoint, int(latest_recommendation["target_kp_id"]))
+        if latest_recommendation and latest_recommendation.get("target_kp_id") is not None
+        else None
+    )
 
     return {
         "student": {
@@ -908,6 +951,8 @@ def _build_student_detail_payload(
         "recommendation_closure": {
             "total_recommendations": len(recommendation_items),
             "latest_target_kp_id": latest_recommendation["target_kp_id"] if latest_recommendation else None,
+            "latest_target_kp_title": latest_target_kp.title if latest_target_kp is not None else "",
+            "latest_target_kp_code": latest_target_kp.code if latest_target_kp is not None else "",
             "latest_reason_summary": latest_recommendation["reason_summary"] if latest_recommendation else "",
             "latest_created_at": latest_recommendation["created_at"] if latest_recommendation else None,
             "final_summary": (
@@ -1248,6 +1293,48 @@ def upload_kp_resource(
     else:
         row.url = stored["relative_url"]
     session.add(row)
+    completion = session.exec(
+        select(CourseCompletionRecord).where(
+            CourseCompletionRecord.course_id == int(course.id),
+            CourseCompletionRecord.student_id == payload.user_id,
+        )
+    ).first()
+    if completion is None:
+        completion = CourseCompletionRecord(
+            course_id=int(course.id),
+            student_id=payload.user_id,
+            note="教师已确认学期最终成绩，课程学习已完成",
+        )
+    else:
+        completion.completed_at = datetime.utcnow()
+        completion.note = completion.note or "教师已确认学期最终成绩，课程学习已完成"
+    session.add(completion)
+
+    confirmed_user_ids = {
+        int(item)
+        for item in session.exec(
+            select(TeacherFinalScoreConfirmation.user_id).where(
+                TeacherFinalScoreConfirmation.course_id == int(course.id),
+                TeacherFinalScoreConfirmation.user_id.in_(list(active_student_ids)),
+            )
+        ).all()
+    }
+    confirmed_user_ids.add(int(payload.user_id))
+    all_active_students_confirmed = bool(active_student_ids) and confirmed_user_ids.issuperset(active_student_ids)
+    if all_active_students_confirmed:
+        activation_rows = session.exec(
+            select(CourseTeacherActivation).where(CourseTeacherActivation.course_id == int(course.id))
+        ).all()
+        now = datetime.utcnow()
+        for activation in activation_rows:
+            if activation.teaching_status != TeacherCourseStatus.finished:
+                activation.teaching_status = TeacherCourseStatus.finished
+                activation.finished_at = now
+                activation.updated_at = now
+                session.add(activation)
+        course.enroll_status = CourseEnrollStatus.closed
+        session.add(course)
+
     session.commit()
     session.refresh(row)
     maybe_prepare_preview(resource=row)
@@ -1820,19 +1907,45 @@ def delete_course(
     course = session.get(Course, course_id)
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")
+    course_code = course.code
     activation_rows = session.exec(
         select(CourseTeacherActivation).where(CourseTeacherActivation.course_id == course_id)
     ).all()
-    if any(row.teaching_status != TeacherCourseStatus.finished for row in activation_rows):
-        teacher_ids = [int(row.teacher_id) for row in activation_rows if row.teaching_status != TeacherCourseStatus.finished]
+    unfinished_rows = [
+        row
+        for row in activation_rows
+        if (row.teaching_status.value if hasattr(row.teaching_status, "value") else str(row.teaching_status or ""))
+        != TeacherCourseStatus.finished.value
+    ]
+    if unfinished_rows and (
+        not _course_has_active_students(session, course_id=course_id)
+        or _all_active_students_final_confirmed(session, course_id=course_id)
+    ):
+        _mark_course_teaching_finished(session, course=course)
+        session.flush()
+        activation_rows = session.exec(
+            select(CourseTeacherActivation).where(CourseTeacherActivation.course_id == course_id)
+        ).all()
+        unfinished_rows = [
+            row
+            for row in activation_rows
+            if (row.teaching_status.value if hasattr(row.teaching_status, "value") else str(row.teaching_status or ""))
+            != TeacherCourseStatus.finished.value
+        ]
+    if unfinished_rows:
+        teacher_ids = [int(row.teacher_id) for row in unfinished_rows]
         teacher_rows = session.exec(select(User).where(User.id.in_(teacher_ids))).all() if teacher_ids else []
         teacher_names = [row.full_name or row.username for row in teacher_rows]
         teacher_suffix = f"：{ '、'.join(teacher_names) }" if teacher_names else ""
         raise HTTPException(status_code=400, detail=f"仍有教师未结课，当前课程不能删除{teacher_suffix}")
-    _purge_course_related_rows(session, course_id=course_id)
-    session.delete(course)
-    session.commit()
-    _log_action(session, admin, "course_delete", f"id={course_id} code={course.code}")
+    try:
+        _purge_course_related_rows(session, course_id=course_id)
+        session.delete(course)
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=f"删除失败：课程仍有关联数据未清理（{exc}）") from exc
+    _log_action(session, admin, "course_delete", f"id={course_id} code={course_code}")
     return {"ok": True}
 
 @router.get("/users")

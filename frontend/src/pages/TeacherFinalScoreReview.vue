@@ -53,7 +53,17 @@ const recommendationClosure = computed(() => detail.value?.recommendation_closur
 const selectedStudent = computed(() => students.value.find((item) => item.user_id === selectedUserId.value) ?? null);
 const canConfirmFinalScore = computed(() => Number(termSummary.value?.stage_count || 0) > 0);
 const confirmedCount = computed(() => students.value.filter((item) => item.confirmed_score != null).length);
+const confirmationProgress = computed(() => (students.value.length ? Math.round((confirmedCount.value / students.value.length) * 100) : 0));
 const metaText = computed(() => `当前课程：${subject.value || "未选择"} · 已确认 ${confirmedCount.value}/${students.value.length}`);
+const latestRecommendationTargetLabel = computed(() => {
+  const title = String(recommendationClosure.value?.latest_target_kp_title || "").trim();
+  const code = String(recommendationClosure.value?.latest_target_kp_code || "").trim();
+  const id = recommendationClosure.value?.latest_target_kp_id;
+  if (title) return code ? `${code} · ${title}` : title;
+  const target = (detail.value?.mastery_map ?? []).find((item: any) => Number(item.kp_id) === Number(id));
+  if (target?.title) return target.code ? `${target.code} · ${target.title}` : target.title;
+  return id ? `知识点 ID ${id}` : "暂无";
+});
 
 const summaryCards = computed(() => [
   { label: "建议得分", value: `${toPercent(termSummary.value?.final_score_reference)}%`, icon: DataAnalysis, tone: "blue" },
@@ -213,7 +223,7 @@ onMounted(async () => {
       <HintButton tip="切换到报名审核页，查看课程准入记录。" @click="router.push({ path: '/teacher/review', query: { ...buildTeacherSubjectQuery(subject), tab: 'enrollment' } })">
         报名审核
       </HintButton>
-      <el-button type="primary" @click="loadDetail">刷新详情</el-button>
+      <button type="button" class="refresh-detail-button" @click="loadDetail">刷新详情</button>
     </WorkspaceTopbar>
 
     <div class="final-review-layout">
@@ -228,6 +238,15 @@ onMounted(async () => {
           <div><small>已确认</small><strong>{{ confirmedCount }}</strong></div>
           <div><small>待确认</small><strong>{{ Math.max(students.length - confirmedCount, 0) }}</strong></div>
         </div>
+        <div class="sidebar-progress" aria-label="确认进度">
+          <div class="sidebar-progress__top">
+            <span>确认进度</span>
+            <strong>{{ confirmationProgress }}%</strong>
+          </div>
+          <div class="sidebar-progress__track">
+            <div class="sidebar-progress__bar" :style="{ width: `${confirmationProgress}%` }"></div>
+          </div>
+        </div>
 
         <div class="student-list">
           <button
@@ -240,11 +259,12 @@ onMounted(async () => {
           >
             <div class="student-item__main">
               <strong>{{ item.full_name || item.username }}</strong>
-              <span>{{ item.persona_label }} · {{ item.risk_level }}</span>
+              <span>{{ item.class_name || "未分班" }} · {{ item.persona_label || "未生成画像" }}</span>
             </div>
             <div class="student-item__meta">
+              <span :class="['student-risk', `student-risk--${item.risk_level}`]">{{ item.risk_level || "未标记" }}</span>
               <span>建议 {{ toPercent(item.suggested_score) }}%</span>
-              <span v-if="item.confirmed_score != null">已确认 {{ toPercent(item.confirmed_score) }}%</span>
+              <span v-if="item.confirmed_score != null" class="student-confirmed">已确认 {{ toPercent(item.confirmed_score) }}%</span>
             </div>
           </button>
         </div>
@@ -258,6 +278,10 @@ onMounted(async () => {
                 <span class="section-eyebrow">收口概览</span>
                 <h2>{{ selectedStudent?.full_name || selectedStudent?.username || "未选择学生" }}</h2>
                 <p>将阶段评价、推荐结果与教师观察合并为课程期末结论。</p>
+              </div>
+              <div class="overview-score">
+                <span>建议得分</span>
+                <strong>{{ toPercent(termSummary.final_score_reference) }}%</strong>
               </div>
               <div class="overview-card__badges">
                 <span>{{ selectedStudent?.class_name || "未分班" }}</span>
@@ -279,8 +303,8 @@ onMounted(async () => {
             </div>
           </section>
 
-          <section class="detail-grid">
-            <el-card class="panel-card" shadow="never">
+          <section class="detail-grid detail-grid--primary">
+            <el-card class="panel-card detail-card detail-card--radar" shadow="never">
               <template #header>期末画像雷达图</template>
               <PortraitRadarChart
                 :items="finalDimensions"
@@ -290,7 +314,7 @@ onMounted(async () => {
               />
             </el-card>
 
-            <el-card class="panel-card" shadow="never">
+            <el-card class="panel-card detail-card detail-card--confirm" shadow="never">
               <template #header>教师确认表单</template>
               <div class="confirm-form">
                 <div class="confirm-form__row">
@@ -326,8 +350,8 @@ onMounted(async () => {
             </el-card>
           </section>
 
-          <section class="detail-grid">
-            <el-card class="panel-card" shadow="never">
+          <section class="detail-grid detail-grid--evidence">
+            <el-card class="panel-card detail-card detail-card--timeline" shadow="never">
               <template #header>阶段变化趋势</template>
               <div v-if="stageHistory.length === 0" class="empty-text">暂无阶段数据</div>
               <div v-else class="timeline-list">
@@ -341,7 +365,7 @@ onMounted(async () => {
               </div>
             </el-card>
 
-            <el-card class="panel-card" shadow="never">
+            <el-card class="panel-card detail-card detail-card--closure" shadow="never">
               <template #header>推荐链路最终收口</template>
               <div class="closure-panel">
                 <div class="closure-panel__item">
@@ -349,8 +373,8 @@ onMounted(async () => {
                   <strong>{{ recommendationClosure.latest_created_at ? recommendationClosure.latest_created_at.replace("T", " ").slice(0, 16) : "暂无" }}</strong>
                 </div>
                 <div class="closure-panel__item">
-                  <span>最近推荐目标</span>
-                  <strong>{{ recommendationClosure.latest_target_kp_id || "暂无" }}</strong>
+                  <span>最近推荐知识点</span>
+                  <strong>{{ latestRecommendationTargetLabel }}</strong>
                 </div>
                 <div class="closure-panel__item closure-panel__item--wide">
                   <span>系统推荐结论</span>
@@ -376,187 +400,351 @@ onMounted(async () => {
 <style scoped>
 .final-review-page {
   display: grid;
-  gap: 18px;
+  gap: 20px;
+  --review-ink: var(--app-text-main);
+  --review-muted: var(--app-text-soft);
+  --review-subtle: var(--app-text-light);
+  --review-border: var(--app-border);
+  --review-border-strong: var(--app-border-hover);
+  --review-surface: var(--app-card);
+  --review-soft: var(--app-surface-muted);
+  --review-blue: #2f6fed;
+  --review-green: var(--app-primary);
+  --review-amber: var(--app-warning);
 }
 
 .panel-card {
-  border-radius: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: var(--app-radius);
+  border: 1px solid var(--review-border);
   background:
-    radial-gradient(circle at top right, rgba(191, 221, 254, 0.18), transparent 24%),
-    radial-gradient(circle at top left, rgba(245, 158, 11, 0.08), transparent 22%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
+    radial-gradient(circle at top right, rgba(184, 228, 246, 0.14), transparent 28%),
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.06), transparent 24%),
+    var(--app-gradient-surface);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .section-eyebrow {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
+  min-height: 26px;
+  padding: 0 10px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #eef6dc 0%, #fff2db 100%);
-  color: #586537;
-  font-size: 12px;
+  background: var(--app-primary-tint);
+  color: var(--app-eyebrow);
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   text-transform: uppercase;
   width: fit-content;
 }
 
+.refresh-detail-button {
+  appearance: none;
+  border: none;
+  min-width: 108px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: var(--app-primary);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 38px;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(34, 197, 94, 0.24);
+  transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.refresh-detail-button:hover,
+.refresh-detail-button:focus-visible {
+  outline: none;
+  background: var(--app-primary-deep);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(34, 197, 94, 0.28);
+}
+
 .final-review-layout {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
 }
 
 .final-review-sidebar {
+  position: sticky;
+  top: 118px;
   display: grid;
-  gap: 16px;
-  align-content: start;
-  padding: 20px;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 14px;
+  max-height: calc(100dvh - 136px);
+  padding: 18px;
+  overflow: hidden;
 }
 
 .sidebar-head h2,
 .overview-card__head h2 {
-  margin: 6px 0 0;
-  color: #1f2937;
-  font-size: 24px;
-  line-height: 1.15;
+  margin: 8px 0 0;
+  color: var(--review-ink);
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: 0;
 }
 
 .sidebar-head p,
 .overview-card__head p {
-  margin: 8px 0 0;
-  color: #6a7280;
-  line-height: 1.7;
+  margin: 6px 0 0;
+  color: var(--review-muted);
+  line-height: 1.6;
+  font-size: 13px;
 }
 
 .sidebar-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .sidebar-stats > div {
-  padding: 14px 16px;
-  border-radius: 22px;
-  border: 1px solid rgba(191, 167, 132, 0.24);
-  background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 244, 229, 0.92));
+  padding: 12px 14px;
+  border-radius: var(--app-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--review-border) 90%, #ffffff);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .sidebar-stats small {
-  color: #6a7280;
+  color: var(--review-muted);
+  font-weight: 700;
 }
 
 .sidebar-stats strong {
   display: block;
-  margin-top: 8px;
-  color: #1f2937;
+  margin-top: 4px;
+  color: var(--review-ink);
   font-size: 24px;
+  line-height: 1;
+}
+
+.sidebar-progress {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--app-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--app-primary) 18%, var(--review-border));
+  background: linear-gradient(180deg, var(--app-primary-tint) 0%, #ffffff 100%);
+}
+
+.sidebar-progress__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--review-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sidebar-progress__top strong {
+  color: var(--review-blue);
+}
+
+.sidebar-progress__track {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--app-bg-alt);
+}
+
+.sidebar-progress__bar {
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #bfe3f5 0%, var(--app-primary) 100%);
+  transition: width 0.22s ease;
 }
 
 .student-list {
   display: grid;
-  gap: 10px;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+  overscroll-behavior: contain;
 }
 
 .student-item {
   display: grid;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 13px 14px;
   text-align: left;
-  border-radius: 22px;
-  border: 1px solid rgba(191, 167, 132, 0.24);
-  background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 244, 229, 0.92));
+  border-radius: var(--app-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--review-border) 90%, #ffffff);
+  background: rgba(255, 255, 255, 0.9);
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.student-item:hover,
+.student-item:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--app-primary) 24%, var(--review-border));
+  background: #f8fbff;
 }
 
 .student-item.active {
-  border-color: rgba(34, 197, 94, 0.24);
+  border-color: color-mix(in srgb, var(--app-primary) 34%, var(--review-border));
   background:
-    radial-gradient(circle at top right, rgba(215, 249, 168, 0.22), transparent 28%),
-    linear-gradient(180deg, #ffffff 0%, #eef8ff 100%);
-  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.08);
+    radial-gradient(circle at top right, rgba(184, 228, 246, 0.22), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, var(--app-primary-tint) 100%);
+  box-shadow: inset 3px 0 0 var(--app-primary), var(--app-shadow-sm);
 }
 
 .student-item__main,
 .student-item__meta {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .student-item strong {
-  color: #1f2937;
+  width: 100%;
+  color: var(--review-ink);
+  line-height: 1.2;
 }
 
 .student-item span {
-  color: #6a7280;
-  font-size: 13px;
+  color: var(--review-muted);
+  font-size: 12px;
+}
+
+.student-item__meta span {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--app-surface-muted);
+  color: #475569;
+  font-weight: 700;
+}
+
+.student-item__meta .student-confirmed {
+  background: var(--app-primary-tint);
+  color: var(--app-primary-deep);
+}
+
+.student-risk {
+  background: #fff7ed !important;
+  color: #c2410c !important;
+}
+
+.student-risk--优秀,
+.student-risk--良好 {
+  background: var(--app-primary-tint) !important;
+  color: var(--app-primary-deep) !important;
+}
+
+.student-risk--预警,
+.student-risk--需关注 {
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
 }
 
 .final-review-main {
   display: grid;
-  gap: 18px;
+  gap: 22px;
 }
 
 .overview-card {
   display: grid;
-  gap: 18px;
-  padding: 24px;
+  gap: 20px;
+  padding: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(184, 228, 246, 0.18), transparent 28%),
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.08), transparent 24%),
+    var(--app-gradient-surface);
 }
 
 .overview-card__head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  align-items: start;
 }
 
 .overview-card__badges {
+  grid-column: 1 / -1;
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .overview-card__badges span {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
+  min-height: 28px;
+  padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(191, 167, 132, 0.34);
-  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
-  color: #8a6740;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.86);
+  color: #475569;
   font-size: 12px;
   font-weight: 800;
+}
+
+.overview-score {
+  min-width: 132px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--app-primary) 24%, var(--review-border));
+  background:
+    radial-gradient(circle at top right, rgba(34, 197, 94, 0.14), transparent 36%),
+    linear-gradient(180deg, #ffffff 0%, var(--app-primary-tint) 100%);
+  color: var(--review-ink);
+  box-shadow: var(--app-shadow-sm);
+}
+
+.overview-score span {
+  display: block;
+  color: var(--review-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.overview-score strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 30px;
+  line-height: 1;
 }
 
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .summary-card {
   display: flex;
   gap: 12px;
-  padding: 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(191, 167, 132, 0.24);
-  background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 244, 229, 0.92));
+  min-height: 84px;
+  padding: 14px;
+  border-radius: var(--app-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--review-border) 90%, #ffffff);
+  background: rgba(255, 255, 255, 0.86);
 }
 
 .summary-card__icon {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
   display: grid;
   place-items: center;
-  border-radius: 16px;
-  background: #ffffff;
+  border-radius: 12px;
+  background: var(--app-surface-muted);
 }
 
 .summary-card__body {
@@ -565,62 +753,96 @@ onMounted(async () => {
 }
 
 .summary-card__body span {
-  color: #6a7280;
-  font-size: 13px;
+  color: var(--review-muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .summary-card__body strong {
-  color: #1f2937;
-  font-size: 22px;
+  color: var(--review-ink);
+  font-size: 21px;
   line-height: 1.15;
 }
 
 .summary-card--blue .summary-card__icon {
-  color: #334155;
-  background: rgba(191, 227, 245, 0.45);
+  color: #1d4ed8;
+  background: #eef6ff;
 }
 
 .summary-card--amber .summary-card__icon {
-  color: #b45309;
-  background: rgba(253, 230, 138, 0.32);
+  color: var(--review-amber);
+  background: #fffbeb;
 }
 
 .summary-card--green .summary-card__icon {
   color: #15803d;
-  background: rgba(187, 247, 208, 0.3);
+  background: var(--app-primary-tint);
 }
 
 .summary-card--neutral .summary-card__icon {
   color: #475569;
-  background: rgba(226, 232, 240, 0.52);
+  background: var(--app-surface-muted);
 }
 
 .detail-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 22px;
+  align-items: start;
+}
+
+.detail-card {
+  min-width: 0;
+}
+
+.detail-card--radar {
+  grid-column: span 7;
+  min-height: 470px;
+}
+
+.detail-card--confirm {
+  grid-column: span 5;
+}
+
+.detail-card--timeline {
+  grid-column: span 7;
+}
+
+.detail-card--closure {
+  grid-column: span 5;
+}
+
+.detail-card--radar :deep(.el-card__body) {
+  min-height: 410px;
+  display: grid;
+  align-items: center;
+}
+
+.detail-card--confirm :deep(.el-card__body) {
+  padding-bottom: 24px;
 }
 
 .final-review-main :deep(.el-card__header) {
-  padding: 24px 24px 0;
+  padding: 18px 20px 0;
   border-bottom: 0;
-  color: #1f2937;
-  font-size: 18px;
+  color: var(--review-ink);
+  font-size: 17px;
   font-weight: 800;
+  letter-spacing: 0;
 }
 
 .final-review-main :deep(.el-card__body) {
-  padding: 20px 24px 24px;
+  padding: 16px 20px 20px;
 }
 
 .confirm-form {
   display: grid;
-  gap: 14px;
+  gap: 13px;
 }
 
 .confirm-form__row {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 92px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
 }
@@ -630,9 +852,9 @@ onMounted(async () => {
 }
 
 .confirm-form__row label {
-  color: #6a7280;
+  color: #475569;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .confirm-form__actions {
@@ -643,19 +865,19 @@ onMounted(async () => {
 
 .timeline-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .timeline-item,
 .closure-panel__item {
-  border-radius: 22px;
-  border: 1px solid rgba(191, 167, 132, 0.24);
-  background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 244, 229, 0.92));
-  padding: 14px 16px;
+  border-radius: var(--app-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--review-border) 90%, #ffffff);
+  background: rgba(255, 255, 255, 0.88);
+  padding: 14px;
 }
 
 .timeline-item__title {
-  color: #1f2937;
+  color: var(--review-ink);
   font-weight: 700;
 }
 
@@ -665,9 +887,9 @@ onMounted(async () => {
 .empty-text,
 .empty-state {
   margin-top: 6px;
-  color: #6a7280;
+  color: var(--review-muted);
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.65;
 }
 
 .closure-panel {
@@ -678,7 +900,7 @@ onMounted(async () => {
 
 .closure-panel__item {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .closure-panel__item--wide {
@@ -686,8 +908,8 @@ onMounted(async () => {
 }
 
 .closure-panel__item strong {
-  color: #1f2937;
-  line-height: 1.7;
+  color: var(--review-ink);
+  line-height: 1.6;
 }
 
 .empty-card {
@@ -699,15 +921,53 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 
+  .final-review-sidebar {
+    position: relative;
+    top: auto;
+    max-height: none;
+  }
+
+  .student-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-card--radar,
+  .detail-card--confirm,
+  .detail-card--timeline,
+  .detail-card--closure {
+    grid-column: 1 / -1;
+  }
+
+  .detail-card--radar {
+    min-height: auto;
+  }
+
+  .detail-card--radar :deep(.el-card__body) {
+    min-height: 360px;
   }
 }
 
 @media (max-width: 768px) {
   .overview-card,
   .final-review-sidebar {
-    padding: 18px;
+    padding: 16px;
+  }
+
+  .overview-card__head {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-score {
+    width: 100%;
+  }
+
+  .student-list {
+    grid-template-columns: 1fr;
   }
 
   .detail-grid,
@@ -718,7 +978,7 @@ onMounted(async () => {
 
   .sidebar-head h2,
   .overview-card__head h2 {
-    font-size: 22px;
+    font-size: 20px;
   }
 
   .confirm-form__row {

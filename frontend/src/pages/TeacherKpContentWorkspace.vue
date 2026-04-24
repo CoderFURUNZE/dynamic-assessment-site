@@ -478,8 +478,7 @@ const practicePageSize = ref(5);
 const practiceTypeOptions = [
   { label: "全部题型", value: "all" },
   { label: "选择题", value: "mcq" },
-  { label: "判断题", value: "tof" },
-  { label: "简答题", value: "short" },
+  { label: "填空题", value: "blank" },
 ];
 const practiceDifficultyOptions = [
   { label: "全部难度", value: "all" },

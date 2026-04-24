@@ -44,7 +44,7 @@ function syncQuery() {
 }
 
 function goResults() {
-  router.push({ path: "/teacher/evaluation", query: { ...buildTeacherSubjectQuery(subject.value), tab: "behavior" } });
+  router.push({ path: "/teacher/students", query: { ...buildTeacherSubjectQuery(subject.value), tab: "behavior" } });
 }
 
 function goHistory() {

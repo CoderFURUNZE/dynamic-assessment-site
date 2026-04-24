@@ -1640,7 +1640,7 @@ watch(
       panY.value = 0;
       activeChapter.value = "全部";
       search.value = "";
-      showAllKps.value = !props.fullscreen;
+      showAllKps.value = false;
       selectedType.value = "kp";
       drawerOpen.value = !props.fullscreen;
       detailTab.value = "overview";

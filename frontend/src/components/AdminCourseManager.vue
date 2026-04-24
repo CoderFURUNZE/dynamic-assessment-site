@@ -165,7 +165,8 @@ async function remove(row: Course) {
     ElMessage.success("课程已删除");
     await load();
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail ?? "删除失败");
+    const detail = e?.response?.data?.detail;
+    ElMessage.error(typeof detail === "string" && detail.trim() ? detail : "删除失败");
   }
 }
 

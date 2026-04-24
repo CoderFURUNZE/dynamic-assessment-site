@@ -32,6 +32,8 @@ const loading = ref(false);
 const activeRiskFilter = ref<RiskFilter>("all");
 const riskTableAnchor = ref<HTMLElement | null>(null);
 const activeStudentId = ref<number | null>(null);
+const currentRiskPage = ref(1);
+const riskPageSize = 5;
 
 const data = ref({
   total_students: 0,
@@ -43,11 +45,6 @@ const data = ref({
   progress_ranking: [] as StudentRow[],
   ability_practice_cohort: {} as Record<string, any>,
 });
-
-const stageCount = computed(() => data.value.stage_summary.length);
-const latestStageScore = computed(() => Math.round((data.value.latest_stage?.avg_dynamic_score ?? 0) * 100));
-const latestStageMastery = computed(() => Math.round((data.value.latest_stage?.avg_course_mastery ?? 0) * 100));
-const practiceCount = computed(() => data.value.ability_practice_cohort?.overall?.attempts ?? 0);
 
 const cohortAbility = computed(() => data.value.ability_practice_cohort ?? {});
 const cohortHasPractice = computed(() => (cohortAbility.value?.overall?.attempts ?? 0) > 0);
@@ -187,6 +184,11 @@ const filteredRiskStudents = computed(() => {
   return list.filter((row) => normalizeRisk(row.risk_level) === target);
 });
 
+const pagedRiskStudents = computed(() => {
+  const start = (currentRiskPage.value - 1) * riskPageSize;
+  return filteredRiskStudents.value.slice(start, start + riskPageSize);
+});
+
 const progressRankingRows = computed(() =>
   [...data.value.progress_ranking].sort((a, b) => (b.dynamic_score || 0) - (a.dynamic_score || 0))
 );
@@ -200,22 +202,6 @@ const progressRankingList = computed(() =>
     masteryPercent: Math.round((row.course_mastery || 0) * 100),
     }))
 );
-
-const summaryCards = computed(() => [
-  { key: "students", label: "班级学生数", value: data.value.total_students, hint: "当前课程下已纳入分析的学生", tone: "blue" },
-  { key: "stages", label: "阶段完成数", value: stageCount.value, hint: "已有阶段评价数据的阶段数", tone: "blue" },
-  { key: "risk", label: "风险学生数", value: data.value.risk_students.length, hint: "需要优先关注的学生", tone: "red" },
-  { key: "score", label: "最新平均分", value: `${latestStageScore.value}%`, hint: "最近阶段动态评价平均分", tone: "blue" },
-  { key: "mastery", label: "最新平均掌握度", value: `${latestStageMastery.value}%`, hint: "最近阶段课程掌握情况", tone: "green" },
-  { key: "practice", label: "测验完成数", value: practiceCount.value, hint: "当前班级已完成的练习尝试数", tone: "green" },
-]);
-
-const suggestionText = computed(() => {
-  const high = riskOverview.value.find((item) => item.label === "高风险")?.count ?? 0;
-  if (high > 0) return `当前班级有 ${high} 名高风险学生，建议优先查看重点关注学生与风险学生清单。`;
-  if (weakKnowledgeList.value.length > 0) return `当前薄弱知识点集中在 ${weakKnowledgeList.value[0].title} 等内容，建议先安排针对性练习。`;
-  return "当前班级整体风险较低，可继续关注知识薄弱点与学习进度变化。";
-});
 
 async function load() {
   if (!props.subject) return;
@@ -263,38 +249,26 @@ watch(
   () => load(),
   { immediate: true }
 );
+
+watch(
+  () => activeRiskFilter.value,
+  () => {
+    currentRiskPage.value = 1;
+  }
+);
+
+watch(
+  () => filteredRiskStudents.value.length,
+  (length) => {
+    const maxPage = Math.max(1, Math.ceil(length / riskPageSize));
+    if (currentRiskPage.value > maxPage) currentRiskPage.value = maxPage;
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
   <div class="analytics-shell" v-loading="loading">
-    <section class="analytics-hero">
-      <div class="analytics-hero__copy">
-        <span class="analytics-hero__eyebrow">班级状态速览</span>
-        <h2>先看班级整体，再决定先处理谁</h2>
-        <p>{{ suggestionText }}</p>
-      </div>
-      <div class="analytics-hero__chips">
-        <span class="analytics-chip analytics-chip--warm">重点学生 {{ focusStudents.length }}</span>
-        <span class="analytics-chip">风险学生 {{ data.risk_students.length }}</span>
-        <span class="analytics-chip">薄弱知识点 {{ weakKnowledgeList.length }}</span>
-      </div>
-    </section>
-
-    <section class="summary-cards">
-      <button
-        v-for="card in summaryCards"
-        :key="card.key"
-        type="button"
-        class="summary-card"
-        :class="`summary-card--${card.tone}`"
-        @click="card.key === 'risk' ? applyRiskFilter('all') : undefined"
-      >
-        <span class="summary-card__label">{{ card.label }}</span>
-        <strong class="summary-card__value">{{ card.value }}</strong>
-        <span class="summary-card__hint">{{ card.hint }}</span>
-      </button>
-    </section>
-
     <section class="focus-section">
       <div class="section-title">
         <div class="focus-section__title">
@@ -343,10 +317,6 @@ watch(
           </div>
         </article>
       </div>
-      <div v-if="focusStudents.length" class="focus-section__guide">
-        <span>处理建议</span>
-        <p>优先处理高风险、低掌握度且近期活跃度偏低的学生，再到下方风险学生清单查看完整原因。</p>
-      </div>
       <div v-else class="empty-panel">
         <strong>当前暂无重点风险学生</strong>
         <p>班级整体状态良好</p>
@@ -380,7 +350,7 @@ watch(
         </div>
         <div v-if="filteredRiskStudents.length" class="risk-student-list">
           <article
-            v-for="row in filteredRiskStudents"
+            v-for="row in pagedRiskStudents"
             :key="row.user_id"
             class="risk-student-row"
             :class="{ 'is-active': activeStudentId === Number(row.user_id) }"
@@ -407,6 +377,15 @@ watch(
               <el-button v-if="props.showStudentDetailAction" size="small" @click.stop="openStudent(row)">查看</el-button>
             </div>
           </article>
+        </div>
+        <div v-if="filteredRiskStudents.length > riskPageSize" class="risk-pagination">
+          <el-pagination
+            v-model:current-page="currentRiskPage"
+            :page-size="riskPageSize"
+            :total="filteredRiskStudents.length"
+            layout="prev, pager, next"
+            background
+          />
         </div>
         <div v-else class="empty-panel empty-panel--compact">
           <strong>暂无符合条件的学生</strong>
@@ -1514,6 +1493,27 @@ watch(
 .progress-ranking-list {
   display: grid;
   gap: 16px;
+}
+
+.risk-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.risk-pagination :deep(.el-pagination) {
+  --el-pagination-button-bg-color: rgba(255, 250, 245, 0.94);
+  --el-pagination-hover-color: #284fbe;
+  --el-pagination-text-color: var(--ana-soft);
+  --el-pagination-button-color: var(--ana-soft);
+  --el-pagination-button-disabled-bg-color: rgba(248, 250, 252, 0.88);
+}
+
+.risk-pagination :deep(.btn-prev),
+.risk-pagination :deep(.btn-next),
+.risk-pagination :deep(.number),
+.risk-pagination :deep(.more) {
+  border-radius: 12px;
 }
 
 .risk-student-row,

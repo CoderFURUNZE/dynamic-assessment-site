@@ -45,24 +45,26 @@ const emit = defineEmits<{
 .detail-header {
   display: flex;
   justify-content: space-between;
-  gap: 14px;
-  align-items: flex-start;
+  gap: 12px;
+  align-items: center;
   flex-wrap: wrap;
-  padding: 20px 22px;
-  border-radius: 24px;
+  padding: 12px 16px;
+  border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background:
     radial-gradient(circle at top left, rgba(191, 219, 254, 0.18), transparent 28%),
     radial-gradient(circle at right center, rgba(187, 247, 208, 0.16), transparent 22%),
     linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow:
-    0 18px 36px rgba(15, 23, 42, 0.05),
+    0 10px 22px rgba(15, 23, 42, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 .detail-header__main {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .detail-header__eyebrow {
@@ -70,7 +72,7 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: center;
   width: fit-content;
-  min-height: 32px;
+  min-height: 28px;
   padding: 0 12px;
   border-radius: 999px;
   background: rgba(187, 247, 208, 0.42);
@@ -82,9 +84,9 @@ const emit = defineEmits<{
 }
 
 .detail-title {
-  font-size: clamp(24px, 3vw, 34px);
+  font-size: clamp(18px, 2vw, 22px);
   font-weight: 800;
-  line-height: 1.08;
+  line-height: 1.2;
   letter-spacing: -0.04em;
   color: #0f172a;
 }
@@ -98,7 +100,7 @@ const emit = defineEmits<{
 
 .detail-actions__meta {
   padding: 0 12px;
-  min-height: 42px;
+  min-height: 36px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
@@ -110,7 +112,7 @@ const emit = defineEmits<{
 }
 
 .detail-actions :deep(.el-select__wrapper) {
-  min-height: 44px;
+  min-height: 38px;
   border-radius: 14px !important;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.2) inset !important;

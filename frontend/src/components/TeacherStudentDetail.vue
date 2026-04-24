@@ -87,6 +87,16 @@ const students = ref<StudentRow[]>([]);
 const selectedUserId = ref<number | null>(null);
 const selectedStageId = ref<number | null>(null);
 const detail = ref<any | null>(null);
+const recordPageSize = 10;
+const recordPages = reactive<Record<string, number>>({
+  behavior: 1,
+  practice: 1,
+  quiz: 1,
+  timeline: 1,
+  video: 1,
+  reco: 1,
+  mastery: 1,
+});
 const feedbackForm = reactive({
   feedback_tag: "",
   comment: "",
@@ -132,6 +142,32 @@ function percent(value?: number | null) {
   return Math.round((Number(value ?? 0) || 0) * 100);
 }
 
+function shortText(value?: string | null, max = 42) {
+  const text = String(value || "").trim();
+  if (!text) return "暂无判定依据";
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+}
+
+function masteryStatusTone(status?: string | null) {
+  const raw = String(status || "").trim().toLowerCase();
+  if (["mastered", "stable", "good"].some((item) => raw.includes(item))) return "success";
+  if (["partial", "learning", "developing"].some((item) => raw.includes(item))) return "warning";
+  if (["weak", "risk", "unmastered"].some((item) => raw.includes(item))) return "danger";
+  return "neutral";
+}
+
+function masteryStatusLabel(status?: string | null) {
+  const raw = String(status || "").trim().toLowerCase();
+  if (raw.includes("mastered")) return "已掌握";
+  if (raw.includes("partial")) return "部分掌握";
+  if (raw.includes("learning")) return "学习中";
+  if (raw.includes("developing")) return "待巩固";
+  if (raw.includes("weak")) return "偏薄弱";
+  if (raw.includes("risk")) return "需关注";
+  if (raw.includes("unmastered")) return "未掌握";
+  return status || "待判断";
+}
+
 function eventTypeLabel(eventType?: string) {
   const key = String(eventType || "").trim();
   const map: Record<string, string> = {
@@ -171,6 +207,12 @@ const weakPoints = computed(() =>
     .sort((a: any, b: any) => Number(a.mastery ?? 0) - Number(b.mastery ?? 0))
     .slice(0, 6)
 );
+
+const weakPointAverage = computed(() => {
+  if (!weakPoints.value.length) return 0;
+  const total = weakPoints.value.reduce((sum: number, item: any) => sum + Number(item.mastery ?? 0), 0);
+  return Math.round((total / weakPoints.value.length) * 100);
+});
 
 const stageHistory = computed<StageHistoryItem[]>(() => detail.value?.stage_history ?? []);
 const finalPortraitDimensions = computed<PortraitDimensionItem[]>(() => detail.value?.profile?.final_portrait_dimensions ?? []);
@@ -442,6 +484,59 @@ const recommendationCards = computed(() =>
   }))
 );
 
+const recentPracticeRecords = computed(() => detail.value?.recent_practice ?? []);
+const recentQuizRecords = computed(() => detail.value?.recent_quiz ?? []);
+const masteryMapRecords = computed(() => detail.value?.mastery_map ?? []);
+
+function pageSlice<T>(items: T[], key: string) {
+  const page = Math.max(1, recordPages[key] || 1);
+  const start = (page - 1) * recordPageSize;
+  return items.slice(start, start + recordPageSize);
+}
+
+const visibleBehaviorTimelineRecords = computed(() => pageSlice(behaviorTimelineRecords.value, "behavior"));
+const visiblePracticeRecords = computed(() => pageSlice(recentPracticeRecords.value, "practice"));
+const visibleQuizRecords = computed(() => pageSlice(recentQuizRecords.value, "quiz"));
+const visibleChangeEvents = computed(() => pageSlice(changeEvents.value, "timeline"));
+const visibleVideoProgressList = computed(() => pageSlice(videoProgressList.value, "video"));
+const visibleRecommendationCards = computed(() => pageSlice(recommendationCards.value, "reco"));
+const visibleMasteryMapRecords = computed(() => pageSlice(masteryMapRecords.value, "mastery"));
+
+const recordCounts = computed(() => ({
+  behavior: behaviorTimelineRecords.value.length,
+  practice: recentPracticeRecords.value.length,
+  quiz: recentQuizRecords.value.length,
+  timeline: changeEvents.value.length,
+  video: videoProgressList.value.length,
+  reco: recommendationCards.value.length,
+  mastery: masteryMapRecords.value.length,
+}));
+
+const totalRecordCount = computed(() => Object.values(recordCounts.value).reduce((sum, count) => sum + Number(count || 0), 0));
+
+function recordHeaderTitle(title: string, count: number) {
+  return `${title}（${count} 条）`;
+}
+
+function recordPageCount(total: number) {
+  return Math.max(1, Math.ceil(Number(total || 0) / recordPageSize));
+}
+
+function recordPageLabel(key: string, total: number) {
+  return `${recordPages[key] || 1} / ${recordPageCount(total)} 页`;
+}
+
+function setRecordPage(key: string, total: number, delta: number) {
+  const next = Math.min(recordPageCount(total), Math.max(1, (recordPages[key] || 1) + delta));
+  recordPages[key] = next;
+}
+
+function resetRecordPages() {
+  Object.keys(recordPages).forEach((key) => {
+    recordPages[key] = 1;
+  });
+}
+
 function jumpToRecords() {
   detailTab.value = "records";
 }
@@ -613,6 +708,7 @@ async function loadDetail() {
       `/admin/analytics/student-detail?user_id=${selectedUserId.value}&subject=${encodeURIComponent(props.subject)}&grade=${encodeURIComponent(props.grade)}`
     );
     detail.value = res.data;
+    resetRecordPages();
     const history = res.data?.stage_history ?? [];
     if (history.length) {
       const wanted = props.initialUserId === selectedUserId.value ? selectedStageId.value : null;
@@ -628,6 +724,7 @@ async function loadDetail() {
     await loadTeacherIndicators();
   } catch (e: any) {
     detail.value = null;
+    resetRecordPages();
     selectedStageId.value = null;
     syncFeedbackForm(null);
     feedbackHistory.value = [];
@@ -679,16 +776,16 @@ watch(
 </script>
 
 <template>
-  <div class="student-detail-shell">
-    <el-card class="panel-card detail-card" shadow="never" v-loading="loading">
-      <template #header>
+  <div class="student-detail-shell" v-loading="loading">
+      <div class="student-detail-shell__header">
         <TeacherStudentHeaderBar
           :students="students"
           :selected-user-id="selectedUserId"
           @update:selected-user-id="selectedUserId = $event"
         />
-      </template>
+      </div>
 
+      <div class="student-detail-shell__body">
       <div v-if="detail" class="detail-layout" v-loading="detailLoading">
         <section class="core-panel" :class="`core-panel--${currentRiskTone}`">
           <div class="core-panel__main">
@@ -807,194 +904,108 @@ watch(
                   </el-card>
                 </div>
                 <el-tabs v-model="recordTab" class="record-tabs">
-                  <el-tab-pane label="行为记录" name="overview">
-                    <div v-if="behaviorTimelineRecords.length" class="behavior-timeline">
-                      <div v-for="item in behaviorTimelineRecords" :key="item.id" class="behavior-item">
-                        <div class="behavior-item__dot"></div>
-                        <div class="behavior-item__content">
-                          <div class="behavior-item__top">
-                            <div class="behavior-item__title">{{ item.title }}</div>
-                            <div class="behavior-item__time">{{ item.time }}</div>
-                          </div>
-                          <div class="behavior-item__desc">{{ item.description }}</div>
-                          <div class="behavior-item__extra">{{ item.extra }}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div v-else class="empty-strip empty-strip--panel">
-                      <div class="empty-strip__title">暂无行为记录</div>
-                      <div class="empty-strip__desc">系统暂未采集到可展示的学习行为。</div>
-                    </div>
-                  </el-tab-pane>
 
-                  <el-tab-pane label="练习记录" name="practice">
-                    <div class="practice-stack">
-                      <div class="practice-summary practice-summary--hero">
-                        <div v-for="item in practiceSummaryItems" :key="item.label" class="practice-summary__item">
-                          <span>{{ item.label }}</span>
-                          <strong>{{ item.value }}</strong>
-                        </div>
-                      </div>
-                      <section class="record-panel">
-                        <div class="record-panel__head">
-                          <div>
-                            <div class="record-panel__title">最近练习记录</div>
-                            <div class="record-panel__desc">查看最近完成的练习作答情况和提交时间。</div>
-                          </div>
-                        </div>
-                        <el-table :data="detail.recent_practice" size="small" max-height="320" class="record-table">
-                          <el-table-column prop="kp_id" label="知识点" width="110" />
-                          <el-table-column prop="question_id" label="题目" width="100" />
-                          <el-table-column prop="correct" label="结果" width="90">
-                            <template #default="{ row }">
-                              <el-tag :type="row.correct ? 'success' : 'danger'">{{ row.correct ? "正确" : "错误" }}</el-tag>
-                            </template>
-                          </el-table-column>
-                          <el-table-column prop="duration_ms" label="耗时(ms)" width="110" />
-                          <el-table-column prop="created_at" label="提交时间" min-width="180">
-                            <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
-                          </el-table-column>
-                        </el-table>
-                      </section>
-
-                      <section class="record-panel">
-                        <div class="record-panel__head">
-                          <div>
-                            <div class="record-panel__title">最近测验记录</div>
-                            <div class="record-panel__desc">重点关注测验通过情况、得分和耗时表现。</div>
-                          </div>
-                        </div>
-                        <el-table :data="detail.recent_quiz" size="small" max-height="320" class="record-table">
-                          <el-table-column prop="kp_id" label="知识点" width="110" />
-                          <el-table-column prop="score" label="得分" width="90">
-                            <template #default="{ row }">{{ percent(row.score) }}%</template>
-                          </el-table-column>
-                          <el-table-column prop="passed" label="通过" width="90">
-                            <template #default="{ row }">
-                              <el-tag :type="row.passed ? 'success' : 'info'">{{ row.passed ? "通过" : "未通过" }}</el-tag>
-                            </template>
-                          </el-table-column>
-                          <el-table-column prop="duration_ms" label="耗时(ms)" width="110" />
-                          <el-table-column prop="created_at" label="提交时间" min-width="180">
-                            <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
-                          </el-table-column>
-                        </el-table>
-                      </section>
-                    </div>
-                  </el-tab-pane>
-
-                  <el-tab-pane label="变化轨迹" name="timeline">
-                    <div v-if="changeEvents.length" class="change-track">
-                      <div v-for="item in changeEvents" :key="item.key" class="change-track__item" :class="`change-track__item--${item.tone}`">
-                        <div class="change-track__top">
-                          <div class="change-track__title">{{ item.title }}</div>
-                          <div class="change-track__value">{{ item.value }}</div>
-                        </div>
-                        <div class="change-track__summary">{{ item.summary }}</div>
-                      </div>
-                    </div>
-                    <div v-else class="empty-strip empty-strip--panel">
-                      <div class="empty-strip__title">暂无显著变化记录</div>
-                      <div class="empty-strip__desc">最近学习状态整体平稳。</div>
-                    </div>
-                  </el-tab-pane>
-
-                  <el-tab-pane label="视频学习" name="video">
-                    <div v-if="videoProgressList.length" class="video-progress-list">
-                      <div v-for="item in videoProgressList" :key="`${item.kp_id}-${item.updated_at}`" class="video-progress-item">
-                        <div class="video-progress-item__meta">
-                          <div>
-                            <div class="video-progress-item__title">{{ item.title }}</div>
-                            <div class="video-progress-item__code">{{ item.subtitle }}</div>
-                          </div>
-                          <div class="video-progress-item__status">
-                            <strong>{{ item.progress }}%</strong>
-                            <el-tag :type="item.completed ? 'success' : 'info'">{{ item.completed ? "已完成" : "进行中" }}</el-tag>
-                          </div>
-                        </div>
-                        <div class="progress-cell">
-                          <el-progress :percentage="item.progress" :stroke-width="8" />
-                        </div>
-                        <div class="video-progress-item__time">更新时间：{{ formatDateTime(item.updated_at) }}</div>
-                      </div>
-                    </div>
-                    <div v-else class="empty-strip empty-strip--panel">
-                      <div class="empty-strip__title">暂无视频学习记录</div>
-                      <div class="empty-strip__desc">最近没有可展示的视频观看进度。</div>
-                    </div>
-                  </el-tab-pane>
-
-                  <el-tab-pane label="推荐记录" name="reco">
-                    <div v-if="recommendationCards.length" class="recommendation-list">
-                      <div v-for="item in recommendationCards" :key="item.id" class="recommendation-item">
-                        <div class="recommendation-item__top">
-                          <div>
-                            <div class="recommendation-item__title">{{ item.title }}</div>
-                            <div v-if="item.source" class="recommendation-item__source">推荐来源：{{ item.source }}</div>
-                          </div>
-                          <div class="timeline-time">{{ formatDateTime(item.created_at) }}</div>
-                        </div>
-                        <div class="recommendation-item__reason">{{ item.reason_summary || "系统根据当前学习状态生成推荐。" }}</div>
-                      </div>
-                    </div>
-                    <div v-else class="empty-strip empty-strip--panel">
-                      <div class="empty-strip__title">暂无推荐记录</div>
-                      <div class="empty-strip__desc">系统还没有生成最近推荐。</div>
-                    </div>
-                  </el-tab-pane>
-
-                  <el-tab-pane label="知识点掌握" name="kps">
-                    <div class="record-split-grid">
-                      <section class="record-panel record-panel--flat">
-                        <div class="record-panel__head">
-                          <div>
-                            <div class="record-panel__title">薄弱知识点 Top6</div>
-                            <div class="record-panel__desc">优先关注掌握度最低的知识点。</div>
-                          </div>
-                        </div>
-                        <div class="weak-list">
-                          <div v-for="item in weakPoints" :key="item.kp_id" class="weak-item">
+                  <el-tab-pane :label="recordHeaderTitle('知识点掌握', recordCounts.mastery)" name="kps">
+                    <div class="record-list-box">
+                      <div class="mastery-board">
+                        <section class="record-panel record-panel--flat mastery-panel mastery-panel--weak">
+                          <div class="record-panel__head">
                             <div>
-                              <div class="weak-code">{{ item.code }}</div>
-                              <div class="weak-title">{{ item.title }}</div>
+                              <div class="record-panel__title">薄弱知识点 Top6</div>
+                              <div class="record-panel__desc">按掌握度从低到高汇总，优先用于安排补练和讲解。</div>
                             </div>
-                            <div class="weak-item__meta">
-                              <el-tag type="warning">{{ percent(item.mastery) }}%</el-tag>
-                              <div class="weak-item__progress">
+                          </div>
+
+                          <div class="mastery-highlight">
+                            <div class="mastery-highlight__label">待巩固知识点</div>
+                            <div class="mastery-highlight__value">{{ weakPoints.length }} 个</div>
+                            <div class="mastery-highlight__meta">平均掌握度 {{ weakPointAverage }}%</div>
+                          </div>
+
+                          <div v-if="weakPoints.length" class="weak-card-list">
+                            <article v-for="item in weakPoints" :key="item.kp_id" class="weak-card">
+                              <div class="weak-card__top">
+                                <div>
+                                  <div class="weak-code">{{ item.code }}</div>
+                                  <div class="weak-title">{{ item.title }}</div>
+                                </div>
+                                <div class="weak-card__score">{{ percent(item.mastery) }}%</div>
+                              </div>
+                              <div class="weak-card__bar">
                                 <span :style="{ width: `${percent(item.mastery)}%` }"></span>
                               </div>
+                              <div class="weak-card__foot">
+                                <span class="weak-card__hint">薄弱原因</span>
+                                <span class="weak-card__hint">{{ shortText(item.reason_summary, 22) }}</span>
+                              </div>
+                            </article>
+                          </div>
+                          <div v-else class="empty-strip empty-strip--panel">
+                            <div class="empty-strip__title">暂无薄弱知识点</div>
+                            <div class="empty-strip__desc">当前学生的知识点掌握情况较稳定。</div>
+                          </div>
+                        </section>
+
+                        <section class="record-panel record-panel--flat mastery-panel mastery-panel--map">
+                          <div class="record-panel__head">
+                            <div>
+                              <div class="record-panel__title">知识点掌握明细</div>
+                              <div class="record-panel__desc">查看各知识点掌握度、状态和系统判断依据。</div>
                             </div>
                           </div>
-                        </div>
-                      </section>
 
-                      <section class="record-panel record-panel--flat">
-                        <div class="record-panel__head">
-                          <div>
-                            <div class="record-panel__title">知识点掌握情况</div>
-                            <div class="record-panel__desc">查看知识点状态、掌握度和判断依据。</div>
+                          <div v-if="visibleMasteryMapRecords.length" class="mastery-card-list">
+                            <article v-for="item in visibleMasteryMapRecords" :key="`${item.code || item.kp_id}-${item.title}`" class="mastery-card">
+                              <div class="mastery-card__top">
+                                <div>
+                                  <div class="mastery-card__code">{{ item.code || `KP-${item.kp_id}` }}</div>
+                                  <div class="mastery-card__title">{{ item.title }}</div>
+                                </div>
+                                <span class="mastery-card__status" :class="`mastery-card__status--${masteryStatusTone(item.status)}`">
+                                  {{ masteryStatusLabel(item.status) }}
+                                </span>
+                              </div>
+
+                              <div class="mastery-card__metrics">
+                                <div class="mastery-card__metric">
+                                  <strong>{{ percent(item.mastery) }}%</strong>
+                                  <span>掌握度</span>
+                                </div>
+                                <div class="mastery-card__reason">{{ shortText(item.reason_summary, 58) }}</div>
+                              </div>
+
+                              <div class="mastery-card__bar">
+                                <span :style="{ width: `${percent(item.mastery)}%` }"></span>
+                              </div>
+                            </article>
                           </div>
-                        </div>
-                        <el-table :data="detail.mastery_map" size="small" max-height="420" class="record-table">
-                          <el-table-column prop="code" label="编码" width="120" />
-                          <el-table-column prop="title" label="知识点" min-width="180" />
-                          <el-table-column prop="status" label="状态" width="100" />
-                          <el-table-column prop="mastery" label="掌握度" width="100">
-                            <template #default="{ row }">{{ percent(row.mastery) }}%</template>
-                          </el-table-column>
-                          <el-table-column prop="reason_summary" label="依据" min-width="220">
-                            <template #default="{ row }">
-                              <el-tooltip v-if="String(row.reason_summary || '').length > 24" :content="row.reason_summary" placement="top">
-                                <span>{{ String(row.reason_summary || "").slice(0, 24) }}...</span>
-                              </el-tooltip>
-                              <span v-else>{{ row.reason_summary || "-" }}</span>
-                            </template>
-                          </el-table-column>
-                        </el-table>
-                      </section>
+                          <div v-else class="empty-strip empty-strip--panel">
+                            <div class="empty-strip__title">暂无知识点掌握记录</div>
+                            <div class="empty-strip__desc">完成练习或阶段评价后，这里会显示掌握明细。</div>
+                          </div>
+
+                          <div
+                            v-if="recordCounts.mastery > recordPageSize"
+                            class="record-pagination"
+                          >
+                            <el-button size="small" :disabled="recordPages.mastery <= 1" @click="setRecordPage('mastery', recordCounts.mastery, -1)">
+                              上一页
+                            </el-button>
+                            <span>{{ recordPageLabel("mastery", recordCounts.mastery) }}</span>
+                            <el-button
+                              size="small"
+                              :disabled="recordPages.mastery >= recordPageCount(recordCounts.mastery)"
+                              @click="setRecordPage('mastery', recordCounts.mastery, 1)"
+                            >
+                              下一页
+                            </el-button>
+                          </div>
+                        </section>
+                      </div>
                     </div>
                   </el-tab-pane>
                 </el-tabs>
+                <div class="record-count-footer">共 {{ totalRecordCount }} 条记录</div>
               </section>
             </el-tab-pane>
 
@@ -1250,35 +1261,24 @@ watch(
           <HoverTip content="如果这里没有内容，请先确认已选择课程、已创建阶段并已导入阶段数据。" />
         </div>
       </div>
-    </el-card>
+      </div>
   </div>
 </template>
 
 <style scoped>
 .student-detail-shell {
   display: grid;
+  gap: 16px;
 }
 
-.detail-card {
-  border-radius: 28px;
-  border: 1px solid rgba(148, 163, 184, 0.22) !important;
-  background:
-    radial-gradient(circle at top left, rgba(191, 219, 254, 0.18), transparent 24%),
-    radial-gradient(circle at bottom right, rgba(187, 247, 208, 0.16), transparent 22%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
-  box-shadow:
-    0 18px 36px rgba(15, 23, 42, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.88) !important;
-  overflow: hidden;
-}
-
-.detail-card :deep(.el-card__body) {
-  padding: 18px;
+.student-detail-shell__header,
+.student-detail-shell__body {
+  display: grid;
 }
 
 .detail-layout {
   display: grid;
-  gap: 24px;
+  gap: 16px;
 }
 
 .core-panel,
@@ -1292,11 +1292,11 @@ watch(
 }
 
 .core-panel {
-  padding: 24px;
+  padding: 18px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  gap: 18px;
 }
 
 .core-panel--danger {
@@ -1758,6 +1758,31 @@ watch(
   margin-top: 6px;
 }
 
+.record-list-box {
+  padding: 4px 0;
+  contain: layout paint;
+}
+
+.record-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.record-count-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .record-metric-card {
   border-radius: 18px;
   border: 1.5px solid rgba(31, 41, 55, 0.14);
@@ -1812,7 +1837,7 @@ watch(
 .behavior-timeline,
 .change-track {
   display: grid;
-  gap: 16px;
+  gap: 8px;
 }
 
 .practice-summary {
@@ -1830,18 +1855,18 @@ watch(
 .change-track__item,
 .video-progress-item,
 .recommendation-item {
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  border: 1.5px solid rgba(31, 41, 55, 0.14);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.22);
 }
 
 .practice-summary__item {
   display: grid;
   gap: 6px;
-  min-height: 82px;
+  min-height: 64px;
   align-content: center;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: #ffffff;
   border-color: rgba(31, 41, 55, 0.14);
   box-shadow: none;
 }
@@ -1875,6 +1900,198 @@ watch(
 
 .record-panel--flat {
   gap: 12px;
+}
+
+.mastery-board {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.92fr) minmax(360px, 1.08fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.mastery-panel {
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(8, 145, 178, 0.14);
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(236, 254, 255, 0.92) 100%);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+}
+
+.mastery-panel--weak {
+  border-color: rgba(249, 115, 22, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(255, 247, 237, 0.94) 100%);
+}
+
+.mastery-highlight {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(249, 115, 22, 0.16);
+  background: linear-gradient(135deg, rgba(255, 247, 237, 0.98) 0%, rgba(255, 237, 213, 0.88) 100%);
+}
+
+.mastery-highlight__label,
+.mastery-card__code,
+.weak-card__hint,
+.mastery-card__metric span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.mastery-highlight__value {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.1;
+}
+
+.mastery-highlight__meta {
+  font-size: 13px;
+  color: #9a3412;
+  font-weight: 600;
+}
+
+.weak-card-list,
+.mastery-card-list {
+  display: grid;
+  gap: 12px;
+}
+
+.weak-card,
+.mastery-card {
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.weak-card {
+  display: grid;
+  gap: 12px;
+}
+
+.weak-card__top,
+.mastery-card__top,
+.mastery-card__metrics {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.weak-card__score {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 237, 213, 0.9);
+  color: #ea580c;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.weak-card__bar,
+.mastery-card__bar {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(226, 232, 240, 0.92);
+}
+
+.weak-card__bar span,
+.mastery-card__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.weak-card__bar span {
+  background: linear-gradient(90deg, #f97316 0%, #facc15 100%);
+}
+
+.mastery-card__bar span {
+  background: linear-gradient(90deg, #06b6d4 0%, #22c55e 100%);
+}
+
+.weak-card__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.weak-card__hint:first-child {
+  color: #c2410c;
+  font-weight: 700;
+}
+
+.mastery-card {
+  display: grid;
+  gap: 14px;
+}
+
+.mastery-card__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.mastery-card__status {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.mastery-card__status--success {
+  color: #15803d;
+  background: rgba(220, 252, 231, 0.92);
+  border-color: rgba(34, 197, 94, 0.22);
+}
+
+.mastery-card__status--warning {
+  color: #b45309;
+  background: rgba(254, 243, 199, 0.94);
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+.mastery-card__status--danger {
+  color: #b91c1c;
+  background: rgba(254, 226, 226, 0.94);
+  border-color: rgba(239, 68, 68, 0.22);
+}
+
+.mastery-card__status--neutral {
+  color: #475569;
+  background: rgba(241, 245, 249, 0.96);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+.mastery-card__metric {
+  min-width: 86px;
+  display: grid;
+  gap: 2px;
+}
+
+.mastery-card__metric strong {
+  font-size: 24px;
+  line-height: 1;
+  color: #0f172a;
+}
+
+.mastery-card__reason {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #475569;
 }
 
 .record-panel__head {
@@ -1985,7 +2202,7 @@ watch(
 .behavior-item {
   display: grid;
   grid-template-columns: 12px 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 
 .behavior-item__dot {
@@ -1998,7 +2215,7 @@ watch(
 
 .behavior-item__content {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .behavior-item__top,
@@ -2015,7 +2232,7 @@ watch(
 .change-track__title,
 .video-progress-item__title,
 .recommendation-item__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #0f172a;
 }
@@ -2256,7 +2473,7 @@ watch(
 @media (max-width: 960px) {
   .core-panel,
   .analysis-grid,
-  .record-split-grid,
+  .mastery-board,
   .summary-grid,
   .practice-summary {
     grid-template-columns: 1fr;
@@ -2295,6 +2512,16 @@ watch(
   .metric-section,
   .record-overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .weak-card__top,
+  .mastery-card__top,
+  .mastery-card__metrics {
+    flex-direction: column;
+  }
+
+  .mastery-card__status {
+    align-self: flex-start;
   }
 
   .core-panel__headline h2 {

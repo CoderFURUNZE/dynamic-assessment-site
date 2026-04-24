@@ -1812,6 +1812,7 @@ def recalculate_profile_snapshot(
         grade=grade,
         refresh_mastery=refresh_mastery,
     )
+    course_id = resolve_course_id(session, subject=subject)
     kp_ids = [int(k.id) for k in kps if k.id is not None]
 
     practice_rows = []

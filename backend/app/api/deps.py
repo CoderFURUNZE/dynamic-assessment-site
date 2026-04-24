@@ -9,6 +9,7 @@ from app.db.models import (
     ApplicationStatus,
     Course,
     CourseApplication,
+    CourseCompletionRecord,
     CourseTeacherActivation,
     CourseLifecycleStatus,
     Enrollment,
@@ -93,8 +94,18 @@ def assert_student_subject_access(session: Session, user_id: int, subject: str) 
 
     student = session.get(User, user_id)
     has_closed_course = False
+    has_completed_course = False
     for course in courses:
         if course.id is None:
+            continue
+        completed = session.exec(
+            select(CourseCompletionRecord.id).where(
+                CourseCompletionRecord.student_id == user_id,
+                CourseCompletionRecord.course_id == int(course.id),
+            )
+        ).first()
+        if completed is not None:
+            has_completed_course = True
             continue
 
         enrollment = session.exec(
@@ -124,6 +135,8 @@ def assert_student_subject_access(session: Session, user_id: int, subject: str) 
         if not is_course_open_for_students(session, course):
             has_closed_course = True
 
+    if has_completed_course:
+        raise HTTPException(status_code=403, detail="课程已完成，当前仅可查看学习报告，不能继续进入课程学习")
     if has_closed_course:
         raise HTTPException(status_code=403, detail="课程尚未开放学习，暂时无法进入")
     raise HTTPException(status_code=403, detail="当前账号尚未加入这门课程，暂时无法进入课程学习")

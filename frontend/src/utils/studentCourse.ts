@@ -5,11 +5,15 @@ type CourseLike = {
   title: string;
   active?: boolean;
   enroll_status?: string;
+  completed?: boolean;
+  learning_available?: boolean;
 };
 
 function isAccessibleCourse(course: CourseLike | undefined) {
   if (!course) return false;
   if (course.active === false) return false;
+  if (course.completed === true) return false;
+  if (course.learning_available === false) return false;
   if (String(course.enroll_status || "").trim().toLowerCase() === "closed") return false;
   return Boolean(String(course.title || "").trim());
 }

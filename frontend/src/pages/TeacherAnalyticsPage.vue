@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import AdminAnalyticsOverview from "../components/AdminAnalyticsOverview.vue";
-import HintButton from "../components/HintButton.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
 type Course = { id: number; code: string; title: string };
@@ -14,48 +13,6 @@ const router = useRouter();
 const subject = ref("");
 const grade = ref("通用");
 const courses = ref<Course[]>([]);
-
-const heroStats = computed(() => [
-  {
-    label: "课程数",
-    value: `${courses.value.length || 0}`,
-    hint: "当前可切换的课程数量",
-  },
-  {
-    label: "分析模式",
-    value: "班级总览",
-    hint: "先看整体，再决定处理对象",
-  },
-  {
-    label: "下一步",
-    value: subject.value ? "查看学生详情" : "先选择课程",
-    hint: subject.value ? `${subject.value} 已可进入追踪` : "选中课程后自动同步分析对象",
-  },
-]);
-
-const cockpitCards = computed(() => [
-  {
-    eyebrow: "班级画像",
-    title: "先看整体走势",
-    desc: "把风险学生、薄弱知识点和阶段表现放在一个入口里。",
-    action: "刷新总览",
-    handler: () => loadCourses(),
-  },
-  {
-    eyebrow: "学生追踪",
-    title: "直接进入个体详情",
-    desc: "从班级总览切到学生详情，连续查看画像信号和学习表现。",
-    action: "学生详情",
-    handler: () => router.push({ path: "/teacher/students", query: { ...buildTeacherSubjectQuery(subject.value), tab: "detail" } }),
-  },
-  {
-    eyebrow: "阶段联动",
-    title: "返回阶段评价页",
-    desc: "需要回看导入、指标或阶段配置时，直接回到评价工作区。",
-    action: "阶段评价",
-    handler: () => router.push({ path: "/teacher/evaluation", query: { ...buildTeacherSubjectQuery(subject.value), tab: "behavior" } }),
-  },
-]);
 
 async function loadCourses() {
   try {
@@ -96,59 +53,6 @@ onMounted(loadCourses);
 
 <template>
   <div class="teacher-page">
-    <section class="analytics-toolbar">
-      <div class="analytics-toolbar__copy">
-        <span class="analytics-title__eyebrow">班级总览</span>
-        <div class="analytics-title">
-          <h1>教师分析台</h1>
-          <p>快速识别风险学生、薄弱知识点和阶段变化，先看整体，再进入个体处理。</p>
-        </div>
-        <div class="analytics-toolbar__meta">
-          <span class="analytics-meta-pill analytics-meta-pill--course">{{ subject || "未选择课程" }}</span>
-          <span class="analytics-meta-pill analytics-meta-pill--grade">{{ grade }}</span>
-        </div>
-        <div class="analytics-hero-stats">
-          <article v-for="item in heroStats" :key="item.label" class="analytics-hero-stat">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-            <p>{{ item.hint }}</p>
-          </article>
-        </div>
-      </div>
-
-      <div class="analytics-toolbar__panel">
-        <div class="analytics-toolbar__panel-head">
-          <span>当前操作</span>
-          <strong>统一从这里切课程、刷新数据和进入详情</strong>
-        </div>
-        <div class="analytics-toolbar__course">
-          <span>课程</span>
-          <el-select v-model="subject" placeholder="请选择课程" size="large" style="width: 240px">
-            <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
-          </el-select>
-        </div>
-        <div class="analytics-toolbar__actions">
-          <HintButton size="small" tip="刷新当前班级分析数据" @click="loadCourses">刷新</HintButton>
-          <HintButton
-            size="small"
-            tip="切换到学生详情视图"
-            @click="router.push({ path: '/teacher/students', query: { ...buildTeacherSubjectQuery(subject), tab: 'detail' } })"
-          >
-            学生详情
-          </HintButton>
-        </div>
-      </div>
-    </section>
-
-    <section class="analytics-cockpit-grid">
-      <article v-for="card in cockpitCards" :key="card.eyebrow" class="analytics-cockpit-card">
-        <span class="analytics-cockpit-card__eyebrow">{{ card.eyebrow }}</span>
-        <h3>{{ card.title }}</h3>
-        <p>{{ card.desc }}</p>
-        <button type="button" class="analytics-cockpit-card__action" @click="card.handler">{{ card.action }}</button>
-      </article>
-    </section>
-
     <section class="edu-panel analytics-panel">
       <AdminAnalyticsOverview
         :subject="subject"

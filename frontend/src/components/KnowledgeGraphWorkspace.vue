@@ -297,7 +297,7 @@ const categoryNodes = computed<CategoryNode[]>(() =>
 );
 
 const visibleCategoryNodes = computed(() => {
-  if (isTeacherMode.value || activeChapter.value === "全部") return categoryNodes.value;
+  if (isTeacherMode.value || !showAllKps.value || activeChapter.value === "全部") return categoryNodes.value;
   return categoryNodes.value.filter((item) => item.key === activeChapter.value);
 });
 

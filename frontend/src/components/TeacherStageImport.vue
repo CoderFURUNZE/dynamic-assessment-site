@@ -449,7 +449,7 @@ onBeforeUnmount(() => window.removeEventListener("da:teacher-stage-changed", han
                           <span>{{ item.desc }}</span>
                         </div>
                       </div>
-                      <el-switch :model-value="systemMappings[item.key]" @click.stop />
+                      <span class="source-card__state">{{ systemMappings[item.key] ? "已启用" : "未启用" }}</span>
                     </button>
                   </div>
                 </div>
@@ -518,30 +518,6 @@ onBeforeUnmount(() => window.removeEventListener("da:teacher-stage-changed", han
 
         <aside class="import-side">
           <section class="side-card panel-card">
-            <span class="section-eyebrow">当前进度</span>
-            <div class="side-progress">
-              <strong>{{ completionPercent }}%</strong>
-              <span>还差 {{ pendingItems.length }} 项待补充</span>
-            </div>
-            <div class="side-checks">
-              <article v-for="item in pendingItems" :key="item.key" class="side-check side-check--pending">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.desc }}</span>
-              </article>
-            </div>
-            <button class="side-toggle" type="button" @click="showCompleted = !showCompleted">
-              已完成 {{ completedItems.length }} 项
-              <span>{{ showCompleted ? "收起" : "展开" }}</span>
-            </button>
-            <div v-if="showCompleted" class="side-checks side-checks--done">
-              <article v-for="item in completedItems" :key="item.key" class="side-check side-check--done">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.desc }}</span>
-              </article>
-            </div>
-          </section>
-
-          <section class="side-card panel-card">
             <span class="section-eyebrow">课程摘要</span>
             <div class="side-summary">
               <div><small>课程</small><strong>{{ subject || "未选择课程" }}</strong></div>
@@ -560,56 +536,6 @@ onBeforeUnmount(() => window.removeEventListener("da:teacher-stage-changed", han
             </div>
           </section>
         </aside>
-      </section>
-
-      <section class="panel-card result-card">
-        <div class="result-card__head">
-          <div>
-            <span class="section-eyebrow">导入结果</span>
-            <h3>查看本次导入结果</h3>
-            <p>导入完成后，这里会显示成功数、失败数、画像更新状态与下一步建议。</p>
-          </div>
-          <HintButton size="small" tip="查看完整导入历史" @click="scrollToHistory">查看导入历史</HintButton>
-        </div>
-
-        <div v-if="!lastResult" class="result-strip">
-          暂无本次导入结果。完成一次导入后，这里会立即显示结果摘要与下一步动作。
-        </div>
-
-        <template v-else>
-          <div class="result-grid">
-            <div v-for="item in resultSummaryCards" :key="item.label" class="result-summary">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-            </div>
-          </div>
-
-          <div class="result-note">
-            <span>{{ lastResult.next_action }}</span>
-            <button class="ghost-btn" type="button" @click="openProfiles">去结果页复核</button>
-          </div>
-
-          <div v-if="lastResult.errors?.length" class="error-box">
-            <strong>错误预览</strong>
-            <span v-for="msg in lastResult.errors" :key="msg">{{ msg }}</span>
-          </div>
-        </template>
-      </section>
-
-      <section v-if="sourceSummaryCards.length" class="panel-card source-card-panel">
-        <div class="result-card__head">
-          <div>
-            <span class="section-eyebrow">系统汇总预览</span>
-            <h3>当前阶段可用数据规模</h3>
-            <p>帮助教师快速判断当前系统数据是否足够支撑阶段画像更新。</p>
-          </div>
-        </div>
-        <div class="result-grid">
-          <div v-for="item in sourceSummaryCards" :key="item.label" class="result-summary">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-          </div>
-        </div>
       </section>
 
       <section ref="historyAnchor" class="panel-card history-card">
@@ -873,6 +799,7 @@ onBeforeUnmount(() => window.removeEventListener("da:teacher-stage-changed", han
   gap: 14px;
   padding: 16px;
   text-align: left;
+  align-items: flex-start;
 }
 
 .source-card__meta {
@@ -886,6 +813,24 @@ onBeforeUnmount(() => window.removeEventListener("da:teacher-stage-changed", han
   margin-top: 2px;
   color: #16a34a;
   font-size: 18px;
+}
+
+.source-card__state {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.source-card.is-active .source-card__state {
+  background: rgba(34, 197, 94, 0.14);
+  color: #166534;
 }
 
 .upload-dropzone {

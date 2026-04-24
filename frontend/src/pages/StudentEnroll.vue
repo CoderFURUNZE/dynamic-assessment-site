@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { api } from "../api";
 import QueryToolbar from "../components/QueryToolbar.vue";
 import { getRole } from "../token";
@@ -47,6 +47,7 @@ const router = useRouter();
 const route = useRoute();
 const loading = ref(false);
 const applying = ref<number | null>(null);
+const cancelling = ref<number | null>(null);
 const courses = ref<EnrollableCourse[]>([]);
 const applications = ref<CourseApplication[]>([]);
 const notices = ref<Notice[]>([]);
@@ -172,6 +173,36 @@ async function applyCourse(course: EnrollableCourse) {
     ElMessage.error(e?.response?.data?.detail ?? "报名失败");
   } finally {
     applying.value = null;
+  }
+}
+
+async function cancelApplication(item: CourseApplication) {
+  if (isPreviewMode.value) {
+    ElMessage.warning("当前是管理员预览学生端，不能取消报名申请");
+    return;
+  }
+  if (normalizeStatus(item.status) !== "pending") {
+    ElMessage.warning("只有审核中的报名申请可以取消");
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(`确定取消《${item.course_title}》的报名申请吗？取消后可以重新提交。`, "取消报名", {
+      confirmButtonText: "确认取消",
+      cancelButtonText: "再想想",
+      type: "warning",
+    });
+  } catch {
+    return;
+  }
+  cancelling.value = item.id;
+  try {
+    await api.delete(`/enrollment/my/applications/${item.id}`);
+    ElMessage.success("已取消报名申请");
+    await loadAll();
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? "取消报名失败");
+  } finally {
+    cancelling.value = null;
   }
 }
 
@@ -303,7 +334,19 @@ onMounted(loadAll);
               <strong>{{ item.course_title }}</strong>
               <p>{{ item.created_at.replace('T', ' ').slice(0, 16) }}</p>
             </div>
-            <el-tag round>{{ appStatusLabel(item.status) }}</el-tag>
+            <div class="enroll-record-item__status">
+              <el-tag round>{{ appStatusLabel(item.status) }}</el-tag>
+              <el-button
+                v-if="normalizeStatus(item.status) === 'pending'"
+                size="small"
+                plain
+                type="danger"
+                :loading="cancelling === item.id"
+                @click="cancelApplication(item)"
+              >
+                取消报名
+              </el-button>
+            </div>
           </div>
 
           <div class="enroll-record-item__grid">
@@ -555,6 +598,14 @@ onMounted(loadAll);
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+}
+
+.enroll-record-item__status {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .enroll-course-card__title-block {

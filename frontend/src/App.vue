@@ -87,13 +87,13 @@ const activeNavKey = computed(() => {
     const tab = String(route.query.tab || "stages");
     if (tab === "indicators") return "teacher-evaluation-indicators";
     if (tab === "imports") return "teacher-evaluation-imports";
-    if (tab === "behavior") return "teacher-evaluation-behavior";
+    if (tab === "rules") return "teacher-evaluation-rules";
     return "teacher-evaluation-stages";
   }
   if (route.path.startsWith("/teacher/students")) {
     const tab = String(route.query.tab || "class");
     if (tab === "detail") return "teacher-students-detail";
-    if (tab === "rules") return "teacher-students-rules";
+    if (tab === "behavior") return "teacher-students-behavior";
     if (tab === "results") return "teacher-students-results";
     return "teacher-students-class";
   }

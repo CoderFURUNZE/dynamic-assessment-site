@@ -662,3 +662,15 @@
 2026-04-22 15:11:16,789 INFO app.audit actor=admin role=admin action=course_update detail=id=2 code=MATH-LA-002
 2026-04-22 15:11:20,550 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=MATH-GA-001
 2026-04-22 15:31:08,716 INFO app.audit actor=admin role=admin action=course_update detail=id=3 code=MATH-PR-003
+2026-04-23 16:37:19,991 INFO app.audit actor=teacher1 role=teacher action=stage_internal_behavior_apply detail=course_id=4 stage_id=1 success=0
+2026-04-23 16:37:36,678 INFO app.audit actor=teacher1 role=teacher action=stage_internal_summary_apply detail=course_id=4 stage_id=2 success=24 include_video=True include_practice=True include_mastery=True
+2026-04-23 16:38:25,546 INFO app.audit actor=teacher1 role=teacher action=stage_internal_summary_apply detail=course_id=4 stage_id=3 success=24 include_video=True include_practice=True include_mastery=True
+2026-04-23 16:39:20,232 INFO app.audit actor=teacher1 role=teacher action=stage_internal_behavior_apply detail=course_id=4 stage_id=3 success=77
+2026-04-23 16:42:43,021 INFO app.audit actor=teacher1 role=teacher action=persona_rule_update detail=subject=高等数学 grade=通用
+2026-04-24 14:54:03,858 INFO app.audit actor=teacher1 role=teacher action=final_score_confirm detail=user_id=45 subject=高等数学 confirmed_score=93
+2026-04-24 14:57:22,820 INFO app.audit actor=admin role=admin action=user_update detail=user_id=45
+2026-04-24 15:06:15,227 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=MATH-GA-001
+2026-04-24 15:06:36,724 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=MATH-GA-001
+2026-04-24 15:06:38,694 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=MATH-GA-001
+2026-04-24 15:11:20,997 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=MATH-GA-001
+2026-04-24 15:12:30,125 INFO app.audit actor=admin role=admin action=course_delete detail=id=2 code=MATH-LA-002

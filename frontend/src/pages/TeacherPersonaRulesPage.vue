@@ -28,16 +28,16 @@ async function loadCourses() {
 function syncQuery() {
   const nextQuery = { ...buildTeacherSubjectQuery(subject.value), tab: "rules" };
   const currentSubject = String(route.query.subject || "").trim();
-  const currentTab = String(route.query.tab || "class").trim();
+  const currentTab = String(route.query.tab || "stages").trim();
   if (
-    route.path === "/teacher/students"
+    route.path === "/teacher/evaluation"
     && currentSubject === String(nextQuery.subject || "").trim()
     && currentTab === "rules"
   ) {
     return;
   }
   saveTeacherSubject(subject.value);
-  router.replace({ path: "/teacher/students", query: nextQuery });
+  router.replace({ path: "/teacher/evaluation", query: nextQuery });
 }
 
 watch(subject, () => syncQuery());

@@ -12,6 +12,8 @@ type Course = {
   title: string;
   active?: boolean;
   enroll_status?: string;
+  completed?: boolean;
+  learning_available?: boolean;
 };
 type KP = { id: number; code: string; title: string; chapter?: string };
 type WorkspaceState = {
@@ -58,6 +60,7 @@ const workspaceState = ref<WorkspaceState>({
 
 const isStandaloneWorkspace = computed(() => Boolean(route.meta?.standaloneWorkspace));
 const currentCourse = computed(() => courses.value.find((item) => item.title === subject.value) ?? null);
+const learningCourses = computed(() => courses.value.filter((item) => item.completed !== true && item.learning_available !== false));
 const currentKp = computed(() => kps.value.find((item) => item.id === currentKpId.value) ?? null);
 
 const recommendationLabel = computed(() => reco.value?.target_kp?.title || "继续完成当前知识点");
@@ -164,14 +167,19 @@ async function loadCourses() {
       title: String(item.title || ""),
       active: item.active !== false,
       enroll_status: String(item.enroll_status || ""),
+      completed: item.completed === true,
+      learning_available: item.learning_available !== false,
     }));
     const routeSubject = String(route.query.subject || "").trim();
-    const titles = new Set(courses.value.map((item) => item.title));
-    const nextSubject = routeSubject && !titles.has(routeSubject)
+    const learningTitles = new Set(learningCourses.value.map((item) => item.title));
+    const nextSubject = routeSubject && !learningTitles.has(routeSubject)
       ? ""
       : resolveStudentSubject(routeSubject, subject.value, courses.value);
     subject.value = nextSubject;
-    if (!nextSubject) resetWorkspaceState();
+    if (!nextSubject) {
+      resetWorkspaceState();
+      if (routeSubject) ElMessage.info("该课程已结束，知识图谱不再开放学习，可前往学习报告查看结果。");
+    }
   } catch (e: any) {
     resetWorkspaceState();
     if (e?.response?.status === 401) return;
@@ -336,7 +344,7 @@ onMounted(refreshWorkspace);
           :disabled="courses.length === 0"
           @change="handleCourseChange"
         >
-          <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
+          <el-option v-for="course in learningCourses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
         <button class="graph-page__toolbar-btn" type="button" @click="refreshWorkspace">刷新</button>
         <button class="graph-page__toolbar-btn" type="button" @click="openFullscreenGraph">全屏图谱</button>
@@ -359,6 +367,7 @@ onMounted(refreshWorkspace);
     <section class="graph-page__content">
       <section class="graph-page__workspace">
         <KnowledgeGraphWorkspace
+          v-if="subject"
           embedded
           actor-mode="student"
           :subject="subject"
@@ -372,6 +381,13 @@ onMounted(refreshWorkspace);
           @open-content="openStudentKpContent"
           @state-change="handleStateChange"
         />
+        <div v-else class="graph-page__ended-state">
+          <strong>当前没有可继续学习的课程</strong>
+          <p>老师已结束课程后，知识图谱会停止开放学习。你仍可以在学习报告中查看本学期结果。</p>
+          <button type="button" class="graph-page__toolbar-btn graph-page__toolbar-btn--primary" @click="router.push({ path: '/student/report' })">
+            查看学习报告
+          </button>
+        </div>
       </section>
 
       <aside class="graph-page__side">
@@ -657,6 +673,31 @@ onMounted(refreshWorkspace);
   background: transparent;
   box-shadow: none;
   min-width: 0;
+}
+
+.graph-page__ended-state {
+  min-height: var(--graph-panel-height);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 32px;
+  text-align: center;
+  border-radius: 22px;
+  border: 1px dashed var(--graph-theme-border);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.graph-page__ended-state strong {
+  color: #0f172a;
+  font-size: 22px;
+}
+
+.graph-page__ended-state p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--graph-theme-ink-soft);
+  line-height: 1.7;
 }
 
 .graph-page__side {

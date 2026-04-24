@@ -68,7 +68,7 @@ export const appNavigation: Record<"student" | "teacher" | "admin", AppNavItem[]
         { key: "teacher-evaluation-stages", label: "阶段设置", path: "/teacher/evaluation?tab=stages", icon: Files },
         { key: "teacher-evaluation-indicators", label: "指标配置", path: "/teacher/evaluation?tab=indicators", icon: Setting },
         { key: "teacher-evaluation-imports", label: "数据导入", path: "/teacher/evaluation?tab=imports", icon: Plus },
-        { key: "teacher-evaluation-behavior", label: "结果查看", path: "/teacher/evaluation?tab=behavior", icon: Histogram },
+        { key: "teacher-evaluation-rules", label: "课程画像规则", path: "/teacher/evaluation?tab=rules", icon: DataAnalysis },
       ],
     },
     {
@@ -79,7 +79,7 @@ export const appNavigation: Record<"student" | "teacher" | "admin", AppNavItem[]
       children: [
         { key: "teacher-students-class", label: "班级总览", path: "/teacher/students?tab=class", icon: Histogram },
         { key: "teacher-students-detail", label: "学生详情", path: "/teacher/students?tab=detail", icon: User },
-        { key: "teacher-students-rules", label: "课程画像规则", path: "/teacher/students?tab=rules", icon: DataAnalysis },
+        { key: "teacher-students-behavior", label: "结果查看", path: "/teacher/students?tab=behavior", icon: DataAnalysis },
         { key: "teacher-students-results", label: "画像结果", path: "/teacher/students?tab=results", icon: Document },
       ],
     },

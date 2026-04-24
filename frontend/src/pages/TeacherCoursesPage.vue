@@ -21,6 +21,7 @@ type CourseRow = {
   activated?: boolean;
   can_activate?: boolean;
   can_finish?: boolean;
+  can_restore?: boolean;
   can_exit?: boolean;
   teaching_status?: string | null;
 };
@@ -140,6 +141,35 @@ async function finishCourse(row: CourseRow) {
     await loadCatalog();
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.detail ?? "结束课程失败");
+  } finally {
+    actioningKey.value = "";
+  }
+}
+
+async function restoreCourse(row: CourseRow) {
+  if (actioningKey.value) return;
+  try {
+    await ElMessageBox.confirm(
+      `恢复后，《${row.title}》会重新进入授课中，学生端知识图谱也会重新开放。确定恢复这门课程吗？`,
+      "恢复授课",
+      {
+        type: "warning",
+        confirmButtonText: "确认恢复",
+        cancelButtonText: "取消",
+      },
+    );
+  } catch {
+    return;
+  }
+  const actionKey = `restore-${row.id}`;
+  actioningKey.value = actionKey;
+  try {
+    await api.post(`/graph/teacher/courses/${row.id}/restore`);
+    ElMessage.success("课程已恢复授课");
+    activePanel.value = "teaching";
+    await loadCatalog();
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail ?? "恢复课程失败");
   } finally {
     actioningKey.value = "";
   }
@@ -290,6 +320,16 @@ onMounted(loadCatalog);
             >
               <el-icon class="el-icon--left"><CircleCheck /></el-icon>
               结束课程
+            </el-button>
+            <el-button
+              v-if="activePanel === 'finished' && row.can_restore"
+              class="teacher-course-card__activate-btn"
+              type="primary"
+              round
+              :loading="actioningKey === `restore-${row.id}`"
+              @click="restoreCourse(row)"
+            >
+              恢复授课
             </el-button>
             <el-button
               v-if="activePanel === 'finished' && row.can_exit"

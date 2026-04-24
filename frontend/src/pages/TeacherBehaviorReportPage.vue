@@ -5,7 +5,6 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { api } from "../api";
 import HintButton from "../components/HintButton.vue";
-import TeacherIntroHero from "../components/TeacherIntroHero.vue";
 import { buildTeacherSubjectQuery, resolveTeacherSubject, saveTeacherSubject } from "../utils/teacherCourse";
 
 type Course = { id: number; code: string; title: string };
@@ -248,18 +247,18 @@ function syncQuery() {
     stage_id: stageId ? String(stageId) : undefined,
   });
   const currentSubject = String(route.query.subject || "").trim();
-  const currentTab = String(route.query.tab || "stages").trim();
+  const currentTab = String(route.query.tab || "class").trim();
   const currentStageId = String(route.query.stage_id || "").trim();
   const nextStageId = String(nextQuery.stage_id || "").trim();
   if (
-    route.path === "/teacher/evaluation"
+    route.path === "/teacher/students"
     && currentSubject === String(nextQuery.subject || "").trim()
     && currentTab === "behavior"
     && currentStageId === nextStageId
   ) {
     return;
   }
-  router.replace({ path: "/teacher/evaluation", query: nextQuery });
+  router.replace({ path: "/teacher/students", query: nextQuery });
 }
 async function refresh() {
   loading.value = true;
@@ -376,15 +375,8 @@ onMounted(async () => {
 
 <template>
   <div class="report-page">
-    <TeacherIntroHero eyebrow="阶段评价" title="结果查看" pill="结果查看" />
-
     <section class="report-toolbar">
       <div class="report-toolbar__context">
-        <div class="page-copy">
-          <span class="page-copy__eyebrow">阶段评价</span>
-          <h1>结果查看</h1>
-          <p>查看当前阶段的行为画像、风险分布与重点学生情况</p>
-        </div>
         <div class="toolbar-field">
           <label>课程</label>
           <el-select v-model="subject" class="toolbar-field__select" placeholder="选择课程" size="large">
@@ -534,7 +526,7 @@ onMounted(async () => {
 
     <section ref="detailTableAnchor" class="detail-section">
       <div class="section-heading">
-        <div><span class="section-heading__eyebrow">学生行为明细</span><h2>最后看明细表</h2></div>
+        <div><span class="section-heading__eyebrow">学生行为明细</span></div>
         <div class="filter-pills">
           <button v-for="item in detailFilterOptions" :key="item.value" type="button" class="filter-pill" :class="{ 'is-active': activeRiskFilter === item.value }" @click="activeRiskFilter = item.value">{{ item.label }}</button>
         </div>
@@ -573,11 +565,9 @@ onMounted(async () => {
 .analysis-side { display: grid; gap: 18px; }
 .report-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .report-toolbar__context { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-.page-copy { display: grid; gap: 6px; }
-.page-copy__eyebrow, .section-heading__eyebrow, .panel-heading__eyebrow { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #586537; }
-.page-copy h1, .section-heading h2, .panel-heading h3 { margin: 0; color: #1f2937; }
-.page-copy h1 { font-size: 22px; line-height: 1.1; }
-.page-copy p, .section-heading p, .panel-heading p { margin: 0; color: #6a7280; font-size: 12px; }
+.section-heading__eyebrow, .panel-heading__eyebrow { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #586537; }
+.section-heading h2, .panel-heading h3 { margin: 0; color: #1f2937; }
+.section-heading p, .panel-heading p { margin: 0; color: #6a7280; font-size: 12px; }
 .toolbar-field { display: grid; gap: 6px; min-width: 240px; }
 .toolbar-field label { font-size: 12px; color: #7c5e3d; font-weight: 700; }
 .toolbar-field__select { width: min(320px, 100%); }

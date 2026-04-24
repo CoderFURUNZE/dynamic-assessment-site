@@ -202,7 +202,7 @@ onMounted(async () => {
       <HintButton tip="切换到学期收口页，继续处理最终评分确认。" @click="router.push({ path: '/teacher/review', query: { ...buildTeacherSubjectQuery(subject), tab: 'final' } })">
         最终评分确认
       </HintButton>
-      <el-button type="primary" @click="loadRows">刷新列表</el-button>
+      <button type="button" class="refresh-list-button" @click="loadRows">刷新列表</button>
     </WorkspaceTopbar>
 
     <section class="review-overview panel-card">
@@ -495,6 +495,30 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.refresh-list-button {
+  appearance: none;
+  border: none;
+  min-width: 118px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 38px;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 10px 18px rgba(34, 197, 94, 0.22);
+}
+
+.refresh-list-button:hover,
+.refresh-list-button:focus-visible {
+  outline: none;
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  color: #ffffff;
 }
 
 .review-table-card :deep(.el-table) {

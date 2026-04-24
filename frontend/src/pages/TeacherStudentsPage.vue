@@ -80,7 +80,8 @@ onMounted(loadCourses);
       </template>
       <template #actions>
         <el-button @click="router.push({ path: '/teacher/students', query: { ...buildTeacherSubjectQuery(subject), tab: 'class' } })">班级总览</el-button>
-        <el-button type="primary" @click="router.push({ path: '/teacher/students', query: { ...buildTeacherSubjectQuery(subject), tab: 'results' } })">画像结果</el-button>
+        <el-button type="primary">学生详情</el-button>
+        <el-button @click="router.push({ path: '/teacher/students', query: { ...buildTeacherSubjectQuery(subject), tab: 'results' } })">画像结果</el-button>
       </template>
     </TeacherWorkspaceHero>
 
