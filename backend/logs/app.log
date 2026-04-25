@@ -674,3 +674,5 @@
 2026-04-24 15:06:38,694 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=MATH-GA-001
 2026-04-24 15:11:20,997 INFO app.audit actor=admin role=admin action=course_update detail=id=1 code=MATH-GA-001
 2026-04-24 15:12:30,125 INFO app.audit actor=admin role=admin action=course_delete detail=id=2 code=MATH-LA-002
+2026-04-24 16:30:46,812 INFO app.audit actor=admin role=admin action=course_delete detail=id=1 code=MATH-GA-001
+2026-04-24 16:58:07,490 INFO app.audit actor=admin role=admin action=course_update detail=id=4 code=HM
