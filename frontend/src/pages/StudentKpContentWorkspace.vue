@@ -11,6 +11,7 @@ type KpInfo = {
   code: string;
   title: string;
   chapter?: string;
+  is_terminal?: boolean;
 };
 
 type ResourceItem = {
@@ -65,6 +66,12 @@ type RecoData = {
   reason_summary: string;
   recommendation_stage_label?: string;
   advice_text: string;
+  student_message?: string;
+  teacher_explanation?: string;
+  recommendation_source?: string;
+  personalized_path?: Array<{ kp_id?: number; id?: number; title?: string; action?: string }>;
+  ai_enhanced?: Record<string, any>;
+  course_completion?: { enabled?: boolean; completed?: boolean; completed_terminal_title?: string };
 };
 
 type WorkspaceView = "overview" | "resource" | "practice" | "review" | "next";
@@ -74,8 +81,8 @@ const route = useRoute();
 const router = useRouter();
 
 const loading = ref(false);
-const activeView = ref<WorkspaceView>("resource");
-const workflowSteps: WorkspaceView[] = ["overview", "resource", "practice", "review", "next"];
+const activeView = ref<WorkspaceView>("practice");
+const workflowSteps: WorkspaceView[] = ["practice", "next"];
 const detail = ref<NodeDetail | null>(null);
 const reco = ref<RecoData | null>(null);
 const lastRecommendedTargetId = ref<number | null>(null);
@@ -122,12 +129,32 @@ const recommendationContext = computed(() => {
     isCurrentTarget,
     label: reco.value.recommendation_stage_label || "当前推荐",
     reason: reco.value.reason_summary,
-    advice: reco.value.advice_text,
+    advice: reco.value.student_message || reco.value.advice_text,
   };
 });
+const personalizedPathItems = computed(() => {
+  const raw = Array.isArray(reco.value?.personalized_path) ? reco.value?.personalized_path ?? [] : [];
+  const items = raw
+    .map((item, index) => {
+      const id = Number(item.kp_id ?? item.id ?? 0);
+      const title = String(item.title || "").trim();
+      const action = String(item.action || "").trim();
+      if (!id && !title) return null;
+      return {
+        id,
+        title: title || (id ? `知识点 ${id}` : `路径节点 ${index + 1}`),
+        action,
+      };
+    })
+    .filter((item): item is { id: number; title: string; action: string } => Boolean(item));
+  if (items.length > 0) return items;
+  const target = reco.value?.target_kp;
+  return target?.id ? [{ id: Number(target.id), title: target.title, action: "进入系统推荐知识点" }] : [];
+});
+const recommendationSourceLabel = computed(() => (reco.value?.recommendation_source === "bailian" ? "百炼增强" : "规则推荐"));
+const courseCompleted = computed(() => Boolean(reco.value?.course_completion?.completed));
 
 const closureDoneCount = computed(() => [closureState.resourceDone, closureState.practiceDone].filter(Boolean).length);
-const closureReady = computed(() => closureDoneCount.value >= 2);
 const stats = computed(() => ({
   learning: learningResources.value.length,
   practice: detail.value?.practice_list?.length ?? 0,
@@ -135,6 +162,7 @@ const stats = computed(() => ({
 }));
 const navigation = computed(() => detail.value?.navigation ?? null);
 const masteryPercent = computed(() => Math.round(Number(detail.value?.overlay?.mastery ?? 0) * 100));
+const closureReady = computed(() => masteryPercent.value >= 70);
 const masteryStatus = computed(() => {
   const raw = String(detail.value?.overlay?.status || "").toLowerCase();
   if (raw === "mastered") return "已掌握";
@@ -350,7 +378,10 @@ async function loadRecommendation(options: { notifyOnChange?: boolean } = {}) {
   if (!kpId.value) return;
   try {
     const previousTargetId = reco.value?.target_kp?.id ?? lastRecommendedTargetId.value ?? null;
-    const res = await api.get(`/reco?kp_id=${kpId.value}`);
+    const res = await api.get("/reco", {
+      params: { kp_id: kpId.value, ai: false },
+      skipGlobalLoading: true,
+    } as any);
     reco.value = res.data ?? null;
     const nextTargetId = reco.value?.target_kp?.id ?? null;
     lastRecommendedTargetId.value = nextTargetId;
@@ -419,6 +450,11 @@ watch(kpId, async () => {
             <span>{{ masterySummary }}</span>
           </div>
         </div>
+      </div>
+
+      <div class="student-kp-page__hero-progress" :style="{ '--mastery': `${masteryPercent}%` }">
+        <strong>{{ masteryPercent }}%</strong>
+        <span>{{ masteryStatus }}</span>
       </div>
 
       <div class="student-kp-page__hero-actions">
@@ -530,10 +566,27 @@ watch(kpId, async () => {
 
         <section v-if="activeView === 'overview'" class="student-kp-page__panel-grid">
           <article v-if="recommendationContext" class="student-kp-page__info-card">
-            <span class="student-kp-page__section-eyebrow">推荐说明</span>
+            <span class="student-kp-page__section-eyebrow">推荐说明 · {{ recommendationSourceLabel }}</span>
             <h3>{{ recommendationContext.label }}</h3>
             <p>{{ recommendationContext.reason }}</p>
             <p>{{ recommendationContext.advice }}</p>
+            <p v-if="courseCompleted" class="student-kp-page__complete-note">
+              已完成终点知识点“{{ reco?.course_completion?.completed_terminal_title || reco?.target_kp?.title }}”，课程已达标，可进入学习报告查看评分结果。
+            </p>
+            <div v-if="personalizedPathItems.length" class="student-kp-page__path-list">
+              <button
+                v-for="(item, index) in personalizedPathItems"
+                :key="`${item.id || item.title}-${index}`"
+                class="student-kp-page__path-item"
+                type="button"
+                :disabled="!item.id"
+                @click="item.id && goToKp(item.id)"
+              >
+                <span>{{ index + 1 }}</span>
+                <strong>{{ item.title }}</strong>
+                <small>{{ item.action || (index === 0 ? "优先学习" : "继续推进") }}</small>
+              </button>
+            </div>
             <button class="student-kp-page__btn" type="button" @click="switchView('resource')">开始资源学习</button>
           </article>
 
@@ -572,10 +625,27 @@ watch(kpId, async () => {
           <template #header>下一步建议</template>
 
           <section v-if="recommendationContext" class="student-kp-page__next-card">
-            <span class="student-kp-page__section-eyebrow">推荐学习</span>
+            <span class="student-kp-page__section-eyebrow">推荐学习 · {{ recommendationSourceLabel }}</span>
             <h3>{{ recommendationContext.label }}</h3>
             <p>{{ recommendationContext.reason }}</p>
             <p>{{ recommendationContext.advice }}</p>
+            <p v-if="courseCompleted" class="student-kp-page__complete-note">
+              课程已达标，可进入学习报告查看评分结果。
+            </p>
+            <div v-if="personalizedPathItems.length" class="student-kp-page__path-list student-kp-page__path-list--compact">
+              <button
+                v-for="(item, index) in personalizedPathItems"
+                :key="`${item.id || item.title}-${index}`"
+                class="student-kp-page__path-item"
+                type="button"
+                :disabled="!item.id"
+                @click="item.id && goToKp(item.id)"
+              >
+                <span>{{ index + 1 }}</span>
+                <strong>{{ item.title }}</strong>
+                <small>{{ item.action || "学习路径节点" }}</small>
+              </button>
+            </div>
             <button class="student-kp-page__btn student-kp-page__btn--primary" type="button" @click="goToRecommendedTarget">
               {{ recommendationContext.isCurrentTarget ? "继续学习当前推荐点" : "跳转到系统推荐点" }}
             </button>
@@ -680,13 +750,14 @@ watch(kpId, async () => {
 
 <style scoped>
 .student-kp-page {
-  min-height: 100vh;
-  max-width: 1480px;
+  min-height: calc(100vh - 96px);
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 20px 20px 28px;
+  padding: 18px 20px 32px;
   display: grid;
-  gap: 18px;
+  gap: 14px;
   min-width: 0;
+  color: #102033;
 }
 
 .student-kp-page__hero,
@@ -698,29 +769,29 @@ watch(kpId, async () => {
 .student-kp-page__side-card,
 .student-kp-page__card,
 .student-kp-page__bottom-nav {
-  border-radius: 22px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  border: 1px solid #dbe4ee;
   background: #ffffff;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
   min-width: 0;
   max-width: 100%;
 }
 
 .student-kp-page__hero {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 118px auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 22px 24px;
+  gap: 20px;
+  padding: 24px;
   background:
-    radial-gradient(circle at top left, rgba(219, 234, 254, 0.32), transparent 24%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    linear-gradient(135deg, rgba(239, 246, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 50%, rgba(240, 253, 244, 0.9) 100%),
+    #ffffff;
 }
 
 .student-kp-page__hero-copy {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -734,34 +805,54 @@ watch(kpId, async () => {
 .student-kp-page__btn {
   min-height: 40px;
   padding: 0 18px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  border: 1px solid #d7e0ea;
   background: #ffffff;
-  color: #334155;
+  color: #243449;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.student-kp-page__back {
+  align-self: flex-start;
+  white-space: nowrap;
+}
+
+.student-kp-page__back:hover,
+.student-kp-page__btn:hover:not(:disabled) {
+  border-color: #9fb2c8;
+  background: #f8fbff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.student-kp-page__btn:disabled,
+.student-kp-page__chapter-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  box-shadow: none;
 }
 
 .student-kp-page__eyebrow,
 .student-kp-page__section-eyebrow {
   display: inline-flex;
+  align-items: center;
   width: fit-content;
   padding: 6px 12px;
-  border-radius: 999px;
-  background: #eefbf3;
-  border: 1px solid rgba(34, 197, 94, 0.18);
-  color: #166534;
+  border-radius: 8px;
+  background: #ecfdf3;
+  border: 1px solid #b9ebc8;
+  color: #0f6b2f;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 900;
 }
 
 .student-kp-page__hero-text h1 {
   margin: 0;
-  font-size: clamp(28px, 4vw, 42px);
-  line-height: 1.04;
-  letter-spacing: -0.04em;
-  color: #1f2937;
+  font-size: 34px;
+  line-height: 1.12;
+  color: #102033;
   overflow-wrap: anywhere;
 }
 
@@ -773,27 +864,28 @@ watch(kpId, async () => {
 .student-kp-page__next-card p,
 .student-kp-page__task-item p {
   margin: 0;
-  color: #6b7280;
-  line-height: 1.7;
+  color: #5e6e82;
+  line-height: 1.65;
 }
 
 .student-kp-page__hero-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .student-kp-page__hero-meta span,
 .student-kp-page__task-code,
 .student-kp-page__status-pill {
   display: inline-flex;
+  align-items: center;
   padding: 7px 12px;
-  border-radius: 999px;
-  background: #f8fafc;
-  color: #475569;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: #f6f9fc;
+  color: #334155;
+  border: 1px solid #dbe4ee;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .student-kp-page__hero-actions,
@@ -805,16 +897,52 @@ watch(kpId, async () => {
   align-items: center;
 }
 
+.student-kp-page__hero-actions {
+  justify-content: flex-end;
+}
+
+.student-kp-page__hero-progress {
+  width: 104px;
+  height: 104px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  background:
+    radial-gradient(circle at center, #ffffff 0 56%, transparent 57%),
+    conic-gradient(#22c55e var(--mastery), #dce7f2 0);
+  color: #102033;
+  box-shadow: inset 0 0 0 1px #dbe4ee, 0 12px 26px rgba(34, 197, 94, 0.16);
+}
+
+.student-kp-page__hero-progress strong {
+  font-size: 25px;
+  line-height: 1;
+}
+
+.student-kp-page__hero-progress span {
+  color: #5e6e82;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .student-kp-page__btn--primary {
-  border-color: rgba(34, 197, 94, 0.24);
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  border-color: #16a34a;
+  background: #18b957;
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(24, 185, 87, 0.22);
+}
+
+.student-kp-page__btn--primary:hover:not(:disabled) {
+  background: #129447;
+  border-color: #129447;
   color: #ffffff;
 }
 
 .student-kp-page__stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -824,16 +952,31 @@ watch(kpId, async () => {
 .student-kp-page__chapter-nav,
 .student-kp-page__info-card,
 .student-kp-page__side-card {
-  padding: 20px 22px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  padding: 18px;
+  background: #ffffff;
 }
 
 .student-kp-page__stat-card {
   display: grid;
-  gap: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 18px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label value"
+    "hint value";
+  gap: 4px 12px;
+  align-items: center;
+  border-left: 4px solid #60a5fa;
+}
+
+.student-kp-page__stat-card:nth-child(2) {
+  border-left-color: #22c55e;
+}
+
+.student-kp-page__stat-card:nth-child(3) {
+  border-left-color: #f59e0b;
+}
+
+.student-kp-page__stat-card:nth-child(4) {
+  border-left-color: #8b5cf6;
 }
 
 .student-kp-page__stat-card span,
@@ -841,39 +984,57 @@ watch(kpId, async () => {
 .student-kp-page__workflow-card span,
 .student-kp-page__workflow-card small,
 .student-kp-page__side-metrics small {
-  color: #6b7280;
+  color: #5e6e82;
   font-size: 13px;
+}
+
+.student-kp-page__stat-card span {
+  grid-area: label;
+  font-weight: 900;
+}
+
+.student-kp-page__stat-card small {
+  grid-area: hint;
 }
 
 .student-kp-page__stat-card strong,
 .student-kp-page__side-metrics strong {
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.1;
-  color: #1f2937;
+  color: #102033;
+}
+
+.student-kp-page__stat-card strong {
+  grid-area: value;
 }
 
 .student-kp-page__workflow {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px;
+  gap: 8px;
   min-width: 0;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid #dbe4ee;
+  background: #f6f9fc;
 }
 
 .student-kp-page__workflow-card {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   text-align: left;
   cursor: pointer;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  padding: 13px 14px;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .student-kp-page__workflow-card.active {
-  border-color: rgba(34, 197, 94, 0.24);
-  background: #eefbf3;
-  box-shadow: 0 8px 14px rgba(15, 23, 42, 0.06);
+  border-color: #b9ebc8;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
 .student-kp-page__workflow-card.disabled {
@@ -886,15 +1047,17 @@ watch(kpId, async () => {
 .student-kp-page__info-card h3,
 .student-kp-page__next-card h3,
 .student-kp-page__side-card h3 {
-  color: #1f2937;
+  color: #102033;
   overflow-wrap: anywhere;
 }
 
 .student-kp-page__task-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 18px;
+  padding: 22px;
+  border-top: 4px solid #2563eb;
 }
 
 .student-kp-page__task-copy,
@@ -914,13 +1077,21 @@ watch(kpId, async () => {
   min-width: 0;
 }
 
+.student-kp-page__task-head h2,
+.student-kp-page__chapter-head h3,
+.student-kp-page__info-card h3,
+.student-kp-page__next-card h3,
+.student-kp-page__side-card h3 {
+  margin: 0;
+}
+
 .student-kp-page__progress-head {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   font-size: 14px;
-  color: #6b7280;
-  font-weight: 700;
+  color: #5e6e82;
+  font-weight: 800;
 }
 
 .student-kp-page__chapter-head {
@@ -944,25 +1115,25 @@ watch(kpId, async () => {
 .student-kp-page__chapter-chip,
 .student-kp-page__tag-list button,
 .student-kp-page__checklist span {
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  border: 1px solid #dbe4ee;
   background: #f8fafc;
-  color: #475569;
+  color: #334155;
   padding: 8px 12px;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .student-kp-page__chapter-chip.active,
 .student-kp-page__checklist span.done {
-  border-color: rgba(34, 197, 94, 0.24);
-  background: #eefbf3;
-  color: #166534;
+  border-color: #b9ebc8;
+  background: #ecfdf3;
+  color: #0f6b2f;
 }
 
 .student-kp-page__content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 18px;
   align-items: start;
   min-width: 0;
@@ -974,7 +1145,7 @@ watch(kpId, async () => {
 
 .student-kp-page__main {
   display: grid;
-  gap: 18px;
+  gap: 14px;
   min-width: 0;
 }
 
@@ -987,10 +1158,10 @@ watch(kpId, async () => {
 
 .student-kp-page__card :deep(.el-card__header) {
   padding: 18px 20px 14px;
-  border-bottom: 1px solid rgba(31, 41, 55, 0.1);
+  border-bottom: 1px solid #e6edf5;
   font-weight: 800;
-  color: #1f2937;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #102033;
+  background: #f8fbff;
 }
 
 .student-kp-page__card :deep(.el-card__body) {
@@ -998,7 +1169,7 @@ watch(kpId, async () => {
 }
 
 .student-kp-page__empty {
-  color: #6b7280;
+  color: #5e6e82;
   font-size: 13px;
   padding: 6px 0;
 }
@@ -1010,28 +1181,102 @@ watch(kpId, async () => {
   min-width: 0;
 }
 
-.student-kp-page__link-list a {
-  text-decoration: none;
-  color: #334155;
-  border: 1.5px solid rgba(31, 41, 55, 0.14);
-  border-radius: 18px;
-  padding: 12px 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+.student-kp-page__path-list {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0;
+  min-width: 0;
+}
+
+.student-kp-page__path-list--compact {
+  gap: 6px;
+}
+
+.student-kp-page__path-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 2px 10px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid #c9ead4;
+  border-radius: 8px;
+  background: #f7fdf9;
+  padding: 11px 12px;
+  color: #102033;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.student-kp-page__path-item:hover:not(:disabled) {
+  border-color: #22c55e;
+  background: #ecfdf3;
+}
+
+.student-kp-page__path-item:disabled {
+  cursor: default;
+}
+
+.student-kp-page__path-item span {
+  grid-row: span 2;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #16a34a;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.student-kp-page__path-item strong,
+.student-kp-page__path-item small {
   overflow-wrap: anywhere;
 }
 
+.student-kp-page__path-item small {
+  color: #5e6e82;
+  font-size: 12px;
+}
+
+.student-kp-page__complete-note {
+  border: 1px solid #b9ebc8;
+  border-radius: 8px;
+  background: #ecfdf3;
+  color: #0f6b2f;
+  padding: 10px 12px;
+  font-weight: 700;
+}
+
+.student-kp-page__link-list a {
+  text-decoration: none;
+  color: #243449;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #ffffff;
+  overflow-wrap: anywhere;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.student-kp-page__link-list a:hover {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
 .student-kp-page__task-item {
-  border: 1.5px solid rgba(31, 41, 55, 0.14);
-  border-radius: 20px;
+  border: 1px solid #dbe4ee;
+  border-radius: 8px;
   padding: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: #ffffff;
   display: grid;
   gap: 8px;
   min-width: 0;
 }
 
 .student-kp-page__task-item strong {
-  color: #1f2937;
+  color: #102033;
   font-size: 15px;
 }
 
@@ -1048,7 +1293,7 @@ watch(kpId, async () => {
 
 .student-kp-page__section h3 {
   margin: 0;
-  color: #1f2937;
+  color: #102033;
   font-size: 16px;
 }
 
@@ -1059,14 +1304,14 @@ watch(kpId, async () => {
 
 .student-kp-page__bottom-hint {
   flex: 1;
-  color: #6b7280;
+  color: #5e6e82;
   font-size: 13px;
   line-height: 1.7;
 }
 
 .student-kp-page__side {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   position: sticky;
   top: 18px;
 }
@@ -1075,6 +1320,28 @@ watch(kpId, async () => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.student-kp-page__side-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f6f9fc;
+  border: 1px solid #e6edf5;
+}
+
+.student-kp-page :deep(.el-progress-bar__outer) {
+  background-color: #e6edf5;
+}
+
+.student-kp-page :deep(.el-progress-bar__inner) {
+  background: linear-gradient(90deg, #2563eb 0%, #22c55e 100%) !important;
+}
+
+.student-kp-page :deep(.quiz-pane),
+.student-kp-page :deep(.resource-pane) {
+  border-radius: 8px;
 }
 
 @media (max-width: 1180px) {
@@ -1092,6 +1359,11 @@ watch(kpId, async () => {
     grid-template-columns: 1fr;
   }
 
+  .student-kp-page__hero-progress,
+  .student-kp-page__hero-actions {
+    justify-self: start;
+  }
+
   .student-kp-page__side {
     position: static;
   }
@@ -1104,6 +1376,7 @@ watch(kpId, async () => {
 
   .student-kp-page__hero-copy {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .student-kp-page__hero-actions,

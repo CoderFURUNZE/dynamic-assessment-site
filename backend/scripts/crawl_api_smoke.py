@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from urllib.error import HTTPError
 from urllib.parse import quote
@@ -16,6 +17,17 @@ def post_json(path: str, payload: dict) -> dict:
     req = Request(f"{BASE}{path}", data=data, headers={"Content-Type": "application/json"}, method="POST")
     with urlopen(req, timeout=15) as resp:
         return json.loads(resp.read().decode())
+
+
+def login(username: str, password: str, *, staff: bool = False) -> str:
+    paths = ["/auth/login/admin", "/auth/login"] if staff else ["/auth/login", "/auth/login/admin"]
+    last_error: Exception | None = None
+    for path in paths:
+        try:
+            return str(post_json(path, {"username": username, "password": password})["access_token"])
+        except Exception as exc:
+            last_error = exc
+    raise RuntimeError(f"{username} login failed: {last_error}")
 
 
 def get_json(path_qs: str, token: str | None = None) -> tuple[int, object]:
@@ -70,9 +82,13 @@ def main() -> int:
         print("FAIL: no openapi")
         return 1
 
-    admin = post_json("/auth/login", {"username": "admin", "password": "admin123"})["access_token"]
-    teacher = post_json("/auth/login", {"username": "teacher1", "password": "teacher123"})["access_token"]
-    student = post_json("/auth/login", {"username": "student1", "password": "student123"})["access_token"]
+    admin = login(os.getenv("SMOKE_ADMIN_USER", "admin"), os.getenv("SMOKE_ADMIN_PASS", "admin123"), staff=True)
+    teacher = login(
+        os.getenv("SMOKE_TEACHER_USER", "teacher_demo"),
+        os.getenv("SMOKE_TEACHER_PASS", "123456"),
+        staff=True,
+    )
+    student = login(os.getenv("SMOKE_STUDENT_USER", "student_demo_1"), os.getenv("SMOKE_STUDENT_PASS", "123456"))
 
     failures: list[str] = []
     paths = spec.get("paths") or {}

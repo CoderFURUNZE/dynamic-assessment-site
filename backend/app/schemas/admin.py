@@ -95,6 +95,7 @@ class KnowledgePointIn(BaseModel):
     difficulty: float = 0.5
     pos_x: float | None = None
     pos_y: float | None = None
+    is_terminal: bool = False
 
 
 class KnowledgePointUpdateIn(BaseModel):
@@ -109,6 +110,7 @@ class KnowledgePointUpdateIn(BaseModel):
     difficulty: float | None = None
     pos_x: float | None = None
     pos_y: float | None = None
+    is_terminal: bool | None = None
 
 
 class KpResourceIn(BaseModel):

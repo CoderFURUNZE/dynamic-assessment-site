@@ -513,19 +513,35 @@ onBeforeUnmount(() => {
   margin-bottom: 12px;
 }
 
+.resource-pane__tabs :deep(.el-tabs__nav-scroll) {
+  display: flex;
+  align-items: center;
+}
+
+.resource-pane__tabs :deep(.el-tabs__nav) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .resource-pane__tabs :deep(.el-tabs__nav-wrap)::after,
 .resource-pane__tabs :deep(.el-tabs__active-bar) {
   display: none;
 }
 
 .resource-pane__tabs :deep(.el-tabs__item) {
-  min-height: 42px;
+  height: 44px;
+  min-height: 44px;
   border-radius: 999px;
   border: 1.5px solid rgba(31, 41, 55, 0.14);
   background: linear-gradient(180deg, #dff2fb 0%, #ebf8ff 100%);
   color: #1f2937;
-  padding: 6px 16px;
-  margin-right: 8px;
+  padding: 0 18px !important;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   transition: all 0.2s ease;
 }
 

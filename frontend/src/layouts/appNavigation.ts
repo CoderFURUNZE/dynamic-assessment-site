@@ -33,7 +33,7 @@ export const appNavigation: Record<"student" | "teacher" | "admin", AppNavItem[]
       icon: Monitor,
       children: [
         { key: "student-dashboard", label: "首页概览", path: "/student/dashboard", icon: House },
-        { key: "student-graph", label: "知识图谱", path: "/student/graph-workspace", icon: Share },
+        { key: "student-graph", label: "学习路径", path: "/student/graph-workspace", icon: Share },
       ],
     },
     {

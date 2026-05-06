@@ -90,18 +90,13 @@ def _ensure_user_columns() -> None:
 
 
 def _ensure_kp_practice_total_column() -> None:
-    inspector = inspect(engine)
-    try:
-        cols = {c["name"] for c in inspector.get_columns("knowledgepoint")}
-    except Exception:
-        return
-    if "practice_total" in cols:
-        return
-    try:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE knowledgepoint ADD COLUMN practice_total INTEGER"))
-    except Exception:
-        pass
+    _ensure_columns(
+        "knowledgepoint",
+        {
+            "practice_total": "practice_total INTEGER",
+            "is_terminal": "is_terminal BOOLEAN DEFAULT 0",
+        },
+    )
 
 
 def _ensure_question_meta_columns() -> None:

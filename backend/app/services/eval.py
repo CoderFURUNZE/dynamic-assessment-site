@@ -3,11 +3,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from statistics import mean
 
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, desc, select
 
 from app.db.models import (
     KnowledgeEdge,
     KnowledgePoint,
+    LearningBehaviorEvent,
     LearningResource,
     Mastery,
     RelationType,
@@ -15,6 +17,7 @@ from app.db.models import (
     ReviewSchedule,
     VideoProgress,
     PracticeAttempt,
+    Question,
     QuizAttempt,
 )
 
@@ -34,9 +37,7 @@ def _mastery_status(*, final_value: float, direct_value: float, activity_count: 
 
 
 def _resource_completion(session: Session, *, user_id: int, kp_id: int) -> float:
-    resources = session.exec(
-        select(LearningResource).where(LearningResource.kp_id == kp_id, LearningResource.type == ResourceType.video)
-    ).all()
+    resources = session.exec(select(LearningResource).where(LearningResource.kp_id == kp_id)).all()
     if not resources:
         return 0.0
     progress_map = {
@@ -45,14 +46,43 @@ def _resource_completion(session: Session, *, user_id: int, kp_id: int) -> float
             select(VideoProgress).where(VideoProgress.user_id == user_id, VideoProgress.kp_id == kp_id)
         ).all()
     }
-    completed = 0
+    visited_resource_ids: set[int] = set()
+    for event in session.exec(
+        select(LearningBehaviorEvent).where(
+            LearningBehaviorEvent.user_id == user_id,
+            LearningBehaviorEvent.kp_id == kp_id,
+            LearningBehaviorEvent.event_type.in_(["resource_visit", "resource_download"]),
+        )
+    ).all():
+        try:
+            import json
+
+            payload = json.loads(event.value_json or "{}")
+            resource_id = int(payload.get("resource_id") or 0)
+        except Exception:
+            resource_id = 0
+        if resource_id > 0:
+            visited_resource_ids.add(resource_id)
+
+    score = 0.0
+    counted = 0
     for resource in resources:
         if resource.id is None:
             continue
-        row = progress_map.get(int(resource.id))
-        if row is not None and row.completed:
-            completed += 1
-    return _clamp01(completed / len(resources))
+        counted += 1
+        resource_id = int(resource.id)
+        if resource.type == ResourceType.video:
+            row = progress_map.get(resource_id)
+            if row is None:
+                continue
+            if row.completed:
+                score += 1.0
+            elif row.duration_seconds and row.duration_seconds > 0:
+                score += _clamp01(float(row.watched_seconds or 0) / float(row.duration_seconds))
+            continue
+        if resource_id in visited_resource_ids:
+            score += 1.0
+    return _clamp01(score / counted) if counted else 0.0
 
 
 def _learning_frequency(session: Session, *, user_id: int, kp_id: int) -> float:
@@ -106,7 +136,6 @@ def upsert_mastery(session: Session, *, user_id: int, kp_id: int, subject: str, 
         select(PracticeAttempt)
         .where(PracticeAttempt.user_id == user_id, PracticeAttempt.kp_id == kp_id)
         .order_by(desc(PracticeAttempt.created_at))
-        .limit(20)
     ).all()
     quiz_rows = session.exec(
         select(QuizAttempt)
@@ -115,65 +144,65 @@ def upsert_mastery(session: Session, *, user_id: int, kp_id: int, subject: str, 
         .limit(5)
     ).all()
 
+    question_ids = session.exec(select(Question.id).where(Question.kp_id == kp_id).order_by(Question.id)).all()
+    available_questions = len([item for item in question_ids if item is not None])
+    required_questions = min(int(kp.practice_total or 5), available_questions) if available_questions else 0
+    required_questions = max(1, required_questions) if available_questions else 0
+    correct_question_ids = {int(row.question_id) for row in practice_rows if row.correct and row.question_id is not None}
+    practice_progress = _clamp01(len(correct_question_ids) / required_questions) if required_questions > 0 else 0.0
     practice_accuracy = mean(1.0 if row.correct else 0.0 for row in practice_rows) if practice_rows else 0.0
     quiz_accuracy = mean(float(row.score) for row in quiz_rows) if quiz_rows else 0.0
     resource_completion = _resource_completion(session, user_id=user_id, kp_id=kp_id)
     learning_frequency = _learning_frequency(session, user_id=user_id, kp_id=kp_id)
     review_completion = _review_completion(session, user_id=user_id, kp_id=kp_id)
 
-    direct_value = _clamp01(
-        0.30 * quiz_accuracy
-        + 0.35 * practice_accuracy
-        + 0.15 * resource_completion
-        + 0.10 * learning_frequency
-        + 0.10 * review_completion
-    )
-
-    prereq_edges = session.exec(
-        select(KnowledgeEdge).where(
-            KnowledgeEdge.next_id == kp_id,
-            KnowledgeEdge.relation_type == RelationType.prerequisite,
-        )
-    ).all()
-    if prereq_edges:
-        prereq_values: list[float] = []
-        for edge in prereq_edges:
-            mastery = session.exec(
-                select(Mastery).where(Mastery.user_id == user_id, Mastery.kp_id == edge.prereq_id)
-            ).first()
-            prereq_values.append(float(mastery.value) if mastery is not None else 0.0)
-        prereq_avg = mean(prereq_values) if prereq_values else 0.5
-    else:
-        prereq_avg = 0.5
-
-    final_value = _clamp01(0.80 * direct_value + 0.20 * prereq_avg)
-    activity_count = len(practice_rows) + len(quiz_rows)
+    assessment_value = max(practice_progress, quiz_accuracy)
+    process_value = max(learning_frequency, review_completion)
+    combined_value = _clamp01(assessment_value * 0.6 + resource_completion * 0.3 + process_value * 0.1)
+    direct_value = _clamp01(max(assessment_value, combined_value))
+    final_value = direct_value
+    activity_count = len(practice_rows) + len(quiz_rows) + (1 if resource_completion > 0 else 0)
     status = _mastery_status(final_value=final_value, direct_value=direct_value, activity_count=activity_count)
     reason_summary = (
         f"测验 {quiz_accuracy:.2f} / 练习 {practice_accuracy:.2f} / 资源 {resource_completion:.2f} / "
         f"频次 {learning_frequency:.2f} / 复习 {review_completion:.2f}"
     )
 
-    mastery = session.exec(select(Mastery).where(Mastery.user_id == user_id, Mastery.kp_id == kp_id)).first()
-    if mastery is None:
-        mastery = Mastery(
-            user_id=user_id,
-            kp_id=kp_id,
-            value=final_value,
-            direct_value=direct_value,
-            status=status,
-            reason_summary=reason_summary,
-            updated_at=datetime.utcnow(),
-        )
-    else:
+    reason_summary = (
+        f"练习进度 {len(correct_question_ids)}/{required_questions or available_questions} / "
+        f"练习正确率 {practice_accuracy:.2f}"
+    )
+
+    reason_summary = (
+        f"练习进度 {len(correct_question_ids)}/{required_questions or available_questions} / "
+        f"练习正确率 {practice_accuracy:.2f} / 小测 {quiz_accuracy:.2f} / "
+        f"资源学习 {resource_completion:.2f} / 学习频次 {learning_frequency:.2f} / 复习 {review_completion:.2f}"
+    )
+
+    def apply_values(mastery: Mastery) -> Mastery:
         mastery.value = final_value
         mastery.direct_value = direct_value
         mastery.status = status
         mastery.reason_summary = reason_summary
         mastery.updated_at = datetime.utcnow()
+        return mastery
+
+    mastery = session.exec(select(Mastery).where(Mastery.user_id == user_id, Mastery.kp_id == kp_id)).first()
+    if mastery is None:
+        mastery = apply_values(Mastery(user_id=user_id, kp_id=kp_id))
+    else:
+        mastery = apply_values(mastery)
 
     session.add(mastery)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        mastery = session.exec(select(Mastery).where(Mastery.user_id == user_id, Mastery.kp_id == kp_id)).first()
+        if mastery is None:
+            raise
+        session.add(apply_values(mastery))
+        session.commit()
     session.refresh(mastery)
     return mastery
 

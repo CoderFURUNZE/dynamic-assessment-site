@@ -32,6 +32,34 @@ def _safe_json_list(raw: str | None) -> list:
     return data if isinstance(data, list) else []
 
 
+def _norm_answer(value: object) -> str:
+    return str(value or "").strip().upper()
+
+
+def _is_answer_correct(*, submitted: str, stored_answer: str, item_type: str, options: list[str]) -> bool:
+    submitted_norm = _norm_answer(submitted)
+    stored_norm = _norm_answer(stored_answer)
+    if not submitted_norm:
+        return False
+    if submitted_norm == stored_norm:
+        return True
+
+    if item_type != "mcq":
+        return False
+
+    accepted = {stored_norm}
+    labels = [chr(65 + idx) for idx in range(len(options))]
+    option_norms = [_norm_answer(option) for option in options]
+
+    for label, option, option_norm in zip(labels, options, option_norms):
+        label_with_text = _norm_answer(f"{label}. {option}")
+        label_with_cn_text = _norm_answer(f"{label}、{option}")
+        if stored_norm in {label, option_norm, label_with_text, label_with_cn_text}:
+            accepted.update({label, option_norm, label_with_text, label_with_cn_text})
+
+    return submitted_norm in accepted
+
+
 def _get_video_complete_ratio(session: Session, *, subject: str, grade: str) -> float:
     cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == subject, EvalConfig.grade == grade)).first()
     if cfg is None:
@@ -79,6 +107,7 @@ def track_resource_visit(
         kp_id=resource.kp_id,
         payload={"resource_id": int(resource.id), "resource_type": resource.type.value},
     )
+    upsert_mastery(session, user_id=user.id, kp_id=resource.kp_id, subject=resource.subject, grade=resource.grade)
     recalculate_profile_snapshot(
         session,
         user_id=user.id,
@@ -141,7 +170,12 @@ def submit_quiz(
         if item is None:
             continue
         answer = str(ans.get("answer", "")).strip()
-        is_correct = answer.upper() == item.answer.strip().upper()
+        is_correct = _is_answer_correct(
+            submitted=answer,
+            stored_answer=item.answer,
+            item_type=item.type,
+            options=[str(option) for option in _safe_json_list(item.options_json)],
+        )
         if is_correct:
             correct_count += 1
         details.append(

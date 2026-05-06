@@ -23,7 +23,7 @@ type TeacherGraphWorkbenchExpose = {
 const route = useRoute();
 const router = useRouter();
 
-const isTeacher = computed(() => getRole() === "teacher");
+const canOpenTeacherGraph = computed(() => ["teacher", "admin"].includes(getRole()));
 const courses = ref<Course[]>([]);
 const subject = ref("");
 const grade = ref("通用");
@@ -44,7 +44,8 @@ const isReadonlyCourse = computed(() => {
 async function loadCourses() {
   const res = await api.get("/graph/courses");
   courses.value = res.data ?? [];
-  subject.value = resolveTeacherSubject(String(route.query.subject || ""), subject.value, courses.value);
+  const routeSubject = String(route.query.subject || "").trim();
+  subject.value = resolveTeacherSubject(routeSubject, subject.value, courses.value) || routeSubject;
 }
 
 function syncQuery() {
@@ -80,8 +81,8 @@ watch(subject, () => {
 });
 
 onMounted(async () => {
-  if (!isTeacher.value) {
-    ElMessage.warning("仅教师可访问全屏图谱");
+  if (!canOpenTeacherGraph.value) {
+    ElMessage.warning("仅教师或管理员可访问全屏图谱");
     router.push("/login/staff");
     return;
   }
@@ -90,7 +91,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <main v-if="isTeacher" class="teacher-graph-fullscreen">
+  <main v-if="canOpenTeacherGraph" class="teacher-graph-fullscreen">
     <header class="teacher-graph-fullscreen__bar">
       <button type="button" class="teacher-graph-fullscreen__back" @click="backToWorkspace">返回主工作台</button>
       <div class="teacher-graph-fullscreen__title">

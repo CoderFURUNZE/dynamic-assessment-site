@@ -49,6 +49,11 @@ class DynamicBreakdownOut(BaseModel):
     achievement_score: float = 0.0
     efficiency_score: float = 0.0
     risk_score: float = 0.0
+    base_dynamic_score: float = 0.0
+    graph_learning_coverage: float = 0.0
+    graph_mastery_coverage: float = 0.0
+    graph_score: float = 0.0
+    graph_weight: float = 0.0
     dynamic_score: float = 0.0
     stability: float = 0.0
     summary: str = ""
@@ -143,6 +148,7 @@ class ProfileOut(BaseModel):
     recent_video_records: list[dict] = []
     latest_recommendation: dict = {}
     evaluation_explain: dict = {}
+    graph_coverage: dict = {}
 
 
 class MasteryMapItem(BaseModel):

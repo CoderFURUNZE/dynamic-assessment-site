@@ -30,6 +30,42 @@ router = APIRouter(prefix="/practice", tags=["practice"])
 logger = logging.getLogger("app.practice")
 
 
+def _norm_answer(value: object) -> str:
+    return str(value or "").strip().upper()
+
+
+def _safe_options(raw: str | None) -> list[str]:
+    try:
+        parsed = json.loads(raw or "[]")
+    except Exception:
+        return []
+    return [str(item) for item in parsed] if isinstance(parsed, list) else []
+
+
+def _is_answer_correct(*, submitted: str, stored_answer: str, q_type: str, options: list[str]) -> bool:
+    submitted_norm = _norm_answer(submitted)
+    stored_norm = _norm_answer(stored_answer)
+    if not submitted_norm:
+        return False
+    if submitted_norm == stored_norm:
+        return True
+
+    if q_type != "mcq":
+        return False
+
+    accepted = {stored_norm}
+    labels = [chr(65 + idx) for idx in range(len(options))]
+    option_norms = [_norm_answer(option) for option in options]
+
+    for label, option, option_norm in zip(labels, options, option_norms):
+        label_with_text = _norm_answer(f"{label}. {option}")
+        label_with_cn_text = _norm_answer(f"{label}、{option}")
+        if stored_norm in {label, option_norm, label_with_text, label_with_cn_text}:
+            accepted.update({label, option_norm, label_with_text, label_with_cn_text})
+
+    return submitted_norm in accepted
+
+
 @router.get("/questions", response_model=list[PracticeQuestionOut])
 def list_questions(
     kp_id: int,
@@ -87,7 +123,13 @@ def submit(
     if getattr(user, "role", None) == "student":
         assert_student_kp_access(session, int(user.id), payload.kp_id)
     answer = payload.answer.strip()
-    is_correct = answer.upper() == q.answer.strip().upper()
+    options = _safe_options(q.options_json)
+    is_correct = _is_answer_correct(
+        submitted=answer,
+        stored_answer=q.answer,
+        q_type=q.type,
+        options=options,
+    )
     self_report = (payload.self_report or "unknown").strip().lower()
     if self_report not in {"guess", "sure", "unknown"}:
         self_report = "unknown"
@@ -200,206 +242,38 @@ def next_question(
     if getattr(user, "role", None) == "student":
         assert_student_kp_access(session, int(user.id), kp_id)
 
-    cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == kp.subject, EvalConfig.grade == kp.grade)).first()
-    window = json.loads(cfg.window_json) if cfg else {}
-    total_cfg = int(kp.practice_total) if kp.practice_total is not None else int(window.get("practice_total", 10))
-    step = float(window.get("difficulty_step", 0.1))
-    step = max(0.05, min(0.5, step))
+    questions = session.exec(select(Question).where(Question.kp_id == kp_id).order_by(Question.id)).all()
+    total_available = len(questions)
+    total_n = min(int(kp.practice_total or 5), total_available) if total_available else 0
+    total_n = max(1, total_n) if total_available else 0
+    required_questions = questions[:total_n]
+    required_question_ids = {int(item.id) for item in required_questions if item.id is not None}
 
-    total_available = session.exec(select(Question.id).where(Question.kp_id == kp_id)).all()
-    total_available_n = len(total_available)
-    total_n = min(total_cfg, total_available_n)
-
-    attempted_rows = session.exec(
-        select(PracticeAttempt.question_id, Question.prompt)
-        .join(Question, PracticeAttempt.question_id == Question.id, isouter=True)
-        .where(PracticeAttempt.user_id == user.id, PracticeAttempt.kp_id == kp_id)
-    ).all()
-    attempted_set = {int(r[0]) for r in attempted_rows if r[0] is not None}
-    attempted_prompts = {r[1] for r in attempted_rows if r[1]}
-    attempted_n = len(attempted_set)
-
-    if total_n == 0:
-        return PracticeNextOut(
-            done=True,
-            total_questions=0,
-            attempted_questions=attempted_n,
-            question=None,
-        )
-    if attempted_n >= total_n:
-        return PracticeNextOut(
-            done=True,
-            total_questions=total_n,
-            attempted_questions=attempted_n,
-            question=None,
-        )
-
-    last = session.exec(
-        select(PracticeAttempt, Question)
-        .join(Question, PracticeAttempt.question_id == Question.id, isouter=True)
+    attempts = session.exec(
+        select(PracticeAttempt)
         .where(PracticeAttempt.user_id == user.id, PracticeAttempt.kp_id == kp_id)
         .order_by(PracticeAttempt.created_at.desc())
-        .limit(1)
-    ).first()
+    ).all()
+    correct_ids = {
+        int(item.question_id)
+        for item in attempts
+        if item.correct and item.question_id is not None and int(item.question_id) in required_question_ids
+    }
+    correct_n = min(len(correct_ids), total_n)
+    upsert_mastery(session, user_id=user.id, kp_id=kp_id, subject=kp.subject, grade=kp.grade)
 
-    target = 0.0
-    last_correct = True
-    last_diff = 0.5
-    if last:
-        attempt, question = last
-        last_diff = float(question.difficulty) if question is not None else 0.5
-        last_correct = bool(attempt.correct)
-        target = last_diff + (step if last_correct else -step)
+    if total_n == 0:
+        return PracticeNextOut(done=True, total_questions=total_n, attempted_questions=correct_n, question=None)
 
-    evidence = evidence_checklist(session, user_id=user.id, kp_id=kp_id)
-    # Stability: pull target towards last difficulty and cap per-step jump.
-    stability_strength = float(window.get("stability_strength", 0.4))
-    stability_strength = max(0.0, min(1.0, stability_strength))
-    max_jump = float(window.get("max_difficulty_jump", 0.2))
-    max_jump = max(0.0, min(0.5, max_jump))
-
-    if last:
-        target = (1.0 - stability_strength) * target + stability_strength * last_diff
-        if max_jump > 0:
-            target = max(last_diff - max_jump, min(last_diff + max_jump, target))
-
-    # Remedial: if frustration is high or wrong streak, bias to easier range.
-    wrong_streak = recent_wrong_streak(session, user_id=user.id, kp_id=kp_id, window=5)
-    if (not last_correct) and wrong_streak >= 2:
-        target = max(0.0, target - step)
-
-    target = max(0.0, min(1.0, target))
-
-    bucket_start = math.floor(target / step) * step
-    bucket_start = max(0.0, min(1.0 - step, bucket_start))
-
-    def candidates_in_range(start: float) -> list[Question]:
-        end = min(1.0, start + step)
-        q = select(Question).where(Question.kp_id == kp_id, Question.difficulty >= start)
-        if end < 1.0:
-            q = q.where(Question.difficulty < end)
-        if attempted_set:
-            q = q.where(~Question.id.in_(attempted_set))
-        if attempted_prompts:
-            q = q.where(~Question.prompt.in_(attempted_prompts))
-        return session.exec(q.order_by(Question.difficulty, Question.id)).all()
-
-    ranges: list[float] = [bucket_start]
-    max_steps = int(math.ceil(1.0 / step))
-    for i in range(1, max_steps + 1):
-        down = bucket_start - i * step
-        up = bucket_start + i * step
-        if last_correct:
-            if up >= 0:
-                ranges.append(up)
-            if down >= 0:
-                ranges.append(down)
-        else:
-            if down >= 0:
-                ranges.append(down)
-            if up >= 0:
-                ranges.append(up)
-
-    rng = random.Random(user.id * 1000003 + kp_id * 97 + attempted_n)
-    picked = None
-    picked_range = None
-    predicted_correct = None
-    model_used = False
-    reason = None
-    w_need = float(window.get("w_need", 0.45))
-    w_gain = float(window.get("w_gain", 0.4))
-    w_risk = float(window.get("w_risk", 0.15))
-
-    missing = set(evidence.get("missing", []))
-    missing_types = set()
-    missing_bands = set()
-    for item in missing:
-        if "mcq" in item:
-            missing_types.add("mcq")
-        if "blank" in item:
-            missing_types.add("blank")
-        if "medium" in item:
-            missing_bands.add("medium")
-        if "hard" in item:
-            missing_bands.add("hard")
-
-    risk = min(1.0, wrong_streak / 3)
-
-    def rule_score(q: Question, target_value: float) -> float:
-        need = 0.2
-        if q.type in missing_types:
-            need += 0.4
-        band = difficulty_band(float(q.difficulty))
-        if band in missing_bands:
-            need += 0.4
-        need = min(1.0, need)
-        learn_gain = 1.0 - min(1.0, abs(float(q.difficulty) - target_value) * 1.5)
-        return w_need * need + w_gain * learn_gain - w_risk * risk
-
-    def learn_gain_from_prob(p: float) -> float:
-        return max(0.0, 1.0 - abs(p - 0.65) / 0.65)
-
-    for start in ranges:
-        if start < 0 or start > 1.0:
-            continue
-        cand = candidates_in_range(start)
-        if cand:
-            scored = score_questions(session, user_id=user.id, kp_id=kp_id, questions=cand)
-            if scored:
-                scored_with_policy = []
-                for prob, q in scored:
-                    policy_score = rule_score(q, target)
-                    gain_ml = learn_gain_from_prob(float(prob))
-                    final = 0.7 * policy_score + 0.3 * gain_ml
-                    scored_with_policy.append((final, prob, q))
-                scored_sorted = sorted(scored_with_policy, key=lambda x: x[0], reverse=True)
-                top_n = min(5, len(scored_sorted))
-                final_score, best_prob, best_q = rng.choice(scored_sorted[:top_n])
-                picked = best_q
-                predicted_correct = float(best_prob)
-                model_used = True
-                reason = "policy+model"
-            else:
-                cand_scored = [(rule_score(q, target), q) for q in cand]
-                cand_sorted = sorted(cand_scored, key=lambda x: x[0], reverse=True)
-                top_n = min(5, len(cand_sorted))
-                picked = rng.choice(cand_sorted[:top_n])[1]
-                model_used = False
-                reason = "policy_rule"
-            picked_range = start
-            break
-
+    picked = next((q for q in required_questions if q.id is not None and int(q.id) not in correct_ids), None)
     if picked is None:
-        q = select(Question).where(Question.kp_id == kp_id)
-        if attempted_set:
-            q = q.where(~Question.id.in_(attempted_set))
-        if attempted_prompts:
-            q = q.where(~Question.prompt.in_(attempted_prompts))
-        picked = session.exec(q.order_by(Question.difficulty, Question.id)).first()
-        picked_range = None
-        if picked is not None:
-            pred = predict_one(session, user_id=user.id, kp_id=kp_id, question=picked)
-            if pred is not None:
-                predicted_correct = pred
-                model_used = True
-                reason = "policy+model_fallback"
-            else:
-                model_used = False
-                reason = "policy_fallback"
+        return PracticeNextOut(done=True, total_questions=total_n, attempted_questions=correct_n, question=None)
 
-    if picked is None:
-        return PracticeNextOut(done=True, total_questions=total_n, attempted_questions=attempted_n, question=None)
-
-    range_label = None
-    if picked_range is not None:
-        range_label = f"{picked_range:.1f}~{min(1.0, picked_range + step):.1f}"
-
-    recent_preds = score_recent(session, user_id=user.id, kp_id=kp_id) or []
     return PracticeNextOut(
         done=False,
         total_questions=total_n,
-        attempted_questions=attempted_n,
-        difficulty_range=range_label,
+        attempted_questions=correct_n,
+        difficulty_range=None,
         question=PracticeQuestionOut(
             id=picked.id,
             kp_id=kp_id,
@@ -410,10 +284,10 @@ def next_question(
             cognitive_level=picked.cognitive_level or "understand",
             ability_subtags=picked.ability_subtags or "",
         ),
-        model_used=model_used,
-        predicted_correct=predicted_correct,
-        reason=reason,
-        recent_predictions=recent_preds,
+        model_used=False,
+        predicted_correct=None,
+        reason="simple_sequence",
+        recent_predictions=[],
     )
 
 

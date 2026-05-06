@@ -67,7 +67,7 @@ DEFAULT_PERSONA_WEIGHTS: dict[str, Any] = {
     "achievement": {"practice_accuracy": 0.5, "quiz_accuracy": 0.3, "mastery_growth": 0.2},
     "efficiency": {"unit_time_accuracy": 0.6, "task_completion": 0.4},
     "risk": {"overdue_rate": 0.4, "wrong_streak": 0.3, "abandonment_rate": 0.3},
-    "dynamic": {"engagement": 0.25, "achievement": 0.3, "course_mastery": 0.35, "stability": 0.1},
+    "dynamic": {"engagement": 0.25, "achievement": 0.3, "course_mastery": 0.35, "stability": 0.1, "graph_score": 0.2},
     "stage_dimensions": {
         "engagement": {
             "enabled": True,
@@ -109,6 +109,8 @@ DEFAULT_PERSONA_WEIGHTS: dict[str, Any] = {
         },
     },
 }
+
+GRAPH_SCORE_WEIGHT = 0.2
 
 DIMENSION_LEGACY_LABELS = {
     "potential_trait": "潜能与特质倾向",
@@ -1357,6 +1359,20 @@ def recalculate_stage_snapshot(
             dynamic_score = _clamp01(
                 sum(float(item.get("score", 0.0)) * (float(item.get("selection_weight", 0.0)) / portrait_weight_total) for item in available_dimensions)
             )
+    _, graph_kps, graph_mastery_map = _course_mastery(
+        session,
+        user_id=user_id,
+        subject=stage.subject,
+        grade=stage.grade,
+        refresh_mastery=False,
+    )
+    graph_coverage = build_graph_coverage_summary(kps=graph_kps, mastery_map=graph_mastery_map)
+    base_dynamic_score = dynamic_score
+    dynamic_score = blend_dynamic_score_with_graph(
+        base_dynamic_score,
+        float(graph_coverage.get("graph_score", 0.0)),
+        GRAPH_SCORE_WEIGHT,
+    )
 
     previous = session.exec(
         select(StageEvaluationSnapshot)
@@ -1447,6 +1463,8 @@ def recalculate_stage_snapshot(
             "continuity": continuity,
             "task_completion": task_completion,
             "resource_initiative": resource_initiative,
+            "base_dynamic_score": base_dynamic_score,
+            "graph_coverage": graph_coverage,
             "metric_types": sorted(metric_types),
         }
     )
@@ -1477,7 +1495,20 @@ def sync_profile_snapshot_from_stage(
     latest = get_latest_stage_snapshot(session, user_id=user_id, subject=subject, grade=grade)
     if latest is None:
         return None
-    history = get_stage_snapshot_trend(session, user_id=user_id, subject=subject, grade=grade, limit=5)
+    _, graph_kps, graph_mastery_map = _course_mastery(
+        session,
+        user_id=user_id,
+        subject=subject,
+        grade=grade,
+        refresh_mastery=False,
+    )
+    graph_coverage = build_graph_coverage_summary(kps=graph_kps, mastery_map=graph_mastery_map)
+    blended_dynamic_score = blend_dynamic_score_with_graph(
+        float(latest.dynamic_score),
+        float(graph_coverage.get("graph_score", 0.0)),
+        GRAPH_SCORE_WEIGHT,
+    )
+    history = get_stage_snapshot_trend(session, user_id=user_id, subject=subject, grade=grade, limit=8)
     ordered_history = list(reversed(history))
     scores = [float(item.dynamic_score) for item in reversed(history)]
     if len(scores) <= 1:
@@ -1522,7 +1553,12 @@ def sync_profile_snapshot_from_stage(
         "achievement_score": float(latest.achievement),
         "efficiency_score": float(latest.efficiency),
         "risk_score": float(latest.risk),
-        "dynamic_score": float(latest.dynamic_score),
+        "base_dynamic_score": float(latest.dynamic_score),
+        "graph_learning_coverage": float(graph_coverage.get("learning_coverage", 0.0)),
+        "graph_mastery_coverage": float(graph_coverage.get("mastery_coverage", 0.0)),
+        "graph_score": float(graph_coverage.get("graph_score", 0.0)),
+        "graph_weight": GRAPH_SCORE_WEIGHT,
+        "dynamic_score": float(blended_dynamic_score),
         "stability": float(stability),
         "summary": final_reason_summary,
     }
@@ -1537,9 +1573,9 @@ def sync_profile_snapshot_from_stage(
         efficiency=float(latest.efficiency),
         risk=float(latest.risk),
         course_mastery=float(latest.course_mastery),
-        dynamic_score=float(latest.dynamic_score),
+        dynamic_score=float(blended_dynamic_score),
         stability=stability,
-        risk_level=latest.risk_level,
+        risk_level=_risk_level(float(blended_dynamic_score)),
         override_source=override_source,
         reason_summary=latest.reason_summary,
         portrait_summary_json=_json_dump(
@@ -1549,6 +1585,7 @@ def sync_profile_snapshot_from_stage(
                 "final_portrait_dimensions": final_portrait_dimensions,
                 "final_portrait_indicators": final_portrait_indicators,
                 "dynamic_breakdown": dynamic_breakdown,
+                "graph_coverage": graph_coverage,
                 "term_summary": {
                     **term_summary,
                     "final_reason_summary": final_reason_summary,
@@ -1772,6 +1809,57 @@ def _course_mastery(
     return _clamp01(avg_value), list(kps), mastery_map
 
 
+def build_graph_coverage_summary(
+    *,
+    kps: list[KnowledgePoint],
+    mastery_map: dict[int, Mastery],
+) -> dict[str, Any]:
+    total_nodes = len([kp for kp in kps if kp.id is not None])
+    if total_nodes <= 0:
+        return {
+            "total_nodes": 0,
+            "completed_nodes": 0,
+            "mastered_nodes": 0,
+            "learning_coverage": 0.0,
+            "mastery_coverage": 0.0,
+            "graph_score": 0.0,
+            "formula": "图谱评价得分 = 学习覆盖度 * 60% + 掌握覆盖度 * 40%",
+            "dynamic_weight": GRAPH_SCORE_WEIGHT,
+        }
+
+    completed_nodes = 0
+    mastered_nodes = 0
+    for kp in kps:
+        if kp.id is None:
+            continue
+        mastery = mastery_map.get(int(kp.id))
+        value = float(mastery.value) if mastery is not None else 0.0
+        status = (mastery.status if mastery is not None else "").strip().lower()
+        if value >= 0.5 or status in {"learning", "mastered"}:
+            completed_nodes += 1
+        if value >= 0.85 or status == "mastered":
+            mastered_nodes += 1
+
+    learning_coverage = _clamp01(completed_nodes / total_nodes)
+    mastery_coverage = _clamp01(mastered_nodes / total_nodes)
+    graph_score = _clamp01(learning_coverage * 0.6 + mastery_coverage * 0.4)
+    return {
+        "total_nodes": total_nodes,
+        "completed_nodes": completed_nodes,
+        "mastered_nodes": mastered_nodes,
+        "learning_coverage": learning_coverage,
+        "mastery_coverage": mastery_coverage,
+        "graph_score": graph_score,
+        "formula": "图谱评价得分 = 学习覆盖度 * 60% + 掌握覆盖度 * 40%",
+        "dynamic_weight": GRAPH_SCORE_WEIGHT,
+    }
+
+
+def blend_dynamic_score_with_graph(base_score: float, graph_score: float, weight: float = GRAPH_SCORE_WEIGHT) -> float:
+    weight = _clamp01(weight)
+    return _clamp01(float(base_score) * (1.0 - weight) + float(graph_score) * weight)
+
+
 def recalculate_profile_snapshot(
     session: Session,
     *,
@@ -1812,6 +1900,7 @@ def recalculate_profile_snapshot(
         grade=grade,
         refresh_mastery=refresh_mastery,
     )
+    graph_coverage = build_graph_coverage_summary(kps=kps, mastery_map=mastery_map)
     course_id = resolve_course_id(session, subject=subject)
     kp_ids = [int(k.id) for k in kps if k.id is not None]
 
@@ -1982,11 +2071,17 @@ def recalculate_profile_snapshot(
         + float(dynamic_weights.get("course_mastery", 0.35)) * course_mastery
     )
     stability = _calc_stability(session, user_id=user_id, subject=subject, grade=grade, current_score=provisional_dynamic)
-    dynamic_score = _clamp01(
+    base_dynamic_score = _clamp01(
         float(dynamic_weights.get("engagement", 0.25)) * engagement
         + float(dynamic_weights.get("achievement", 0.3)) * achievement
         + float(dynamic_weights.get("course_mastery", 0.35)) * course_mastery
         + float(dynamic_weights.get("stability", 0.1)) * stability
+    )
+    graph_weight = _clamp01(float(dynamic_weights.get("graph_score", GRAPH_SCORE_WEIGHT)))
+    dynamic_score = blend_dynamic_score_with_graph(
+        base_dynamic_score,
+        float(graph_coverage.get("graph_score", 0.0)),
+        graph_weight,
     )
     profile_breakdown = {
         "learning_frequency": learning_frequency,
@@ -2005,6 +2100,11 @@ def recalculate_profile_snapshot(
         "achievement_score": achievement,
         "efficiency_score": efficiency,
         "risk_score": risk,
+        "base_dynamic_score": base_dynamic_score,
+        "graph_learning_coverage": float(graph_coverage.get("learning_coverage", 0.0)),
+        "graph_mastery_coverage": float(graph_coverage.get("mastery_coverage", 0.0)),
+        "graph_score": float(graph_coverage.get("graph_score", 0.0)),
+        "graph_weight": graph_weight,
         "dynamic_score": dynamic_score,
         "stability": stability,
         "summary": (
@@ -2062,7 +2162,7 @@ def recalculate_profile_snapshot(
         risk_level=_risk_level(dynamic_score),
         override_source=override_source,
         reason_summary=reason_summary,
-        portrait_summary_json=_json_dump({"dynamic_breakdown": profile_breakdown}),
+        portrait_summary_json=_json_dump({"dynamic_breakdown": profile_breakdown, "graph_coverage": graph_coverage}),
         updated_at=now,
     )
     if persist:

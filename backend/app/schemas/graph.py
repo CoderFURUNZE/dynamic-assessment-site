@@ -17,6 +17,7 @@ class KnowledgePointOut(BaseModel):
     pos_x: float | None = None
     pos_y: float | None = None
     practice_total: int | None = None
+    is_terminal: bool = False
 
 
 class GraphRelationNodeOut(BaseModel):

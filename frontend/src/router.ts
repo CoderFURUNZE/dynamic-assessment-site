@@ -88,7 +88,7 @@ router.addRoute({
 router.addRoute({
   path: "/student/graph-workspace",
   component: StudentGraphWorkspacePage,
-  meta: { title: "知识图谱" },
+  meta: { title: "学习路径" },
 });
 router.addRoute({
   path: "/student/graph-fullscreen",
@@ -304,8 +304,10 @@ router.beforeEach((to) => {
   if (to.path === "/student/graph-fullscreen") {
     return true;
   }
-  if (to.path === "/teacher/graph-fullscreen" && role === "student") {
-    return { path: "/student/graph-fullscreen", query: to.query };
+  if (to.path === "/teacher/graph-fullscreen") {
+    if (role === "student") return { path: "/student/graph-fullscreen", query: to.query };
+    persistLastRoute(to.fullPath);
+    return true;
   }
   if (to.path.startsWith("/admin")) {
     if (role === "student") return "/student/dashboard";

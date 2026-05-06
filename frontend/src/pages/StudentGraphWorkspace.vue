@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
+import { Check, Lock, Star, Trophy, VideoPlay } from "@element-plus/icons-vue";
 import { api, getWithCache } from "../api";
-import KnowledgeGraphWorkspace from "../components/KnowledgeGraphWorkspace.vue";
 import { resolveStudentSubject, saveStudentSubject } from "../utils/studentCourse";
 
 type Course = {
@@ -15,199 +15,392 @@ type Course = {
   completed?: boolean;
   learning_available?: boolean;
 };
-type KP = { id: number; code: string; title: string; chapter?: string };
-type WorkspaceState = {
-  kpCount: number;
-  categoryCount: number;
-  filteredCount: number;
-  selectedType: "kp" | "category";
-  selectedKpId: number | null;
-  selectedCategory: string | null;
+
+type KP = {
+  id: number;
+  code: string;
+  title: string;
+  chapter?: string;
+  is_terminal?: boolean;
+  mastery?: number;
+  status?: string;
+  previewLocked?: boolean;
 };
 
 type RecoData = {
-  target_kp: { id: number; code: string; title: string };
+  target_kp: { id: number; code: string; title: string; chapter?: string; mastery?: number };
   reason_summary: string;
   advice_text?: string;
+  student_message?: string;
+  personalized_path?: Array<{ kp_id?: number; id?: number; title?: string; action?: string; mastery?: number }>;
+  course_completion?: { completed?: boolean; completed_terminal_title?: string };
 };
 
-type PathData = {
-  next_candidates: number[];
-  next_titles: string[];
-  can_unlock_next: boolean;
-  blocked_titles: string[];
-  path_summary: string;
+type RouteStop = {
+  kp: KP;
+  index: number;
+  role: "start" | "recommended" | "terminal";
+  x: number;
+  y: number;
+};
+
+type ConnectorLine = {
+  key: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  state: string;
 };
 
 const route = useRoute();
 const router = useRouter();
 
+const loading = ref(false);
+const recoLoading = ref(false);
 const courses = ref<Course[]>([]);
 const subject = ref("");
 const grade = ref("通用");
-const kps = ref<KP[]>([]);
+const visibleKps = ref<KP[]>([]);
 const currentKpId = ref<number | null>(null);
 const reco = ref<RecoData | null>(null);
-const pathInfo = ref<PathData | null>(null);
-const workspaceState = ref<WorkspaceState>({
-  kpCount: 0,
-  categoryCount: 0,
-  filteredCount: 0,
-  selectedType: "kp",
-  selectedKpId: null,
-  selectedCategory: null,
-});
+const mapRef = ref<HTMLElement | null>(null);
+const isDragging = ref(false);
+const dragStart = ref({ x: 0, y: 0, left: 0, top: 0 });
 
-const isStandaloneWorkspace = computed(() => Boolean(route.meta?.standaloneWorkspace));
+const visibleCourses = computed(() =>
+  courses.value.filter((item) => item.active !== false && String(item.enroll_status || "").trim().toLowerCase() !== "closed"),
+);
 const currentCourse = computed(() => courses.value.find((item) => item.title === subject.value) ?? null);
-const learningCourses = computed(() => courses.value.filter((item) => item.completed !== true && item.learning_available !== false));
-const currentKp = computed(() => kps.value.find((item) => item.id === currentKpId.value) ?? null);
+const recommendedKp = computed(() => reco.value?.target_kp ?? null);
+const courseClosed = computed(() => Boolean(currentCourse.value && currentCourse.value.learning_available === false));
 
-const recommendationLabel = computed(() => reco.value?.target_kp?.title || "继续完成当前知识点");
-const currentNodeLabel = computed(() => currentKp.value?.title || "请先在图谱中选择一个知识点");
-const currentNodeCode = computed(() => currentKp.value?.code || "--");
-const graphLead = computed(() => {
-  if (pathInfo.value?.path_summary) return pathInfo.value.path_summary;
-  if (reco.value?.reason_summary) return reco.value.reason_summary;
-  return "从图谱里选择一个知识点，系统会告诉你下一步该学什么。";
+const currentKp = computed(() => {
+  const recommendedId = Number(recommendedKp.value?.id || 0);
+  return visibleKps.value.find((item) => item.id === currentKpId.value)
+    ?? visibleKps.value.find((item) => item.id === recommendedId)
+    ?? visibleKps.value[0]
+    ?? null;
 });
 
-const graphOverviewCards = computed(() => [
-  {
-    label: "知识点数量",
-    value: workspaceState.value.kpCount || kps.value.length,
-    hint: "当前课程纳入图谱的知识点",
-  },
-  {
-    label: "分类数量",
-    value: workspaceState.value.categoryCount,
-    hint: "用于组织学习路径的分类层级",
-  },
-  {
-    label: "当前筛选",
-    value: workspaceState.value.filteredCount || workspaceState.value.kpCount || kps.value.length,
-    hint: "当前视图里可见的节点数量",
-  },
-]);
+const commonStartKp = computed(() =>
+  visibleKps.value.find((item) => item.code === "HM-MID-01")
+  ?? visibleKps.value.find((item) => !item.is_terminal)
+  ?? visibleKps.value[0]
+  ?? null,
+);
 
-const graphStatusText = computed(() => {
-  if (!currentKp.value) return "等待选择";
-  if (pathInfo.value?.can_unlock_next === false && (pathInfo.value.blocked_titles?.length || 0) > 0) return "需补前置";
-  if (reco.value?.target_kp?.id === currentKp.value.id) return "推荐学习";
-  return "可继续学习";
-});
+const commonTerminalKp = computed(() =>
+  visibleKps.value.find((item) => item.code === "HM-MID-C2")
+  ?? visibleKps.value.find((item) => item.is_terminal)
+  ?? null,
+);
 
-const blockedSummary = computed(() => {
-  if (!pathInfo.value?.blocked_titles?.length) return "当前没有前置阻塞，可以继续推进后续知识点。";
-  return `需先补足：${pathInfo.value.blocked_titles.join("、")}`;
-});
+const routeKps = computed(() => {
+  const recommendedId = Number(recommendedKp.value?.id || currentKpId.value || 0);
+  const byId = new Map<number, KP>();
+  for (const item of visibleKps.value) byId.set(item.id, { ...item });
+  if (recommendedId && !byId.has(recommendedId) && recommendedKp.value) {
+    byId.set(recommendedId, {
+      id: recommendedId,
+      code: recommendedKp.value.code,
+      title: recommendedKp.value.title,
+      chapter: recommendedKp.value.chapter,
+      mastery: recommendedKp.value.mastery,
+    });
+  }
 
-const nextCandidatesPreview = computed(() => {
-  if (!pathInfo.value?.next_titles?.length) return "完成当前知识点后，系统会在这里提示下一步内容。";
-  return pathInfo.value.next_titles.slice(0, 3).join("、");
-});
-
-const graphPathHint = computed(() => {
-  if (!pathInfo.value) return null;
-  return {
-    next_candidate_ids: pathInfo.value.next_candidates ?? [],
-    next_titles: pathInfo.value.next_titles ?? [],
-    can_unlock_next: pathInfo.value.can_unlock_next,
-    blocked_titles: pathInfo.value.blocked_titles ?? [],
-    path_summary: pathInfo.value.path_summary || "",
+  const result: KP[] = [];
+  const push = (item?: KP | null, previewLocked = false) => {
+    if (!item || result.some((row) => row.id === item.id)) return;
+    result.push({ ...item, previewLocked });
   };
+
+  const start = commonStartKp.value;
+  const terminal = commonTerminalKp.value;
+  push(start);
+
+  const pathIds = (reco.value?.personalized_path ?? [])
+    .map((item) => Number(item.kp_id || item.id || 0))
+    .filter(Boolean);
+  pathIds.forEach((id) => {
+    const item = byId.get(id);
+    if (!item) return;
+    if (start && item.id === start.id) return;
+    if (terminal && item.id === terminal.id) return;
+    push(item);
+  });
+
+  const recommended = recommendedId ? byId.get(recommendedId) ?? null : null;
+  if (
+    recommended
+    && (!start || recommended.id !== start.id)
+    && (!terminal || recommended.id !== terminal.id)
+  ) {
+    push(recommended);
+  }
+
+  if (result.length <= 1) {
+    const fallback = visibleKps.value.find((item) => {
+      if (start && item.id === start.id) return false;
+      if (terminal && item.id === terminal.id) return false;
+      return !isCompleted(item);
+    });
+    push(fallback);
+  }
+
+  if (terminal) push(terminal, !isCompleted(terminal) && Boolean(recommended && recommended.id !== terminal.id));
+  if (result.length === 0) push(visibleKps.value[0]);
+  return result.slice(0, 6);
 });
 
-const graphRecoHint = computed(() => {
-  if (!reco.value?.target_kp?.id) return null;
-  return {
-    reason_summary: reco.value.reason_summary,
-    advice_text: reco.value.advice_text,
-    target_kp_id: reco.value.target_kp.id,
-    target_code: reco.value.target_kp.code,
-    target_title: reco.value.target_kp.title,
-  };
+const completedCount = computed(() => routeKps.value.filter((item) => isCompleted(item)).length);
+const progressPercent = computed(() => {
+  if (!routeKps.value.length) return 0;
+  return Math.round((completedCount.value / routeKps.value.length) * 100);
+});
+const previewCount = computed(() => routeKps.value.filter((item) => item.previewLocked).length);
+const routeTerminalCount = computed(() => routeKps.value.filter((item) => item.is_terminal).length);
+
+const mapWidth = 1040;
+const FAST_ENTRY_CACHE_TTL = 60 * 1000;
+const mapHeight = computed(() => 700);
+const routeStops = computed<RouteStop[]>(() => {
+  const start = routeKps.value[0];
+  const terminal = routeKps.value.find((kp) => commonTerminalKp.value && kp.id === commonTerminalKp.value.id)
+    ?? routeKps.value[routeKps.value.length - 1];
+  const middle = routeKps.value.filter((kp) => kp.id !== start?.id && kp.id !== terminal?.id);
+  const laneXs = middle.length <= 1
+    ? [520]
+    : middle.length === 2
+      ? [390, 650]
+      : middle.length === 3
+        ? [300, 520, 740]
+        : [240, 425, 615, 800];
+  const stops: RouteStop[] = [];
+  if (start) stops.push({ kp: start, index: 0, role: "start", x: 520, y: 120 });
+  middle.slice(0, 4).forEach((kp, index) => {
+    const laneYs = middle.length <= 1
+      ? [330]
+      : middle.length === 2
+        ? [275, 405]
+        : middle.length === 3
+          ? [260, 330, 400]
+          : [245, 315, 385, 455];
+    stops.push({ kp, index: stops.length, role: "recommended", x: laneXs[index] ?? 520, y: laneYs[index] ?? 330 });
+  });
+  if (terminal && (!start || terminal.id !== start.id)) {
+    stops.push({ kp: terminal, index: stops.length, role: "terminal", x: 520, y: middle.length > 1 ? 610 : 545 });
+  }
+  return stops;
+});
+const connectorLines = computed(() => {
+  const start = routeStops.value.find((item) => item.role === "start");
+  const terminal = routeStops.value.find((item) => item.role === "terminal");
+  const middle = routeStops.value.filter((item) => item.role === "recommended");
+  const lines: ConnectorLine[] = [];
+  if (start && middle.length > 0) {
+    middle.forEach((stop) => {
+      lines.push({
+        key: `start-${stop.kp.id}`,
+        x1: start.x,
+        y1: start.y + 42,
+        x2: stop.x,
+        y2: stop.y - 42,
+        state: nodeState(stop.kp),
+      });
+    });
+  }
+  if (terminal && middle.length > 0) {
+    middle.forEach((stop) => {
+      lines.push({
+        key: `${stop.kp.id}-terminal`,
+        x1: stop.x,
+        y1: stop.y + 42,
+        x2: terminal.x,
+        y2: terminal.y - 42,
+        state: nodeState(stop.kp),
+      });
+    });
+  } else if (start && terminal) {
+    lines.push({
+      key: "start-terminal",
+      x1: start.x,
+      y1: start.y + 42,
+      x2: terminal.x,
+      y2: terminal.y - 42,
+      state: nodeState(terminal.kp),
+    });
+  }
+  return lines;
+});
+const pageTitle = computed(() => {
+  if (courseClosed.value) return "课程已结束";
+  if (recommendedKp.value?.title) return `下一关：${recommendedKp.value.title}`;
+  if (currentKp.value?.title) return `继续学习：${currentKp.value.title}`;
+  return "等待老师开放学习路线";
 });
 
-function resetWorkspaceState() {
-  kps.value = [];
+const pageLead = computed(() => {
+  if (courseClosed.value) {
+    return "老师已结束这门课程，当前可查看学习路径和学习报告。";
+  }
+  return reco.value?.student_message || reco.value?.advice_text || reco.value?.reason_summary || "系统会根据你的掌握度，沿老师设置的路线推荐下一关。";
+});
+
+const selectedIsRecommendation = computed(() =>
+  Boolean(currentKpId.value && currentKp.value?.id === recommendedKp.value?.id),
+);
+
+const focusBadge = computed(() => {
+  if (!currentKpId.value) return "推荐本关";
+  return selectedIsRecommendation.value ? "推荐本关" : "所选节点";
+});
+
+const focusText = computed(() => {
+  if (currentKpId.value && !selectedIsRecommendation.value && currentKp.value) {
+    return isCompleted(currentKp.value)
+      ? "该知识点已经完成，你仍然可以重新进入学习。"
+      : "你当前选择的是这个知识点，可以直接进入学习。";
+  }
+  return reco.value?.reason_summary || "系统会按你的掌握情况自动选择下一关。";
+});
+
+const focusActionText = computed(() => {
+  if (courseClosed.value) return "查看报告";
+  if (currentKpId.value && !selectedIsRecommendation.value && currentKp.value && isCompleted(currentKp.value)) return "重新学习";
+  return "进入学习";
+});
+
+function isCompleted(kp: KP) {
+  return Number(kp.mastery || 0) >= 0.7 || kp.status === "mastered";
+}
+
+function nodeState(kp: KP) {
+  if (kp.previewLocked) return "locked";
+  if (kp.id === recommendedKp.value?.id || kp.id === currentKpId.value) return "current";
+  if (isCompleted(kp)) return "done";
+  return "open";
+}
+
+function nodeIcon(kp: KP) {
+  const state = nodeState(kp);
+  if (state === "locked") return Lock;
+  if (state === "current") return VideoPlay;
+  if (kp.is_terminal) return Trophy;
+  if (state === "done") return Check;
+  return Star;
+}
+
+function centerCurrentStop() {
+  nextTick(() => {
+    const el = mapRef.value;
+    if (!el) return;
+    el.scrollTop = 0;
+  });
+}
+
+function cardSide(stop: RouteStop) {
+  return stop.index % 2 === 0 ? "is-card-right" : "is-card-left";
+}
+
+function onMapPointerDown(event: PointerEvent) {
+  const el = mapRef.value;
+  if (!el) return;
+  const target = event.target as HTMLElement | null;
+  if (target?.closest(".learning-route-stop")) return;
+  isDragging.value = true;
+  dragStart.value = { x: event.clientX, y: event.clientY, left: 0, top: el.scrollTop };
+  dragStart.value.left = el.scrollLeft;
+  el.setPointerCapture?.(event.pointerId);
+}
+
+function onMapPointerMove(event: PointerEvent) {
+  const el = mapRef.value;
+  if (!el || !isDragging.value) return;
+  event.preventDefault();
+  el.scrollLeft = dragStart.value.left - (event.clientX - dragStart.value.x);
+  el.scrollTop = dragStart.value.top - (event.clientY - dragStart.value.y);
+}
+
+function onMapPointerUp(event: PointerEvent) {
+  isDragging.value = false;
+  mapRef.value?.releasePointerCapture?.(event.pointerId);
+}
+
+function resetState() {
+  visibleKps.value = [];
   currentKpId.value = null;
   reco.value = null;
-  pathInfo.value = null;
-  workspaceState.value = {
-    kpCount: 0,
-    categoryCount: 0,
-    filteredCount: 0,
-    selectedType: "kp",
-    selectedKpId: null,
-    selectedCategory: null,
-  };
 }
 
 function syncQuery() {
   saveStudentSubject(subject.value);
-  const preview = String(route.query.preview || "");
   router.replace({
     path: "/student/graph-workspace",
     query: {
       subject: subject.value || undefined,
       kp: currentKpId.value ? String(currentKpId.value) : undefined,
-      preview: preview || undefined,
+      preview: String(route.query.preview || "") || undefined,
     },
-  });
+  }).catch(() => {});
 }
 
-async function loadCourses() {
-  try {
-    const res = await api.get("/graph/courses");
-    const raw = res.data ?? [];
-    courses.value = raw.map((item: any) => ({
+async function loadCourses(useCache = true) {
+  const raw = useCache
+    ? await getWithCache<any[]>("/graph/courses", undefined, { skipGlobalLoading: true, ttlMs: FAST_ENTRY_CACHE_TTL })
+    : (await api.get("/graph/courses", { skipGlobalLoading: true } as any)).data;
+  const list = Array.isArray(raw) ? raw : [];
+  courses.value = list.map((item: any) => ({
+    id: Number(item.id),
+    code: String(item.code || ""),
+    title: String(item.title || ""),
+    active: item.active !== false,
+    enroll_status: String(item.enroll_status || ""),
+    completed: item.completed === true,
+    learning_available: item.learning_available !== false,
+  }));
+  const routeSubject = String(route.query.subject || "").trim();
+  const visibleTitles = new Set(visibleCourses.value.map((item) => item.title));
+  subject.value = routeSubject && !visibleTitles.has(routeSubject)
+    ? ""
+    : resolveStudentSubject(routeSubject, subject.value, visibleCourses.value, {
+      allowCompleted: true,
+      allowUnavailable: true,
+    });
+}
+
+async function loadVisibleKps(useCache = true) {
+  if (!subject.value) {
+    resetState();
+    return;
+  }
+  const data = await getWithCache<any>(
+    "/graph/map",
+    { subject: subject.value, grade: grade.value },
+    { skipGlobalLoading: true, ttlMs: FAST_ENTRY_CACHE_TTL },
+  );
+  const overlayMap = new Map<number, any>((Array.isArray(data?.overlay) ? data.overlay : []).map((item: any) => [Number(item.kp_id), item]));
+  const list = Array.isArray(data?.base?.kps) ? data.base.kps : [];
+  visibleKps.value = list.map((item: any) => {
+    const overlay = overlayMap.get(Number(item.id)) || {};
+    return {
       id: Number(item.id),
       code: String(item.code || ""),
       title: String(item.title || ""),
-      active: item.active !== false,
-      enroll_status: String(item.enroll_status || ""),
-      completed: item.completed === true,
-      learning_available: item.learning_available !== false,
-    }));
-    const routeSubject = String(route.query.subject || "").trim();
-    const learningTitles = new Set(learningCourses.value.map((item) => item.title));
-    const nextSubject = routeSubject && !learningTitles.has(routeSubject)
-      ? ""
-      : resolveStudentSubject(routeSubject, subject.value, courses.value);
-    subject.value = nextSubject;
-    if (!nextSubject) {
-      resetWorkspaceState();
-      if (routeSubject) ElMessage.info("该课程已结束，知识图谱不再开放学习，可前往学习报告查看结果。");
-    }
-  } catch (e: any) {
-    resetWorkspaceState();
-    if (e?.response?.status === 401) return;
-    ElMessage.error(e?.response?.data?.detail ?? "加载课程失败");
-  }
-}
+      chapter: String(item.chapter || ""),
+      is_terminal: item.is_terminal === true,
+      mastery: Number(overlay.mastery || 0),
+      status: String(overlay.status || "not_started"),
+    };
+  });
 
-async function loadKps() {
-  if (!subject.value) {
-    resetWorkspaceState();
-    return;
-  }
-  workspaceState.value = {
-    ...workspaceState.value,
-    kpCount: 0,
-    categoryCount: 0,
-    filteredCount: 0,
-  };
-  try {
-    const data = await getWithCache("/graph/kps", { subject: subject.value, grade: grade.value });
-    kps.value = Array.isArray(data) ? data : [];
-    const routeKp = Number(route.query.kp || 0);
-    currentKpId.value = routeKp && kps.value.some((item) => item.id === routeKp) ? routeKp : (kps.value[0]?.id ?? null);
-  } catch (e: any) {
-    resetWorkspaceState();
-    if (e?.response?.status === 401) return;
-    ElMessage.error(e?.response?.data?.detail ?? "加载知识点失败");
-  }
+  const routeKp = Number(route.query.kp || 0);
+  const firstLearning = visibleKps.value.find((item) => item.status === "learning" && !isCompleted(item))
+    ?? visibleKps.value.find((item) => !isCompleted(item));
+  currentKpId.value = routeKp && visibleKps.value.some((item) => item.id === routeKp)
+    ? routeKp
+    : firstLearning?.id ?? visibleKps.value[0]?.id ?? null;
 }
 
 async function loadRecommendation() {
@@ -215,87 +408,82 @@ async function loadRecommendation() {
     reco.value = null;
     return;
   }
+  recoLoading.value = true;
   try {
-    const res = await api.get(`/reco?kp_id=${currentKpId.value}`, { skipGlobalLoading: true } as any);
+    const res = await api.get("/reco", {
+      params: { kp_id: currentKpId.value, ai: false },
+      skipGlobalLoading: true,
+    } as any);
     reco.value = res.data ?? null;
   } catch {
     reco.value = null;
+  } finally {
+    recoLoading.value = false;
   }
 }
 
-async function loadPathInfo() {
-  if (!currentKpId.value) {
-    pathInfo.value = null;
-    return;
-  }
+async function refreshPage(forceReload = false) {
+  loading.value = courses.value.length === 0 && visibleKps.value.length === 0;
   try {
-    const res = await api.get(`/graph/path/${currentKpId.value}`, { skipGlobalLoading: true } as any);
-    pathInfo.value = res.data ?? null;
-  } catch {
-    pathInfo.value = null;
+    const useCache = !forceReload;
+    await loadCourses(useCache);
+    await loadVisibleKps(useCache);
+    syncQuery();
+    centerCurrentStop();
+    loading.value = false;
+    void loadRecommendation().then(() => {
+      syncQuery();
+      centerCurrentStop();
+    });
+  } catch (e: any) {
+    resetState();
+    if (e?.response?.status !== 401) ElMessage.error(e?.response?.data?.detail ?? "加载学习路线失败");
+  } finally {
+    loading.value = false;
   }
-}
-
-async function refreshWorkspace() {
-  await loadCourses();
-  await loadKps();
-  await Promise.all([loadRecommendation(), loadPathInfo()]);
 }
 
 async function handleCourseChange() {
   currentKpId.value = null;
   reco.value = null;
-  pathInfo.value = null;
-  await loadKps();
-  await Promise.all([loadRecommendation(), loadPathInfo()]);
+  await loadVisibleKps();
   syncQuery();
+  centerCurrentStop();
+  void loadRecommendation().then(() => {
+    syncQuery();
+    centerCurrentStop();
+  });
 }
 
-function openStudentKpContent(id: number) {
+async function selectKp(kp: KP) {
+  if (nodeState(kp) === "locked") {
+    ElMessage.info("先完成当前关卡，后续关卡会自动解锁");
+    return;
+  }
+  currentKpId.value = kp.id;
+  await loadRecommendation();
+  syncQuery();
+  centerCurrentStop();
+}
+
+function openKp(id?: number | null) {
+  if (courseClosed.value) {
+    openReport();
+    return;
+  }
+  const targetId = Number(id || currentKpId.value || recommendedKp.value?.id || 0);
+  if (!targetId) {
+    ElMessage.warning("当前还没有可学习的关卡");
+    return;
+  }
   router.push({
-    path: `/student/kp-content/${id}`,
-    query: {
-      subject: subject.value || undefined,
-      from: "graph-workspace",
-    },
+    path: `/student/kp-content/${targetId}`,
+    query: { subject: subject.value || undefined, from: "learning-path" },
   });
 }
 
-function openCurrentLearning() {
-  if (!currentKpId.value) {
-    ElMessage.warning("请先选择一个知识点");
-    return;
-  }
-  openStudentKpContent(currentKpId.value);
-}
-
-function openFullscreenGraph() {
-  const preview = String(route.query.preview || "");
-  const resolved = router.resolve({
-    path: "/student/graph-fullscreen",
-    query: {
-      subject: subject.value || undefined,
-      kp: currentKpId.value ? String(currentKpId.value) : undefined,
-      preview: preview || undefined,
-    },
-  });
-  window.open(resolved.href, "_blank", "noopener,noreferrer");
-}
-
-function openRecommendedLearning() {
-  if (reco.value?.target_kp?.id) {
-    openStudentKpContent(reco.value.target_kp.id);
-    return;
-  }
-  openCurrentLearning();
-}
-
-function handleSelectKp(id: number) {
-  currentKpId.value = id;
-}
-
-function handleStateChange(payload: WorkspaceState) {
-  workspaceState.value = payload;
+function openReport() {
+  router.push({ path: "/student/report", query: { subject: subject.value || undefined } });
 }
 
 watch(
@@ -304,133 +492,109 @@ watch(
     const next = String(value || "").trim();
     if (next && next !== subject.value) {
       subject.value = next;
-      await loadCourses();
-      await loadKps();
-      await Promise.all([loadRecommendation(), loadPathInfo()]);
+      await refreshPage();
     }
   },
 );
 
-watch(
-  currentKpId,
-  async (value, oldValue) => {
-    if (value === oldValue) return;
-    syncQuery();
-    await Promise.all([loadRecommendation(), loadPathInfo()]);
-  },
-);
-
-onMounted(refreshWorkspace);
+onMounted(() => refreshPage());
 </script>
 
 <template>
-  <div class="graph-page" :class="{ 'graph-page--standalone': isStandaloneWorkspace }">
-    <section class="graph-page__toolbar">
-      <div class="graph-page__toolbar-copy">
-        <span class="graph-page__eyebrow">学习导航</span>
-        <h1>知识图谱</h1>
-        <p>{{ currentCourse?.title || "当前没有可学习课程" }}</p>
-        <div class="graph-page__toolbar-meta">
-          <span>当前知识点：{{ currentNodeCode }}</span>
-          <span>学习状态：{{ graphStatusText }}</span>
-        </div>
+  <div v-loading="loading" class="learning-route-page">
+    <section class="learning-route-hero">
+      <div class="learning-route-hero__copy">
+        <span class="learning-route-badge">个性化学习路线</span>
+        <h1>{{ pageTitle }}</h1>
+        <p>{{ pageLead }}</p>
       </div>
-
-      <div class="graph-page__toolbar-actions">
-        <el-select
-          v-model="subject"
-          class="graph-page__select"
-          placeholder="选择课程"
-          :disabled="courses.length === 0"
-          @change="handleCourseChange"
-        >
-          <el-option v-for="course in learningCourses" :key="course.id" :label="course.title" :value="course.title" />
+      <div class="learning-route-actions">
+        <el-select v-model="subject" class="learning-route-course" placeholder="选择课程" :disabled="visibleCourses.length === 0" @change="handleCourseChange">
+          <el-option v-for="course in visibleCourses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
-        <button class="graph-page__toolbar-btn" type="button" @click="refreshWorkspace">刷新</button>
-        <button class="graph-page__toolbar-btn" type="button" @click="openFullscreenGraph">全屏图谱</button>
-        <button class="graph-page__toolbar-btn graph-page__toolbar-btn--primary" type="button" @click="openCurrentLearning">
-          去学习
-        </button>
+        <button type="button" class="learning-route-button" @click="() => refreshPage(true)">刷新</button>
+        <button v-if="courseClosed" type="button" class="learning-route-button learning-route-button--primary" @click="openReport">查看报告</button>
+        <button v-else type="button" class="learning-route-button learning-route-button--primary" @click="openKp(currentKpId || recommendedKp?.id)">开始本关</button>
       </div>
     </section>
 
-    <section class="graph-page__overview-shell">
-      <div class="graph-page__overview">
-        <article v-for="item in graphOverviewCards" :key="item.label" class="graph-page__overview-card">
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-          <small>{{ item.hint }}</small>
-        </article>
-      </div>
+    <section v-if="!subject" class="learning-route-empty">
+      <strong>当前没有可继续学习的课程</strong>
+      <p>如果已经完成课程，请进入学习报告查看评分结果。</p>
+      <button type="button" class="learning-route-button learning-route-button--primary" @click="openReport">查看学习报告</button>
     </section>
 
-    <section class="graph-page__content">
-      <section class="graph-page__workspace">
-        <KnowledgeGraphWorkspace
-          v-if="subject"
-          embedded
-          actor-mode="student"
-          :subject="subject"
-          :grade="grade"
-          :current-kp-id="currentKpId"
-          :recommended-kp-id="reco?.target_kp?.id ?? null"
-          :highlighted-kp-ids="pathInfo?.next_candidates ?? null"
-          :graph-path-hint="graphPathHint"
-          :graph-reco-hint="graphRecoHint"
-          @select-kp="handleSelectKp"
-          @open-content="openStudentKpContent"
-          @state-change="handleStateChange"
-        />
-        <div v-else class="graph-page__ended-state">
-          <strong>当前没有可继续学习的课程</strong>
-          <p>老师已结束课程后，知识图谱会停止开放学习。你仍可以在学习报告中查看本学期结果。</p>
-          <button type="button" class="graph-page__toolbar-btn graph-page__toolbar-btn--primary" @click="router.push({ path: '/student/report' })">
-            查看学习报告
-          </button>
+    <section v-else class="learning-route-layout">
+      <main class="learning-route-board">
+        <header class="learning-route-board__head">
+          <div>
+            <span class="learning-route-badge">当前课程</span>
+            <h2>{{ currentCourse?.title || subject }}</h2>
+          </div>
+          <div class="learning-route-progress">
+            <strong>{{ progressPercent }}%</strong>
+            <span>路线进度</span>
+          </div>
+        </header>
+
+        <div
+          ref="mapRef"
+          class="learning-route-map"
+          :class="{ 'is-dragging': isDragging }"
+          @pointerdown="onMapPointerDown"
+          @pointermove="onMapPointerMove"
+          @pointerup="onMapPointerUp"
+          @pointerleave="onMapPointerUp"
+        >
+          <div class="learning-route-canvas" :style="{ width: `${mapWidth}px`, height: `${mapHeight}px` }">
+            <svg class="learning-route-lines" :viewBox="`0 0 ${mapWidth} ${mapHeight}`" aria-hidden="true">
+              <line
+                v-for="line in connectorLines"
+                :key="line.key"
+                class="learning-route-line"
+                :class="`is-${line.state}`"
+                :x1="line.x1"
+                :y1="line.y1"
+                :x2="line.x2"
+                :y2="line.y2"
+              />
+            </svg>
+            <article
+              v-for="stop in routeStops"
+              :key="stop.kp.id"
+              class="learning-route-stop"
+              :class="[`is-${nodeState(stop.kp)}`, `is-${stop.role}`, cardSide(stop)]"
+              :style="{ left: `${stop.x}px`, top: `${stop.y}px` }"
+            >
+              <button class="learning-route-node" type="button" @click.stop="selectKp(stop.kp)">
+                <el-icon><component :is="nodeIcon(stop.kp)" /></el-icon>
+              </button>
+              <div class="learning-route-card">
+                <span>{{ stop.kp.code }}</span>
+                <strong>{{ stop.kp.title }}</strong>
+                <small>{{ stop.role === "start" ? "共同起点" : (stop.role === "terminal" ? "达标终点" : "系统推荐节点") }}</small>
+              </div>
+            </article>
+          </div>
         </div>
-      </section>
+      </main>
 
-      <aside class="graph-page__side">
-        <section class="graph-page__side-panel">
-          <div class="graph-page__side-head">
-            <span class="graph-page__section-eyebrow">当前学习点</span>
-            <h3>{{ currentNodeLabel }}</h3>
-            <p>{{ graphLead }}</p>
-          </div>
+      <aside class="learning-route-side">
+        <section class="learning-route-panel learning-route-panel--focus">
+          <span class="learning-route-badge">{{ focusBadge }}</span>
+          <h2>{{ currentKp?.title || recommendedKp?.title || "等待推荐" }}</h2>
+          <p>{{ focusText }}</p>
+          <button class="learning-route-button learning-route-button--primary learning-route-button--wide" type="button" @click="openKp(currentKpId || recommendedKp?.id)">
+            {{ focusActionText }}
+          </button>
+        </section>
 
-          <div class="graph-page__focus-card">
-            <span class="graph-page__focus-code">{{ currentNodeCode }}</span>
-            <strong>{{ graphStatusText }}</strong>
-            <p>{{ currentKp?.chapter || "当前知识点尚未配置所属分类" }}</p>
-          </div>
-
-          <div class="graph-page__side-list">
-            <article class="graph-page__side-item">
-              <span>推荐学习</span>
-              <strong>{{ recommendationLabel }}</strong>
-              <p>{{ reco?.reason_summary || "系统会根据你的当前学习状态推荐下一步内容。" }}</p>
-            </article>
-
-            <article class="graph-page__side-item">
-              <span>前置状态</span>
-              <strong>{{ pathInfo?.can_unlock_next === false ? "需要补前置" : "可以继续推进" }}</strong>
-              <p>{{ blockedSummary }}</p>
-            </article>
-
-            <article class="graph-page__side-item">
-              <span>下一步路径</span>
-              <strong>{{ nextCandidatesPreview }}</strong>
-              <p>{{ pathInfo?.path_summary || "完成当前知识点后，系统会给出后续学习建议。" }}</p>
-            </article>
-          </div>
-
-          <div class="graph-page__side-actions">
-            <button class="graph-page__side-btn graph-page__side-btn--primary" type="button" @click="openCurrentLearning">
-              进入当前知识点
-            </button>
-            <button class="graph-page__side-btn" type="button" @click="openRecommendedLearning">
-              学习推荐内容
-            </button>
+        <section class="learning-route-panel">
+          <span class="learning-route-badge">路线概况</span>
+          <div class="learning-route-stats">
+            <div><strong>{{ routeKps.length }}</strong><span>当前显示</span></div>
+            <div><strong>{{ completedCount }}</strong><span>已完成</span></div>
+            <div><strong>{{ previewCount || routeTerminalCount }}</strong><span>{{ previewCount ? "待解锁" : "终点" }}</span></div>
           </div>
         </section>
       </aside>
@@ -439,541 +603,378 @@ onMounted(refreshWorkspace);
 </template>
 
 <style scoped>
-.graph-page {
-  --graph-theme-surface: #ffffff;
-  --graph-theme-surface-soft: #f8fafc;
-  --graph-theme-surface-muted: #f1f5f9;
-  --graph-theme-surface-accent: #eefbf3;
-  --graph-theme-border: rgba(148, 163, 184, 0.22);
-  --graph-theme-border-strong: rgba(34, 197, 94, 0.24);
-  --graph-theme-ink-soft: #64748b;
-  --graph-panel-height: min(64vh, 760px);
-  min-height: calc(100dvh - 96px);
+.learning-route-page {
+  width: min(100%, 1520px);
+  min-height: calc(100vh - 96px);
+  margin: 0 auto;
   display: grid;
-  gap: 16px;
-  min-width: 0;
+  gap: 18px;
+  padding-bottom: 24px;
 }
 
-.graph-page__toolbar,
-.graph-page__overview-shell,
-.graph-page__workspace,
-.graph-page__side-panel {
-  border-radius: 22px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+.learning-route-hero,
+.learning-route-board,
+.learning-route-panel,
+.learning-route-empty {
+  border: 1px solid #d8e5d4;
+  border-radius: 18px;
   background: #ffffff;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
-  min-width: 0;
-  max-width: 100%;
 }
 
-.graph-page__toolbar {
+.learning-route-hero {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 24px 26px;
-  background:
-    radial-gradient(circle at top left, rgba(219, 234, 254, 0.34), transparent 24%),
-    radial-gradient(circle at right bottom, rgba(220, 252, 231, 0.14), transparent 24%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  align-items: center;
+  gap: 24px;
+  padding: 22px 28px;
 }
 
-.graph-page__toolbar-copy {
+.learning-route-hero__copy {
   display: grid;
   gap: 8px;
-  max-width: 60ch;
   min-width: 0;
 }
 
-.graph-page__eyebrow {
-  display: inline-flex;
+.learning-route-badge {
   width: fit-content;
+  display: inline-flex;
   padding: 6px 12px;
   border-radius: 999px;
-  background: #eefbf3;
-  border: 1px solid rgba(34, 197, 94, 0.18);
+  background: #edf8e8;
+  color: #2b7a0b;
+  border: 1px solid #cdeec0;
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #166534;
+  font-weight: 900;
 }
 
-.graph-page__toolbar-copy h1 {
+.learning-route-hero h1,
+.learning-route-board__head h2,
+.learning-route-panel h2 {
   margin: 0;
-  font-size: clamp(28px, 4vw, 44px);
-  line-height: 1.02;
-  letter-spacing: -0.04em;
-  color: #1f2937;
+  color: #102033;
   overflow-wrap: anywhere;
 }
 
-.graph-page__toolbar-copy p {
+.learning-route-hero h1 {
+  font-size: 34px;
+  line-height: 1.12;
+}
+
+.learning-route-hero p,
+.learning-route-panel p,
+.learning-route-empty p {
   margin: 0;
-  color: #74654e;
-  font-size: 15px;
+  color: #5f6d5d;
   line-height: 1.7;
 }
 
-.graph-page__toolbar-meta {
+.learning-route-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px 14px;
-  min-width: 0;
-}
-
-.graph-page__toolbar-meta span {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--graph-theme-ink-soft);
-  padding: 7px 12px;
-  border-radius: 999px;
-  background: var(--graph-theme-surface-soft);
-  border: 1px solid var(--graph-theme-border);
-}
-
-.graph-page__toolbar-actions {
-  display: flex;
-  align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  min-width: 0;
+  justify-content: flex-end;
 }
 
-.graph-page__select {
-  width: 240px;
-  max-width: 100%;
+.learning-route-course {
+  width: 260px;
 }
 
-.graph-page__toolbar-actions :deep(.el-select__wrapper) {
-  min-height: 48px;
-  border-radius: 14px !important;
-  background: var(--graph-theme-surface-soft) !important;
-  box-shadow: 0 0 0 1px var(--graph-theme-border) inset !important;
-}
-
-.graph-page__toolbar-actions :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 1px var(--graph-theme-border-strong) inset, 0 0 0 3px rgba(205, 185, 145, 0.18) !important;
-}
-
-.graph-page__toolbar-actions :deep(.el-select__placeholder),
-.graph-page__toolbar-actions :deep(.el-select__selected-item),
-.graph-page__toolbar-actions :deep(.el-select__caret) {
-  color: var(--graph-theme-ink-soft) !important;
-}
-
-.graph-page__toolbar-btn {
-  min-width: 118px;
-  min-height: 40px;
-  padding: 0 20px;
-  border-radius: 999px;
-  border: 1px solid var(--graph-theme-border);
-  background: var(--graph-theme-surface);
-  color: #475569;
-  font-size: 14px;
-  font-weight: 700;
+.learning-route-button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 18px;
+  background: #eef4ea;
+  color: #2e3d2a;
+  font-weight: 900;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-  box-shadow: 0 6px 16px rgba(31, 41, 55, 0.06);
+  box-shadow: inset 0 -3px 0 rgba(15, 23, 42, 0.08);
 }
 
-.graph-page__toolbar-btn:hover,
-.graph-page__toolbar-btn:focus-visible {
-  transform: translateY(-1px);
-  border-color: var(--graph-theme-border-strong);
-  background: var(--graph-theme-surface-soft);
-  color: #243449;
-}
-
-.graph-page__toolbar-btn--primary {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  border-color: var(--graph-theme-border-strong);
+.learning-route-button--primary {
+  background: #58cc02;
   color: #ffffff;
+  box-shadow: inset 0 -4px 0 #46a302;
 }
 
-.graph-page__toolbar-btn--primary:hover,
-.graph-page__toolbar-btn--primary:focus-visible {
-  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-  border-color: var(--graph-theme-border-strong);
-  color: #ffffff;
+.learning-route-button--wide {
+  width: 100%;
 }
 
-.graph-page__overview {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  min-width: 0;
-}
-
-.graph-page__overview-shell {
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.graph-page__overview-card {
-  display: grid;
-  gap: 10px;
-  min-height: 128px;
-  padding: 18px 28px 16px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at top left, rgba(219, 234, 254, 0.28), transparent 36%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06);
-  align-content: start;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.graph-page__overview-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 30px rgba(15, 23, 42, 0.08);
-}
-
-.graph-page__overview-card span,
-.graph-page__section-eyebrow,
-.graph-page__side-item span,
-.graph-page__focus-card span {
-  font-size: 12px;
-  color: #4e6076;
-  font-weight: 800;
-}
-
-.graph-page__overview-card strong {
-  font-size: clamp(26px, 3.2vw, 38px);
-  line-height: 1.05;
-  color: #10203d;
-  overflow-wrap: anywhere;
-}
-
-.graph-page__overview-card small {
-  color: #6d7f96;
-  font-size: 13px;
-  line-height: 1.45;
-  max-width: 20ch;
-}
-
-.graph-page__content {
+.learning-route-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 18px;
+  gap: 20px;
   align-items: start;
-  min-width: 0;
 }
 
-.graph-page__workspace {
+.learning-route-board {
+  padding: 24px;
   overflow: hidden;
-  min-height: var(--graph-panel-height);
-  height: var(--graph-panel-height);
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  min-width: 0;
 }
 
-.graph-page__ended-state {
-  min-height: var(--graph-panel-height);
+.learning-route-board__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #edf3ea;
+}
+
+.learning-route-progress {
+  width: 104px;
+  height: 104px;
+  border-radius: 999px;
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 12px;
-  padding: 32px;
-  text-align: center;
-  border-radius: 22px;
-  border: 1px dashed var(--graph-theme-border);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: conic-gradient(#58cc02 var(--progress, 60%), #e8f4e3 0);
+  color: #1f3d12;
 }
 
-.graph-page__ended-state strong {
-  color: #0f172a;
-  font-size: 22px;
+.learning-route-progress strong {
+  font-size: 26px;
 }
 
-.graph-page__ended-state p {
-  max-width: 520px;
-  margin: 0;
-  color: var(--graph-theme-ink-soft);
-  line-height: 1.7;
+.learning-route-progress span {
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.graph-page__side {
-  min-width: 0;
+.learning-route-map {
+  height: min(66vh, 680px);
+  min-height: 560px;
+  margin-top: 18px;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(141, 184, 132, 0.32);
+  border-radius: 16px;
+  background:
+    linear-gradient(rgba(221, 235, 214, 0.26) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(221, 235, 214, 0.26) 1px, transparent 1px),
+    #fffef8;
+  background-size: 40px 40px, 40px 40px, auto;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  scrollbar-width: thin;
+}
+
+.learning-route-map.is-dragging {
+  cursor: grabbing;
+}
+
+.learning-route-canvas {
+  position: relative;
+  width: 720px;
+  min-width: 1040px;
+  margin: 0 auto;
+}
+
+.learning-route-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
   height: 100%;
+  pointer-events: none;
+  z-index: 1;
 }
 
-.graph-page__side-panel {
+.learning-route-line {
+  stroke: #b7c7d9;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.learning-route-line.is-done {
+  stroke: #58cc02;
+  stroke-width: 5;
+}
+
+.learning-route-line.is-current {
+  stroke: #ffb000;
+  stroke-width: 5;
+}
+
+.learning-route-line.is-locked {
+  stroke-dasharray: 8 8;
+}
+
+.learning-route-stop {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 0;
+  height: 0;
+  z-index: 3;
+}
+
+.learning-route-node {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  border: 0;
+  border-radius: 999px;
+  background: #58cc02;
+  color: #ffffff;
+  font-size: 30px;
+  cursor: pointer;
+  box-shadow: inset 0 -8px 0 #46a302, 0 10px 20px rgba(88, 204, 2, 0.24);
+  z-index: 3;
+}
+
+.learning-route-node::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 999px;
+  border: 4px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 5px 0 rgba(15, 23, 42, 0.08);
+}
+
+.learning-route-node :deep(.el-icon) {
+  position: relative;
+  z-index: 1;
+}
+
+.learning-route-card {
+  position: absolute;
+  top: 0;
+  width: 168px;
+  min-height: 92px;
   display: grid;
-  align-content: start;
-  gap: 16px;
-  padding: 20px;
-  min-height: var(--graph-panel-height);
-  height: var(--graph-panel-height);
+  gap: 5px;
+  place-items: center;
+  padding: 15px 16px;
+  border-radius: 14px;
+  border: 1px solid #dfead9;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  text-align: center;
+  z-index: 2;
+}
+
+.learning-route-stop.is-card-right .learning-route-card {
+  left: 88px;
+  transform: translateY(-50%);
+}
+
+.learning-route-stop.is-card-left .learning-route-card {
+  right: 88px;
+  transform: translateY(-50%);
+}
+
+.learning-route-card span,
+.learning-route-card small {
+  color: #71806c;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.learning-route-card strong {
+  color: #102033;
+  overflow-wrap: anywhere;
+}
+
+.learning-route-stop.is-current .learning-route-node {
+  background: linear-gradient(180deg, #ffc800 0%, #ffab00 100%);
+  box-shadow: inset 0 -8px 0 #d38a00, 0 18px 30px rgba(255, 178, 0, 0.28);
+}
+
+.learning-route-stop.is-open .learning-route-node {
+  background: linear-gradient(180deg, #57c7ff 0%, #1d9ad6 100%);
+  box-shadow: inset 0 -8px 0 #147fb7, 0 16px 26px rgba(29, 154, 214, 0.2);
+}
+
+.learning-route-stop.is-locked .learning-route-node {
+  background: linear-gradient(180deg, #d7dfd1 0%, #aebbaa 100%);
+  box-shadow: inset 0 -8px 0 #879281, 0 12px 22px rgba(95, 111, 90, 0.16);
+}
+
+.learning-route-stop.is-locked .learning-route-card {
+  opacity: 0.68;
+}
+
+.learning-route-side {
+  display: grid;
+  gap: 18px;
   position: sticky;
   top: 18px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  background:
-    radial-gradient(circle at top left, rgba(219, 234, 254, 0.22), transparent 24%),
-    linear-gradient(180deg, var(--graph-theme-surface) 0%, #f8fafc 100%);
 }
 
-.graph-page__side-head {
+.learning-route-panel {
   display: grid;
-  gap: 8px;
+  gap: 14px;
+  padding: 20px;
 }
 
-.graph-page__section-eyebrow {
-  display: inline-flex;
-  width: fit-content;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: #eefbf3;
-  color: #166534;
-  border: 1px solid rgba(34, 197, 94, 0.18);
-  font-weight: 700;
+.learning-route-panel--focus {
+  background: #fbfff8;
 }
 
-.graph-page__side-head h3 {
-  margin: 0;
+.learning-route-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.learning-route-stats div {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  background: #f3f8f0;
+}
+
+.learning-route-stats strong {
   font-size: 24px;
-  line-height: 1.25;
-  color: #0f172a;
-  overflow-wrap: anywhere;
+  color: #102033;
 }
 
-.graph-page__side-head p,
-.graph-page__side-item p,
-.graph-page__focus-card p {
-  margin: 0;
-  color: #766853;
-  font-size: 13px;
-  line-height: 1.7;
+.learning-route-stats span {
+  color: #71806c;
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.graph-page__focus-card {
+.learning-route-empty {
   display: grid;
-  gap: 10px;
-  padding: 18px;
-  border-radius: 18px;
-  border: 1px solid var(--graph-theme-border);
-  background: linear-gradient(135deg, var(--graph-theme-surface-accent) 0%, var(--graph-theme-surface) 100%);
-  min-width: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-}
-
-.graph-page__focus-card strong,
-.graph-page__side-item strong {
-  font-size: 18px;
-  line-height: 1.4;
-  color: #0f172a;
-  overflow-wrap: anywhere;
-}
-
-.graph-page__focus-code {
-  display: inline-flex;
-  width: fit-content;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--graph-theme-surface);
-  border: 1px solid var(--graph-theme-border);
-}
-
-.graph-page__side-list {
-  display: grid;
+  place-items: center;
+  text-align: center;
   gap: 12px;
+  padding: 48px;
 }
 
-.graph-page__side-item {
-  display: grid;
-  gap: 6px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  border: 1px solid var(--graph-theme-border);
-  background: linear-gradient(180deg, var(--graph-theme-surface) 0%, var(--graph-theme-surface-soft) 100%);
-  min-width: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+@media (max-width: 1080px) {
+  .learning-route-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .learning-route-side {
+    position: static;
+  }
 }
 
-.graph-page__side-item:hover {
-  transform: translateY(-2px);
-  border-color: var(--graph-theme-border-strong);
-  background: linear-gradient(180deg, var(--graph-theme-surface) 0%, var(--graph-theme-surface-accent) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    0 12px 22px rgba(31, 41, 55, 0.08);
-}
-
-.graph-page__side-actions {
-  display: grid;
-  gap: 10px;
-  margin-top: auto;
-}
-
-.graph-page__side-btn {
-  min-height: 40px;
-  padding: 0 18px;
-  border-radius: 999px;
-  border: 1px solid var(--graph-theme-border);
-  background: var(--graph-theme-surface);
-  color: #475569;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-  box-shadow: 0 6px 16px rgba(31, 41, 55, 0.06);
-}
-
-.graph-page__side-btn--primary {
-  background: linear-gradient(135deg, #edf7cf 0%, #fff7e8 100%);
-  border-color: var(--graph-theme-border);
-  color: #4c3d24;
-}
-
-.graph-page__side-btn:hover,
-.graph-page__side-btn:focus-visible {
-  transform: translateY(-1px);
-  border-color: var(--graph-theme-border-strong);
-  background: var(--graph-theme-surface-soft);
-}
-
-.graph-page :deep(.workspace-shell) {
-  padding: 0;
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.graph-page :deep(.workspace-shell--embedded .workspace-content) {
-  min-height: 100%;
-  height: 100%;
-  max-height: 100%;
-  padding: 0;
-  background: transparent;
-}
-
-.graph-page :deep(.workspace-shell--embedded .workspace-stage) {
-  min-height: 100%;
-  height: 100%;
-}
-
-.graph-page :deep(.workspace-stage) {
-  background: linear-gradient(180deg, var(--graph-theme-surface) 0%, var(--graph-theme-surface-soft) 100%);
-}
-
-.graph-page :deep(.workspace-stage__top) {
-  background:
-    radial-gradient(circle at top left, rgba(241, 226, 198, 0.18), transparent 24%),
-    rgba(255, 252, 246, 0.9);
-  border-bottom: 1.5px solid var(--graph-theme-border);
-}
-
-.graph-page :deep(.workspace-stage__pill) {
-  background: var(--graph-theme-surface-soft);
-  border: 1.5px solid var(--graph-theme-border);
-  color: var(--graph-theme-ink-soft);
-}
-
-.graph-page :deep(.workspace-stage__learn-btn),
-.graph-page :deep(.workspace-stage__focus-btn),
-.graph-page :deep(.workspace-stage__menu button) {
-  border: 1.5px solid var(--graph-theme-border);
-  background: var(--graph-theme-surface);
-  color: #243449;
-}
-
-.graph-page :deep(.workspace-stage__learn-btn--ghost),
-.graph-page :deep(.workspace-stage__focus-btn--ghost) {
-  background: var(--graph-theme-surface-soft);
-}
-
-.graph-page :deep(.workspace-stage__learn-btn:hover),
-.graph-page :deep(.workspace-stage__focus-btn:hover),
-.graph-page :deep(.workspace-stage__menu button:hover) {
-  border-color: var(--graph-theme-border-strong);
-  background: var(--graph-theme-surface-accent);
-  color: #243449;
-}
-
-.graph-page :deep(.workspace-stage__viewport) {
-  background:
-    radial-gradient(circle at top left, rgba(201, 237, 255, 0.14), transparent 20%),
-    linear-gradient(180deg, #fffcf8 0%, #fff7ee 100%);
-}
-
-.graph-page :deep(.workspace-stage__empty) {
-  border: 1.5px solid var(--graph-theme-border);
-  background: rgba(255, 253, 248, 0.98);
-}
-
-.graph-page :deep(.workspace-drawer),
-.graph-page :deep(.workspace-tree__summary),
-.graph-page :deep(.workspace-tree__child),
-.graph-page :deep(.workspace-stage__menu),
-.graph-page :deep(.workspace-zoom) {
-  border-color: var(--graph-theme-border);
-  background: rgba(255, 252, 247, 0.96);
-}
-
-.graph-page :deep(.workspace-drawer__tabs) {
-  background: var(--graph-theme-surface-soft);
-  border: 1.5px solid var(--graph-theme-border);
-}
-
-.graph-page :deep(.workspace-drawer__tab),
-.graph-page :deep(.workspace-drawer__metric),
-.graph-page :deep(.workspace-drawer__desc),
-.graph-page :deep(.workspace-drawer__empty),
-.graph-page :deep(.workspace-drawer__tag) {
-  border-color: var(--graph-theme-border);
-  background: linear-gradient(180deg, var(--graph-theme-surface) 0%, var(--graph-theme-surface-soft) 100%);
-  color: #243449;
-}
-
-.graph-page :deep(.workspace-drawer__secondary),
-.graph-page :deep(.workspace-drawer__link-btn) {
-  background: var(--graph-theme-surface-soft);
-  border-color: var(--graph-theme-border);
-  color: #243449;
-}
-
-.graph-page :deep(.workspace-drawer__secondary:hover),
-.graph-page :deep(.workspace-drawer__link-btn:hover),
-.graph-page :deep(.workspace-drawer__tag:hover) {
-  background: var(--graph-theme-surface-accent);
-  border-color: var(--graph-theme-border-strong);
-  color: #243449;
-}
-
-@media (max-width: 1100px) {
-  .graph-page__toolbar {
+@media (max-width: 720px) {
+  .learning-route-hero,
+  .learning-route-board__head {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .graph-page__overview,
-  .graph-page__content {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .graph-page__toolbar-copy h1 {
-    font-size: 28px;
-  }
-
-  .graph-page__select {
+  .learning-route-course,
+  .learning-route-actions {
     width: 100%;
   }
 
-  .graph-page__workspace {
-    min-height: min(76vh, 920px);
+  .learning-route-map {
+    min-height: 500px;
   }
 }
 </style>

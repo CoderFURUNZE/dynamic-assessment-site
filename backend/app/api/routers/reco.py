@@ -14,18 +14,19 @@ router = APIRouter(prefix="/reco", tags=["reco"])
 def _handle_reco(
     *,
     kp_id: int,
+    ai: bool,
     session: Session,
     user,
 ):
     if getattr(user, "role", None) == "student":
-        kp = assert_student_kp_access(session, int(user.id), kp_id)
+        kp = assert_student_kp_access(session, int(user.id), kp_id, allow_completed=True)
     else:
         kp = session.get(KnowledgePoint, kp_id)
     if kp is None:
         from fastapi import HTTPException
 
         raise HTTPException(status_code=404, detail="Knowledge point not found")
-    result = recommend_next(session, user_id=user.id, kp_id=kp_id, subject=kp.subject, grade=kp.grade)
+    result = recommend_next(session, user_id=user.id, kp_id=kp_id, subject=kp.subject, grade=kp.grade, enable_ai=ai)
     log_behavior_event(
         session,
         user_id=user.id,
@@ -42,7 +43,8 @@ def _handle_reco(
 @router.get("/", response_model=RecommendationOut)
 def reco(
     kp_id: int,
+    ai: bool = False,
     session: Session = Depends(get_session),
     user=Depends(get_current_user),
 ):
-    return _handle_reco(kp_id=kp_id, session=session, user=user)
+    return _handle_reco(kp_id=kp_id, ai=ai, session=session, user=user)

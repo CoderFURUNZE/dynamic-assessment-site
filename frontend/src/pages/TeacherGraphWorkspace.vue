@@ -62,7 +62,8 @@ async function loadCourses() {
   try {
     const res = await api.get("/graph/courses");
     courses.value = res.data ?? [];
-    subject.value = resolveTeacherSubject(String(route.query.subject || ""), subject.value, courses.value);
+    const routeSubject = String(route.query.subject || "").trim();
+    subject.value = resolveTeacherSubject(routeSubject, subject.value, courses.value) || routeSubject;
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? "加载教师课程失败");
   }

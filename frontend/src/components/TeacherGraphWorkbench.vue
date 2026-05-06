@@ -26,6 +26,7 @@ type KP = {
   literacy_tag?: string;
   importance?: number;
   difficulty?: number;
+  is_terminal?: boolean;
   pos_x?: number | null;
   pos_y?: number | null;
 };
@@ -176,6 +177,7 @@ const form = reactive({
   literacy_tag: "",
   importance: 0.5,
   difficulty: 0.5,
+  is_terminal: false,
 });
 
 const chapterSummary = computed(() => {
@@ -409,6 +411,19 @@ function saveManualKpPositionIds() {
 
 function markKpPositionManual(kpId: number) {
   manualKpPositionIds.value = new Set([...manualKpPositionIds.value, kpId]);
+}
+
+function syncManualKpPositionIdsFromRows(rows: KP[]) {
+  const ids = new Set(manualKpPositionIds.value);
+  for (const kp of rows) {
+    if (!kp.id || kp.pos_x == null || kp.pos_y == null) continue;
+    const x = Number(kp.pos_x);
+    const y = Number(kp.pos_y);
+    if (Number.isFinite(x) && Number.isFinite(y) && (x >= 12000 || y >= 12000)) {
+      ids.add(kp.id);
+    }
+  }
+  manualKpPositionIds.value = ids;
 }
 
 function viewStateStorageKey() {
@@ -670,6 +685,12 @@ function pointInsideViewport(point: Point, radius = 96) {
   );
 }
 
+function hasVisibleGraphNodeInViewport() {
+  if (categoryNodes.value.some((item) => pointInsideViewport(categoryPoint(item.key), 150))) return true;
+  if (showAllKps.value && visibleKps.value.some((kp) => pointInsideViewport(displayKpPoint(kp.id), nodeRadius(kp) + 48))) return true;
+  return false;
+}
+
 const renderedKps = computed(() => {
   if (!showAllKps.value) return [];
   if (viewportWidth.value <= 0 || viewportHeight.value <= 0) return visibleKps.value;
@@ -681,7 +702,7 @@ const renderedKps = computed(() => {
 });
 
 const renderedKpIds = computed(() => new Set(renderedKps.value.map((kp) => kp.id)));
-const renderedCategoryKpLines = computed(() => (showDenseGraphDetails.value ? renderedKps.value : []));
+const renderedCategoryKpLines = computed(() => (showAllKps.value ? renderedKps.value : []));
 const showDenseGraphDetails = computed(() => !draggingCanvas.value && !draggingNode.value && canvasScale.value >= 0.72 && renderedKps.value.length <= 90);
 
 const kpById = computed(() => new Map(kps.value.map((kp) => [kp.id, kp])));
@@ -716,15 +737,43 @@ function categoryPoint(key: string) {
   return categoryPositions.value[key] ?? defaultCategoryPositions.value[key] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y - 360 };
 }
 
+function sanitizeCategoryPositions(positions: Record<string, Point>) {
+  const next: Record<string, Point> = {};
+  for (const item of categoryNodes.value) {
+    const fallback = defaultCategoryPositions.value[item.key] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y - 360 };
+    const point = positions[item.key] ?? fallback;
+    const x = Number(point.x);
+    const y = Number(point.y);
+    next[item.key] = {
+      x: Number.isFinite(x) && x >= 0 && x <= CANVAS_WIDTH ? x : fallback.x,
+      y: Number.isFinite(y) && y >= 0 && y <= CANVAS_HEIGHT ? y : fallback.y,
+    };
+  }
+
+  const values = Object.values(next);
+  if (values.length >= 2) {
+    const minX = Math.min(...values.map((point) => point.x));
+    const maxX = Math.max(...values.map((point) => point.x));
+    const minY = Math.min(...values.map((point) => point.y));
+    const maxY = Math.max(...values.map((point) => point.y));
+    if (maxX - minX > 5200 || maxY - minY > 3600) {
+      return { ...defaultCategoryPositions.value };
+    }
+  }
+
+  return next;
+}
+
 function kpPoint(id: number) {
   return kpPositions.value[id] ?? defaultKpPositions.value[id] ?? { x: INITIAL_CENTER_X, y: INITIAL_CENTER_Y };
 }
 
 function focusedKpPoint(kp: KP) {
   const chapter = kp.chapter || "未分章";
-  if (!showAllKps.value || activeChapter.value !== chapter) return kpPoint(kp.id);
+  if (!showAllKps.value) return kpPoint(kp.id);
   if (draggingNode.value?.type === "kp" && Number(draggingNode.value.id) === kp.id) return kpPoint(kp.id);
-  if (manualKpPositionIds.value.has(kp.id)) return kpPoint(kp.id);
+  const persisted = kpPoint(kp.id);
+  if (manualKpPositionIds.value.has(kp.id)) return persisted;
   const anchor = categoryPoint(chapter);
   const siblings = kps.value
     .filter((item) => (item.chapter || "未分章") === chapter)
@@ -742,7 +791,8 @@ function focusedKpPoint(kp: KP) {
 }
 
 function displayKpPoint(id: number) {
-  return kpPoint(id);
+  const kp = kpById.value.get(id);
+  return kp ? focusedKpPoint(kp) : kpPoint(id);
 }
 
 function edgeLine(edge: Edge) {
@@ -877,6 +927,7 @@ function syncFormFromSelected() {
     literacy_tag: selectedKp.value.literacy_tag || "",
     importance: selectedKp.value.importance ?? 0.5,
     difficulty: selectedKp.value.difficulty ?? 0.5,
+    is_terminal: Boolean(selectedKp.value.is_terminal),
   });
 }
 
@@ -905,6 +956,7 @@ function resetCreateForm(chapter = "") {
     literacy_tag: "",
     importance: 0.5,
     difficulty: 0.5,
+    is_terminal: false,
   });
 }
 
@@ -929,17 +981,6 @@ function selectCategory(chapter: string) {
     return;
   }
   const supportsCategoryToggle = props.fullscreen || props.embedded;
-  if (supportsCategoryToggle && selectedType.value === "category" && selectedCategory.value === chapter && showAllKps.value && activeChapter.value === chapter) {
-    showAllKps.value = false;
-    selectedType.value = "category";
-    selectedCategory.value = chapter;
-    selectedId.value = null;
-    graphEditorOpen.value = false;
-    drawerOpen.value = false;
-    detailTab.value = "overview";
-    centerOnPoint(categoryPoint(chapter));
-    return;
-  }
   selectedType.value = "category";
   selectedCategory.value = chapter;
   selectedId.value = null;
@@ -947,11 +988,17 @@ function selectCategory(chapter: string) {
   drawerOpen.value = !props.fullscreen;
   detailTab.value = "overview";
   activeChapter.value = chapter;
-  if (supportsCategoryToggle) showAllKps.value = true;
+  if (supportsCategoryToggle) {
+    search.value = "";
+    showIncompleteOnly.value = false;
+    fullscreenFocusFilter.value = "all";
+    showAllKps.value = true;
+  }
   if (supportsCategoryToggle) {
     nextTick(() => {
       viewportFitRetryCount.value = 0;
-      fitVisibleToViewport();
+      if (visibleKps.value.length > 0) fitVisibleToViewport();
+      else centerOnPoint(categoryPoint(chapter));
     });
   } else {
     centerOnPoint(categoryPoint(chapter));
@@ -1090,6 +1137,8 @@ function resetViewport() {
   search.value = "";
   linkSelectionMode.value = null;
   categoryLinkMode.value = null;
+  localStorage.removeItem(chapterPositionStorageKey());
+  categoryPositions.value = { ...defaultCategoryPositions.value };
   syncCategoryPositions();
   syncKpPositions();
   nextTick(() => {
@@ -1130,6 +1179,13 @@ function fitVisibleToViewport() {
     maxX = Math.max(maxX, p.x + r);
     minY = Math.min(minY, p.y - r);
     maxY = Math.max(maxY, p.y + r);
+
+    const chapter = kp.chapter || "未分章";
+    const category = categoryPoint(chapter);
+    minX = Math.min(minX, category.x - 130);
+    maxX = Math.max(maxX, category.x + 130);
+    minY = Math.min(minY, category.y - 54);
+    maxY = Math.max(maxY, category.y + 54);
   }
   const w = maxX - minX || 1;
   const h = maxY - minY || 1;
@@ -1145,6 +1201,7 @@ function fitVisibleToViewport() {
 
 function fitCategoryNodesToViewport() {
   if (!stageRef.value || categoryNodes.value.length === 0) return;
+  categoryPositions.value = sanitizeCategoryPositions(categoryPositions.value);
   const sw = stageRef.value.clientWidth;
   const sh = stageRef.value.clientHeight;
   if (sw <= 0 || sh <= 0) {
@@ -1290,8 +1347,10 @@ async function stopDragging() {
           grade: props.grade,
           chapters: categoryPositions.value,
         });
+        ElMessage.success("章节位置已保存");
       } catch (error) {
         console.warn("Chapter layout sync failed; using local cache fallback.", error);
+        ElMessage.warning("章节位置已保存在本机，后端同步失败");
       }
     }
   }
@@ -1349,6 +1408,7 @@ async function load() {
     kps.value = kpRes.data ?? [];
     edges.value = edgeRes.data.items ?? [];
     chapterEdges.value = chapterEdgeRes.data ?? [];
+    syncManualKpPositionIdsFromRows(kps.value);
     const nextCov: Record<number, { resource_count: number; question_count: number; task_count: number; has_quiz: boolean }> = {};
     for (const row of covRes.data?.items ?? []) {
       nextCov[row.kp_id] = {
@@ -1371,26 +1431,24 @@ async function load() {
     );
     const serverChapters = (layoutRes.data?.chapters ?? {}) as Record<string, { x: number; y: number }>;
     let mergedCat = mergeChapterLayout(det.categoryPositions, serverChapters);
-    if (Object.keys(serverChapters).length === 0) {
-      try {
-        const raw = localStorage.getItem(chapterPositionStorageKey());
-        const parsed = raw ? JSON.parse(raw) : null;
-        if (parsed && typeof parsed === "object") {
-          const next: Record<string, Point> = {};
-          for (const [key, point] of Object.entries(parsed)) {
-            const x = Number((point as any)?.x);
-            const y = Number((point as any)?.y);
-            if (Number.isFinite(x) && Number.isFinite(y)) {
-              next[key] = { x, y };
-            }
+    try {
+      const raw = localStorage.getItem(chapterPositionStorageKey());
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === "object") {
+        const next: Record<string, Point> = {};
+        for (const [key, point] of Object.entries(parsed)) {
+          const x = Number((point as any)?.x);
+          const y = Number((point as any)?.y);
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            next[key] = { x, y };
           }
-          mergedCat = mergeChapterLayout(mergedCat, next);
         }
-      } catch {
-        // ignore invalid local cache
+        mergedCat = mergeChapterLayout(mergedCat, next);
       }
+    } catch {
+      // ignore invalid local cache
     }
-    categoryPositions.value = mergedCat;
+    categoryPositions.value = sanitizeCategoryPositions(mergedCat);
     syncCategoryPositions();
     syncKpPositions();
     if (props.fullscreen && !viewRestored) {
@@ -1417,6 +1475,8 @@ async function load() {
           if (props.fullscreen) {
             if (showAllKps.value && visibleKps.value.length > 0) fitVisibleToViewport();
             else fitCategoryNodesToViewport();
+          } else if (!hasVisibleGraphNodeInViewport()) {
+            fitStageToViewport();
           } else {
             fitVisibleToViewport();
           }
@@ -1457,6 +1517,7 @@ async function saveKp() {
         literacy_tag: form.literacy_tag,
         importance: form.importance,
         difficulty: form.difficulty,
+        is_terminal: form.is_terminal,
         pos_x: point.x,
         pos_y: point.y,
       });
@@ -1475,6 +1536,7 @@ async function saveKp() {
         literacy_tag: form.literacy_tag,
         importance: form.importance,
         difficulty: form.difficulty,
+        is_terminal: form.is_terminal,
         pos_x: draft.x,
         pos_y: draft.y,
       });
@@ -1947,10 +2009,10 @@ onBeforeUnmount(() => {
             :y1="categoryKpLine(kp).y1"
             :x2="categoryKpLine(kp).x2"
             :y2="categoryKpLine(kp).y2"
-            stroke="rgba(179, 154, 117, 0.34)"
-            stroke-width="1.2"
+            stroke="rgba(103, 121, 154, 0.48)"
+            stroke-width="1.6"
             stroke-linecap="round"
-            stroke-dasharray="3 4"
+            stroke-dasharray="4 5"
           />
 
           <g
@@ -2134,6 +2196,7 @@ onBeforeUnmount(() => {
               <el-form-item label="学习重点"><el-input-number v-model="form.importance" :min="0" :max="1" :step="0.05" /></el-form-item>
               <el-form-item label="理解难度"><el-input-number v-model="form.difficulty" :min="0" :max="1" :step="0.05" /></el-form-item>
             </div>
+            <el-form-item label="课程终点"><el-switch v-model="form.is_terminal" active-text="达标终点" inactive-text="普通节点" /></el-form-item>
             <div class="teacher-drawer__actions">
               <button class="teacher-drawer__primary" type="button" :disabled="saving" @click="saveKp">
                 {{ saving ? "保存中..." : "保存知识点" }}

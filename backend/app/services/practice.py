@@ -4,6 +4,7 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.db.models import EvalConfig, KnowledgePoint, PracticeAttempt, Question
+from app.services.eval import upsert_mastery
 
 
 def _get_practice_total(session: Session, *, kp_id: int) -> int:
@@ -25,6 +26,10 @@ def _get_practice_total(session: Session, *, kp_id: int) -> int:
 
 def practice_status(session: Session, *, user_id: int, kp_id: int) -> dict:
     total_n = _get_practice_total(session, kp_id=kp_id)
+    kp = session.get(KnowledgePoint, kp_id)
+    mastery_value = 0.0
+    if kp is not None:
+        mastery_value = float(upsert_mastery(session, user_id=user_id, kp_id=kp_id, subject=kp.subject, grade=kp.grade).value)
     attempted = session.exec(
         select(func.count(func.distinct(PracticeAttempt.question_id)))
         .where(PracticeAttempt.user_id == user_id, PracticeAttempt.kp_id == kp_id)
@@ -34,5 +39,6 @@ def practice_status(session: Session, *, user_id: int, kp_id: int) -> dict:
         "kp_id": kp_id,
         "total_questions": total_n,
         "attempted_questions": attempted_n,
-        "completed": total_n > 0 and attempted_n >= total_n,
+        "mastery": mastery_value,
+        "completed": mastery_value >= 0.7,
     }

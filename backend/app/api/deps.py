@@ -9,7 +9,6 @@ from app.db.models import (
     ApplicationStatus,
     Course,
     CourseApplication,
-    CourseCompletionRecord,
     CourseTeacherActivation,
     CourseLifecycleStatus,
     Enrollment,
@@ -58,7 +57,7 @@ def require_role(*roles: UserRole):
                 "/api/admin/questions",
                 "/api/admin/seed",
             )
-            if path.startswith(admin_content_prefixes):
+            if request.method.upper() not in {"GET", "HEAD", "OPTIONS"} and path.startswith(admin_content_prefixes):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Admin cannot access course-content APIs",
@@ -82,7 +81,7 @@ def _is_course_learning_available(course: Course | None) -> bool:
     return bool(course.active) and lifecycle == CourseLifecycleStatus.active.value
 
 
-def assert_student_subject_access(session: Session, user_id: int, subject: str) -> None:
+def assert_student_subject_access(session: Session, user_id: int, subject: str, *, allow_completed: bool = False) -> None:
     normalized_subject = str(subject or "").strip()
     courses = [
         course
@@ -94,18 +93,8 @@ def assert_student_subject_access(session: Session, user_id: int, subject: str) 
 
     student = session.get(User, user_id)
     has_closed_course = False
-    has_completed_course = False
     for course in courses:
         if course.id is None:
-            continue
-        completed = session.exec(
-            select(CourseCompletionRecord.id).where(
-                CourseCompletionRecord.student_id == user_id,
-                CourseCompletionRecord.course_id == int(course.id),
-            )
-        ).first()
-        if completed is not None:
-            has_completed_course = True
             continue
 
         enrollment = session.exec(
@@ -135,18 +124,16 @@ def assert_student_subject_access(session: Session, user_id: int, subject: str) 
         if not is_course_open_for_students(session, course):
             has_closed_course = True
 
-    if has_completed_course:
-        raise HTTPException(status_code=403, detail="课程已完成，当前仅可查看学习报告，不能继续进入课程学习")
     if has_closed_course:
         raise HTTPException(status_code=403, detail="课程尚未开放学习，暂时无法进入")
     raise HTTPException(status_code=403, detail="当前账号尚未加入这门课程，暂时无法进入课程学习")
 
 
-def assert_student_kp_access(session: Session, user_id: int, kp_id: int) -> KnowledgePoint:
+def assert_student_kp_access(session: Session, user_id: int, kp_id: int, *, allow_completed: bool = False) -> KnowledgePoint:
     kp = session.get(KnowledgePoint, kp_id)
     if kp is None:
         raise HTTPException(status_code=404, detail="知识点不存在")
-    assert_student_subject_access(session, user_id, kp.subject)
+    assert_student_subject_access(session, user_id, kp.subject, allow_completed=allow_completed)
     return kp
 
 
@@ -195,3 +182,4 @@ def teacher_has_course_access(session: Session, teacher_id: int, course: Course 
     if course is None or course.id is None:
         return False
     return int(course.id) in get_teacher_activated_course_ids(session, int(teacher_id))
+

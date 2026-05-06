@@ -14,9 +14,17 @@ from app.db.models import (
     Question,
     RecommendationLog,
     RelationType,
+    Course,
+    CourseCompletionRecord,
 )
+from app.services.bailian_reco import bailian_available, enhance_recommendation_with_bailian
 from app.services.eval import upsert_mastery
-from app.services.learner_profile import build_kp_dimension_summary, get_or_create_persona_rule, persona_label, recalculate_profile_snapshot
+from app.services.learner_profile import (
+    build_kp_dimension_summary,
+    get_or_create_persona_rule,
+    persona_label,
+    recalculate_profile_snapshot,
+)
 
 
 def _mastery_value(session: Session, *, user_id: int, kp_id: int, subject: str, grade: str) -> Mastery:
@@ -87,19 +95,318 @@ def _question_order(persona_type: PersonaType, question: Question) -> tuple[floa
     return (abs(difficulty - 0.5), int(question.id or 0))
 
 
+def _kp_summary(session: Session, kp_ids: list[int], mastery_by_id: dict[int, float] | None = None) -> list[dict]:
+    items: list[dict] = []
+    seen: set[int] = set()
+    for kp_id in kp_ids:
+        if kp_id in seen:
+            continue
+        seen.add(kp_id)
+        kp = session.get(KnowledgePoint, kp_id)
+        if kp is None or kp.id is None:
+            continue
+        items.append(
+            {
+                "id": int(kp.id),
+                "code": kp.code,
+                "title": kp.title,
+                "chapter": kp.chapter,
+                "mastery": mastery_by_id.get(int(kp.id)) if mastery_by_id else None,
+            }
+        )
+    return items
+
+
+def _teacher_route_context(
+    session: Session,
+    *,
+    user_id: int,
+    subject: str,
+    grade: str,
+    target_kp_id: int,
+) -> list[dict]:
+    kps = session.exec(
+        select(KnowledgePoint)
+        .where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)
+        .order_by(KnowledgePoint.code, KnowledgePoint.id)
+    ).all()
+    kp_by_id = {int(kp.id): kp for kp in kps if kp.id is not None}
+    target = kp_by_id.get(int(target_kp_id))
+    if target is None:
+        return []
+
+    prereq_edges = session.exec(
+        select(KnowledgeEdge).where(
+            KnowledgeEdge.subject == subject,
+            KnowledgeEdge.grade == grade,
+            KnowledgeEdge.relation_type == RelationType.prerequisite,
+        )
+    ).all()
+    prereqs_by_next: dict[int, list[int]] = {}
+    next_by_prereq: dict[int, list[int]] = {}
+    for edge in prereq_edges:
+        prereqs_by_next.setdefault(int(edge.next_id), []).append(int(edge.prereq_id))
+        next_by_prereq.setdefault(int(edge.prereq_id), []).append(int(edge.next_id))
+
+    def mainline_rank(kp: KnowledgePoint) -> tuple[int, str, int]:
+        code = str(kp.code or "")
+        if code == "HM-MID-01":
+            return (0, code, int(kp.id or 0))
+        if code.startswith("HM-MID-0"):
+            return (1, code, int(kp.id or 0))
+        if bool(kp.is_terminal):
+            return (9, code, int(kp.id or 0))
+        return (5, code, int(kp.id or 0))
+
+    chain: list[int] = []
+    seen: set[int] = set()
+    cursor = int(target.id)
+    while cursor and cursor not in seen:
+        seen.add(cursor)
+        chain.append(cursor)
+        candidates = [
+            kp_by_id[pid]
+            for pid in prereqs_by_next.get(cursor, [])
+            if pid in kp_by_id and not bool(kp_by_id[pid].is_terminal)
+        ]
+        if not candidates:
+            break
+        candidates.sort(key=mainline_rank, reverse=True)
+        cursor = int(candidates[0].id)
+    chain.reverse()
+
+    if int(target.id) not in chain:
+        chain.append(int(target.id))
+
+    if not bool(target.is_terminal):
+        successors = [
+            kp_by_id[nid]
+            for nid in next_by_prereq.get(int(target.id), [])
+            if nid in kp_by_id and not bool(kp_by_id[nid].is_terminal) and str(kp_by_id[nid].code or "").startswith("HM-MID-0")
+        ]
+        successors.sort(key=mainline_rank)
+        if successors and int(successors[0].id) not in chain:
+            chain.append(int(successors[0].id))
+
+    terminal = next((kp for kp in kps if str(kp.code or "") == "HM-MID-C2"), None)
+    if terminal is None:
+        terminal = next((kp for kp in kps if bool(kp.is_terminal)), None)
+    if terminal is not None and terminal.id is not None and int(terminal.id) not in chain:
+        chain.append(int(terminal.id))
+
+    mastery_by_id = {
+        kp_id: float(_mastery_value(session, user_id=user_id, kp_id=kp_id, subject=subject, grade=grade).value)
+        for kp_id in chain
+    }
+    return _kp_summary(session, chain, mastery_by_id)
+
+
 def _advice_text(persona_type: PersonaType, *, target_title: str, reason: str) -> str:
     if persona_type == PersonaType.smart:
-        return f"你当前推进速度较快，建议直接冲刺“{target_title}”的高阶题，保留最少量讲解。{reason}"
+        return f"你当前推进速度较快，建议直接挑战“{target_title}”的高阶题，并保留少量讲解复盘。{reason}"
     if persona_type == PersonaType.diligent:
         return f"建议按结构化路径推进“{target_title}”，先看资源，再做分层练习。{reason}"
     if persona_type == PersonaType.struggling:
-        return f"先把“{target_title}”补牢，优先看短视频和基础题。{reason}"
+        return f"先把“{target_title}”补稳，优先看短视频和基础题。{reason}"
     if persona_type == PersonaType.procrastinating:
-        return f"建议先完成“{target_title}”的最短任务链：1 个资源 + 3 题练习。{reason}"
+        return f"建议先完成“{target_title}”的最短任务链：1 个资源 + 3 道练习。{reason}"
     return f"继续按标准路径学习“{target_title}”。{reason}"
 
 
-def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, grade: str):
+def _apply_bailian_enhancement(payload: dict, enhancement: dict) -> dict:
+    if not enhancement:
+        payload["recommendation_source"] = "local_rule"
+        payload["ai_enhanced"] = {"provider": "bailian", "enabled": bailian_available(), "ok": False}
+        return payload
+
+    payload["ai_enhanced"] = enhancement
+    if not enhancement.get("ok"):
+        payload["recommendation_source"] = "local_rule"
+        return payload
+
+    target_id = int(payload["target_kp"]["id"])
+    try:
+        enhanced_target_id = int(enhancement.get("target_kp_id") or target_id)
+    except (TypeError, ValueError):
+        enhanced_target_id = target_id
+    if enhanced_target_id == target_id:
+        reason = str(enhancement.get("reason_summary") or "").strip()
+        advice = str(enhancement.get("advice_text") or "").strip()
+        if reason:
+            payload["reason_summary"] = reason
+            payload["remedy"]["reason_summary"] = reason
+        if advice:
+            payload["advice_text"] = advice
+    payload["recommendation_source"] = "bailian"
+    payload["personalized_path"] = enhancement.get("personalized_path") or payload["remedy_path"].get("nodes", [])
+    payload["student_message"] = enhancement.get("student_message") or payload["advice_text"]
+    payload["teacher_explanation"] = enhancement.get("teacher_explanation") or payload["reason_summary"]
+    return payload
+
+
+def _apply_seeded_demo_path(
+    session: Session,
+    *,
+    user_id: int,
+    subject: str,
+    grade: str,
+    source_kp_id: int,
+    payload: dict,
+) -> dict:
+    logs = session.exec(
+        select(RecommendationLog)
+        .where(
+            RecommendationLog.user_id == user_id,
+            RecommendationLog.subject == subject,
+            RecommendationLog.grade == grade,
+        )
+        .order_by(RecommendationLog.created_at.desc())
+    ).all()
+    for log in logs[:20]:
+        try:
+            seeded = json.loads(log.payload_json or "{}")
+        except Exception:
+            continue
+        if seeded.get("recommendation_source") != "midterm_demo_seed":
+            continue
+        seeded_path = seeded.get("personalized_path")
+        path_ids: list[int] = []
+        if isinstance(seeded_path, list) and seeded_path:
+            path_ids = [
+                int(item.get("kp_id") or item.get("id"))
+                for item in seeded_path
+                if item.get("kp_id") or item.get("id")
+            ]
+            payload["personalized_path"] = seeded_path
+            payload["remedy_path"]["nodes"] = seeded_path
+            payload["remedy_path"]["path"] = path_ids
+
+        next_target_id = int(payload.get("target_kp", {}).get("id") or 0)
+        if path_ids:
+            current_mastery = _mastery_value(
+                session,
+                user_id=user_id,
+                kp_id=source_kp_id,
+                subject=subject,
+                grade=grade,
+            )
+            if source_kp_id in path_ids and float(current_mastery.value) >= 0.7:
+                current_index = path_ids.index(source_kp_id)
+                for candidate_id in path_ids[current_index + 1 :]:
+                    candidate_mastery = _mastery_value(
+                        session,
+                        user_id=user_id,
+                        kp_id=candidate_id,
+                        subject=subject,
+                        grade=grade,
+                    )
+                    if float(candidate_mastery.value) < 0.7:
+                        next_target_id = candidate_id
+                        break
+                if not next_target_id and current_index + 1 < len(path_ids):
+                    next_target_id = path_ids[current_index + 1]
+
+        target_override_id = next_target_id
+        target_override = session.get(KnowledgePoint, target_override_id) if target_override_id else None
+        if target_override is not None and target_override.id is not None:
+            target_mastery = _mastery_value(
+                session,
+                user_id=user_id,
+                kp_id=int(target_override.id),
+                subject=subject,
+                grade=grade,
+            )
+            payload["target_kp"] = {
+                **payload["target_kp"],
+                "id": int(target_override.id),
+                "code": target_override.code,
+                "title": target_override.title,
+                "chapter": target_override.chapter,
+                "mastery": float(target_mastery.value),
+            }
+            if source_kp_id in path_ids and target_override_id != source_kp_id:
+                payload["reason_summary"] = f"当前知识点已达标，可以推进到下一个知识点“{target_override.title}”。"
+                payload["advice_text"] = f"建议进入“{target_override.title}”，继续沿个性化路径推进。"
+                payload["student_message"] = payload["advice_text"]
+                payload["teacher_explanation"] = payload["reason_summary"]
+                payload["recommendation_stage_label"] = "继续推进"
+        for key in ("reason_summary", "advice_text", "student_message", "teacher_explanation"):
+            if seeded.get(key) and target_override_id == source_kp_id:
+                payload[key] = seeded[key]
+        if target_override_id == source_kp_id:
+            payload["recommendation_stage_label"] = seeded.get("recommendation_stage_label") or payload.get("recommendation_stage_label")
+        payload["recommendation_source"] = "local_rule"
+        return payload
+    return payload
+
+
+def _sync_course_completion(
+    session: Session,
+    *,
+    user_id: int,
+    subject: str,
+    grade: str,
+) -> dict:
+    terminal_kps = session.exec(
+        select(KnowledgePoint).where(
+            KnowledgePoint.subject == subject,
+            KnowledgePoint.grade == grade,
+            KnowledgePoint.is_terminal == True,  # noqa: E712
+        )
+    ).all()
+    if not terminal_kps:
+        return {"enabled": False, "completed": False, "terminal_kps": []}
+
+    terminal_items: list[dict] = []
+    completed_terminal: KnowledgePoint | None = None
+    for kp in terminal_kps:
+        if kp.id is None:
+            continue
+        mastery = _mastery_value(session, user_id=user_id, kp_id=int(kp.id), subject=subject, grade=grade)
+        item = {
+            "kp_id": int(kp.id),
+            "title": kp.title,
+            "mastery": float(mastery.value),
+            "completed": float(mastery.value) >= 0.7,
+        }
+        terminal_items.append(item)
+        if item["completed"] and completed_terminal is None:
+            completed_terminal = kp
+
+    if completed_terminal is None:
+        return {"enabled": True, "completed": False, "terminal_kps": terminal_items}
+
+    course = session.exec(select(Course).where(Course.title == subject).order_by(Course.created_at.desc())).first()
+    if course is None or course.id is None:
+        return {"enabled": True, "completed": True, "terminal_kps": terminal_items, "recorded": False}
+
+    existing = session.exec(
+        select(CourseCompletionRecord).where(
+            CourseCompletionRecord.course_id == int(course.id),
+            CourseCompletionRecord.student_id == user_id,
+        )
+    ).first()
+    if existing is None:
+        session.add(
+            CourseCompletionRecord(
+                course_id=int(course.id),
+                student_id=user_id,
+                note=f"完成终点知识点：{completed_terminal.title}",
+            )
+        )
+        session.flush()
+    return {
+        "enabled": True,
+        "completed": True,
+        "recorded": True,
+        "course_id": int(course.id),
+        "terminal_kps": terminal_items,
+        "completed_terminal_kp_id": int(completed_terminal.id),
+        "completed_terminal_title": completed_terminal.title,
+    }
+
+
+def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, grade: str, enable_ai: bool = False):
     current_kp = session.get(KnowledgePoint, kp_id)
     if current_kp is None:
         raise ValueError(f"Knowledge point not found: {kp_id}")
@@ -127,7 +434,7 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
     blocked_prereqs: list[dict] = []
     for prereq_id in _prereq_ids(session, kp_id=kp_id):
         mastery = _mastery_value(session, user_id=user_id, kp_id=prereq_id, subject=subject, grade=grade)
-        if float(mastery.value) < 0.6:
+        if float(mastery.value) < 0.7:
             blocked_prereqs.append({"kp_id": prereq_id, "mastery": float(mastery.value)})
     blocked_prereqs.sort(key=lambda item: item["mastery"])
 
@@ -135,7 +442,7 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
     unlocked_next: list[int] = []
     for candidate_id in next_candidates:
         prereqs = _prereq_ids(session, kp_id=candidate_id)
-        if all(_mastery_value(session, user_id=user_id, kp_id=pid, subject=subject, grade=grade).value >= 0.6 for pid in prereqs):
+        if all(_mastery_value(session, user_id=user_id, kp_id=pid, subject=subject, grade=grade).value >= 0.7 for pid in prereqs):
             unlocked_next.append(candidate_id)
 
     related_candidates = _related_ids(session, kp_id=kp_id)
@@ -157,10 +464,13 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
     elif unlocked_next:
         scored = []
         for candidate_id in unlocked_next:
+            candidate = session.get(KnowledgePoint, candidate_id)
+            if candidate is None:
+                continue
             mastery = _mastery_value(session, user_id=user_id, kp_id=candidate_id, subject=subject, grade=grade)
-            scored.append((float(mastery.value), candidate_id))
-        scored.sort(key=lambda item: item[0])
-        target_kp_id = scored[0][1]
+            scored.append((bool(candidate.is_terminal), str(candidate.code or ""), float(mastery.value), candidate_id))
+        scored.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
+        target_kp_id = scored[0][3]
         stage = "next_unlocked"
     elif related_candidates:
         scored = []
@@ -172,15 +482,17 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
         stage = "related_extension"
 
     target_kp = session.get(KnowledgePoint, target_kp_id)
+    if target_kp is None or target_kp.id is None:
+        raise ValueError(f"Recommendation target not found: {target_kp_id}")
     target_mastery = _mastery_value(session, user_id=user_id, kp_id=target_kp_id, subject=subject, grade=grade)
 
     reason_map = {
         "blocked_prerequisite": f"当前知识点依赖的前置点还不稳，先补“{target_kp.title}”更有效。",
         "current_remedial": f"当前知识点“{target_kp.title}”掌握度仍偏低，需要继续补强。",
         "ability_strengthen": f"知识掌握度已达标，但能力目标尚未达成，建议围绕“{target_kp.title}”再做一轮能力强化。",
-        "literacy_strengthen": f"知识掌握度已达标，但素养目标尚未达成，建议围绕“{target_kp.title}”补齐学习行为证据。",
-        "next_unlocked": f"前置条件已满足，可以推进到下一知识点“{target_kp.title}”。",
-        "related_extension": f"主线已较稳定，建议通过相关知识点“{target_kp.title}”做扩展巩固。",
+        "literacy_strengthen": f"知识掌握度已达标，但素养目标尚未达成，建议围绕“{target_kp.title}”补齐学习证据。",
+        "next_unlocked": f"前置条件已满足，可以推进到下一个知识点“{target_kp.title}”。",
+        "related_extension": f"主线已较稳定，建议通过相关知识点“{target_kp.title}”做拓展巩固。",
         "current": f"继续围绕“{target_kp.title}”进行标准学习。",
     }
     stage_label_map = {
@@ -227,6 +539,13 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
         "课程状态良好": float(profile.dynamic_score) >= 0.7,
     }
     evidence_missing = [label for label, ok in evidence_items.items() if not ok]
+    remedy_path_ids = [int(item["kp_id"]) for item in blocked_prereqs] + [int(target_kp.id)]
+    candidate_ids = [kp_id, int(target_kp.id), *[int(item["kp_id"]) for item in blocked_prereqs], *unlocked_next, *related_candidates]
+    mastery_by_id: dict[int, float] = {}
+    for candidate_id in candidate_ids:
+        mastery_by_id[candidate_id] = float(
+            _mastery_value(session, user_id=user_id, kp_id=candidate_id, subject=subject, grade=grade).value
+        )
 
     payload = {
         "target_kp": {
@@ -280,8 +599,15 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
         },
         "remedy_path": {
             "blocked_prereqs": [int(item["kp_id"]) for item in blocked_prereqs],
-            "path": [int(item["kp_id"]) for item in blocked_prereqs] + [int(target_kp.id)],
+            "path": remedy_path_ids,
+            "nodes": _kp_summary(session, remedy_path_ids, mastery_by_id),
         },
+        "personalized_path": _kp_summary(session, remedy_path_ids, mastery_by_id),
+        "recommendation_source": "local_rule",
+        "ai_enhanced": {"provider": "bailian", "enabled": bailian_available(), "ok": False},
+        "student_message": advice_text,
+        "teacher_explanation": reason_summary,
+        "course_completion": {"enabled": False, "completed": False},
         "resources": resource_list,
         "practice": practice_list,
         "unlock": {
@@ -290,15 +616,77 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
         },
     }
 
+    if enable_ai and bailian_available():
+        context = {
+            "student_profile": {
+                "persona_type": profile.persona_type.value,
+                "persona_label": persona_label(profile.persona_type),
+                "dynamic_score": float(profile.dynamic_score),
+                "engagement": float(profile.engagement),
+                "risk_level": profile.risk_level,
+                "strategy_tag": strategy_tag,
+            },
+            "local_recommendation": {
+                "target_kp": payload["target_kp"],
+                "stage": stage,
+                "stage_label": payload["recommendation_stage_label"],
+                "reason_summary": reason_summary,
+                "advice_text": advice_text,
+            },
+            "current_kp": _kp_summary(session, [kp_id], mastery_by_id)[0],
+            "graph_candidates": {
+                "blocked_prereqs": _kp_summary(session, [int(item["kp_id"]) for item in blocked_prereqs], mastery_by_id),
+                "unlocked_next": _kp_summary(session, unlocked_next, mastery_by_id),
+                "related": _kp_summary(session, related_candidates, mastery_by_id),
+                "remedy_path": payload["remedy_path"]["nodes"],
+            },
+            "evidence": payload["evidence"],
+            "triple": payload["triple"],
+            "resources": [{"id": item["id"], "title": item["title"], "type": item["type"]} for item in resource_list],
+            "practice": [
+                {"question_id": item["question_id"], "type": item["type"], "difficulty": item["difficulty"]}
+                for item in practice_list
+            ],
+        }
+        payload = _apply_bailian_enhancement(payload, enhance_recommendation_with_bailian(context))
+
+    payload = _apply_seeded_demo_path(
+        session,
+        user_id=user_id,
+        subject=subject,
+        grade=grade,
+        source_kp_id=kp_id,
+        payload=payload,
+    )
+    route_context = _teacher_route_context(
+        session,
+        user_id=user_id,
+        subject=subject,
+        grade=grade,
+        target_kp_id=int(payload["target_kp"]["id"]),
+    )
+    if route_context:
+        route_ids = [int(item["id"]) for item in route_context if item.get("id")]
+        payload["personalized_path"] = route_context
+        payload["remedy_path"]["nodes"] = route_context
+        payload["remedy_path"]["path"] = route_ids
+
+    payload["course_completion"] = _sync_course_completion(
+        session,
+        user_id=user_id,
+        subject=subject,
+        grade=grade,
+    )
+
     session.add(
         RecommendationLog(
             user_id=user_id,
             subject=subject,
             grade=grade,
             source_kp_id=kp_id,
-            target_kp_id=int(target_kp.id),
+            target_kp_id=int(payload["target_kp"]["id"]),
             persona_type=profile.persona_type,
-            reason_summary=reason_summary,
+            reason_summary=payload["reason_summary"],
             payload_json=json.dumps(payload, ensure_ascii=False),
         )
     )

@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import type { Component } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { Reading, EditPen, Collection, FolderOpened, Share, Upload, ArrowDown, Setting, Connection, CircleCheck } from "@element-plus/icons-vue";
 import { api } from "../api";
 
@@ -17,6 +17,7 @@ type KpInfo = {
   literacy_tag?: string;
   importance?: number;
   difficulty?: number;
+  is_terminal?: boolean;
 };
 
 type ResourceItem = {
@@ -208,6 +209,7 @@ const kpForm = reactive({
   literacy_tag: "",
   importance: 0.5,
   difficulty: 0.5,
+  is_terminal: false,
 });
 
 function resetKpForm(chapter = "") {
@@ -221,6 +223,7 @@ function resetKpForm(chapter = "") {
     literacy_tag: "",
     importance: 0.5,
     difficulty: 0.5,
+    is_terminal: false,
   });
 }
 
@@ -235,6 +238,7 @@ function syncKpFormFromNode(node: Partial<KpInfo> | null | undefined) {
     literacy_tag: node?.literacy_tag || "",
     importance: node?.importance ?? 0.5,
     difficulty: node?.difficulty ?? 0.5,
+    is_terminal: Boolean(node?.is_terminal),
   });
 }
 
@@ -1147,6 +1151,36 @@ function openKpMetaEditor() {
   kpMetaDialogOpen.value = true;
 }
 
+async function removeCurrentKp() {
+  if (createMode.value || !kpId.value) return;
+  const title = kp.value?.title || kpForm.title || "当前知识点";
+  try {
+    await ElMessageBox.confirm(
+      `确定删除“${title}”吗？删除后会同时清理该知识点的图谱关系、资源、题目和学生学习记录。`,
+      "确认删除知识点",
+      {
+        type: "warning",
+        confirmButtonText: "删除",
+        cancelButtonText: "取消",
+        confirmButtonClass: "el-button--danger",
+      },
+    );
+    await api.delete(`/admin/kps/${kpId.value}`);
+    ElMessage.success("知识点已删除");
+    kpMetaDialogOpen.value = false;
+    router.replace({
+      path: "/teacher/content",
+      query: {
+        subject: subject.value || undefined,
+        grade: grade.value || undefined,
+      },
+    });
+  } catch (e: any) {
+    if (e === "cancel" || e === "close") return;
+    ElMessage.error(e?.response?.data?.detail ?? "删除知识点失败");
+  }
+}
+
 async function saveKpMeta(options: { redirectAfterCreate?: boolean } = {}) {
   saving.value = true;
   try {
@@ -1162,6 +1196,7 @@ async function saveKpMeta(options: { redirectAfterCreate?: boolean } = {}) {
       literacy_tag: kpForm.literacy_tag.trim(),
       importance: kpForm.importance,
       difficulty: kpForm.difficulty,
+      is_terminal: kpForm.is_terminal,
     };
     if (!payload.code) {
       ElMessage.warning("请输入知识点编码");
@@ -1274,6 +1309,7 @@ watch(
           <el-form-item label="素养标签"><el-input v-model="kpForm.literacy_tag" placeholder="例如 主动学习,规范意识" /></el-form-item>
           <el-form-item label="重要度"><el-input-number v-model="kpForm.importance" :min="0" :max="1" :step="0.05" /></el-form-item>
           <el-form-item label="理解难度"><el-input-number v-model="kpForm.difficulty" :min="0" :max="1" :step="0.05" /></el-form-item>
+          <el-form-item label="课程终点"><el-switch v-model="kpForm.is_terminal" active-text="达标终点" inactive-text="普通节点" /></el-form-item>
           <el-form-item class="content-meta__full" label="知识点描述">
             <el-input v-model="kpForm.description" type="textarea" :rows="3" placeholder="说明学生学什么、为什么重要、建议如何学习" />
           </el-form-item>
@@ -1911,14 +1947,20 @@ watch(
           <el-form-item label="素养标签"><el-input v-model="kpForm.literacy_tag" placeholder="例如 主动学习,规范意识" /></el-form-item>
           <el-form-item label="重要度"><el-input-number v-model="kpForm.importance" :min="0" :max="1" :step="0.05" /></el-form-item>
           <el-form-item label="理解难度"><el-input-number v-model="kpForm.difficulty" :min="0" :max="1" :step="0.05" /></el-form-item>
+          <el-form-item label="课程终点"><el-switch v-model="kpForm.is_terminal" active-text="达标终点" inactive-text="普通节点" /></el-form-item>
           <el-form-item class="content-meta__full" label="知识点描述">
             <el-input v-model="kpForm.description" type="textarea" :rows="4" placeholder="说明学生学什么、为什么重要、建议如何学习" />
           </el-form-item>
         </div>
       </div>
       <template #footer>
-        <el-button @click="kpMetaDialogOpen = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="saveKpMeta().then((ok) => { if (ok) kpMetaDialogOpen = false; })">保存基础信息</el-button>
+        <div class="meta-dialog-footer">
+          <el-button v-if="!createMode" type="danger" plain @click="removeCurrentKp">删除知识点</el-button>
+          <div class="meta-dialog-footer__actions">
+            <el-button @click="kpMetaDialogOpen = false">取消</el-button>
+            <el-button type="primary" :loading="saving" @click="saveKpMeta().then((ok) => { if (ok) kpMetaDialogOpen = false; })">保存基础信息</el-button>
+          </div>
+        </div>
       </template>
     </el-dialog>
 
@@ -2979,6 +3021,19 @@ watch(
   border-top: 1px solid #e7edf5;
   padding: 16px 24px 18px;
   background: #fff;
+}
+
+.meta-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.meta-dialog-footer__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .meta-dialog-body {

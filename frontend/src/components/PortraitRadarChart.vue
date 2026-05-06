@@ -164,6 +164,7 @@ const labelPoints = computed(() => {
 .radar-card {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .radar-card__head {
@@ -193,16 +194,18 @@ const labelPoints = computed(() => {
 
 .radar-card__body {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(180px, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(220px, 300px) minmax(180px, 1fr);
+  gap: 16px;
   align-items: center;
+  min-width: 0;
 }
 
 .radar-svg {
   width: 100%;
-  max-width: 320px;
+  max-width: 300px;
   height: auto;
   overflow: visible;
+  justify-self: center;
 }
 
 .radar-svg__grid {
@@ -243,6 +246,7 @@ const labelPoints = computed(() => {
 .radar-legend {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .radar-legend__item {
@@ -254,11 +258,14 @@ const labelPoints = computed(() => {
   border-radius: 12px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1px solid var(--app-border);
+  min-width: 0;
 }
 
 .radar-legend__label {
   font-size: 13px;
   color: var(--app-ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .radar-legend__value {
@@ -274,5 +281,11 @@ const labelPoints = computed(() => {
   border-radius: 16px;
   background: #fcfdff;
   border: 1px dashed var(--app-border);
+}
+
+@media (max-width: 760px) {
+  .radar-card__body {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

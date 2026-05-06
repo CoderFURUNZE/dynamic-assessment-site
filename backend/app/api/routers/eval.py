@@ -40,6 +40,7 @@ from app.schemas.eval import (
 )
 from app.services.eval import refresh_subject_mastery, upsert_mastery
 from app.services.learner_profile import (
+    build_graph_coverage_summary,
     build_ability_practice_cognitive_summary,
     build_kp_dimension_summary,
     _json_load,
@@ -220,7 +221,7 @@ def mastery(
     user=Depends(get_current_user),
 ):
     if getattr(user, "role", None) == "student":
-        kp = assert_student_kp_access(session, int(user.id), kp_id)
+        kp = assert_student_kp_access(session, int(user.id), kp_id, allow_completed=True)
     else:
         kp = session.get(KnowledgePoint, kp_id)
     if kp is None:
@@ -253,7 +254,7 @@ def profile(
         else:
             raise HTTPException(status_code=400, detail="subject and grade are required")
     if getattr(user, "role", None) == "student":
-        assert_student_subject_access(session, int(user.id), subject)
+        assert_student_subject_access(session, int(user.id), subject, allow_completed=True)
     refresh_subject_mastery(session, user_id=user.id, subject=subject, grade=grade)
     snapshot = recalculate_profile_snapshot(
         session,
@@ -288,6 +289,7 @@ def profile(
         )
         if value < 0.5:
             weak_points.append(int(kp.id))
+    graph_coverage = build_graph_coverage_summary(kps=list(kps), mastery_map=mastery_row_map)
     stage_rows = list(
         reversed(get_stage_snapshot_trend(session, user_id=user.id, subject=subject, grade=grade, days=days))
     )
@@ -552,6 +554,17 @@ def profile(
             "explain": "反映当前课程知识点整体掌握水平，是动态评价的重要基础项。",
         },
         {
+            "key": "graph_score",
+            "label": "知识图谱融合",
+            "score": round(float(graph_coverage.get("graph_score", 0.0)), 4),
+            "score_label": _label_from_score(float(graph_coverage.get("graph_score", 0.0))),
+            "explain": (
+                f"已完成 {int(graph_coverage.get('completed_nodes', 0))}/{int(graph_coverage.get('total_nodes', 0))} 个图谱节点，"
+                f"已掌握 {int(graph_coverage.get('mastered_nodes', 0))}/{int(graph_coverage.get('total_nodes', 0))} 个节点；"
+                "图谱评价分按学习覆盖度 60% + 掌握覆盖度 40% 计算，并以 20% 权重融入动态评价。"
+            ),
+        },
+        {
             "key": "risk",
             "label": "风险信号",
             "score": round(float(snapshot.risk), 4),
@@ -738,6 +751,7 @@ def profile(
             if row.id is not None
         ],
         latest_recommendation=latest_recommendation_payload,
+        graph_coverage=graph_coverage,
         evaluation_explain={
             "summary": (
                 current_stage.reason_summary

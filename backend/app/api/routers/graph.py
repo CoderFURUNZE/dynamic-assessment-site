@@ -33,6 +33,7 @@ from app.db.models import (
     Question,
     Quiz,
     QuizItem,
+    RecommendationLog,
     RelationType,
     ResourceType,
     User,
@@ -69,6 +70,49 @@ def _relation_value(value) -> str:
     if isinstance(value, str) and value:
         return value
     return RelationType.prerequisite.value
+
+
+def _seeded_demo_path_ids(session: Session, *, user_id: int, subject: str, grade: str) -> list[int]:
+    logs = session.exec(
+        select(RecommendationLog)
+        .where(
+            RecommendationLog.user_id == user_id,
+            RecommendationLog.subject == subject,
+            RecommendationLog.grade == grade,
+        )
+        .order_by(RecommendationLog.created_at.desc())
+    ).all()
+    for log in logs[:20]:
+        try:
+            payload = json.loads(log.payload_json or "{}")
+        except Exception:
+            continue
+        if payload.get("recommendation_source") != "midterm_demo_seed":
+            continue
+        raw_path = payload.get("personalized_path")
+        if not isinstance(raw_path, list):
+            continue
+        path_ids = [
+            int(item.get("kp_id") or item.get("id"))
+            for item in raw_path
+            if isinstance(item, dict) and (item.get("kp_id") or item.get("id"))
+        ]
+        if path_ids:
+            return path_ids
+    return []
+
+
+def _effective_prereq_ids(session: Session, *, user_id: int, kp: KnowledgePoint, graph_prereqs: list[int]) -> list[int]:
+    if kp.id is None:
+        return graph_prereqs
+    path_ids = _seeded_demo_path_ids(session, user_id=user_id, subject=kp.subject, grade=kp.grade)
+    kp_id = int(kp.id)
+    if kp_id not in path_ids:
+        return graph_prereqs
+    index = path_ids.index(kp_id)
+    if index <= 0:
+        return []
+    return path_ids[:index]
 
 
 def _resource_value(value) -> str:
@@ -184,7 +228,7 @@ def _is_course_platform_open(course: Course | None) -> bool:
     return bool(course.active) and lifecycle == CourseLifecycleStatus.active.value
 
 
-def _assert_student_subject_access(session: Session, user_id: int, subject: str) -> None:
+def _assert_student_subject_access(session: Session, user_id: int, subject: str, *, allow_completed: bool = False) -> None:
     """???????????????????????????????????????"""
     normalized_subject = str(subject or "").strip()
     courses = [
@@ -197,18 +241,8 @@ def _assert_student_subject_access(session: Session, user_id: int, subject: str)
 
     student = session.get(User, user_id)
     has_unavailable_course = False
-    has_completed_course = False
     for course in courses:
         if course.id is None:
-            continue
-        completed = session.exec(
-            select(CourseCompletionRecord.id).where(
-                CourseCompletionRecord.student_id == user_id,
-                CourseCompletionRecord.course_id == int(course.id),
-            )
-        ).first()
-        if completed is not None:
-            has_completed_course = True
             continue
         enrollment = session.exec(
             select(Enrollment).where(
@@ -217,10 +251,10 @@ def _assert_student_subject_access(session: Session, user_id: int, subject: str)
                 Enrollment.status == EnrollmentStatus.active,
             )
         ).first()
-        if enrollment is not None:
+        if enrollment is not None and is_course_open_for_students(session, course):
             return
         if student is not None and str(student.class_name or "").strip() and str(course.target_class or "").strip():
-            if str(student.class_name).strip() == str(course.target_class).strip():
+            if str(student.class_name).strip() == str(course.target_class).strip() and is_course_open_for_students(session, course):
                 return
         approved = session.exec(
             select(CourseApplication.id).where(
@@ -229,20 +263,22 @@ def _assert_student_subject_access(session: Session, user_id: int, subject: str)
                 CourseApplication.status == ApplicationStatus.approved,
             )
         ).first()
-        if approved is not None:
+        if approved is not None and is_course_open_for_students(session, course):
             return
         if not is_course_open_for_students(session, course):
             has_unavailable_course = True
 
-    if has_completed_course:
-        raise HTTPException(status_code=403, detail="课程已完成，当前仅可查看学习报告，不能继续进入课程学习")
     if has_unavailable_course:
         raise HTTPException(status_code=403, detail="??????????????????????????")
     raise HTTPException(status_code=403, detail="???????????????????")
 
 
 def _chapter_layout_map(session: Session, subject: str, grade: str) -> dict[str, dict[str, float]]:
-    cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == subject, EvalConfig.grade == grade)).first()
+    cfg = session.exec(
+        select(EvalConfig)
+        .where(EvalConfig.subject == subject, EvalConfig.grade == grade)
+        .order_by(EvalConfig.id.desc())
+    ).first()
     if cfg is None or not str(getattr(cfg, "graph_layout_json", "") or "").strip():
         return {}
     try:
@@ -273,7 +309,7 @@ def get_chapter_layout(
     user=Depends(get_current_user),
 ):
     if user.role == UserRole.student:
-        _assert_student_subject_access(session, int(user.id), subject)
+        _assert_student_subject_access(session, int(user.id), subject, allow_completed=True)
     return {"chapters": _chapter_layout_map(session, subject, grade)}
 
 
@@ -290,7 +326,7 @@ def list_kps(
         .order_by(KnowledgePoint.chapter, KnowledgePoint.id)
     ).all()
     if _user.role == UserRole.student:
-        _assert_student_subject_access(session, int(_user.id), subject)
+        _assert_student_subject_access(session, int(_user.id), subject, allow_completed=True)
     return [_kp_out(row) for row in rows]
 
 
@@ -302,9 +338,21 @@ def list_courses(
     stmt = select(Course).order_by(Course.created_at.desc())
     if user.role == UserRole.teacher:
         activated_ids = get_teacher_activated_course_ids(session, int(user.id))
-        if not activated_ids:
-            return []
-        stmt = stmt.where(Course.id.in_(activated_ids))
+        assigned_ids = {
+            int(course_id)
+            for course_id in session.exec(
+                select(Course.id).where(Course.teacher_id == int(user.id))
+            ).all()
+            if course_id is not None
+        }
+        teacher_course_ids = activated_ids | assigned_ids
+        if teacher_course_ids:
+            stmt = stmt.where(Course.id.in_(teacher_course_ids))
+        else:
+            stmt = stmt.where(
+                Course.active == True,  # noqa: E712
+                Course.lifecycle_status == CourseLifecycleStatus.active,
+            )
     elif user.role == UserRole.student:
         enrolled_rows = session.exec(
             select(Enrollment).where(
@@ -339,7 +387,7 @@ def list_courses(
         if user.role == UserRole.student and course.id is not None:
             completed = int(course.id) in completed_course_ids
             payload["completed"] = completed
-            payload["learning_available"] = (not completed) and is_course_open_for_students(session, course)
+            payload["learning_available"] = is_course_open_for_students(session, course)
         items.append(payload)
     return items
 
@@ -748,7 +796,7 @@ def graph_map(
     user=Depends(get_current_user),
 ):
     if user.role == UserRole.student:
-        _assert_student_subject_access(session, int(user.id), subject)
+        _assert_student_subject_access(session, int(user.id), subject, allow_completed=True)
     kps = session.exec(
         select(KnowledgePoint)
         .where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)
@@ -793,6 +841,57 @@ def graph_map(
         except Exception:
             pass
 
+        prereq_map: dict[int, list[int]] = {}
+        for edge in edges:
+            if _relation_value(edge.relation_type) != RelationType.prerequisite.value:
+                continue
+            prereq_map.setdefault(int(edge.next_id), []).append(int(edge.prereq_id))
+        seeded_path_ids = _seeded_demo_path_ids(session, user_id=int(user.id), subject=subject, grade=grade)
+        visible_ids: set[int] = set()
+        for kp in kps:
+            if kp.id is None:
+                continue
+            kp_id = int(kp.id)
+            mastery = mastery_map.get(kp_id)
+            mastery_value = float(mastery.value) if mastery is not None else 0.0
+            status = str(mastery.status if mastery is not None else "not_started")
+            actively_started = mastery is not None and (status != "not_started" or float(mastery.direct_value) > 0)
+            if kp_id in seeded_path_ids:
+                seeded_index = seeded_path_ids.index(kp_id)
+                prereqs = seeded_path_ids[:seeded_index]
+            else:
+                prereqs = prereq_map.get(kp_id, [])
+            unlocked = not prereqs or all(
+                (mastery_map.get(pid) is not None) and float(mastery_map[pid].value) >= 0.7
+                for pid in prereqs
+            )
+            if unlocked or actively_started:
+                visible_ids.add(kp_id)
+        for kp in kps:
+            if kp.id is None:
+                continue
+            if kp.code == "HM-MID-01" or bool(kp.is_terminal):
+                visible_ids.add(int(kp.id))
+        original_order = {int(kp.id): index for index, kp in enumerate(kps) if kp.id is not None}
+
+        def _student_visible_order(kp: KnowledgePoint) -> tuple[int, int, int]:
+            if kp.id is None:
+                return (9, 0, 0)
+            kp_id = int(kp.id)
+            if kp.code == "HM-MID-01":
+                return (0, 0, kp_id)
+            if kp_id in seeded_path_ids:
+                return (1, seeded_path_ids.index(kp_id), kp_id)
+            if bool(kp.is_terminal):
+                return (3, original_order.get(kp_id, kp_id), kp_id)
+            return (2, original_order.get(kp_id, kp_id), kp_id)
+
+        kps = sorted(
+            [kp for kp in kps if kp.id is not None and int(kp.id) in visible_ids],
+            key=_student_visible_order,
+        )
+        edges = [edge for edge in edges if int(edge.prereq_id) in visible_ids and int(edge.next_id) in visible_ids]
+
     kp_title_map = {int(kp.id): kp.title for kp in kps if kp.id is not None}
     overlay: list[GraphOverlayNodeOut] = []
     kp_dimension_summary = (
@@ -823,10 +922,12 @@ def graph_map(
             for edge in edges
             if int(edge.next_id) == int(kp.id) and _relation_value(edge.relation_type) == RelationType.prerequisite.value
         ]
+        if user.role == UserRole.student:
+            prereqs = _effective_prereq_ids(session, user_id=int(user.id), kp=kp, graph_prereqs=prereqs)
         blocked = [
             pid
             for pid in prereqs
-            if pid not in mastery_map or float(mastery_map[pid].value) < 0.6
+            if pid not in mastery_map or float(mastery_map[pid].value) < 0.7
         ]
         if blocked:
             blocked_titles = [kp_title_map.get(item, str(item)) for item in blocked[:3]]
@@ -880,7 +981,7 @@ def node_detail(
     if kp is None:
         raise HTTPException(status_code=404, detail="Knowledge point not found")
     if user.role == UserRole.student:
-        _assert_student_subject_access(session, int(user.id), kp.subject)
+        _assert_student_subject_access(session, int(user.id), kp.subject, allow_completed=True)
 
     overlay = None
     if user.role == UserRole.student:
@@ -900,12 +1001,13 @@ def node_detail(
                 for edge in edges
                 if int(edge.next_id) == kp_id and _relation_value(edge.relation_type) == RelationType.prerequisite.value
             ]
+            prereqs = _effective_prereq_ids(session, user_id=int(user.id), kp=kp, graph_prereqs=prereqs)
             blocked = []
             for prereq_id in prereqs:
                 prereq_mastery = session.exec(
                     select(Mastery).where(Mastery.user_id == user.id, Mastery.kp_id == prereq_id)
                 ).first()
-                if prereq_mastery is None or float(prereq_mastery.value) < 0.6:
+                if prereq_mastery is None or float(prereq_mastery.value) < 0.7:
                     blocked.append(prereq_id)
             blocked_titles = []
             if blocked:
@@ -1085,6 +1187,10 @@ def path(
         prereq_titles = {int(item.id): item.title for item in prereq_kps if item.id is not None}
         next_titles = {int(item.id): item.title for item in next_kps if item.id is not None}
     if user.role == UserRole.student and kp is not None:
+        prereq_ids = _effective_prereq_ids(session, user_id=int(user.id), kp=kp, graph_prereqs=prereq_ids)
+        if prereq_ids:
+            prereq_kps = session.exec(select(KnowledgePoint).where(KnowledgePoint.id.in_(prereq_ids))).all()
+            prereq_titles = {int(item.id): item.title for item in prereq_kps if item.id is not None}
         for prereq_id in prereq_ids:
             try:
                 mastery = upsert_mastery(

@@ -183,6 +183,7 @@ class KnowledgePoint(SQLModel, table=True):
     pos_x: Optional[float] = Field(default=None)
     pos_y: Optional[float] = Field(default=None)
     practice_total: Optional[int] = Field(default=None)
+    is_terminal: bool = Field(default=False, index=True)
 
     __table_args__ = (UniqueConstraint("code"),)
 

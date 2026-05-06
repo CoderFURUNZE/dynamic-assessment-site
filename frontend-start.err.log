@@ -1,0 +1,24 @@
+[2m11:28:55[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/admin/users?page=1&page_size=1[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2m11:28:55[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/admin/users?page=1&page_size=1&role=teacher[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2m11:28:55[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/admin/users?page=1&page_size=1&role=student[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2m11:28:55[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/portrait/dimensions/tree[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2m11:28:55[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/admin/users?page=1&page_size=1&role=admin[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2m11:28:58[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/admin/users?page=1&page_size=500&role=teacher[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2m11:28:58[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/admin/courses?page=1&page_size=15[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2m11:29:00[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/admin/users?page=1&page_size=5&role=student[39m
+Error: connect ECONNREFUSED 127.0.0.1:8000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)

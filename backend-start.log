@@ -1,0 +1,146 @@
+INFO:     127.0.0.1:61395 - "GET /api/openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52815 - "GET /api/openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52816 - "POST /api/auth/login/admin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52817 - "POST /api/auth/login/admin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52818 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52819 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52820 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52821 - "GET /api/graph/chapter-layout?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52823 - "GET /api/graph/kps?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52824 - "GET /api/graph/courses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52825 - "GET /api/graph/teacher/course-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52826 - "GET /api/graph/available-courses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52827 - "GET /api/graph/my-courses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52828 - "GET /api/graph/courses/1/students HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:52829 - "GET /api/graph/edges?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52830 - "GET /api/graph/map?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52831 - "GET /api/graph/node/1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52832 - "GET /api/graph/path/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52833 - "GET /api/enrollment/courses/enrollable HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:52834 - "GET /api/enrollment/my/applications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52835 - "GET /api/enrollment/my/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52836 - "GET /api/enrollment/teacher/applications?course_id=1 HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:52837 - "GET /api/enrollment/courses/1/access-check HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:52838 - "GET /api/content/resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52839 - "GET /api/content/quiz/1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52840 - "GET /api/content/video/progress?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52841 - "GET /api/practice/questions?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52842 - "GET /api/practice/next?kp_id=1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52843 - "GET /api/practice/history?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52844 - "GET /api/practice/stats?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52845 - "GET /api/practice/wrong?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52846 - "GET /api/practice/wrong/page?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52847 - "GET /api/practice/export?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52848 - "GET /api/practice/question/1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52849 - "GET /api/practice/review/queue?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52850 - "GET /api/practice/status?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52851 - "GET /api/eval/mastery?kp_id=1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52852 - "GET /api/eval/profile?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52853 - "GET /api/eval/overview?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52854 - "GET /api/reco/?kp_id=1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52855 - "GET /api/reco?kp_id=1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52856 - "GET /api/notes/?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52857 - "GET /api/extensions/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52858 - "GET /api/extensions/methodology HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52859 - "GET /api/stages/courses/1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52860 - "GET /api/stages/template HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:52861 - "GET /api/stages/metric-guides HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52862 - "GET /api/stages/imports?course_id=1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52863 - "GET /api/stages/internal-summary HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:52864 - "GET /api/stages/internal-summary/export HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:52865 - "GET /api/stages/internal-behavior-summary HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:52866 - "GET /api/stages/internal-behavior-summary/export HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:52867 - "GET /api/portrait/dimensions/tree HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52868 - "GET /api/portrait/course-selection?course_id=1 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52869 - "GET /api/portrait/teacher-input HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:52870 - "GET /api/portrait/questionnaire-input?course_id=1&user_id=3 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52871 - "GET /api/admin/kp-resources?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52872 - "GET /api/admin/kp-resources/1/detail HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52873 - "GET /api/admin/kp-tasks?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52874 - "GET /api/admin/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52875 - "GET /api/admin/users/import-template HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52876 - "GET /api/admin/courses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52877 - "GET /api/admin/practice/report?user_id=3&kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52878 - "GET /api/admin/kps?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52879 - "GET /api/admin/graph/kp-coverage?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52880 - "GET /api/admin/graph/export?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52881 - "GET /api/admin/edges?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52882 - "GET /api/admin/chapter-edges?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52883 - "GET /api/admin/questions?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52884 - "GET /api/admin/questions/export?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52885 - "GET /api/admin/kp-questions?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52886 - "GET /api/admin/quiz?kp_id=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52887 - "GET /api/admin/audit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52888 - "GET /api/admin/config?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52889 - "GET /api/admin/persona/rules?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52890 - "GET /api/admin/persona/overrides?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52891 - "GET /api/admin/persona/students?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52892 - "GET /api/admin/stage-feedback?user_id=3&subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52893 - "GET /api/admin/stage-feedback/history?user_id=3&subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52894 - "GET /api/admin/analytics/overview?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52895 - "GET /api/admin/analytics/student-detail?user_id=3&subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52896 - "GET /api/admin/final-score/students?subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52897 - "GET /api/admin/final-score/detail?user_id=3&subject=%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52898 - "POST /api/auth/login/admin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52899 - "POST /api/auth/login/admin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52900 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52901 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52902 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52903 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52904 - "GET /api/admin/users?page=1&page_size=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52905 - "GET /api/admin/courses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52906 - "GET /api/admin/config?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52907 - "GET /api/admin/audit?page=1&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52908 - "GET /api/admin/persona/rules?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52909 - "GET /api/admin/persona/students?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52910 - "GET /api/admin/final-score/students?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52911 - "GET /api/admin/analytics/overview?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52912 - "GET /api/graph/courses HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52913 - "GET /api/graph/teacher/course-catalog HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52914 - "GET /api/graph/courses/5/students HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52915 - "GET /api/graph/kps?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52916 - "GET /api/graph/edges?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52917 - "GET /api/graph/map?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52918 - "GET /api/graph/node/159 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52919 - "GET /api/graph/path/159 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52920 - "GET /api/graph/chapter-layout?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52921 - "GET /api/admin/kps?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8&page=1&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52922 - "GET /api/admin/graph/kp-coverage?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52923 - "GET /api/admin/kp-resources?kp_id=159 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52924 - "GET /api/admin/kp-tasks?kp_id=159 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52925 - "GET /api/admin/kp-questions?kp_id=159 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52926 - "GET /api/admin/quiz?kp_id=159 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52927 - "GET /api/enrollment/courses/enrollable HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52928 - "GET /api/enrollment/my/applications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52929 - "GET /api/enrollment/my/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52930 - "GET /api/enrollment/courses/5/access-check HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52931 - "GET /api/enrollment/teacher/applications?course_id=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52932 - "GET /api/stages/courses/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52933 - "POST /api/stages/courses/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52934 - "PUT /api/stages/20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52935 - "GET /api/stages/metric-guides HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52936 - "GET /api/stages/imports?course_id=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52937 - "GET /api/stages/internal-summary?course_id=5&stage_id=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52938 - "GET /api/stages/internal-behavior-summary?course_id=5&stage_id=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52939 - "DELETE /api/stages/20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52940 - "GET /api/stages/courses/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52941 - "POST /api/stages/courses/5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52942 - "GET /api/portrait/dimensions/tree HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52943 - "GET /api/portrait/course-selection?course_id=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52944 - "GET /api/portrait/teacher-input?course_id=5&user_id=54&stage_id=21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52945 - "GET /api/portrait/questionnaire-input?course_id=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52946 - "GET /api/eval/mastery?kp_id=159 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52947 - "GET /api/eval/profile?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52948 - "GET /api/eval/overview?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52949 - "GET /api/admin/analytics/student-detail?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8&user_id=54 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52950 - "GET /api/admin/final-score/detail?subject=%E9%AB%98%E7%AD%89%E6%95%B0%E5%AD%A6&grade=%E9%80%9A%E7%94%A8&user_id=54 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52951 - "DELETE /api/stages/21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52952 - "GET /api/notes/?kp_id=159 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52953 - "GET /api/extensions/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52954 - "GET /api/extensions/methodology HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51837 - "POST /api/auth/login/admin HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59282 - "GET /api/admin/users?page=1&page_size=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59283 - "GET /api/admin/users?page=1&page_size=1&role=teacher HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59286 - "GET /api/portrait/dimensions/tree HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59284 - "GET /api/admin/users?page=1&page_size=1&role=student HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59285 - "GET /api/admin/users?page=1&page_size=1&role=admin HTTP/1.1" 200 OK

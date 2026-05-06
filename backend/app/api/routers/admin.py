@@ -2201,6 +2201,7 @@ def create_kp(
         difficulty=max(0.0, min(1.0, float(payload.difficulty))),
         pos_x=float(payload.pos_x) if payload.pos_x is not None else None,
         pos_y=float(payload.pos_y) if payload.pos_y is not None else None,
+        is_terminal=bool(payload.is_terminal),
     )
     session.add(kp)
     session.commit()
@@ -2246,6 +2247,8 @@ def update_kp(
         kp.pos_x = float(payload.pos_x)
     if payload.pos_y is not None:
         kp.pos_y = float(payload.pos_y)
+    if payload.is_terminal is not None:
+        kp.is_terminal = bool(payload.is_terminal)
     session.add(kp)
     session.commit()
     session.refresh(kp)
@@ -2298,14 +2301,23 @@ def save_graph_chapter_layout(
         except (TypeError, ValueError):
             continue
         normalized[str(key)] = {"x": x, "y": y}
-    cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == subject, EvalConfig.grade == grade)).first()
-    if cfg is None:
+    configs = session.exec(
+        select(EvalConfig)
+        .where(EvalConfig.subject == subject, EvalConfig.grade == grade)
+        .order_by(EvalConfig.id.desc())
+    ).all()
+    if configs:
+        cfg = configs[0]
+    else:
         cfg = EvalConfig(subject=subject, grade=grade)
         session.add(cfg)
         session.commit()
         session.refresh(cfg)
-    cfg.graph_layout_json = json.dumps({"version": 1, "chapters": normalized}, ensure_ascii=False)
-    session.add(cfg)
+        configs = [cfg]
+    layout_json = json.dumps({"version": 1, "chapters": normalized}, ensure_ascii=False)
+    for item in configs:
+        item.graph_layout_json = layout_json
+        session.add(item)
     session.commit()
     return {"ok": True, "chapters": normalized}
 

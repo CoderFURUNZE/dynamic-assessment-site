@@ -51,6 +51,7 @@ async function visitRoute(page, baseUrl, scenarioRole, route, findings) {
     if (url.includes("/api/") && resp.status() >= 400) issues.push(`api ${resp.status()}: ${url}`);
   };
   const onRequestFailed = (req) => {
+    if (/^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(req.url())) return;
     issues.push(`requestfailed: ${req.method()} ${req.url()} ${req.failure()?.errorText || ""}`);
   };
 

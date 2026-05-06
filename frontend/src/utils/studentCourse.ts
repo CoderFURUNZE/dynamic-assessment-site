@@ -9,11 +9,15 @@ type CourseLike = {
   learning_available?: boolean;
 };
 
-function isAccessibleCourse(course: CourseLike | undefined) {
+type ResolveStudentSubjectOptions = {
+  allowCompleted?: boolean;
+  allowUnavailable?: boolean;
+};
+
+function isAccessibleCourse(course: CourseLike | undefined, options: ResolveStudentSubjectOptions = {}) {
   if (!course) return false;
   if (course.active === false) return false;
-  if (course.completed === true) return false;
-  if (course.learning_available === false) return false;
+  if (!options.allowUnavailable && course.learning_available === false) return false;
   if (String(course.enroll_status || "").trim().toLowerCase() === "closed") return false;
   return Boolean(String(course.title || "").trim());
 }
@@ -33,8 +37,13 @@ export function saveStudentSubject(subject: string) {
   localStorage.setItem(LEGACY_STUDENT_SUBJECT_KEY, next);
 }
 
-export function resolveStudentSubject(routeSubject: string, currentSubject: string, courses: CourseLike[]) {
-  const accessibleCourses = courses.filter((item) => isAccessibleCourse(item));
+export function resolveStudentSubject(
+  routeSubject: string,
+  currentSubject: string,
+  courses: CourseLike[],
+  options: ResolveStudentSubjectOptions = {},
+) {
+  const accessibleCourses = courses.filter((item) => isAccessibleCourse(item, options));
   const fallbackCourse = accessibleCourses[0] || courses[0];
   const accessibleTitles = new Set(accessibleCourses.map((item) => item.title));
   const candidates = [routeSubject, currentSubject, getSavedStudentSubject(), fallbackCourse?.title || ""];

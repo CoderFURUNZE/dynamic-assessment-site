@@ -65,7 +65,7 @@ const router = useRouter();
 
 const courses = ref<Course[]>([]);
 const subject = ref("");
-const grade = ref("高一");
+const grade = ref("通用");
 const kps = ref<KP[]>([]);
 const currentKpId = ref<number | null>(null);
 const mastery = ref(0);
@@ -228,7 +228,10 @@ async function loadCourses() {
       completed: item.completed === true,
       learning_available: item.learning_available !== false,
     }));
-    subject.value = resolveStudentSubject(String(route.query.subject || ""), subject.value, courses.value);
+    subject.value = resolveStudentSubject(String(route.query.subject || ""), subject.value, courses.value, {
+      allowCompleted: true,
+      allowUnavailable: true,
+    });
   } catch (e: any) {
     if (e?.response?.status === 401) return;
     ElMessage.error(e?.response?.data?.detail ?? "加载课程失败");
@@ -242,10 +245,16 @@ async function loadKps() {
     return;
   }
   try {
-    const data = await getWithCache("/graph/kps", { subject: subject.value, grade: grade.value });
-    kps.value = data ?? [];
+    let data = await getWithCache("/graph/kps", { subject: subject.value, grade: grade.value });
+    if ((!Array.isArray(data) || data.length === 0) && grade.value !== "通用") {
+      grade.value = "通用";
+      data = await getWithCache("/graph/kps", { subject: subject.value, grade: grade.value });
+    }
+    kps.value = Array.isArray(data) ? data : [];
+    const routeKp = Number(route.query.kp || 0);
     const saved = Number(localStorage.getItem(kpStorageKey()) || 0);
-    if (saved && kps.value.some((item) => item.id === saved)) currentKpId.value = saved;
+    if (routeKp && kps.value.some((item) => item.id === routeKp)) currentKpId.value = routeKp;
+    if (!currentKpId.value && saved && kps.value.some((item) => item.id === saved)) currentKpId.value = saved;
     if (!currentKpId.value && kps.value.length) currentKpId.value = kps.value[0].id;
   } catch (e: any) {
     kps.value = [];
@@ -324,7 +333,7 @@ function openCurrentLearning(targetId?: number | null) {
   });
 }
 
-function openGraphWorkspace() {
+function openLearningPath() {
   router.push({
     path: "/student/graph-workspace",
     query: studentQuery({
@@ -380,7 +389,7 @@ onMounted(async () => {
           <button class="primary-cta" type="button" @click="openCurrentLearning()">
             <span>继续学习</span>
           </button>
-          <button class="secondary-cta" type="button" @click="openGraphWorkspace">知识图谱</button>
+          <button class="secondary-cta" type="button" @click="openLearningPath">学习路径</button>
         </div>
 
         <div class="hero-pills">

@@ -171,21 +171,33 @@ api.interceptors.response.use((response) => {
 });
 
 // 带缓存的 GET 请求
-export async function getWithCache<T = any>(url: string, params?: Record<string, any>): Promise<T> {
-  if (shouldBypassCache(url)) {
-    const response = await api.get<T>(url, { params });
-    return response.data;
-  }
+type CacheGetOptions = {
+  forceCache?: boolean;
+  skipGlobalLoading?: boolean;
+  ttlMs?: number;
+};
 
+export async function getWithCache<T = any>(url: string, params?: Record<string, any>, options?: CacheGetOptions): Promise<T> {
   const cacheKey = url + '?' + new URLSearchParams(params || {}).toString();
   const cached = cache[cacheKey];
+  const ttl = options?.ttlMs ?? CACHE_DURATION;
+  const bypassCache = shouldBypassCache(url) && !options?.forceCache;
   
-  if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+  if (!bypassCache && cached && (Date.now() - cached.timestamp) < ttl) {
     return cached.data as T;
+  }
+
+  if (bypassCache) {
+    const response = await api.get<T>(url, { params, skipGlobalLoading: options?.skipGlobalLoading } as any);
+    return response.data;
   }
   
   try {
-    const response = await api.get<T>(url, { params });
+    const response = await api.get<T>(url, { params, skipGlobalLoading: options?.skipGlobalLoading } as any);
+    cache[cacheKey] = {
+      data: response.data,
+      timestamp: Date.now()
+    };
     return response.data;
   } catch (error) {
     if (isAxiosError(error) && error.response?.status === 401) {
@@ -195,7 +207,11 @@ export async function getWithCache<T = any>(url: string, params?: Record<string,
     while (retries < MAX_RETRIES) {
       retries++;
       try {
-        const response = await api.get<T>(url, { params });
+        const response = await api.get<T>(url, { params, skipGlobalLoading: options?.skipGlobalLoading } as any);
+        cache[cacheKey] = {
+          data: response.data,
+          timestamp: Date.now()
+        };
         return response.data;
       } catch (retryError) {
         if (isAxiosError(retryError) && retryError.response?.status === 401) {

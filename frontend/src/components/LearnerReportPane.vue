@@ -174,6 +174,16 @@ type ProfileData = {
     teacher_feedback?: string;
     term_reason_summary?: string;
   };
+  graph_coverage?: {
+    total_nodes?: number;
+    completed_nodes?: number;
+    mastered_nodes?: number;
+    learning_coverage?: number;
+    mastery_coverage?: number;
+    graph_score?: number;
+    formula?: string;
+    dynamic_weight?: number;
+  };
 };
 
 const props = defineProps<{ subject: string; grade: string; reloadKey?: number }>();
@@ -232,6 +242,7 @@ const recentQuizRecords = computed(() => ((profile.value as any)?.recent_quiz_re
 const recentVideoRecords = computed(() => ((profile.value as any)?.recent_video_records ?? []) as Array<any>);
 const evaluationExplain = computed(() => profile.value?.evaluation_explain ?? null);
 const latestRecommendation = computed(() => profile.value?.latest_recommendation ?? null);
+const graphCoverage = computed(() => profile.value?.graph_coverage ?? null);
 
 function bloomLevelLabel(level: string) {
   const map: Record<string, string> = {
@@ -478,7 +489,7 @@ watch(
         </div>
       </section>
 
-<section class="dimension-board">
+      <section class="dimension-board report-card--metric">
         <div class="board-title">核心维度</div>
         <div class="dimension-list">
           <div v-for="item in dimensions" :key="item.label" class="dimension-item">
@@ -493,7 +504,52 @@ watch(
         </div>
       </section>
 
-      <section class="dimension-board">
+      <section v-if="graphCoverage" class="dimension-board report-card--metric">
+        <div class="board-title">知识图谱融合评价</div>
+        <div class="dimension-list">
+          <div class="dimension-item">
+            <div class="dimension-top">
+              <span>学习覆盖度</span>
+              <strong>{{ graphCoverage.completed_nodes || 0 }}/{{ graphCoverage.total_nodes || 0 }}</strong>
+            </div>
+            <div class="dimension-bar">
+              <div
+                class="dimension-bar__value"
+                :style="{ width: `${Math.round((graphCoverage.learning_coverage || 0) * 100)}%`, background: '#2f8cff' }"
+              />
+            </div>
+          </div>
+          <div class="dimension-item">
+            <div class="dimension-top">
+              <span>掌握覆盖度</span>
+              <strong>{{ graphCoverage.mastered_nodes || 0 }}/{{ graphCoverage.total_nodes || 0 }}</strong>
+            </div>
+            <div class="dimension-bar">
+              <div
+                class="dimension-bar__value"
+                :style="{ width: `${Math.round((graphCoverage.mastery_coverage || 0) * 100)}%`, background: '#2cb67d' }"
+              />
+            </div>
+          </div>
+          <div class="dimension-item">
+            <div class="dimension-top">
+              <span>图谱评价得分</span>
+              <strong>{{ Math.round((graphCoverage.graph_score || 0) * 100) }}%</strong>
+            </div>
+            <div class="dimension-bar">
+              <div
+                class="dimension-bar__value"
+                :style="{ width: `${Math.round((graphCoverage.graph_score || 0) * 100)}%`, background: '#ff9b42' }"
+              />
+            </div>
+          </div>
+        </div>
+        <div class="empty-help__text" style="text-align:left; margin-top: 10px;">
+          图谱评价得分 = 学习覆盖度 60% + 掌握覆盖度 40%，并以 20% 权重融入动态评价。
+        </div>
+      </section>
+
+      <section class="dimension-board report-card--metric">
         <div class="board-title">学期总结果</div>
         <div class="dimension-list">
           <div class="dimension-item">
@@ -514,7 +570,7 @@ watch(
         </div>
       </section>
 
-      <section class="dimension-board">
+      <section class="dimension-board report-card--kal">
         <div class="board-title">知识 / 能力 / 素养</div>
         <div class="dimension-list">
           <div class="dimension-item">
@@ -578,7 +634,7 @@ watch(
         </div>
       </section>
 
-      <section v-if="abilityPracticeStats" class="dimension-board">
+      <section v-if="abilityPracticeStats" class="dimension-board report-card--practice">
         <div class="board-title">练习表现 · 认知层级与能力标签</div>
         <p v-if="abilityPracticeStats.high_order_note" class="empty-help__text" style="text-align: left; margin-bottom: 12px">
           {{ abilityPracticeStats.high_order_note }}。下方「高阶」指应用、分析、评价、创造四类题目上的答题情况。
@@ -653,7 +709,7 @@ watch(
         </div>
       </section>
 
-      <section class="dimension-board">
+      <section class="dimension-board report-card--radar">
         <div class="board-title">当前阶段结果</div>
         <PortraitRadarChart
           title="当前阶段结果图"
@@ -683,7 +739,7 @@ watch(
         </div>
       </section>
 
-      <section v-if="finalPortraitDimensions.length" class="dimension-board">
+      <section v-if="finalPortraitDimensions.length" class="dimension-board report-card--radar">
         <div class="board-title">学期结果汇总</div>
         <PortraitRadarChart
           title="学期结果图"
@@ -709,7 +765,7 @@ watch(
         </div>
       </section>
 
-      <section class="stage-board">
+      <section class="stage-board report-card--timeline">
         <div class="board-title">学习变化</div>
         <div v-if="timelineCards.length" class="stage-list">
           <div v-for="item in timelineCards" :key="`${item.stage_id}-${item.stage_order}`" class="stage-card">
@@ -1081,17 +1137,6 @@ watch(
             </section>
           </el-tab-pane>
 
-          <el-tab-pane label="怎么看" name="explain">
-            <section class="config-board">
-              <div class="board-title">这页怎么看</div>
-              <div class="config-list">
-                <div class="config-item">上面先看总结果，下面再看详细结果。</div>
-                <div class="config-item">如果有些内容还没显示，一般是因为老师还没导入数据。</div>
-                <div class="config-item">知识图谱页面适合看知识点、资源和学习顺序。</div>
-                <div class="config-item">这页更适合看你现在的整体学习情况和下一步建议。</div>
-              </div>
-            </section>
-          </el-tab-pane>
         </el-tabs>
       </section>
     </div>
@@ -1154,11 +1199,30 @@ watch(
 
 .report-grid {
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: start;
 }
 
 .report-grid__hero {
+  grid-column: 1 / -1;
+}
+
+.report-card--metric,
+.report-card--kal {
+  grid-column: span 4;
+}
+
+.report-card--practice {
+  grid-column: span 5;
+}
+
+.report-card--radar {
+  grid-column: span 7;
+  min-height: 0;
+}
+
+.report-card--timeline {
   grid-column: 1 / -1;
 }
 
@@ -1247,13 +1311,14 @@ watch(
 .config-board,
 .feedback-board,
 .advice-board {
-  padding: 20px;
-  border-radius: 28px;
+  padding: 18px;
+  border-radius: 18px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1px solid rgba(31, 41, 55, 0.14);
-  box-shadow: 0 16px 34px rgba(31, 41, 55, 0.08);
+  box-shadow: 0 12px 26px rgba(31, 41, 55, 0.06);
   min-width: 0;
   max-width: 100%;
+  overflow: hidden;
 }
 
 .board-title {
@@ -1274,8 +1339,8 @@ watch(
 .dimension-item {
   display: grid;
   gap: 6px;
-  padding: 14px 16px;
-  border-radius: 20px;
+  padding: 12px 14px;
+  border-radius: 14px;
   border: 1.5px solid #d9e6f2;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
@@ -1285,13 +1350,13 @@ watch(
 .kal-grid {
   margin-top: 14px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
 }
 
 .kal-card {
-  padding: 14px;
-  border-radius: 20px;
+  padding: 12px;
+  border-radius: 14px;
   border: 1.5px solid #d9e6f2;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
@@ -1312,12 +1377,21 @@ watch(
 }
 
 .kal-item {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   font-size: 13px;
   color: #617792;
+}
+
+.kal-item span,
+.kal-item strong {
+  min-width: 0;
+}
+
+.kal-item strong {
+  white-space: nowrap;
 }
 
 .dimension-top,
@@ -1348,12 +1422,12 @@ watch(
 }
 
 .stage-list {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .stage-card {
-  padding: 14px;
-  border-radius: 20px;
+  padding: 12px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1.5px solid #d9e6f2;
   display: grid;
@@ -1368,7 +1442,7 @@ watch(
 }
 
 .stage-card__title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--app-ink);
 }
@@ -1380,7 +1454,7 @@ watch(
 
 .config-item {
   padding: 12px 14px;
-  border-radius: 20px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1.5px solid #d9e6f2;
   color: var(--app-ink);
@@ -1459,7 +1533,7 @@ watch(
 
 .feedback-card {
   padding: 14px 16px;
-  border-radius: 20px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1.5px solid #d9e6f2;
   display: grid;
@@ -1486,7 +1560,7 @@ watch(
 
 .advice-item {
   padding: 12px 14px;
-  border-radius: 20px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1.5px solid #d9e6f2;
   color: var(--app-ink);
@@ -1592,12 +1666,37 @@ watch(
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+@media (max-width: 1320px) {
+  .report-card--metric,
+  .report-card--kal {
+    grid-column: span 6;
+  }
+
+  .report-card--practice,
+  .report-card--radar {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 960px) {
   .report-grid {
     grid-template-columns: 1fr;
   }
 
+  .report-card--metric,
+  .report-card--kal,
+  .report-card--practice,
+  .report-card--radar,
+  .report-card--timeline,
+  .detail-tabs {
+    grid-column: 1 / -1;
+  }
+
   .kal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stage-list {
     grid-template-columns: 1fr;
   }
 }

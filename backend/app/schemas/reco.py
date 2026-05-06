@@ -27,6 +27,12 @@ class RecommendationOut(BaseModel):
     triple: dict = {}
     remedy: dict
     remedy_path: dict
+    personalized_path: list[dict] = []
+    recommendation_source: str = "local_rule"
+    ai_enhanced: dict = {}
+    student_message: str = ""
+    teacher_explanation: str = ""
+    course_completion: dict = {}
     resources: list[dict]
     practice: list[dict]
     unlock: dict
