@@ -8,29 +8,32 @@ defineProps<{
 
 <template>
   <section class="report-hero">
-    <div class="hero-head">
-      <div class="hero-head__copy">
-        <div class="hero-label">当前结果</div>
-        <div class="hero-title">{{ profile.persona_label }}</div>
+    <div class="hero-summary">
+      <div class="hero-head">
+        <div class="hero-head__copy">
+          <div class="hero-label">当前阶段画像</div>
+          <div class="hero-title">{{ profile.persona_label }}</div>
+        </div>
+        <el-tag v-if="currentStage" size="small" round class="hero-tag">{{ currentStage.trend_label }}</el-tag>
       </div>
-      <el-tag v-if="currentStage" size="small" round class="hero-tag">{{ currentStage.trend_label }}</el-tag>
+
+      <div class="hero-stage">
+        <span class="hero-stage__label">阶段</span>
+        <span>{{ currentStage?.stage_title || "尚未形成阶段评价" }}</span>
+      </div>
+
+      <div class="hero-text">{{ currentStage?.reason_summary || profile.reason_summary }}</div>
     </div>
 
-    <div class="hero-stage">
-      <span class="hero-stage__label">阶段：</span>
-      <span>{{ currentStage?.stage_title || "尚未形成阶段评价" }}</span>
+    <div class="hero-score" :style="{ '--hero-score': `${Math.round(profile.dynamic_score * 100)}%` }">
+      <strong>{{ Math.round(profile.dynamic_score * 100) }}%</strong>
+      <span>动态评分</span>
     </div>
-
-    <div class="hero-text">{{ currentStage?.reason_summary || profile.reason_summary }}</div>
 
     <div class="hero-metrics">
       <div class="hero-metric">
         <span>课程掌握度</span>
         <strong>{{ Math.round(profile.course_mastery * 100) }}%</strong>
-      </div>
-      <div class="hero-metric">
-        <span>动态评分</span>
-        <strong>{{ Math.round(profile.dynamic_score * 100) }}%</strong>
       </div>
       <div class="hero-metric">
         <span>{{ hasStageModel ? "阶段等级" : "稳定性" }}</span>
@@ -46,17 +49,25 @@ defineProps<{
 
 <style scoped>
 .report-hero {
-  padding: 20px 22px;
-  border-radius: 22px;
+  padding: 22px;
+  border-radius: 18px;
   background:
-    radial-gradient(circle at top right, rgba(219, 234, 254, 0.36), transparent 28%),
-    radial-gradient(circle at left bottom, rgba(220, 252, 231, 0.18), transparent 24%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.12), transparent 30%),
+    radial-gradient(circle at 0% 100%, rgba(34, 197, 94, 0.14), transparent 28%),
+    linear-gradient(135deg, #ffffff 0%, #f7fbff 100%);
   color: #0f172a;
   display: grid;
-  gap: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  grid-template-columns: minmax(0, 1fr) 150px minmax(260px, 0.9fr);
+  gap: 20px;
+  align-items: center;
+  border: 1px solid rgba(99, 120, 153, 0.2);
+  box-shadow: 0 18px 38px rgba(20, 35, 58, 0.08);
+}
+
+.hero-summary {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
 }
 
 .hero-head {
@@ -74,15 +85,15 @@ defineProps<{
 .hero-label {
   font-size: 12px;
   color: #166534;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .hero-title {
   font-size: clamp(26px, 3.8vw, 36px);
   line-height: 1.08;
-  letter-spacing: -0.04em;
   font-weight: 800;
   color: #0f172a;
+  overflow-wrap: break-word;
 }
 
 .hero-tag {
@@ -92,11 +103,15 @@ defineProps<{
 }
 
 .hero-stage {
-  display: flex;
+  display: inline-flex;
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
-  color: #64748b;
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #52647a;
   line-height: 1.6;
 }
 
@@ -105,27 +120,50 @@ defineProps<{
 }
 
 .hero-text {
-  color: #64748b;
+  color: #52647a;
   line-height: 1.7;
   font-size: 14px;
 }
 
+.hero-score {
+  width: 132px;
+  height: 132px;
+  justify-self: center;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  background: conic-gradient(#22c55e var(--hero-score), #dbeafe 0);
+  box-shadow: inset 0 0 0 10px #ffffff, 0 16px 28px rgba(34, 197, 94, 0.16);
+}
+
+.hero-score strong {
+  font-size: 30px;
+  color: #102033;
+}
+
+.hero-score span {
+  font-size: 12px;
+  color: #52647a;
+  font-weight: 800;
+}
+
 .hero-metrics {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 
 .hero-metric {
-  min-height: 98px;
-  padding: 18px 20px;
-  border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  min-height: 76px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(99, 120, 153, 0.18);
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   display: grid;
-  gap: 10px;
+  gap: 6px;
   align-content: center;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .hero-metric span {
@@ -140,14 +178,16 @@ defineProps<{
   font-weight: 800;
 }
 
+@media (max-width: 980px) {
+  .report-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 720px) {
   .hero-head {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .hero-metrics {
-    grid-template-columns: 1fr;
   }
 }
 </style>

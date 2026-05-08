@@ -209,7 +209,7 @@ watch(
       <div class="questionnaire-pane__header">
         <div>
           <div class="questionnaire-pane__title">补充问卷</div>
-          <div class="questionnaire-pane__subtitle">按课程要求补充填写，系统会用于更新学习画像结果。</div>
+          <div class="questionnaire-pane__subtitle">按真实学习状态选择，系统会自动换算画像指标。</div>
         </div>
         <div class="questionnaire-pane__meta">
           <span>完成度 {{ progressText }}</span>
@@ -229,12 +229,12 @@ watch(
     </div>
 
     <div v-else class="questionnaire-pane__content">
-      <section class="questionnaire-summary">
+      <aside class="questionnaire-summary">
+        <div class="questionnaire-summary__progress" :style="{ '--questionnaire-progress': `${completionPercent}%` }">
+          <strong>{{ completionPercent }}%</strong>
+          <span>完成度</span>
+        </div>
         <div class="questionnaire-summary__cards">
-          <div class="questionnaire-summary__card">
-            <span>问卷完成度</span>
-            <strong>{{ completionPercent }}%</strong>
-          </div>
           <div class="questionnaire-summary__card">
             <span>平均得分</span>
             <strong>{{ avgScore == null ? "未计算" : `${Math.round(avgScore * 100)}%` }}</strong>
@@ -264,45 +264,52 @@ watch(
             </div>
           </div>
         </div>
-      </section>
+      </aside>
 
-      <section v-for="group in groupedItems" :key="group.title" class="questionnaire-group">
-        <div class="questionnaire-group__title">{{ group.title }}</div>
-        <div class="questionnaire-group__list">
-          <article v-for="item in group.rows" :key="item.indicator_id" class="questionnaire-item">
-            <div class="questionnaire-item__head">
-              <strong>{{ item.indicator_title }}</strong>
-              <span>学生补充项</span>
+      <main class="questionnaire-workspace">
+        <section v-for="group in groupedItems" :key="group.title" class="questionnaire-group">
+          <div class="questionnaire-group__head">
+            <div>
+              <div class="questionnaire-group__eyebrow">学生补充项</div>
+              <div class="questionnaire-group__title">{{ group.title }}</div>
             </div>
-            <div class="questionnaire-item__question-title">题项作答</div>
-            <div class="questionnaire-item__questions">
-              <div v-for="(text, qIndex) in item.questionTexts" :key="`${item.indicator_id}-${qIndex}`" class="question-row">
-                <div class="question-row__text">{{ qIndex + 1 }}. {{ text }}</div>
-                <el-radio-group v-model="item.questionAnswers[qIndex]" size="small" @change="applyAutoScore(item)">
-                  <el-radio-button
-                    v-for="option in SCORE_OPTIONS"
-                    :key="`${item.indicator_id}-${qIndex}-${option.value}`"
-                    :label="option.value"
-                  >
-                    {{ option.label }}
-                  </el-radio-button>
-                </el-radio-group>
+            <span>{{ group.rows.length }} 个指标</span>
+          </div>
+          <div class="questionnaire-group__list">
+            <article v-for="item in group.rows" :key="item.indicator_id" class="questionnaire-item">
+              <div class="questionnaire-item__head">
+                <div>
+                  <strong>{{ item.indicator_title }}</strong>
+                  <span>系统换算：{{ scoreOptionLabel(calcAutoScore(item)) }}</span>
+                </div>
               </div>
-            </div>
-            <div class="questionnaire-item__score-row">
-              <span>系统换算结果：{{ scoreOptionLabel(calcAutoScore(item)) }}</span>
-            </div>
-            <div class="questionnaire-item__hint">
-              完成上面的题项后，系统会自动换算当前指标结果，不需要你手动设置权重或评分规则。
-            </div>
-            <el-input v-model="item.note" type="textarea" :rows="2" placeholder="可选：补充说明、标签或当前学习感受" />
-          </article>
-        </div>
-      </section>
+              <div class="questionnaire-item__questions">
+                <div v-for="(text, qIndex) in item.questionTexts" :key="`${item.indicator_id}-${qIndex}`" class="question-row">
+                  <div class="question-row__text">
+                    <span>{{ qIndex + 1 }}</span>
+                    <strong>{{ text }}</strong>
+                  </div>
+                  <el-radio-group v-model="item.questionAnswers[qIndex]" size="small" @change="applyAutoScore(item)">
+                    <el-radio-button
+                      v-for="option in SCORE_OPTIONS"
+                      :key="`${item.indicator_id}-${qIndex}-${option.value}`"
+                      :label="option.value"
+                    >
+                      {{ option.label }}
+                    </el-radio-button>
+                  </el-radio-group>
+                </div>
+              </div>
+              <el-input v-model="item.note" type="textarea" :rows="2" placeholder="可选：补充说明、标签或当前学习感受" />
+            </article>
+          </div>
+        </section>
 
-      <div class="questionnaire-pane__actions">
-        <el-button type="primary" :loading="saving" :disabled="!canSave" @click="save">保存补充内容</el-button>
-      </div>
+        <div class="questionnaire-pane__actions">
+          <span>保存后将重新计算学习画像，不需要手动设置权重。</span>
+          <el-button type="primary" :loading="saving" :disabled="!canSave" @click="save">保存补充内容</el-button>
+        </div>
+      </main>
     </div>
   </el-card>
 </template>
@@ -310,20 +317,22 @@ watch(
 <style scoped>
 .questionnaire-pane {
   overflow: hidden;
-  border-radius: 28px;
-  border: 1px solid rgba(31, 41, 55, 0.14);
+  border-radius: 16px;
+  border: 0;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: 0 16px 34px rgba(31, 41, 55, 0.08);
+  box-shadow: none;
 }
 
 .questionnaire-pane :deep(.el-card__header) {
-  padding: 16px 20px 12px;
-  border-bottom: 1px solid #e0d2bb;
-  background: linear-gradient(180deg, #fff1de 0%, #fff8ef 100%);
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(120, 142, 166, 0.18);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.08), transparent 30%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .questionnaire-pane :deep(.el-card__body) {
-  padding: 16px;
+  padding: 18px;
 }
 
 .questionnaire-pane__header {
@@ -335,23 +344,34 @@ watch(
 }
 
 .questionnaire-pane__title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--app-ink);
+  font-size: 22px;
+  font-weight: 900;
+  color: #102033;
 }
 
 .questionnaire-pane__subtitle {
   margin-top: 4px;
   font-size: 13px;
-  color: var(--app-ink-soft);
+  color: #52647a;
 }
 
 .questionnaire-pane__meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  color: #7a6545;
+  color: #52647a;
+}
+
+.questionnaire-pane__meta span {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  font-weight: 800;
 }
 
 .questionnaire-pane__empty {
@@ -367,56 +387,86 @@ watch(
 
 .questionnaire-pane__content {
   display: grid;
-  gap: 14px;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
 }
 
 .questionnaire-summary {
-  border: 1.5px solid #e0d2bb;
-  border-radius: 22px;
-  padding: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  position: sticky;
+  top: 16px;
+  border: 1px solid rgba(120, 142, 166, 0.2);
+  border-radius: 16px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(34, 197, 94, 0.1), transparent 30%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   display: grid;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
   max-width: 100%;
+  box-shadow: 0 14px 30px rgba(20, 35, 58, 0.07);
+}
+
+.questionnaire-summary__progress {
+  width: 132px;
+  height: 132px;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-radius: 999px;
+  background: conic-gradient(#22c55e var(--questionnaire-progress), #dbeafe 0);
+  box-shadow: inset 0 0 0 10px #ffffff, 0 16px 28px rgba(34, 197, 94, 0.16);
+}
+
+.questionnaire-summary__progress strong {
+  color: #102033;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.questionnaire-summary__progress span {
+  color: #52647a;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .questionnaire-summary__cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
   min-width: 0;
 }
 
 .questionnaire-summary__card {
-  border: 1.5px solid #e0d2bb;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  padding: 12px 14px;
+  border: 1px solid #dbe7f3;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px;
   display: grid;
   gap: 4px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
   min-width: 0;
   max-width: 100%;
 }
 
 .questionnaire-summary__card span {
   font-size: 12px;
-  color: #7a6545;
+  color: #52647a;
+  font-weight: 800;
 }
 
 .questionnaire-summary__card strong {
   font-size: 16px;
-  color: #4f3d24;
-  overflow-wrap: anywhere;
+  color: #102033;
+  overflow-wrap: break-word;
 }
 
 .questionnaire-summary__chart {
-  border: 1.5px solid #e0d2bb;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  padding: 12px 14px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid #dbe7f3;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px;
   min-width: 0;
   max-width: 100%;
 }
@@ -430,7 +480,7 @@ watch(
 
 .questionnaire-summary__empty {
   font-size: 12px;
-  color: #8a7555;
+  color: #52647a;
 }
 
 .dimension-bars {
@@ -448,13 +498,13 @@ watch(
   justify-content: space-between;
   align-items: center;
   font-size: 12px;
-  color: #6f5a3a;
+  color: #52647a;
 }
 
 .dimension-bars__track {
-  height: 10px;
+  height: 9px;
   border-radius: 999px;
-  background: #dbeafe;
+  background: #e7eef8;
   overflow: hidden;
 }
 
@@ -464,21 +514,54 @@ watch(
   background: linear-gradient(90deg, #60a5fa 0%, #86efac 100%);
 }
 
+.questionnaire-workspace {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
 .questionnaire-group {
-  border: 1px solid rgba(31, 41, 55, 0.14);
-  border-radius: 26px;
+  border: 1px solid rgba(120, 142, 166, 0.2);
+  border-radius: 16px;
   padding: 16px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: 0 16px 34px rgba(31, 41, 55, 0.08);
+  box-shadow: 0 12px 28px rgba(20, 35, 58, 0.06);
   min-width: 0;
   max-width: 100%;
 }
 
+.questionnaire-group__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.questionnaire-group__head > span {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.questionnaire-group__eyebrow {
+  color: #166534;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .questionnaire-group__title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #243449;
-  margin-bottom: 10px;
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 900;
+  color: #102033;
 }
 
 .questionnaire-group__list {
@@ -487,13 +570,12 @@ watch(
 }
 
 .questionnaire-item {
-  border: 1.5px solid #e0d2bb;
-  border-radius: 20px;
-  padding: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid #dbe7f3;
+  border-radius: 14px;
+  padding: 14px;
+  background: #ffffff;
   display: grid;
-  gap: 8px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  gap: 12px;
   min-width: 0;
   max-width: 100%;
 }
@@ -503,13 +585,27 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: #7a6545;
+  color: #52647a;
   font-size: 12px;
   min-width: 0;
 }
 
 .questionnaire-item__head strong {
-  overflow-wrap: anywhere;
+  display: block;
+  color: #102033;
+  font-size: 16px;
+  overflow-wrap: break-word;
+}
+
+.questionnaire-item__head span {
+  display: inline-flex;
+  margin-top: 6px;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  font-weight: 800;
 }
 
 .questionnaire-item__question-title {
@@ -524,21 +620,43 @@ watch(
 }
 
 .question-row {
-  border: 1.5px solid #e0d2bb;
-  border-radius: 16px;
-  padding: 10px;
+  border: 1px solid #e7eef8;
+  border-radius: 12px;
+  padding: 12px;
   display: grid;
-  gap: 6px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  background: #f8fafc;
   min-width: 0;
   max-width: 100%;
 }
 
 .question-row__text {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.question-row__text span {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
   font-size: 12px;
-  color: #4f3d24;
-  overflow-wrap: anywhere;
+  font-weight: 900;
+}
+
+.question-row__text strong {
+  color: #102033;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: break-word;
 }
 
 .questionnaire-item__score-row {
@@ -552,66 +670,112 @@ watch(
 
 .questionnaire-item__hint {
   font-size: 12px;
-  color: #8a7555;
+  color: #52647a;
   line-height: 1.5;
 }
 
 .questionnaire-pane__actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 142, 166, 0.2);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 -8px 22px rgba(20, 35, 58, 0.08);
+}
+
+.questionnaire-pane__actions span {
+  color: #52647a;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .questionnaire-pane :deep(.el-radio-group) {
   flex-wrap: wrap;
   gap: 6px;
+  justify-content: flex-end;
 }
 
 .questionnaire-pane :deep(.el-radio-button__inner) {
+  min-width: 48px;
   border-radius: 999px;
-  border: 1.5px solid #e0d2bb;
-  background: #fff8ef;
-  color: #7a6545;
+  border: 1px solid #dbe7f3;
+  background: #ffffff;
+  color: #52647a;
   font-size: 12px;
   padding: 6px 12px;
   transition: all 0.2s ease;
 }
 
 .questionnaire-pane :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background: linear-gradient(135deg, #edf7cf 0%, #fff1de 100%);
-  border-color: #ccb78f;
-  color: #4f3d24;
-  box-shadow: 0 6px 10px rgba(31, 41, 55, 0.08);
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #ffffff;
+  box-shadow: 0 8px 14px rgba(34, 197, 94, 0.18);
 }
 
 .questionnaire-pane :deep(.el-textarea__inner) {
-  border-radius: 16px;
-  border: 1.5px solid #e0d2bb;
-  background: #fff8ef;
-  color: #1f2937;
-  box-shadow: none;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #102033;
+  box-shadow: 0 0 0 1px #dbe7f3 inset;
 }
 
 .questionnaire-pane :deep(.el-button:not(.el-button--primary)) {
-  border-color: #e0d2bb;
+  border-color: #dbe7f3;
   background: #ffffff;
-  color: #243449;
+  color: #102033;
+  border-radius: 10px;
 }
 
 .questionnaire-pane :deep(.el-button--primary) {
-  border-color: #ccb78f;
-  background: linear-gradient(135deg, #edf7cf 0%, #fff1de 100%);
-  color: #4f3d24;
+  min-height: 42px;
+  border-color: #22c55e;
+  background: #22c55e;
+  color: #ffffff;
+  border-radius: 10px;
+  font-weight: 900;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
+  .questionnaire-pane__content {
+    grid-template-columns: 1fr;
+  }
+
+  .questionnaire-summary {
+    position: static;
+  }
+
   .questionnaire-summary__cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .question-row {
+    grid-template-columns: 1fr;
+  }
+
+  .questionnaire-pane :deep(.el-radio-group) {
+    justify-content: flex-start;
   }
 }
 
 @media (max-width: 760px) {
   .questionnaire-summary__cards {
     grid-template-columns: 1fr;
+  }
+
+  .questionnaire-pane__header,
+  .questionnaire-pane__actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>

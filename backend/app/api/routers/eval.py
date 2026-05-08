@@ -559,9 +559,14 @@ def profile(
             "score": round(float(graph_coverage.get("graph_score", 0.0)), 4),
             "score_label": _label_from_score(float(graph_coverage.get("graph_score", 0.0))),
             "explain": (
-                f"已完成 {int(graph_coverage.get('completed_nodes', 0))}/{int(graph_coverage.get('total_nodes', 0))} 个图谱节点，"
-                f"已掌握 {int(graph_coverage.get('mastered_nodes', 0))}/{int(graph_coverage.get('total_nodes', 0))} 个节点；"
-                "图谱评价分按学习覆盖度 60% + 掌握覆盖度 40% 计算，并以 20% 权重融入动态评价。"
+                f"已通过终点知识点“{dict(graph_coverage.get('terminal_mastered') or {}).get('title', '终点')}”，"
+                "图谱评价按课程达标计算，并以 20% 权重融入动态评价；未学习分支仍可作为拓展或补弱建议。"
+                if graph_coverage.get("completion_rule") == "terminal_mastery"
+                else (
+                    f"已完成 {int(graph_coverage.get('completed_nodes', 0))}/{int(graph_coverage.get('total_nodes', 0))} 个图谱节点，"
+                    f"已掌握 {int(graph_coverage.get('mastered_nodes', 0))}/{int(graph_coverage.get('total_nodes', 0))} 个节点；"
+                    "图谱评价分按学习覆盖度 60% + 掌握覆盖度 40% 计算，并以 20% 权重融入动态评价。"
+                )
             ),
         },
         {

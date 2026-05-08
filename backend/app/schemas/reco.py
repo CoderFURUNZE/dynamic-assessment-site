@@ -7,6 +7,7 @@ class RecommendationTargetOut(BaseModel):
     title: str
     chapter: str = ""
     mastery: float = 0.0
+    is_terminal: bool = False
 
 
 class RecommendationOut(BaseModel):
@@ -28,6 +29,7 @@ class RecommendationOut(BaseModel):
     remedy: dict
     remedy_path: dict
     personalized_path: list[dict] = []
+    route_options: dict = {}
     recommendation_source: str = "local_rule"
     ai_enhanced: dict = {}
     student_message: str = ""

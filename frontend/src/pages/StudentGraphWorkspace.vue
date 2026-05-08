@@ -4,7 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { Check, Lock, Star, Trophy, VideoPlay } from "@element-plus/icons-vue";
 import { api, getWithCache } from "../api";
-import { resolveStudentSubject, saveStudentSubject } from "../utils/studentCourse";
+import { getSavedStudentSubject, saveStudentSubject } from "../utils/studentCourse";
 
 type Course = {
   id: number;
@@ -25,31 +25,44 @@ type KP = {
   mastery?: number;
   status?: string;
   previewLocked?: boolean;
+  pathSelected?: boolean;
+  pos_x?: number | null;
+  pos_y?: number | null;
+};
+
+type Edge = {
+  prereq_id: number;
+  next_id: number;
+  relation_type: string;
 };
 
 type RecoData = {
-  target_kp: { id: number; code: string; title: string; chapter?: string; mastery?: number };
+  target_kp: { id: number; code: string; title: string; chapter?: string; mastery?: number; is_terminal?: boolean };
   reason_summary: string;
   advice_text?: string;
   student_message?: string;
-  personalized_path?: Array<{ kp_id?: number; id?: number; title?: string; action?: string; mastery?: number }>;
+  personalized_path?: Array<{ kp_id?: number; id?: number; code?: string; title?: string; chapter?: string; action?: string; mastery?: number; is_terminal?: boolean; locked?: boolean }>;
+  route_options?: {
+    display_nodes?: Array<{ kp_id?: number; id?: number; code?: string; title?: string; chapter?: string; mastery?: number; is_terminal?: boolean; locked?: boolean; recommended?: boolean }>;
+    next_options?: Array<{ id?: number; title?: string }>;
+    terminal_options?: Array<{ id?: number; title?: string }>;
+    available_ids?: number[];
+    explain?: string;
+  };
   course_completion?: { completed?: boolean; completed_terminal_title?: string };
 };
 
 type RouteStop = {
   kp: KP;
   index: number;
-  role: "start" | "recommended" | "terminal";
+  role: "start" | "recommended" | "option" | "terminal";
   x: number;
   y: number;
 };
 
 type ConnectorLine = {
   key: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
+  d: string;
   state: string;
 };
 
@@ -62,178 +75,200 @@ const courses = ref<Course[]>([]);
 const subject = ref("");
 const grade = ref("通用");
 const visibleKps = ref<KP[]>([]);
+const visibleEdges = ref<Edge[]>([]);
 const currentKpId = ref<number | null>(null);
+const recommendationSourceKpId = ref<number | null>(null);
 const reco = ref<RecoData | null>(null);
 const mapRef = ref<HTMLElement | null>(null);
 const isDragging = ref(false);
-const dragStart = ref({ x: 0, y: 0, left: 0, top: 0 });
+const dragMoved = ref(false);
+const suppressNodeClick = ref(false);
+const dragStart = ref({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
+const panOffset = ref({ x: 0, y: 0 });
 
 const visibleCourses = computed(() =>
   courses.value.filter((item) => item.active !== false && String(item.enroll_status || "").trim().toLowerCase() !== "closed"),
+);
+const routeSelectableCourses = computed(() =>
+  courses.value.filter((item) => Boolean(String(item.title || "").trim())),
 );
 const currentCourse = computed(() => courses.value.find((item) => item.title === subject.value) ?? null);
 const recommendedKp = computed(() => reco.value?.target_kp ?? null);
 const courseClosed = computed(() => Boolean(currentCourse.value && currentCourse.value.learning_available === false));
 
+const recommendedNodeId = computed(() => Number(recommendedKp.value?.id || 0));
+
+const routeKps = computed(() => {
+  // The graph map is the source of truth; recommendation only highlights a suggested node.
+  return visibleKps.value.map((item) => ({ ...item }));
+});
+
 const currentKp = computed(() => {
   const recommendedId = Number(recommendedKp.value?.id || 0);
-  return visibleKps.value.find((item) => item.id === currentKpId.value)
+  return routeKps.value.find((item) => item.id === currentKpId.value)
+    ?? visibleKps.value.find((item) => item.id === currentKpId.value)
+    ?? routeKps.value.find((item) => item.id === recommendedId)
     ?? visibleKps.value.find((item) => item.id === recommendedId)
+    ?? routeKps.value[0]
     ?? visibleKps.value[0]
     ?? null;
 });
 
-const commonStartKp = computed(() =>
-  visibleKps.value.find((item) => item.code === "HM-MID-01")
-  ?? visibleKps.value.find((item) => !item.is_terminal)
-  ?? visibleKps.value[0]
-  ?? null,
-);
-
-const commonTerminalKp = computed(() =>
-  visibleKps.value.find((item) => item.code === "HM-MID-C2")
-  ?? visibleKps.value.find((item) => item.is_terminal)
-  ?? null,
-);
-
-const routeKps = computed(() => {
-  const recommendedId = Number(recommendedKp.value?.id || currentKpId.value || 0);
-  const byId = new Map<number, KP>();
-  for (const item of visibleKps.value) byId.set(item.id, { ...item });
-  if (recommendedId && !byId.has(recommendedId) && recommendedKp.value) {
-    byId.set(recommendedId, {
-      id: recommendedId,
-      code: recommendedKp.value.code,
-      title: recommendedKp.value.title,
-      chapter: recommendedKp.value.chapter,
-      mastery: recommendedKp.value.mastery,
-    });
-  }
-
-  const result: KP[] = [];
-  const push = (item?: KP | null, previewLocked = false) => {
-    if (!item || result.some((row) => row.id === item.id)) return;
-    result.push({ ...item, previewLocked });
-  };
-
-  const start = commonStartKp.value;
-  const terminal = commonTerminalKp.value;
-  push(start);
-
-  const pathIds = (reco.value?.personalized_path ?? [])
-    .map((item) => Number(item.kp_id || item.id || 0))
-    .filter(Boolean);
-  pathIds.forEach((id) => {
-    const item = byId.get(id);
-    if (!item) return;
-    if (start && item.id === start.id) return;
-    if (terminal && item.id === terminal.id) return;
-    push(item);
-  });
-
-  const recommended = recommendedId ? byId.get(recommendedId) ?? null : null;
-  if (
-    recommended
-    && (!start || recommended.id !== start.id)
-    && (!terminal || recommended.id !== terminal.id)
-  ) {
-    push(recommended);
-  }
-
-  if (result.length <= 1) {
-    const fallback = visibleKps.value.find((item) => {
-      if (start && item.id === start.id) return false;
-      if (terminal && item.id === terminal.id) return false;
-      return !isCompleted(item);
-    });
-    push(fallback);
-  }
-
-  if (terminal) push(terminal, !isCompleted(terminal) && Boolean(recommended && recommended.id !== terminal.id));
-  if (result.length === 0) push(visibleKps.value[0]);
-  return result.slice(0, 6);
-});
-
-const completedCount = computed(() => routeKps.value.filter((item) => isCompleted(item)).length);
+const availableCount = computed(() => routeKps.value.filter((item) => !item.previewLocked).length);
+const completedCount = computed(() => routeKps.value.filter((item) => !item.previewLocked && isCompleted(item)).length);
 const progressPercent = computed(() => {
-  if (!routeKps.value.length) return 0;
-  return Math.round((completedCount.value / routeKps.value.length) * 100);
+  if (!availableCount.value) return 0;
+  return Math.round((completedCount.value / availableCount.value) * 100);
 });
 const previewCount = computed(() => routeKps.value.filter((item) => item.previewLocked).length);
 const routeTerminalCount = computed(() => routeKps.value.filter((item) => item.is_terminal).length);
+const currentMasteryPercent = computed(() => Math.round(Number(currentKp.value?.mastery || recommendedKp.value?.mastery || 0) * 100));
+const routeProgressStyle = computed(() => ({ "--route-progress": `${progressPercent.value}%` }));
+const masteryRingStyle = computed(() => ({ "--mastery-progress": `${currentMasteryPercent.value}%` }));
+const routeContentHeight = computed(() => {
+  const lowestStopY = routeStops.value.reduce((max, stop) => Math.max(max, stop.y), 0);
+  return Math.max(mapHeight.value, lowestStopY + 260);
+});
+const mapCanvasStyle = computed(() => ({
+  width: `${mapWidth}px`,
+  height: `${routeContentHeight.value}px`,
+  transform: `translate3d(${panOffset.value.x}px, ${panOffset.value.y}px, 0)`,
+}));
+const selectedStopIndex = computed(() => {
+  const id = Number(currentKp.value?.id || recommendedKp.value?.id || 0);
+  const index = routeKps.value.findIndex((item) => item.id === id);
+  return index >= 0 ? index + 1 : 1;
+});
+const currentStatusLabel = computed(() => {
+  const kp = currentKp.value;
+  if (!kp) return "等待推荐";
+  const state = nodeState(kp);
+  if (state === "selected") return "当前选择";
+  if (state === "recommended") return "建议优先";
+  if (state === "locked") return "待解锁";
+  if (state === "current") return "当前推荐";
+  if (state === "done") return "已完成";
+  if (state === "path") return "已走路径";
+  return "可学习";
+});
+const currentNodeState = computed(() => currentKp.value ? nodeState(currentKp.value) : "open");
+const learningAdvice = computed(() => {
+  const kp = currentKp.value;
+  if (courseClosed.value) return ["课程已经结束，建议先查看学习报告和最终反馈。", "可以回到薄弱节点复习，但不再产生新的课程进度。"];
+  if (!kp) return ["等待老师开放课程路线后，系统会自动生成下一步建议。"];
+  if (kp.previewLocked) return ["这个节点暂未解锁，先完成当前推荐关卡。", "完成前置节点后，路线会自动刷新并开放后续内容。"];
+  if (isCompleted(kp)) return ["这个知识点已经达标，可以重新学习巩固，也可以继续挑战下一关。", "建议重点查看错题和小测解释，避免遗忘。"];
+  if (Number(kp.mastery || 0) < 0.5) return ["先看本关资源，建立概念，再进入练习。", "练习时优先完成基础题，系统会根据结果更新掌握度。"];
+  return ["继续完成练习和小测，把掌握度推到 70% 以上。", "如果卡住，可以回看资源或查看题目解析。"];
+});
+const routeStepItems = computed(() => routeKps.value.map((kp, index) => ({
+  kp,
+  index: index + 1,
+  state: nodeState(kp),
+  mastery: Math.round(Number(kp.mastery || 0) * 100),
+})));
 
 const mapWidth = 1040;
+const routeNodeRadius = 43;
 const FAST_ENTRY_CACHE_TTL = 60 * 1000;
-const mapHeight = computed(() => 700);
-const routeStops = computed<RouteStop[]>(() => {
-  const start = routeKps.value[0];
-  const terminal = routeKps.value.find((kp) => commonTerminalKp.value && kp.id === commonTerminalKp.value.id)
-    ?? routeKps.value[routeKps.value.length - 1];
-  const middle = routeKps.value.filter((kp) => kp.id !== start?.id && kp.id !== terminal?.id);
-  const laneXs = middle.length <= 1
-    ? [520]
-    : middle.length === 2
-      ? [390, 650]
-      : middle.length === 3
-        ? [300, 520, 740]
-        : [240, 425, 615, 800];
-  const stops: RouteStop[] = [];
-  if (start) stops.push({ kp: start, index: 0, role: "start", x: 520, y: 120 });
-  middle.slice(0, 4).forEach((kp, index) => {
-    const laneYs = middle.length <= 1
-      ? [330]
-      : middle.length === 2
-        ? [275, 405]
-        : middle.length === 3
-          ? [260, 330, 400]
-          : [245, 315, 385, 455];
-    stops.push({ kp, index: stops.length, role: "recommended", x: laneXs[index] ?? 520, y: laneYs[index] ?? 330 });
+const mapHeight = computed(() => routeStops.value.length >= 8 ? 1180 : routeStops.value.length >= 6 ? 1040 : 860);
+function middlePositions(count: number) {
+  const positionsByCount: Record<number, Array<{ x: number; y: number }>> = {
+    1: [{ x: 520, y: 420 }],
+    2: [{ x: 360, y: 390 }, { x: 680, y: 390 }],
+    3: [{ x: 260, y: 330 }, { x: 520, y: 470 }, { x: 780, y: 330 }],
+    4: [{ x: 220, y: 320 }, { x: 420, y: 500 }, { x: 620, y: 500 }, { x: 820, y: 320 }],
+    5: [{ x: 180, y: 320 }, { x: 350, y: 500 }, { x: 520, y: 360 }, { x: 690, y: 500 }, { x: 860, y: 320 }],
+    6: [{ x: 180, y: 300 }, { x: 350, y: 450 }, { x: 520, y: 600 }, { x: 690, y: 450 }, { x: 860, y: 300 }, { x: 520, y: 780 }],
+  };
+  if (count <= 6) return positionsByCount[Math.max(count, 1)] ?? positionsByCount[1];
+  const columns = 3;
+  const xByColumn = [220, 520, 820];
+  return Array.from({ length: count }, (_, index) => {
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    return {
+      x: xByColumn[row % 2 === 0 ? column : columns - 1 - column],
+      y: 300 + row * 190,
+    };
   });
-  if (terminal && (!start || terminal.id !== start.id)) {
-    stops.push({ kp: terminal, index: stops.length, role: "terminal", x: 520, y: middle.length > 1 ? 610 : 545 });
-  }
+}
+
+function graphPositionStops(nodes: KP[]): RouteStop[] | null {
+  const positioned = nodes.filter((kp) => Number.isFinite(Number(kp.pos_x)) && Number.isFinite(Number(kp.pos_y)));
+  if (positioned.length !== nodes.length) return null;
+  const xs = positioned.map((kp) => Number(kp.pos_x));
+  const ys = positioned.map((kp) => Number(kp.pos_y));
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const rangeX = Math.max(maxX - minX, 1);
+  const rangeY = Math.max(maxY - minY, 1);
+  const left = 170;
+  const top = 150;
+  const width = mapWidth - 340;
+  const height = Math.max(620, nodes.length >= 8 ? 980 : 760);
+  return nodes.map((kp, index) => {
+    const hasPosition = Number.isFinite(Number(kp.pos_x)) && Number.isFinite(Number(kp.pos_y));
+    const fallback = middlePositions(nodes.length)[index] ?? { x: 520, y: 420 + index * 120 };
+    return {
+      kp,
+      index,
+      role: kp.is_terminal ? "terminal" : kp.id === recommendedNodeId.value ? "recommended" : index === 0 ? "start" : "option",
+      x: hasPosition ? left + ((Number(kp.pos_x) - minX) / rangeX) * width : fallback.x,
+      y: hasPosition ? top + ((Number(kp.pos_y) - minY) / rangeY) * height : fallback.y,
+    };
+  });
+}
+
+const routeStops = computed<RouteStop[]>(() => {
+  const nodes = routeKps.value;
+  const graphStops = graphPositionStops(nodes);
+  if (graphStops) return graphStops;
+  const positions = middlePositions(nodes.length);
+  const stops: RouteStop[] = [];
+  nodes.forEach((kp, index) => {
+    const position = positions[index] ?? { x: 520, y: 420 + index * 120 };
+    stops.push({
+      kp,
+      index,
+      role: kp.is_terminal ? "terminal" : kp.id === recommendedNodeId.value ? "recommended" : index === 0 ? "start" : "option",
+      x: position.x,
+      y: position.y,
+    });
+  });
   return stops;
 });
 const connectorLines = computed(() => {
-  const start = routeStops.value.find((item) => item.role === "start");
-  const terminal = routeStops.value.find((item) => item.role === "terminal");
-  const middle = routeStops.value.filter((item) => item.role === "recommended");
+  const stopById = new Map(routeStops.value.map((stop) => [stop.kp.id, stop]));
   const lines: ConnectorLine[] = [];
-  if (start && middle.length > 0) {
-    middle.forEach((stop) => {
-      lines.push({
-        key: `start-${stop.kp.id}`,
-        x1: start.x,
-        y1: start.y + 42,
-        x2: stop.x,
-        y2: stop.y - 42,
-        state: nodeState(stop.kp),
-      });
-    });
-  }
-  if (terminal && middle.length > 0) {
-    middle.forEach((stop) => {
-      lines.push({
-        key: `${stop.kp.id}-terminal`,
-        x1: stop.x,
-        y1: stop.y + 42,
-        x2: terminal.x,
-        y2: terminal.y - 42,
-        state: nodeState(stop.kp),
-      });
-    });
-  } else if (start && terminal) {
-    lines.push({
-      key: "start-terminal",
-      x1: start.x,
-      y1: start.y + 42,
-      x2: terminal.x,
-      y2: terminal.y - 42,
-      state: nodeState(terminal.kp),
-    });
+  for (const edge of visibleEdges.value) {
+    if (edge.relation_type !== "prerequisite") continue;
+    const from = stopById.get(edge.prereq_id);
+    const to = stopById.get(edge.next_id);
+    if (!from || !to) continue;
+    lines.push(makeConnector(`${edge.prereq_id}-${edge.next_id}`, from, to, nodeState(to.kp)));
   }
   return lines;
 });
+
+function makeConnector(key: string, from: RouteStop, to: RouteStop, state: string): ConnectorLine {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const insetX = (dx / length) * routeNodeRadius;
+  const insetY = (dy / length) * routeNodeRadius;
+  const x1 = from.x + insetX;
+  const y1 = from.y + insetY;
+  const x2 = to.x - insetX;
+  const y2 = to.y - insetY;
+  return {
+    key,
+    d: `M ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)}`,
+    state,
+  };
+}
 const pageTitle = computed(() => {
   if (courseClosed.value) return "课程已结束";
   if (recommendedKp.value?.title) return `下一关：${recommendedKp.value.title}`;
@@ -245,7 +280,7 @@ const pageLead = computed(() => {
   if (courseClosed.value) {
     return "老师已结束这门课程，当前可查看学习路径和学习报告。";
   }
-  return reco.value?.student_message || reco.value?.advice_text || reco.value?.reason_summary || "系统会根据你的掌握度，沿老师设置的路线推荐下一关。";
+  return reco.value?.student_message || reco.value?.advice_text || reco.value?.reason_summary || "系统会展示当前可解锁的所有节点，你可以自主选择，也可以优先学习系统建议的节点。";
 });
 
 const selectedIsRecommendation = computed(() =>
@@ -253,8 +288,8 @@ const selectedIsRecommendation = computed(() =>
 );
 
 const focusBadge = computed(() => {
-  if (!currentKpId.value) return "推荐本关";
-  return selectedIsRecommendation.value ? "推荐本关" : "所选节点";
+  if (!currentKpId.value) return "建议优先";
+  return selectedIsRecommendation.value ? "建议优先" : "所选节点";
 });
 
 const focusText = computed(() => {
@@ -263,7 +298,7 @@ const focusText = computed(() => {
       ? "该知识点已经完成，你仍然可以重新进入学习。"
       : "你当前选择的是这个知识点，可以直接进入学习。";
   }
-  return reco.value?.reason_summary || "系统会按你的掌握情况自动选择下一关。";
+  return reco.value?.reason_summary || "系统会按你的掌握情况标记建议优先节点，你也可以从其他已解锁节点开始。";
 });
 
 const focusActionText = computed(() => {
@@ -276,61 +311,172 @@ function isCompleted(kp: KP) {
   return Number(kp.mastery || 0) >= 0.7 || kp.status === "mastered";
 }
 
+function isStartedKp(kp: KP) {
+  return Boolean(kp.pathSelected);
+}
+
+function isLockedKp(kp?: KP | null) {
+  return Boolean(kp?.previewLocked);
+}
+
+function findKpById(id?: number | null) {
+  const targetId = Number(id || 0);
+  if (!targetId) return null;
+  return routeKps.value.find((item) => item.id === targetId)
+    ?? visibleKps.value.find((item) => item.id === targetId)
+    ?? null;
+}
+
 function nodeState(kp: KP) {
-  if (kp.previewLocked) return "locked";
-  if (kp.id === recommendedKp.value?.id || kp.id === currentKpId.value) return "current";
+  if (isLockedKp(kp)) return "locked";
+  if (kp.id === currentKpId.value) return "selected";
+  if (kp.id === recommendedNodeId.value) return "recommended";
   if (isCompleted(kp)) return "done";
+  if (isStartedKp(kp)) return "path";
   return "open";
 }
 
 function nodeIcon(kp: KP) {
   const state = nodeState(kp);
   if (state === "locked") return Lock;
-  if (state === "current") return VideoPlay;
+  if (state === "selected" || state === "recommended") return VideoPlay;
   if (kp.is_terminal) return Trophy;
   if (state === "done") return Check;
   return Star;
+}
+
+function statusLabel(kp: KP) {
+  const state = nodeState(kp);
+  if (state === "selected") return "当前选择";
+  if (state === "recommended") return "建议优先";
+  if (state === "locked") return "待解锁";
+  if (state === "current") return "当前推荐";
+  if (state === "done") return "已完成";
+  if (state === "path") return "已走路径";
+  return "可学习";
+}
+
+function roleLabel(role: RouteStop["role"]) {
+  if (role === "start") return "共同起点";
+  if (role === "terminal") return "达标终点";
+  if (role === "recommended") return "建议优先";
+  return "可选分支";
 }
 
 function centerCurrentStop() {
   nextTick(() => {
     const el = mapRef.value;
     if (!el) return;
-    el.scrollTop = 0;
+    const targetId = Number(currentKp.value?.id || recommendedKp.value?.id || 0);
+    const stop = routeStops.value.find((item) => item.kp.id === targetId) ?? routeStops.value.find((item) => item.role === "recommended") ?? routeStops.value[0];
+    if (!stop) return;
+    setPan(el.clientWidth / 2 - stop.x, el.clientHeight / 2 - stop.y);
   });
 }
 
+function jumpToRecommendation() {
+  const targetId = Number(recommendedKp.value?.id || currentKpId.value || 0);
+  if (targetId) currentKpId.value = targetId;
+  syncQuery();
+  centerCurrentStop();
+}
+
 function cardSide(stop: RouteStop) {
+  if (stop.x > mapWidth - 300) return "is-card-left";
+  if (stop.x < 300) return "is-card-right";
   return stop.index % 2 === 0 ? "is-card-right" : "is-card-left";
+}
+
+function clampAxis(value: number, viewportSize: number, contentSize: number) {
+  if (viewportSize >= contentSize) return Math.round((viewportSize - contentSize) / 2);
+  return Math.min(0, Math.max(viewportSize - contentSize, value));
+}
+
+function clampPan(x: number, y: number) {
+  const el = mapRef.value;
+  if (!el) return { x, y };
+  return {
+    x: clampAxis(x, el.clientWidth, mapWidth),
+    y: clampAxis(y, el.clientHeight, routeContentHeight.value),
+  };
+}
+
+function setPan(x: number, y: number) {
+  panOffset.value = clampPan(x, y);
 }
 
 function onMapPointerDown(event: PointerEvent) {
   const el = mapRef.value;
-  if (!el) return;
+  if (!el || event.button !== 0) return;
   const target = event.target as HTMLElement | null;
   if (target?.closest(".learning-route-stop")) return;
   isDragging.value = true;
-  dragStart.value = { x: event.clientX, y: event.clientY, left: 0, top: el.scrollTop };
-  dragStart.value.left = el.scrollLeft;
-  el.setPointerCapture?.(event.pointerId);
+  dragMoved.value = false;
+  dragStart.value = {
+    x: event.clientX,
+    y: event.clientY,
+    offsetX: panOffset.value.x,
+    offsetY: panOffset.value.y,
+  };
+  try {
+    el.setPointerCapture?.(event.pointerId);
+  } catch {
+    // Pointer capture is a convenience; dragging still works while the pointer stays over the map.
+  }
+}
+
+function onStopPointerDown(event: PointerEvent) {
+  event.stopPropagation();
 }
 
 function onMapPointerMove(event: PointerEvent) {
   const el = mapRef.value;
   if (!el || !isDragging.value) return;
+  const dx = event.clientX - dragStart.value.x;
+  const dy = event.clientY - dragStart.value.y;
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMoved.value = true;
+  if (!dragMoved.value) return;
   event.preventDefault();
-  el.scrollLeft = dragStart.value.left - (event.clientX - dragStart.value.x);
-  el.scrollTop = dragStart.value.top - (event.clientY - dragStart.value.y);
+  setPan(dragStart.value.offsetX + dx, dragStart.value.offsetY + dy);
 }
 
 function onMapPointerUp(event: PointerEvent) {
+  if (dragMoved.value) {
+    event.preventDefault();
+    event.stopPropagation();
+    suppressNodeClick.value = true;
+    window.setTimeout(() => {
+      suppressNodeClick.value = false;
+    }, 160);
+  }
   isDragging.value = false;
-  mapRef.value?.releasePointerCapture?.(event.pointerId);
+  try {
+    mapRef.value?.releasePointerCapture?.(event.pointerId);
+  } catch {
+    // Ignore capture release failures from browsers that already released it.
+  }
+}
+
+function onMapWheel(event: WheelEvent) {
+  const el = mapRef.value;
+  if (!el) return;
+  const canPanX = mapWidth > el.clientWidth;
+  const canPanY = routeContentHeight.value > el.clientHeight;
+  if (!canPanX && !canPanY) return;
+  event.preventDefault();
+  const primaryDeltaX = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : 0;
+  const primaryDeltaY = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : 0;
+  setPan(
+    panOffset.value.x - (canPanX ? primaryDeltaX : 0),
+    panOffset.value.y - (canPanY ? primaryDeltaY : 0),
+  );
 }
 
 function resetState() {
   visibleKps.value = [];
+  visibleEdges.value = [];
   currentKpId.value = null;
+  recommendationSourceKpId.value = null;
   reco.value = null;
 }
 
@@ -350,7 +496,15 @@ async function loadCourses(useCache = true) {
   const raw = useCache
     ? await getWithCache<any[]>("/graph/courses", undefined, { skipGlobalLoading: true, ttlMs: FAST_ENTRY_CACHE_TTL })
     : (await api.get("/graph/courses", { skipGlobalLoading: true } as any)).data;
-  const list = Array.isArray(raw) ? raw : [];
+  let list = Array.isArray(raw) ? raw : [];
+  if (list.length === 0) {
+    try {
+      const fallback = await getWithCache<any[]>("/graph/available-courses", undefined, { skipGlobalLoading: true, ttlMs: FAST_ENTRY_CACHE_TTL });
+      list = Array.isArray(fallback) ? fallback : [];
+    } catch {
+      list = [];
+    }
+  }
   courses.value = list.map((item: any) => ({
     id: Number(item.id),
     code: String(item.code || ""),
@@ -361,13 +515,13 @@ async function loadCourses(useCache = true) {
     learning_available: item.learning_available !== false,
   }));
   const routeSubject = String(route.query.subject || "").trim();
-  const visibleTitles = new Set(visibleCourses.value.map((item) => item.title));
-  subject.value = routeSubject && !visibleTitles.has(routeSubject)
-    ? ""
-    : resolveStudentSubject(routeSubject, subject.value, visibleCourses.value, {
-      allowCompleted: true,
-      allowUnavailable: true,
-    });
+  const candidates = [
+    routeSubject,
+    subject.value,
+    getSavedStudentSubject(),
+    routeSelectableCourses.value[0]?.title || "",
+  ];
+  subject.value = String(candidates.find((item) => String(item || "").trim()) || "").trim();
 }
 
 async function loadVisibleKps(useCache = true) {
@@ -375,13 +529,28 @@ async function loadVisibleKps(useCache = true) {
     resetState();
     return;
   }
-  const data = await getWithCache<any>(
-    "/graph/map",
-    { subject: subject.value, grade: grade.value },
-    { skipGlobalLoading: true, ttlMs: FAST_ENTRY_CACHE_TTL },
-  );
+  const requestedSourceId = Number(currentKpId.value || route.query.kp || recommendationSourceKpId.value || 0);
+  const params = {
+    subject: subject.value,
+    grade: grade.value,
+    source_id: requestedSourceId || undefined,
+  };
+  const data = useCache
+    ? await getWithCache<any>(
+      "/graph/map",
+      params,
+      { skipGlobalLoading: true, ttlMs: FAST_ENTRY_CACHE_TTL },
+    )
+    : (await api.get("/graph/map", { params, skipGlobalLoading: true } as any)).data;
   const overlayMap = new Map<number, any>((Array.isArray(data?.overlay) ? data.overlay : []).map((item: any) => [Number(item.kp_id), item]));
   const list = Array.isArray(data?.base?.kps) ? data.base.kps : [];
+  visibleEdges.value = (Array.isArray(data?.base?.edges) ? data.base.edges : [])
+    .map((item: any) => ({
+      prereq_id: Number(item.prereq_id || 0),
+      next_id: Number(item.next_id || 0),
+      relation_type: String(item.relation_type || "prerequisite"),
+    }))
+    .filter((item: Edge) => item.prereq_id && item.next_id);
   visibleKps.value = list.map((item: any) => {
     const overlay = overlayMap.get(Number(item.id)) || {};
     return {
@@ -392,26 +561,38 @@ async function loadVisibleKps(useCache = true) {
       is_terminal: item.is_terminal === true,
       mastery: Number(overlay.mastery || 0),
       status: String(overlay.status || "not_started"),
+      previewLocked: Boolean(overlay.blocked_reason),
+      pathSelected: Boolean(overlay.path_selected),
+      pos_x: item.pos_x == null ? null : Number(item.pos_x),
+      pos_y: item.pos_y == null ? null : Number(item.pos_y),
     };
   });
 
   const routeKp = Number(route.query.kp || 0);
-  const firstLearning = visibleKps.value.find((item) => item.status === "learning" && !isCompleted(item))
-    ?? visibleKps.value.find((item) => !isCompleted(item));
-  currentKpId.value = routeKp && visibleKps.value.some((item) => item.id === routeKp)
-    ? routeKp
-    : firstLearning?.id ?? visibleKps.value[0]?.id ?? null;
+  const firstLearning = visibleKps.value.find((item) => item.status === "learning" && !item.previewLocked && !isCompleted(item))
+    ?? visibleKps.value.find((item) => !item.previewLocked && !isCompleted(item))
+    ?? visibleKps.value.find((item) => !item.previewLocked);
+  const requestedKp = requestedSourceId
+    ? visibleKps.value.find((item) => item.id === requestedSourceId && !item.previewLocked)
+    : null;
+  const queryKp = routeKp
+    ? visibleKps.value.find((item) => item.id === routeKp && !item.previewLocked)
+    : null;
+  const nextCurrent = requestedKp ?? queryKp ?? firstLearning ?? visibleKps.value.find((item) => !item.previewLocked) ?? null;
+  recommendationSourceKpId.value = nextCurrent?.id ?? null;
+  currentKpId.value = nextCurrent?.id ?? null;
 }
 
 async function loadRecommendation() {
-  if (!currentKpId.value) {
+  const sourceKpId = recommendationSourceKpId.value || currentKpId.value;
+  if (!sourceKpId) {
     reco.value = null;
     return;
   }
   recoLoading.value = true;
   try {
     const res = await api.get("/reco", {
-      params: { kp_id: currentKpId.value, ai: false },
+      params: { kp_id: sourceKpId, ai: false },
       skipGlobalLoading: true,
     } as any);
     reco.value = res.data ?? null;
@@ -456,17 +637,21 @@ async function handleCourseChange() {
 }
 
 async function selectKp(kp: KP) {
-  if (nodeState(kp) === "locked") {
+  if (suppressNodeClick.value) return;
+  if (isLockedKp(kp)) {
     ElMessage.info("先完成当前关卡，后续关卡会自动解锁");
     return;
   }
   currentKpId.value = kp.id;
-  await loadRecommendation();
+  recommendationSourceKpId.value = kp.id;
   syncQuery();
   centerCurrentStop();
+  void loadRecommendation().then(() => {
+    centerCurrentStop();
+  });
 }
 
-function openKp(id?: number | null) {
+async function openKp(id?: number | null) {
   if (courseClosed.value) {
     openReport();
     return;
@@ -474,6 +659,21 @@ function openKp(id?: number | null) {
   const targetId = Number(id || currentKpId.value || recommendedKp.value?.id || 0);
   if (!targetId) {
     ElMessage.warning("当前还没有可学习的关卡");
+    return;
+  }
+  const targetKp = findKpById(targetId);
+  if (!targetKp) {
+    ElMessage.warning("当前节点不在可学习路径中，请先刷新路径");
+    return;
+  }
+  if (isLockedKp(targetKp)) {
+    ElMessage.info("先完成前置节点，后续节点会自动解锁");
+    return;
+  }
+  try {
+    await api.post(`/graph/path-choice/${targetId}`, {}, { skipGlobalLoading: true } as any);
+  } catch (e: any) {
+    ElMessage.warning(e?.response?.data?.detail ?? "当前节点暂时不能加入学习路径");
     return;
   }
   router.push({
@@ -504,17 +704,35 @@ onMounted(() => refreshPage());
   <div v-loading="loading" class="learning-route-page">
     <section class="learning-route-hero">
       <div class="learning-route-hero__copy">
-        <span class="learning-route-badge">个性化学习路线</span>
+        <span class="learning-route-badge">可选学习路径</span>
         <h1>{{ pageTitle }}</h1>
         <p>{{ pageLead }}</p>
       </div>
+      <div class="learning-route-hero__metrics" :style="routeProgressStyle">
+        <div class="learning-route-hero__ring">
+          <strong>{{ progressPercent }}%</strong>
+          <span>完成度</span>
+        </div>
+        <div class="learning-route-hero__metric-body">
+          <div class="learning-route-hero__metric-row">
+            <span>当前位置</span>
+            <strong>{{ selectedStopIndex }}/{{ routeKps.length || 1 }}</strong>
+          </div>
+          <div class="learning-route-hero__metric-track"><i></i></div>
+          <div class="learning-route-hero__metric-row">
+            <span>节点状态</span>
+            <strong>{{ currentStatusLabel }}</strong>
+          </div>
+        </div>
+      </div>
       <div class="learning-route-actions">
         <el-select v-model="subject" class="learning-route-course" placeholder="选择课程" :disabled="visibleCourses.length === 0" @change="handleCourseChange">
-          <el-option v-for="course in visibleCourses" :key="course.id" :label="course.title" :value="course.title" />
+          <el-option v-for="course in routeSelectableCourses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
+        <button type="button" class="learning-route-button" @click="jumpToRecommendation">回到建议优先</button>
         <button type="button" class="learning-route-button" @click="() => refreshPage(true)">刷新</button>
         <button v-if="courseClosed" type="button" class="learning-route-button learning-route-button--primary" @click="openReport">查看报告</button>
-        <button v-else type="button" class="learning-route-button learning-route-button--primary" @click="openKp(currentKpId || recommendedKp?.id)">开始本关</button>
+        <button v-else type="button" class="learning-route-button learning-route-button--primary" @click="openKp(currentKpId || recommendedKp?.id)">进入所选节点</button>
       </div>
     </section>
 
@@ -531,9 +749,20 @@ onMounted(() => refreshPage());
             <span class="learning-route-badge">当前课程</span>
             <h2>{{ currentCourse?.title || subject }}</h2>
           </div>
-          <div class="learning-route-progress">
-            <strong>{{ progressPercent }}%</strong>
-            <span>路线进度</span>
+          <div class="learning-route-board__tools">
+            <div class="learning-route-legend">
+              <span class="is-selected">当前选择</span>
+              <span class="is-recommended">建议优先</span>
+              <span class="is-path">已走路径</span>
+              <span class="is-done">已完成</span>
+              <span class="is-current">当前</span>
+              <span class="is-open">可学习</span>
+              <span class="is-locked">待解锁</span>
+            </div>
+            <div class="learning-route-progress" :style="routeProgressStyle">
+              <strong>{{ progressPercent }}%</strong>
+              <span>完成度</span>
+            </div>
           </div>
         </header>
 
@@ -544,19 +773,19 @@ onMounted(() => refreshPage());
           @pointerdown="onMapPointerDown"
           @pointermove="onMapPointerMove"
           @pointerup="onMapPointerUp"
-          @pointerleave="onMapPointerUp"
+          @pointercancel="onMapPointerUp"
+          @wheel="onMapWheel"
+          @dragstart.prevent
         >
-          <div class="learning-route-canvas" :style="{ width: `${mapWidth}px`, height: `${mapHeight}px` }">
-            <svg class="learning-route-lines" :viewBox="`0 0 ${mapWidth} ${mapHeight}`" aria-hidden="true">
-              <line
+          <div class="learning-route-drag-hint">按住画布任意位置可拖动</div>
+          <div class="learning-route-canvas" :style="mapCanvasStyle">
+            <svg class="learning-route-lines" :viewBox="`0 0 ${mapWidth} ${routeContentHeight}`" aria-hidden="true">
+              <path
                 v-for="line in connectorLines"
                 :key="line.key"
                 class="learning-route-line"
                 :class="`is-${line.state}`"
-                :x1="line.x1"
-                :y1="line.y1"
-                :x2="line.x2"
-                :y2="line.y2"
+                :d="line.d"
               />
             </svg>
             <article
@@ -565,14 +794,20 @@ onMounted(() => refreshPage());
               class="learning-route-stop"
               :class="[`is-${nodeState(stop.kp)}`, `is-${stop.role}`, cardSide(stop)]"
               :style="{ left: `${stop.x}px`, top: `${stop.y}px` }"
+              @pointerdown="onStopPointerDown"
+              @click.stop="selectKp(stop.kp)"
             >
-              <button class="learning-route-node" type="button" @click.stop="selectKp(stop.kp)">
+              <button class="learning-route-node" type="button" :aria-label="`${stop.kp.title}`">
                 <el-icon><component :is="nodeIcon(stop.kp)" /></el-icon>
               </button>
               <div class="learning-route-card">
                 <span>{{ stop.kp.code }}</span>
                 <strong>{{ stop.kp.title }}</strong>
-                <small>{{ stop.role === "start" ? "共同起点" : (stop.role === "terminal" ? "达标终点" : "系统推荐节点") }}</small>
+                <small>{{ roleLabel(stop.role) }} · {{ statusLabel(stop.kp) }}</small>
+                <div class="learning-route-card__bar">
+                  <i :style="{ width: `${Math.round(Number(stop.kp.mastery || 0) * 100)}%` }"></i>
+                </div>
+                <em>掌握度 {{ Math.round(Number(stop.kp.mastery || 0) * 100) }}%</em>
               </div>
             </article>
           </div>
@@ -581,8 +816,20 @@ onMounted(() => refreshPage());
 
       <aside class="learning-route-side">
         <section class="learning-route-panel learning-route-panel--focus">
-          <span class="learning-route-badge">{{ focusBadge }}</span>
-          <h2>{{ currentKp?.title || recommendedKp?.title || "等待推荐" }}</h2>
+          <div class="learning-route-panel__top">
+            <span class="learning-route-badge">{{ focusBadge }}</span>
+            <span class="learning-route-status" :class="`is-${currentNodeState}`">{{ currentStatusLabel }}</span>
+          </div>
+          <div class="learning-route-focus-grid">
+            <div class="learning-route-mastery" :style="masteryRingStyle">
+              <strong>{{ currentMasteryPercent }}%</strong>
+              <span>掌握度</span>
+            </div>
+            <div>
+              <h2>{{ currentKp?.title || recommendedKp?.title || "等待推荐" }}</h2>
+              <p>{{ currentKp?.code || recommendedKp?.code || "暂无节点" }}</p>
+            </div>
+          </div>
           <p>{{ focusText }}</p>
           <button class="learning-route-button learning-route-button--primary learning-route-button--wide" type="button" @click="openKp(currentKpId || recommendedKp?.id)">
             {{ focusActionText }}
@@ -590,11 +837,37 @@ onMounted(() => refreshPage());
         </section>
 
         <section class="learning-route-panel">
-          <span class="learning-route-badge">路线概况</span>
+          <span class="learning-route-badge">学习建议</span>
+          <ul class="learning-route-advice">
+            <li v-for="item in learningAdvice" :key="item">{{ item }}</li>
+          </ul>
+        </section>
+
+        <section class="learning-route-panel">
+          <span class="learning-route-badge">图谱概况</span>
           <div class="learning-route-stats">
-            <div><strong>{{ routeKps.length }}</strong><span>当前显示</span></div>
+            <div><strong>{{ routeKps.length }}</strong><span>可见节点</span></div>
             <div><strong>{{ completedCount }}</strong><span>已完成</span></div>
             <div><strong>{{ previewCount || routeTerminalCount }}</strong><span>{{ previewCount ? "待解锁" : "终点" }}</span></div>
+          </div>
+          <div class="learning-route-mini-progress" :style="routeProgressStyle"><i></i></div>
+        </section>
+
+        <section class="learning-route-panel">
+          <span class="learning-route-badge">可学习节点</span>
+          <div class="learning-route-steps">
+            <button
+              v-for="item in routeStepItems"
+              :key="item.kp.id"
+              type="button"
+              class="learning-route-step"
+              :class="[`is-${item.state}`, { 'is-active': item.kp.id === currentKp?.id }]"
+              @click="selectKp(item.kp)"
+            >
+              <span>{{ item.index }}</span>
+              <strong>{{ item.kp.title }}</strong>
+              <em>{{ item.mastery }}%</em>
+            </button>
           </div>
         </section>
       </aside>
@@ -610,30 +883,35 @@ onMounted(() => refreshPage());
   display: grid;
   gap: 18px;
   padding-bottom: 24px;
+  color: #102033;
 }
 
 .learning-route-hero,
 .learning-route-board,
 .learning-route-panel,
 .learning-route-empty {
-  border: 1px solid #d8e5d4;
-  border-radius: 18px;
+  border: 1px solid rgba(160, 184, 207, 0.42);
+  border-radius: 14px;
   background: #ffffff;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 14px 34px rgba(38, 62, 92, 0.08);
 }
 
 .learning-route-hero {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 24px;
-  padding: 22px 28px;
+  display: grid;
+  grid-template-columns: minmax(460px, 1fr) minmax(320px, auto);
+  align-items: start;
+  gap: 18px;
+  padding: 20px 24px;
+  background:
+    linear-gradient(135deg, rgba(238, 246, 255, 0.96), rgba(250, 255, 244, 0.98)),
+    #ffffff;
 }
 
 .learning-route-hero__copy {
   display: grid;
   gap: 8px;
-  min-width: 0;
+  min-width: 360px;
+  max-width: 720px;
 }
 
 .learning-route-badge {
@@ -641,9 +919,9 @@ onMounted(() => refreshPage());
   display: inline-flex;
   padding: 6px 12px;
   border-radius: 999px;
-  background: #edf8e8;
-  color: #2b7a0b;
-  border: 1px solid #cdeec0;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
   font-size: 12px;
   font-weight: 900;
 }
@@ -653,12 +931,14 @@ onMounted(() => refreshPage());
 .learning-route-panel h2 {
   margin: 0;
   color: #102033;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .learning-route-hero h1 {
-  font-size: 34px;
+  font-size: 30px;
   line-height: 1.12;
+  word-break: keep-all;
+  text-wrap: balance;
 }
 
 .learning-route-hero p,
@@ -667,13 +947,97 @@ onMounted(() => refreshPage());
   margin: 0;
   color: #5f6d5d;
   line-height: 1.7;
+  overflow-wrap: break-word;
 }
 
 .learning-route-actions {
+  grid-column: 1 / -1;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
+}
+
+.learning-route-hero__metrics {
+  min-width: 360px;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(248, 251, 255, 0.86)),
+    linear-gradient(90deg, rgba(34, 197, 94, 0.1) var(--route-progress), rgba(255, 255, 255, 0.7) 0);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: 0 14px 30px rgba(20, 35, 58, 0.08);
+}
+
+.learning-route-hero__ring {
+  width: 82px;
+  height: 82px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  border-radius: 999px;
+  background: conic-gradient(#22c55e var(--route-progress), #dbeafe 0);
+  box-shadow: inset 0 0 0 8px #ffffff, 0 10px 20px rgba(34, 197, 94, 0.14);
+}
+
+.learning-route-hero__ring strong {
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.learning-route-hero__ring span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.learning-route-hero__metric-body {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.learning-route-hero__metric-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.learning-route-hero__metric-row span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.learning-route-hero__metric-row strong {
+  color: #102033;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+
+.learning-route-hero__metric-track {
+  height: 9px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.learning-route-hero__metric-track i {
+  display: block;
+  width: var(--route-progress);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #0ea5e9);
 }
 
 .learning-route-course {
@@ -683,19 +1047,32 @@ onMounted(() => refreshPage());
 .learning-route-button {
   min-height: 42px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 0 18px;
-  background: #eef4ea;
-  color: #2e3d2a;
+  background: #e2e8f0;
+  color: #1e293b;
   font-weight: 900;
   cursor: pointer;
   box-shadow: inset 0 -3px 0 rgba(15, 23, 42, 0.08);
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.learning-route-button:hover,
+.learning-route-button:focus-visible {
+  background: #dbeafe;
+  box-shadow: inset 0 -3px 0 rgba(37, 99, 235, 0.18), 0 8px 18px rgba(37, 99, 235, 0.12);
 }
 
 .learning-route-button--primary {
-  background: #58cc02;
+  background: #22c55e;
   color: #ffffff;
-  box-shadow: inset 0 -4px 0 #46a302;
+  box-shadow: inset 0 -4px 0 #15803d;
+}
+
+.learning-route-button--primary:hover,
+.learning-route-button--primary:focus-visible {
+  background: #16a34a;
+  box-shadow: inset 0 -4px 0 #166534, 0 10px 22px rgba(34, 197, 94, 0.22);
 }
 
 .learning-route-button--wide {
@@ -704,12 +1081,15 @@ onMounted(() => refreshPage());
 
 .learning-route-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .learning-route-board {
+  min-height: 760px;
+  display: flex;
+  flex-direction: column;
   padding: 24px;
   overflow: hidden;
 }
@@ -723,15 +1103,62 @@ onMounted(() => refreshPage());
   border-bottom: 1px solid #edf3ea;
 }
 
+.learning-route-board__tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.learning-route-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 360px;
+}
+
+.learning-route-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.learning-route-legend .is-current {
+  display: none;
+}
+
+.learning-route-legend span::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.learning-route-legend .is-done::before { background: #22c55e; }
+.learning-route-legend .is-current::before { background: #f59e0b; }
+.learning-route-legend .is-selected::before { background: #f59e0b; }
+.learning-route-legend .is-recommended::before { background: #8b5cf6; }
+.learning-route-legend .is-path::before { background: #ef4444; }
+.learning-route-legend .is-open::before { background: #0ea5e9; }
+.learning-route-legend .is-locked::before { background: #94a3b8; }
+
 .learning-route-progress {
-  width: 104px;
-  height: 104px;
+  width: 92px;
+  height: 92px;
   border-radius: 999px;
   display: grid;
   place-items: center;
   align-content: center;
-  background: conic-gradient(#58cc02 var(--progress, 60%), #e8f4e3 0);
-  color: #1f3d12;
+  background: conic-gradient(#22c55e var(--route-progress), #e2e8f0 0);
+  color: #0f172a;
+  box-shadow: inset 0 0 0 8px #ffffff, 0 12px 22px rgba(15, 23, 42, 0.08);
 }
 
 .learning-route-progress strong {
@@ -744,34 +1171,56 @@ onMounted(() => refreshPage());
 }
 
 .learning-route-map {
-  height: min(66vh, 680px);
-  min-height: 560px;
+  position: relative;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
   margin-top: 18px;
-  overflow-x: auto;
-  overflow-y: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
-  border: 1px solid rgba(141, 184, 132, 0.32);
-  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 14px;
   background:
-    linear-gradient(rgba(221, 235, 214, 0.26) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(221, 235, 214, 0.26) 1px, transparent 1px),
-    #fffef8;
+    radial-gradient(circle at 50% 10%, rgba(34, 197, 94, 0.08), transparent 32%),
+    linear-gradient(rgba(203, 213, 225, 0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(203, 213, 225, 0.28) 1px, transparent 1px),
+    #fbfdf8;
   background-size: 40px 40px, 40px 40px, auto;
   cursor: grab;
   touch-action: none;
   user-select: none;
-  scrollbar-width: thin;
 }
 
 .learning-route-map.is-dragging {
   cursor: grabbing;
 }
 
+.learning-route-drag-hint {
+  position: sticky;
+  left: 12px;
+  top: 12px;
+  z-index: 8;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+  opacity: 0.86;
+}
+
 .learning-route-canvas {
-  position: relative;
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 720px;
   min-width: 1040px;
-  margin: 0 auto;
+  margin: 0;
+  overflow: hidden;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 .learning-route-lines {
@@ -784,19 +1233,34 @@ onMounted(() => refreshPage());
 }
 
 .learning-route-line {
-  stroke: #b7c7d9;
-  stroke-width: 3;
+  stroke: #cbd5e1;
+  stroke-width: 4;
   stroke-linecap: round;
 }
 
 .learning-route-line.is-done {
-  stroke: #58cc02;
-  stroke-width: 5;
+  stroke: #22c55e;
+  stroke-width: 6;
 }
 
 .learning-route-line.is-current {
-  stroke: #ffb000;
-  stroke-width: 5;
+  stroke: #f59e0b;
+  stroke-width: 6;
+}
+
+.learning-route-line.is-selected {
+  stroke: #f59e0b;
+  stroke-width: 6;
+}
+
+.learning-route-line.is-recommended {
+  stroke: #8b5cf6;
+  stroke-width: 6;
+}
+
+.learning-route-line.is-path {
+  stroke: #ef4444;
+  stroke-width: 6;
 }
 
 .learning-route-line.is-locked {
@@ -809,6 +1273,7 @@ onMounted(() => refreshPage());
   width: 0;
   height: 0;
   z-index: 3;
+  cursor: pointer;
 }
 
 .learning-route-node {
@@ -816,15 +1281,15 @@ onMounted(() => refreshPage());
   left: 0;
   top: 0;
   transform: translate(-50%, -50%);
-  width: 80px;
-  height: 80px;
+  width: 74px;
+  height: 74px;
   border: 0;
   border-radius: 999px;
-  background: #58cc02;
+  background: #22c55e;
   color: #ffffff;
   font-size: 30px;
   cursor: pointer;
-  box-shadow: inset 0 -8px 0 #46a302, 0 10px 20px rgba(88, 204, 2, 0.24);
+  box-shadow: inset 0 -7px 0 #15803d, 0 10px 20px rgba(34, 197, 94, 0.24);
   z-index: 3;
 }
 
@@ -842,30 +1307,41 @@ onMounted(() => refreshPage());
   z-index: 1;
 }
 
+.learning-route-stop:hover .learning-route-node,
+.learning-route-stop:focus-within .learning-route-node {
+  filter: brightness(1.04);
+}
+
+.learning-route-stop:hover .learning-route-card,
+.learning-route-stop:focus-within .learning-route-card {
+  border-color: #93c5fd;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.14);
+}
+
 .learning-route-card {
   position: absolute;
   top: 0;
-  width: 168px;
-  min-height: 92px;
+  width: 190px;
+  min-height: 118px;
   display: grid;
   gap: 5px;
   place-items: center;
   padding: 15px 16px;
-  border-radius: 14px;
-  border: 1px solid #dfead9;
+  border-radius: 12px;
+  border: 1px solid #dbe7f3;
   background: #ffffff;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
   text-align: center;
   z-index: 2;
 }
 
 .learning-route-stop.is-card-right .learning-route-card {
-  left: 88px;
+  left: 82px;
   transform: translateY(-50%);
 }
 
 .learning-route-stop.is-card-left .learning-route-card {
-  right: 88px;
+  right: 82px;
   transform: translateY(-50%);
 }
 
@@ -881,14 +1357,54 @@ onMounted(() => refreshPage());
   overflow-wrap: anywhere;
 }
 
+.learning-route-card__bar {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.learning-route-card__bar i {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #0ea5e9);
+}
+
+.learning-route-card em {
+  color: #475569;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .learning-route-stop.is-current .learning-route-node {
-  background: linear-gradient(180deg, #ffc800 0%, #ffab00 100%);
-  box-shadow: inset 0 -8px 0 #d38a00, 0 18px 30px rgba(255, 178, 0, 0.28);
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  box-shadow: inset 0 -7px 0 #b45309, 0 18px 30px rgba(245, 158, 11, 0.28);
+  animation: routePulse 2s ease-in-out infinite;
+}
+
+.learning-route-stop.is-selected .learning-route-node {
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  box-shadow: inset 0 -7px 0 #b45309, 0 18px 30px rgba(245, 158, 11, 0.28);
+  animation: routePulse 2s ease-in-out infinite;
+}
+
+.learning-route-stop.is-recommended .learning-route-node {
+  background: linear-gradient(180deg, #a78bfa 0%, #8b5cf6 100%);
+  box-shadow: inset 0 -7px 0 #6d28d9, 0 18px 30px rgba(139, 92, 246, 0.24);
+}
+
+.learning-route-stop.is-path .learning-route-node {
+  background: linear-gradient(180deg, #fb7185 0%, #ef4444 100%);
+  box-shadow: inset 0 -7px 0 #b91c1c, 0 18px 30px rgba(239, 68, 68, 0.22);
 }
 
 .learning-route-stop.is-open .learning-route-node {
-  background: linear-gradient(180deg, #57c7ff 0%, #1d9ad6 100%);
-  box-shadow: inset 0 -8px 0 #147fb7, 0 16px 26px rgba(29, 154, 214, 0.2);
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  box-shadow: inset 0 -7px 0 #0369a1, 0 16px 26px rgba(14, 165, 233, 0.2);
 }
 
 .learning-route-stop.is-locked .learning-route-node {
@@ -901,8 +1417,11 @@ onMounted(() => refreshPage());
 }
 
 .learning-route-side {
-  display: grid;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
   gap: 18px;
+  align-self: stretch;
   position: sticky;
   top: 18px;
 }
@@ -914,7 +1433,118 @@ onMounted(() => refreshPage());
 }
 
 .learning-route-panel--focus {
-  background: #fbfff8;
+  background: linear-gradient(180deg, #fbfff8, #f8fbff);
+}
+
+.learning-route-panel__top,
+.learning-route-focus-grid {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.learning-route-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.learning-route-status.is-done {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.learning-route-status.is-current {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.learning-route-status.is-selected {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.learning-route-status.is-recommended {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.learning-route-status.is-path {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.learning-route-status.is-locked {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.learning-route-focus-grid {
+  justify-content: flex-start;
+}
+
+.learning-route-focus-grid h2 {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.learning-route-mastery {
+  width: 92px;
+  height: 92px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  background: conic-gradient(#0ea5e9 var(--mastery-progress), #e2e8f0 0);
+  box-shadow: inset 0 0 0 8px #ffffff, 0 10px 24px rgba(14, 165, 233, 0.16);
+}
+
+.learning-route-mastery strong {
+  color: #0f172a;
+  font-size: 22px;
+}
+
+.learning-route-mastery span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.learning-route-advice {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learning-route-advice li {
+  position: relative;
+  padding: 10px 12px 10px 30px;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  line-height: 1.55;
+  font-weight: 700;
+}
+
+.learning-route-advice li::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 18px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22c55e;
 }
 
 .learning-route-stats {
@@ -928,8 +1558,8 @@ onMounted(() => refreshPage());
   place-items: center;
   gap: 4px;
   padding: 12px 8px;
-  border-radius: 12px;
-  background: #f3f8f0;
+  border-radius: 10px;
+  background: #f8fafc;
 }
 
 .learning-route-stats strong {
@@ -943,6 +1573,108 @@ onMounted(() => refreshPage());
   font-weight: 800;
 }
 
+.learning-route-mini-progress {
+  height: 9px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.learning-route-mini-progress i {
+  display: block;
+  width: var(--route-progress);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #0ea5e9);
+}
+
+.learning-route-steps {
+  display: grid;
+  gap: 9px;
+  max-height: 100%;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.learning-route-step {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.learning-route-step:hover,
+.learning-route-step:focus-visible,
+.learning-route-step.is-active {
+  border-color: #93c5fd;
+  background: #f8fbff;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.1);
+}
+
+.learning-route-step span {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-weight: 900;
+}
+
+.learning-route-step.is-done span {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.learning-route-step.is-current span {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.learning-route-step.is-selected span {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.learning-route-step.is-recommended span {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.learning-route-step.is-path span {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.learning-route-step.is-open span {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.learning-route-step strong {
+  min-width: 0;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.learning-route-step em {
+  color: #64748b;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .learning-route-empty {
   display: grid;
   place-items: center;
@@ -952,11 +1684,26 @@ onMounted(() => refreshPage());
 }
 
 @media (max-width: 1080px) {
-  .learning-route-layout {
+  .learning-route-hero {
     grid-template-columns: 1fr;
   }
 
+  .learning-route-hero__copy {
+    min-width: 0;
+  }
+
+  .learning-route-hero__metrics {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .learning-route-layout {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
   .learning-route-side {
+    height: auto;
     position: static;
   }
 }
@@ -964,7 +1711,6 @@ onMounted(() => refreshPage());
 @media (max-width: 720px) {
   .learning-route-hero,
   .learning-route-board__head {
-    flex-direction: column;
     align-items: flex-start;
   }
 
@@ -973,8 +1719,50 @@ onMounted(() => refreshPage());
     width: 100%;
   }
 
+  .learning-route-actions,
+  .learning-route-board__tools,
+  .learning-route-focus-grid {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .learning-route-hero__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .learning-route-board {
+    min-height: 0;
+    padding: 16px;
+  }
+
   .learning-route-map {
+    height: 500px;
     min-height: 500px;
+  }
+}
+
+@keyframes routePulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learning-route-stop.is-current .learning-route-node {
+    animation: none;
+  }
+
+  .learning-route-stop.is-selected .learning-route-node {
+    animation: none;
+  }
+
+  .learning-route-button,
+  .learning-route-step {
+    transition: none;
   }
 }
 </style>

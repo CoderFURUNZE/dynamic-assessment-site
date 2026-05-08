@@ -23,9 +23,9 @@ const courses = ref<Course[]>([]);
 
 const currentCourse = computed(() => courses.value.find((item) => item.title === subject.value) ?? null);
 const reportHighlights = computed(() => [
-  { label: "当前课程", value: currentCourse.value?.title || "请选择课程" },
-  { label: "查看内容", value: "学习结果与反馈建议" },
-  { label: "建议动作", value: subject.value ? "根据报告调整重点" : "先选择课程" },
+  { label: "课程", value: currentCourse.value?.title || "请选择" },
+  { label: "内容", value: "阶段结果" },
+  { label: "动作", value: subject.value ? "查看建议" : "选择课程" },
 ]);
 
 async function loadCourses() {
@@ -77,12 +77,18 @@ onMounted(async () => {
     <section class="student-report-page__hero">
       <div class="student-report-page__hero-copy">
         <span class="student-report-page__eyebrow">学习报告</span>
-        <h1>先看结果，再决定下一步怎么学</h1>
-        <p>按课程查看学习表现、阶段变化和后续建议，页面只保留一个主内容区，方便连续阅读。</p>
+        <h1>{{ currentCourse?.title || "请选择课程" }}</h1>
+        <p>集中查看阶段结果、知识图谱覆盖、老师建议和下一步学习安排。</p>
+      </div>
+
+      <div class="student-report-page__highlights" aria-label="报告概况">
+        <article v-for="item in reportHighlights" :key="item.label" class="student-report-page__highlight-card">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </article>
       </div>
 
       <div class="student-report-page__hero-panel">
-        <span>选择课程</span>
         <el-select v-model="subject" placeholder="请选择课程" size="large">
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
@@ -95,22 +101,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="student-report-page__highlights">
-      <article v-for="item in reportHighlights" :key="item.label" class="student-report-page__highlight-card">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-      </article>
-    </section>
-
     <section class="student-report-page__content panel-card">
-      <header class="student-report-page__content-head">
-        <div>
-          <span>报告内容</span>
-          <h2>{{ subject || "请选择课程后查看" }}</h2>
-        </div>
-        <p>把课程表现、阶段变化和建议放在一个区域里，避免多层切换。</p>
-      </header>
-
       <LearnerReportPane :subject="subject" :grade="grade" />
     </section>
   </div>
@@ -120,11 +111,15 @@ onMounted(async () => {
 .student-report-page {
   --report-theme-surface: #ffffff;
   --report-theme-surface-soft: #f8fafc;
-  --report-theme-surface-muted: #f1f5f9;
-  --report-theme-surface-accent: #eefbf3;
-  --report-theme-border: rgba(148, 163, 184, 0.22);
-  --report-theme-border-strong: rgba(34, 197, 94, 0.26);
-  --report-theme-ink-soft: #64748b;
+  --report-theme-surface-muted: #eef4ff;
+  --report-theme-surface-accent: #ecfdf5;
+  --report-theme-border: rgba(99, 120, 153, 0.2);
+  --report-theme-border-strong: rgba(34, 197, 94, 0.3);
+  --report-theme-ink: #102033;
+  --report-theme-ink-soft: #52647a;
+  --report-theme-blue: #2563eb;
+  --report-theme-green: #22c55e;
+  --report-theme-amber: #f59e0b;
   display: grid;
   gap: 18px;
 }
@@ -132,21 +127,22 @@ onMounted(async () => {
 .student-report-page__hero,
 .student-report-page__highlight-card,
 .student-report-page__content {
-  border-radius: 22px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  border: 1px solid var(--report-theme-border);
   background: #ffffff;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 16px 36px rgba(20, 35, 58, 0.08);
 }
 
 .student-report-page__hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
-  gap: 18px;
-  padding: 24px;
+  grid-template-columns: minmax(320px, 1fr) minmax(280px, 0.72fr) minmax(320px, 0.9fr);
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
   background:
-    radial-gradient(circle at top left, rgba(219, 234, 254, 0.3), transparent 30%),
-    radial-gradient(circle at right bottom, rgba(220, 252, 231, 0.16), transparent 26%),
-    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    radial-gradient(circle at 4% 0%, rgba(37, 99, 235, 0.12), transparent 30%),
+    radial-gradient(circle at 88% 0%, rgba(34, 197, 94, 0.12), transparent 28%),
+    linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .student-report-page__hero-copy {
@@ -170,49 +166,30 @@ onMounted(async () => {
 
 .student-report-page__hero-copy h1 {
   margin: 0;
-  font-size: clamp(28px, 4vw, 42px);
-  line-height: 1.05;
-  letter-spacing: -0.04em;
-  color: #1f2937;
-  position: relative;
-  color: transparent;
-}
-
-.student-report-page__hero-copy h1::after {
-  content: "学习报告";
-  position: absolute;
-  inset: 0;
-  color: #1f2937;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.12;
+  color: var(--report-theme-ink);
+  overflow-wrap: break-word;
 }
 
 .student-report-page__hero-copy p,
 .student-report-page__content-head p {
   margin: 0;
   max-width: 58ch;
-  color: #617792;
+  color: var(--report-theme-ink-soft);
   line-height: 1.6;
 }
 
-.student-report-page__hero-copy p {
-  position: relative;
-  color: transparent;
-}
-
-.student-report-page__hero-copy p::after {
-  content: "查看结果与建议";
-  position: absolute;
-  inset: 0;
-  color: #617792;
-}
-
 .student-report-page__hero-panel {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  align-content: start;
-  padding: 18px;
-  border-radius: 18px;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 12px;
+  border-radius: 14px;
   border: 1px solid var(--report-theme-border);
-  background: linear-gradient(180deg, var(--report-theme-surface) 0%, var(--report-theme-surface-soft) 100%);
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .student-report-page__hero-panel span,
@@ -224,12 +201,12 @@ onMounted(async () => {
 
 .student-report-page__hero-panel :deep(.el-select),
 .student-report-page__hero-panel :deep(.el-select__wrapper) {
-  width: 100%;
+  width: 260px;
 }
 
 .student-report-page__hero-panel :deep(.el-select__wrapper) {
-  min-height: 48px;
-  border-radius: 14px;
+  min-height: 44px;
+  border-radius: 12px;
   background: var(--report-theme-surface-soft) !important;
   box-shadow: 0 0 0 1px var(--report-theme-border) inset !important;
 }
@@ -261,28 +238,32 @@ onMounted(async () => {
 .student-report-page__highlights {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: 8px;
 }
 
 .student-report-page__highlight-card {
   display: grid;
-  gap: 8px;
-  padding: 18px 20px;
-  min-height: 106px;
-  background: linear-gradient(180deg, var(--report-theme-surface) 0%, var(--report-theme-surface-soft) 100%);
+  gap: 4px;
+  min-height: 76px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
 }
 
 .student-report-page__highlight-card strong,
 .student-report-page__content-head h2 {
   margin: 0;
-  font-size: 18px;
-  color: #1f2937;
+  font-size: 17px;
+  color: var(--report-theme-ink);
   line-height: 1.35;
+  overflow-wrap: break-word;
 }
 
 .student-report-page__content {
-  padding: 20px;
-  background: linear-gradient(180deg, var(--report-theme-surface) 0%, #f8fafc 100%);
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
 }
 
 .student-report-page__content-head {
@@ -294,7 +275,8 @@ onMounted(async () => {
 }
 
 .student-report-page :deep(.report-shell) {
-  border-color: var(--report-theme-border);
+  border: 0;
+  border-radius: 16px;
   background: linear-gradient(180deg, var(--report-theme-surface-soft) 0%, var(--report-theme-surface) 100%);
 }
 
@@ -488,16 +470,22 @@ onMounted(async () => {
   box-shadow: none;
 }
 
-.student-report-page__hero-copy h1::after {
-  content: "学习报告";
+@media (max-width: 1200px) {
+  .student-report-page__hero {
+    grid-template-columns: 1fr;
+  }
+
+  .student-report-page__hero-panel {
+    justify-content: flex-start;
+  }
+
+  .student-report-page__hero-panel :deep(.el-select),
+  .student-report-page__hero-panel :deep(.el-select__wrapper) {
+    width: min(100%, 360px);
+  }
 }
 
-.student-report-page__hero-copy p::after {
-  content: "查看结果与建议";
-}
-
-@media (max-width: 900px) {
-  .student-report-page__hero,
+@media (max-width: 720px) {
   .student-report-page__highlights {
     grid-template-columns: 1fr;
   }

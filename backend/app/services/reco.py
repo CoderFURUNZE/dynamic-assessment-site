@@ -112,6 +112,7 @@ def _kp_summary(session: Session, kp_ids: list[int], mastery_by_id: dict[int, fl
                 "title": kp.title,
                 "chapter": kp.chapter,
                 "mastery": mastery_by_id.get(int(kp.id)) if mastery_by_id else None,
+                "is_terminal": bool(kp.is_terminal),
             }
         )
     return items
@@ -199,6 +200,106 @@ def _teacher_route_context(
         for kp_id in chain
     }
     return _kp_summary(session, chain, mastery_by_id)
+
+
+def _branch_route_context(
+    session: Session,
+    *,
+    user_id: int,
+    subject: str,
+    grade: str,
+    source_kp_id: int,
+    target_kp_id: int,
+) -> dict:
+    kps = session.exec(
+        select(KnowledgePoint)
+        .where(KnowledgePoint.subject == subject, KnowledgePoint.grade == grade)
+        .order_by(KnowledgePoint.code, KnowledgePoint.id)
+    ).all()
+    kp_by_id = {int(kp.id): kp for kp in kps if kp.id is not None}
+    if source_kp_id not in kp_by_id:
+        return {}
+
+    edges = session.exec(
+        select(KnowledgeEdge).where(
+            KnowledgeEdge.subject == subject,
+            KnowledgeEdge.grade == grade,
+            KnowledgeEdge.relation_type == RelationType.prerequisite,
+        )
+    ).all()
+    prereqs_by_next: dict[int, list[int]] = {}
+    next_by_prereq: dict[int, list[int]] = {}
+    for edge in edges:
+        prereqs_by_next.setdefault(int(edge.next_id), []).append(int(edge.prereq_id))
+        next_by_prereq.setdefault(int(edge.prereq_id), []).append(int(edge.next_id))
+
+    def kp_rank(kp_id: int) -> tuple[int, str, int]:
+        kp = kp_by_id.get(kp_id)
+        if kp is None:
+            return (9, "", kp_id)
+        if bool(kp.is_terminal):
+            return (8, str(kp.code or ""), kp_id)
+        return (0, str(kp.code or ""), kp_id)
+
+    def is_available(kp_id: int) -> bool:
+        kp = kp_by_id.get(kp_id)
+        if kp is not None and bool(kp.is_terminal):
+            return True
+        prereqs = prereqs_by_next.get(kp_id, [])
+        return all(
+            float(_mastery_value(session, user_id=user_id, kp_id=pid, subject=subject, grade=grade).value) >= 0.7
+            for pid in prereqs
+        )
+
+    direct_next_ids = sorted(
+        [item for item in next_by_prereq.get(source_kp_id, []) if item in kp_by_id],
+        key=kp_rank,
+    )
+    terminal_ids = sorted(
+        [int(kp.id) for kp in kps if kp.id is not None and bool(kp.is_terminal)],
+        key=kp_rank,
+    )
+    display_ids: list[int] = []
+    for candidate_id in [source_kp_id, *direct_next_ids, target_kp_id, *terminal_ids]:
+        if candidate_id in kp_by_id and candidate_id not in display_ids:
+            display_ids.append(candidate_id)
+
+    mastery_by_id = {
+        kp_id: float(_mastery_value(session, user_id=user_id, kp_id=kp_id, subject=subject, grade=grade).value)
+        for kp_id in display_ids
+    }
+
+    def enrich(items: list[dict]) -> list[dict]:
+        result: list[dict] = []
+        for item in items:
+            kp_item_id = int(item.get("id") or item.get("kp_id") or 0)
+            if not kp_item_id:
+                continue
+            available = is_available(kp_item_id) or kp_item_id == source_kp_id
+            result.append(
+                {
+                    **item,
+                    "available": available,
+                    "locked": not available,
+                    "recommended": kp_item_id == int(target_kp_id),
+                }
+            )
+        return result
+
+    display_nodes = enrich(_kp_summary(session, display_ids, mastery_by_id))
+    next_options = enrich(_kp_summary(session, direct_next_ids, mastery_by_id))
+    terminal_options = enrich(_kp_summary(session, terminal_ids, mastery_by_id))
+    return {
+        "mode": "branch_select",
+        "current_id": int(source_kp_id),
+        "recommended_target_id": int(target_kp_id),
+        "display_nodes": display_nodes,
+        "next_options": next_options,
+        "terminal_options": terminal_options,
+        "available_ids": [int(item["id"]) for item in display_nodes if bool(item.get("available"))],
+        "terminal_ids": terminal_ids,
+        "explain": "系统高亮当前推荐节点；遇到分支时会同时展示可选节点，学生可以自主选择路径，也可以挑战终点节点。",
+    }
 
 
 def _advice_text(persona_type: PersonaType, *, target_title: str, reason: str) -> str:
@@ -323,6 +424,7 @@ def _apply_seeded_demo_path(
                 "title": target_override.title,
                 "chapter": target_override.chapter,
                 "mastery": float(target_mastery.value),
+                "is_terminal": bool(target_override.is_terminal),
             }
             if source_kp_id in path_ids and target_override_id != source_kp_id:
                 payload["reason_summary"] = f"当前知识点已达标，可以推进到下一个知识点“{target_override.title}”。"
@@ -554,6 +656,7 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
             "title": target_kp.title,
             "chapter": target_kp.chapter,
             "mastery": float(target_mastery.value),
+            "is_terminal": bool(target_kp.is_terminal),
         },
         "reason_summary": reason_summary,
         "recommendation_stage": stage,
@@ -658,17 +761,20 @@ def recommend_next(session: Session, *, user_id: int, kp_id: int, subject: str, 
         source_kp_id=kp_id,
         payload=payload,
     )
-    route_context = _teacher_route_context(
+    route_options = _branch_route_context(
         session,
         user_id=user_id,
         subject=subject,
         grade=grade,
+        source_kp_id=kp_id,
         target_kp_id=int(payload["target_kp"]["id"]),
     )
-    if route_context:
-        route_ids = [int(item["id"]) for item in route_context if item.get("id")]
-        payload["personalized_path"] = route_context
-        payload["remedy_path"]["nodes"] = route_context
+    if route_options:
+        route_nodes = list(route_options.get("display_nodes") or [])
+        route_ids = [int(item["id"]) for item in route_nodes if item.get("id")]
+        payload["route_options"] = route_options
+        payload["personalized_path"] = route_nodes
+        payload["remedy_path"]["nodes"] = route_nodes
         payload["remedy_path"]["path"] = route_ids
 
     payload["course_completion"] = _sync_course_completion(

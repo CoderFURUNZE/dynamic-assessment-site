@@ -1829,6 +1829,7 @@ def build_graph_coverage_summary(
 
     completed_nodes = 0
     mastered_nodes = 0
+    terminal_mastered: KnowledgePoint | None = None
     for kp in kps:
         if kp.id is None:
             continue
@@ -1839,18 +1840,40 @@ def build_graph_coverage_summary(
             completed_nodes += 1
         if value >= 0.85 or status == "mastered":
             mastered_nodes += 1
+        if bool(kp.is_terminal) and (value >= 0.7 or status == "mastered") and terminal_mastered is None:
+            terminal_mastered = kp
 
     learning_coverage = _clamp01(completed_nodes / total_nodes)
     mastery_coverage = _clamp01(mastered_nodes / total_nodes)
     graph_score = _clamp01(learning_coverage * 0.6 + mastery_coverage * 0.4)
+    raw_learning_coverage = learning_coverage
+    raw_mastery_coverage = mastery_coverage
+    completion_rule = "coverage"
+    terminal_mastered_payload: dict[str, Any] | None = None
+    formula = "图谱评价得分 = 学习覆盖度 * 60% + 掌握覆盖度 * 40%"
+    if terminal_mastered is not None and terminal_mastered.id is not None:
+        completion_rule = "terminal_mastery"
+        terminal_mastered_payload = {
+            "id": int(terminal_mastered.id),
+            "code": terminal_mastered.code,
+            "title": terminal_mastered.title,
+        }
+        learning_coverage = 1.0
+        mastery_coverage = 1.0
+        graph_score = 1.0
+        formula = "终点知识点达标后，图谱评价按课程掌握完成计算"
     return {
         "total_nodes": total_nodes,
         "completed_nodes": completed_nodes,
         "mastered_nodes": mastered_nodes,
         "learning_coverage": learning_coverage,
         "mastery_coverage": mastery_coverage,
+        "raw_learning_coverage": raw_learning_coverage,
+        "raw_mastery_coverage": raw_mastery_coverage,
         "graph_score": graph_score,
-        "formula": "图谱评价得分 = 学习覆盖度 * 60% + 掌握覆盖度 * 40%",
+        "formula": formula,
+        "completion_rule": completion_rule,
+        "terminal_mastered": terminal_mastered_payload,
         "dynamic_weight": GRAPH_SCORE_WEIGHT,
     }
 

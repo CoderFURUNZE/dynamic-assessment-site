@@ -17,8 +17,8 @@ const courses = ref<Course[]>([]);
 const selectedCourseId = computed<number | null>(() => courses.value.find((item) => item.title === subject.value)?.id ?? null);
 const questionnaireSummary = computed(() => [
   { label: "当前课程", value: subject.value || "请选择课程" },
-  { label: "补充内容", value: "学习状态、兴趣和策略" },
-  { label: "保存后", value: "自动更新课程画像" },
+  { label: "填写内容", value: "状态 / 兴趣 / 策略" },
+  { label: "保存后", value: "更新学习画像" },
 ]);
 
 async function loadCourses() {
@@ -69,19 +69,22 @@ onMounted(async () => {
   <div class="student-questionnaire-page">
     <section class="student-questionnaire-page__hero">
       <div class="student-questionnaire-page__hero-copy">
-        <span class="student-questionnaire-page__eyebrow">学习画像</span>
-        <h1>用一页问卷补充你的学习状态</h1>
-        <p>保留课程选择、填写说明和主问卷区，减少来回切换，完成后会直接更新课程画像。</p>
+        <span class="student-questionnaire-page__eyebrow">问卷填写</span>
+        <h1>本次补充内容</h1>
+        <p>{{ selectedCourseId ? `当前课程：${subject}。优先完成最相关题项，保存后会更新学习画像。` : "请先选择课程，再完成补充问卷。" }}</p>
       </div>
 
+      <section class="student-questionnaire-page__summary" aria-label="问卷概况">
+        <article v-for="item in questionnaireSummary" :key="item.label" class="student-questionnaire-page__summary-card">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </article>
+      </section>
+
       <div class="student-questionnaire-page__hero-panel">
-        <span>选择课程</span>
         <el-select v-model="subject" placeholder="请选择课程" size="large">
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
-        <p>
-          {{ selectedCourseId ? `当前课程：${subject}，保存后会自动更新画像结果。` : "请先选择课程，再完成补充问卷。" }}
-        </p>
         <div class="student-questionnaire-page__hero-actions">
           <el-button @click="router.push({ path: '/student/dashboard', query: studentQuery() })">返回学习中心</el-button>
           <el-button type="primary" @click="router.push({ path: '/student/report', query: studentQuery({ subject: subject || undefined }) })">
@@ -91,22 +94,7 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="student-questionnaire-page__summary">
-      <article v-for="item in questionnaireSummary" :key="item.label" class="student-questionnaire-page__summary-card">
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-      </article>
-    </section>
-
     <section class="student-questionnaire-page__content panel-card">
-      <header class="student-questionnaire-page__content-head">
-        <div>
-          <span>问卷填写</span>
-          <h2>本次补充内容</h2>
-        </div>
-        <p>优先完成与当前课程最相关的题项，不需要在多个模块之间来回跳转。</p>
-      </header>
-
       <QuestionnairePane :course-id="selectedCourseId" />
     </section>
   </div>
@@ -115,31 +103,31 @@ onMounted(async () => {
 <style scoped>
 .student-questionnaire-page {
   display: grid;
-  gap: 20px;
+  gap: 18px;
+  color: #102033;
 }
 
 .student-questionnaire-page__hero,
 .student-questionnaire-page__summary-card,
 .student-questionnaire-page__content {
-  border-radius: 20px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow:
-    0 12px 26px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  border-radius: 16px;
+  border: 1px solid rgba(120, 142, 166, 0.22);
+  background: #ffffff;
+  box-shadow: 0 14px 34px rgba(20, 35, 58, 0.07);
   min-width: 0;
   max-width: 100%;
 }
 
 .student-questionnaire-page__hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
-  gap: 18px;
-  padding: 24px;
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 0.9fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
   background:
-    radial-gradient(circle at top left, rgba(191, 219, 254, 0.22), transparent 30%),
-    radial-gradient(circle at right bottom, rgba(187, 247, 208, 0.16), transparent 26%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.11), transparent 30%),
+    radial-gradient(circle at 92% 0%, rgba(34, 197, 94, 0.13), transparent 26%),
+    linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
 }
 
 .student-questionnaire-page__hero-copy {
@@ -153,19 +141,17 @@ onMounted(async () => {
   width: fit-content;
   padding: 7px 11px;
   border-radius: 999px;
-  background: rgba(187, 247, 208, 0.42);
+  background: #ecfdf5;
+  border: 1px solid rgba(34, 197, 94, 0.22);
   color: #166534;
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .student-questionnaire-page__hero-copy h1 {
   margin: 0;
-  font-size: clamp(28px, 4vw, 40px);
-  line-height: 1.06;
-  letter-spacing: -0.04em;
+  font-size: clamp(26px, 3vw, 36px);
+  line-height: 1.12;
   color: #0f172a;
 }
 
@@ -178,13 +164,27 @@ onMounted(async () => {
 }
 
 .student-questionnaire-page__hero-panel {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  align-content: start;
-  padding: 18px;
-  border-radius: 22px;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 12px;
+  border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.student-questionnaire-page__hero-panel :deep(.el-select),
+.student-questionnaire-page__hero-panel :deep(.el-select__wrapper) {
+  width: 260px;
+}
+
+.student-questionnaire-page__hero-panel :deep(.el-select__wrapper) {
+  min-height: 44px;
+  border-radius: 12px;
+  background: #f8fafc !important;
+  box-shadow: 0 0 0 1px rgba(120, 142, 166, 0.22) inset !important;
 }
 
 .student-questionnaire-page__hero-panel span,
@@ -204,25 +204,29 @@ onMounted(async () => {
 .student-questionnaire-page__summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.student-questionnaire-page__summary-card {
-  padding: 18px 20px;
-  display: grid;
   gap: 8px;
 }
 
+.student-questionnaire-page__summary-card {
+  min-height: 76px;
+  padding: 12px;
+  border-radius: 12px;
+  display: grid;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
+}
+
 .student-questionnaire-page__summary-card strong {
-  font-size: 22px;
+  font-size: 16px;
   line-height: 1.2;
   color: #0f172a;
+  overflow-wrap: break-word;
 }
 
 .student-questionnaire-page__content {
-  padding: 22px;
-  display: grid;
-  gap: 18px;
+  padding: 0;
+  overflow: hidden;
 }
 
 .student-questionnaire-page__content-head {
@@ -239,8 +243,17 @@ onMounted(async () => {
   color: #0f172a;
 }
 
-@media (max-width: 960px) {
-  .student-questionnaire-page__hero,
+@media (max-width: 1180px) {
+  .student-questionnaire-page__hero {
+    grid-template-columns: 1fr;
+  }
+
+  .student-questionnaire-page__hero-panel {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
   .student-questionnaire-page__summary {
     grid-template-columns: 1fr;
   }

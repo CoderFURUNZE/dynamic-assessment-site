@@ -61,6 +61,7 @@ class GraphOverlayNodeOut(BaseModel):
     mastery: float
     status: str
     recommended: bool = False
+    path_selected: bool = False
     blocked_reason: str | None = None
     knowledge_enabled: bool = True
     ability_enabled: bool = False
