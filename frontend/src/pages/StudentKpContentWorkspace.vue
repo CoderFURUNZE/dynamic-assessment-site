@@ -175,7 +175,7 @@ const masteryStatus = computed(() => {
   return "未开始";
 });
 const taskLead = computed(() => detail.value?.kp?.description || "先完成资源学习和练习，再看下一步建议。");
-const currentTaskSubtitle = computed(() => `${detail.value?.kp?.title || "当前知识点"}（示例）`);
+const currentTaskSubtitle = computed(() => detail.value?.kp?.title || "当前知识点");
 const sidebarSuggestion = computed(() => {
   if (recommendationContext.value?.reason) return recommendationContext.value.reason;
   if (detail.value?.overlay?.blocked_reason) return detail.value.overlay.blocked_reason;

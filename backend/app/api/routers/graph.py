@@ -28,6 +28,7 @@ from app.db.models import (
     KpQuestionAssignment,
     KnowledgeEdge,
     KnowledgePoint,
+    LearningBehaviorEvent,
     LearningResource,
     Mastery,
     Question,
@@ -127,17 +128,25 @@ def _student_path_choice_ids(session: Session, *, user_id: int, subject: str, gr
     return result
 
 
+def _active_student_path_ids(session: Session, *, user_id: int, subject: str, grade: str) -> list[int]:
+    choice_ids = _student_path_choice_ids(session, user_id=user_id, subject=subject, grade=grade)
+    if choice_ids:
+        return choice_ids
+    return _seeded_demo_path_ids(session, user_id=user_id, subject=subject, grade=grade)
+
+
 def _effective_prereq_ids(session: Session, *, user_id: int, kp: KnowledgePoint, graph_prereqs: list[int]) -> list[int]:
     if kp.id is None:
         return graph_prereqs
-    path_ids = _seeded_demo_path_ids(session, user_id=user_id, subject=kp.subject, grade=kp.grade)
+    path_ids = _active_student_path_ids(session, user_id=user_id, subject=kp.subject, grade=kp.grade)
     kp_id = int(kp.id)
-    if kp_id not in path_ids:
-        return graph_prereqs
-    index = path_ids.index(kp_id)
-    if index <= 0:
-        return []
-    return path_ids[:index]
+    if kp_id in path_ids:
+        index = path_ids.index(kp_id)
+        return path_ids[:index] if index > 0 else []
+    parent_indexes = [index for index, item in enumerate(path_ids) if item in graph_prereqs]
+    if parent_indexes:
+        return path_ids[: max(parent_indexes) + 1]
+    return graph_prereqs
 
 
 def _resource_value(value) -> str:
@@ -852,20 +861,11 @@ def graph_map(
         for kp in kps:
             if kp.id is None:
                 continue
-            try:
-                mastery_map[int(kp.id)] = upsert_mastery(
-                    session,
-                    user_id=user.id,
-                    kp_id=int(kp.id),
-                    subject=subject,
-                    grade=grade,
-                )
-            except Exception:
-                existing = session.exec(
-                    select(Mastery).where(Mastery.user_id == user.id, Mastery.kp_id == int(kp.id))
-                ).first()
-                if existing is not None:
-                    mastery_map[int(kp.id)] = existing
+            existing = session.exec(
+                select(Mastery).where(Mastery.user_id == user.id, Mastery.kp_id == int(kp.id))
+            ).first()
+            if existing is not None:
+                mastery_map[int(kp.id)] = existing
         try:
             log_behavior_event(
                 session,
@@ -890,40 +890,37 @@ def graph_map(
                 continue
             prereq_map.setdefault(int(edge.next_id), []).append(int(edge.prereq_id))
             next_map.setdefault(int(edge.prereq_id), []).append(int(edge.next_id))
-        seeded_path_ids = _seeded_demo_path_ids(session, user_id=int(user.id), subject=subject, grade=grade)
-        choice_path_ids = _student_path_choice_ids(session, user_id=int(user.id), subject=subject, grade=grade)
-        selected_path_ids = {int(item) for item in choice_path_ids if int(item) in kp_id_set}
-        selected_path_ids.update(int(item) for item in seeded_path_ids if int(item) in kp_id_set)
+        selected_path_order = [
+            int(item)
+            for item in _active_student_path_ids(session, user_id=int(user.id), subject=subject, grade=grade)
+            if int(item) in kp_id_set
+        ]
+        selected_path_ids = set(selected_path_order)
         unlocked_ids: set[int] = set()
         for kp in kps:
             if kp.id is None:
                 continue
             kp_id = int(kp.id)
             mastery = mastery_map.get(kp_id)
-            mastery_value = float(mastery.value) if mastery is not None else 0.0
-            status = str(mastery.status if mastery is not None else "not_started")
-            actively_started = mastery is not None and (status != "not_started" or float(mastery.direct_value) > 0)
-            if kp_id in seeded_path_ids:
-                seeded_index = seeded_path_ids.index(kp_id)
-                prereqs = seeded_path_ids[:seeded_index]
-            else:
-                prereqs = prereq_map.get(kp_id, [])
+            prereqs = _effective_prereq_ids(
+                session,
+                user_id=int(user.id),
+                kp=kp,
+                graph_prereqs=prereq_map.get(kp_id, []),
+            )
             unlocked = not prereqs or all(
                 (mastery_map.get(pid) is not None) and float(mastery_map[pid].value) >= 0.7
                 for pid in prereqs
             )
-            if unlocked or actively_started:
+            if unlocked:
                 unlocked_ids.add(kp_id)
 
         root_ids = {
             int(kp.id)
             for kp in kps
-            if kp.id is not None and (kp.code == "HM-MID-01" or not prereq_map.get(int(kp.id)))
+            if kp.id is not None and not prereq_map.get(int(kp.id))
         }
-        path_ids: set[int] = set(choice_path_ids)
-        path_ids.update(int(item) for item in seeded_path_ids if int(item) in kp_id_set)
-        if focus_source_id and focus_source_id in path_ids:
-            path_ids.add(focus_source_id)
+        path_ids: set[int] = set(selected_path_order)
 
         def add_ancestors(kp_id: int) -> None:
             for prereq_id in prereq_map.get(kp_id, []):
@@ -938,9 +935,15 @@ def graph_map(
         visible_ids: set[int] = set(path_ids)
         if not visible_ids:
             visible_ids.update(root_ids)
-        for source in list(visible_ids):
-            for next_id in next_map.get(source, []):
-                visible_ids.add(int(next_id))
+
+        # Student view is a decision graph: selected path + currently selectable options.
+        # The selected path tail shows the next step; clicking a visible unlocked node can preview its children
+        # without mutating the persisted path.
+        option_sources = list(selected_path_order) if selected_path_order else list(root_ids)
+        if focus_source_id and focus_source_id in kp_id_set and focus_source_id not in option_sources:
+            option_sources.append(focus_source_id)
+        for source in option_sources:
+            visible_ids.update(int(next_id) for next_id in next_map.get(source, []) if int(next_id) in unlocked_ids)
         visible_ids.update(kp_id for kp_id in root_ids if kp_id in unlocked_ids or not path_ids)
 
         original_order = {int(kp.id): index for index, kp in enumerate(kps) if kp.id is not None}
@@ -949,12 +952,10 @@ def graph_map(
             if kp.id is None:
                 return (9, 0, 0)
             kp_id = int(kp.id)
-            if kp.code == "HM-MID-01":
-                return (0, 0, kp_id)
-            if kp_id in choice_path_ids:
-                return (1, choice_path_ids.index(kp_id), kp_id)
-            if kp_id in seeded_path_ids:
-                return (2, seeded_path_ids.index(kp_id), kp_id)
+            if kp_id in root_ids:
+                return (0, original_order.get(kp_id, kp_id), kp_id)
+            if kp_id in selected_path_order:
+                return (1, selected_path_order.index(kp_id), kp_id)
             if bool(kp.is_terminal):
                 return (4, original_order.get(kp_id, kp_id), kp_id)
             return (3, original_order.get(kp_id, kp_id), kp_id)
@@ -1005,6 +1006,8 @@ def graph_map(
         if blocked:
             blocked_titles = [full_kp_title_map.get(item, kp_title_map.get(item, str(item))) for item in blocked[:3]]
             blocked_reason = f"前置未完成：{'、'.join(blocked_titles)}"
+        if mastery_value >= 0.7:
+            blocked_reason = None
         dimension_info = kp_dimension_summary.get("by_kp", {}).get(int(kp.id), {})
         overlay.append(
             GraphOverlayNodeOut(
@@ -1087,25 +1090,58 @@ def record_path_choice(
         blocked_titles = [titles.get(item, str(item)) for item in blocked[:3]]
         raise HTTPException(status_code=409, detail=f"前置未完成：{'、'.join(blocked_titles)}")
 
-    existing_ids = _student_path_choice_ids(session, user_id=int(user.id), subject=kp.subject, grade=kp.grade)
-    if kp_id not in existing_ids:
+    existing_ids = _active_student_path_ids(session, user_id=int(user.id), subject=kp.subject, grade=kp.grade)
+    if kp_id in existing_ids:
+        next_path_ids = existing_ids[: existing_ids.index(kp_id) + 1]
+    else:
+        parent_indexes = [index for index, item in enumerate(existing_ids) if item in prereqs]
+        keep_until = max(parent_indexes) + 1 if parent_indexes else len(existing_ids)
+        next_path_ids = existing_ids[:keep_until] + [kp_id]
+
+    rows = session.exec(
+        select(LearningBehaviorEvent)
+        .where(
+            LearningBehaviorEvent.user_id == user.id,
+            LearningBehaviorEvent.event_type == "path_choice",
+        )
+        .order_by(LearningBehaviorEvent.created_at, LearningBehaviorEvent.id)
+    ).all()
+    for row in rows:
+        try:
+            payload = json.loads(row.value_json or "{}")
+        except Exception:
+            payload = {}
+        if str(payload.get("subject") or "").strip() == kp.subject and str(payload.get("grade") or "").strip() == kp.grade:
+            session.delete(row)
+    session.commit()
+
+    path_kps = {
+        int(row.id): row
+        for row in session.exec(select(KnowledgePoint).where(KnowledgePoint.id.in_(next_path_ids))).all()
+        if row.id is not None
+    }
+    for order, path_kp_id in enumerate(next_path_ids, 1):
+        path_kp = path_kps.get(int(path_kp_id))
         log_behavior_event(
             session,
             user_id=int(user.id),
             event_type="path_choice",
             subject=kp.subject,
             grade=kp.grade,
-            kp_id=kp_id,
+            kp_id=int(path_kp_id),
             payload={
                 "subject": kp.subject,
                 "grade": kp.grade,
-                "kp_id": kp_id,
+                "kp_id": int(path_kp_id),
+                "kp_code": path_kp.code if path_kp is not None else "",
+                "kp_title": path_kp.title if path_kp is not None else "",
                 "source": "student_graph_workspace",
-                "order": len(existing_ids) + 1,
+                "order": order,
             },
+            commit=False,
         )
-        existing_ids.append(kp_id)
-    return {"ok": True, "path_ids": existing_ids}
+    session.commit()
+    return {"ok": True, "path_ids": next_path_ids}
 
 
 @router.get("/node/{kp_id}", response_model=GraphNodeDetailOut)
@@ -1150,6 +1186,9 @@ def node_detail(
             if blocked:
                 blocked_kps = session.exec(select(KnowledgePoint).where(KnowledgePoint.id.in_(blocked[:3]))).all()
                 blocked_titles = [item.title for item in blocked_kps]
+            blocked_reason = f"前置未完成：{'、'.join(blocked_titles or [str(item) for item in blocked[:3]])}" if blocked else None
+            if float(mastery.value) >= 0.7:
+                blocked_reason = None
             dimension_info = build_kp_dimension_summary(
                 session,
                 user_id=user.id,
@@ -1163,7 +1202,7 @@ def node_detail(
                 mastery=float(mastery.value),
                 status=mastery.status,
                 recommended=False,
-                blocked_reason=f"前置未完成：{'、'.join(blocked_titles or [str(item) for item in blocked[:3]])}" if blocked else None,
+                blocked_reason=blocked_reason,
                 knowledge_enabled=bool(dimension_info.get("knowledge_enabled", True)),
                 ability_enabled=bool(dimension_info.get("ability_enabled", False)),
                 literacy_enabled=bool(dimension_info.get("literacy_enabled", False)),

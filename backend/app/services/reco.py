@@ -151,13 +151,9 @@ def _teacher_route_context(
 
     def mainline_rank(kp: KnowledgePoint) -> tuple[int, str, int]:
         code = str(kp.code or "")
-        if code == "HM-MID-01":
-            return (0, code, int(kp.id or 0))
-        if code.startswith("HM-MID-0"):
-            return (1, code, int(kp.id or 0))
         if bool(kp.is_terminal):
             return (9, code, int(kp.id or 0))
-        return (5, code, int(kp.id or 0))
+        return (1, code, int(kp.id or 0))
 
     chain: list[int] = []
     seen: set[int] = set()
@@ -183,15 +179,13 @@ def _teacher_route_context(
         successors = [
             kp_by_id[nid]
             for nid in next_by_prereq.get(int(target.id), [])
-            if nid in kp_by_id and not bool(kp_by_id[nid].is_terminal) and str(kp_by_id[nid].code or "").startswith("HM-MID-0")
+            if nid in kp_by_id and not bool(kp_by_id[nid].is_terminal)
         ]
         successors.sort(key=mainline_rank)
         if successors and int(successors[0].id) not in chain:
             chain.append(int(successors[0].id))
 
-    terminal = next((kp for kp in kps if str(kp.code or "") == "HM-MID-C2"), None)
-    if terminal is None:
-        terminal = next((kp for kp in kps if bool(kp.is_terminal)), None)
+    terminal = next((kp for kp in kps if bool(kp.is_terminal)), None)
     if terminal is not None and terminal.id is not None and int(terminal.id) not in chain:
         chain.append(int(terminal.id))
 

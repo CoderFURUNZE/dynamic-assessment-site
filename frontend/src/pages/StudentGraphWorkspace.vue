@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
@@ -58,6 +58,7 @@ type RouteStop = {
   role: "start" | "recommended" | "option" | "terminal";
   x: number;
   y: number;
+  page: number;
 };
 
 type ConnectorLine = {
@@ -83,6 +84,9 @@ const mapRef = ref<HTMLElement | null>(null);
 const isDragging = ref(false);
 const dragMoved = ref(false);
 const suppressNodeClick = ref(false);
+const choosingKpId = ref<number | null>(null);
+const graphMapRequestSeq = ref(0);
+const recoRequestSeq = ref(0);
 const dragStart = ref({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
 const panOffset = ref({ x: 0, y: 0 });
 
@@ -125,12 +129,13 @@ const routeTerminalCount = computed(() => routeKps.value.filter((item) => item.i
 const currentMasteryPercent = computed(() => Math.round(Number(currentKp.value?.mastery || recommendedKp.value?.mastery || 0) * 100));
 const routeProgressStyle = computed(() => ({ "--route-progress": `${progressPercent.value}%` }));
 const masteryRingStyle = computed(() => ({ "--mastery-progress": `${currentMasteryPercent.value}%` }));
+const routeContentWidth = computed(() => mapWidth + pagePanPadding * 2);
 const routeContentHeight = computed(() => {
   const lowestStopY = routeStops.value.reduce((max, stop) => Math.max(max, stop.y), 0);
-  return Math.max(mapHeight.value, lowestStopY + 260);
+  return Math.max(mapHeight.value, lowestStopY + 230);
 });
 const mapCanvasStyle = computed(() => ({
-  width: `${mapWidth}px`,
+  width: `${routeContentWidth.value}px`,
   height: `${routeContentHeight.value}px`,
   transform: `translate3d(${panOffset.value.x}px, ${panOffset.value.y}px, 0)`,
 }));
@@ -148,7 +153,7 @@ const currentStatusLabel = computed(() => {
   if (state === "locked") return "待解锁";
   if (state === "current") return "当前推荐";
   if (state === "done") return "已完成";
-  if (state === "path") return "已走路径";
+  if (state === "path") return "已选路径";
   return "可学习";
 });
 const currentNodeState = computed(() => currentKp.value ? nodeState(currentKp.value) : "open");
@@ -167,8 +172,8 @@ const routeStepItems = computed(() => routeKps.value.map((kp, index) => ({
   state: nodeState(kp),
   mastery: Math.round(Number(kp.mastery || 0) * 100),
 })));
-
 const mapWidth = 1040;
+const pagePanPadding = 220;
 const routeNodeRadius = 43;
 const FAST_ENTRY_CACHE_TTL = 60 * 1000;
 const mapHeight = computed(() => routeStops.value.length >= 8 ? 1180 : routeStops.value.length >= 6 ? 1040 : 860);
@@ -194,38 +199,95 @@ function middlePositions(count: number) {
   });
 }
 
-function graphPositionStops(nodes: KP[]): RouteStop[] | null {
-  const positioned = nodes.filter((kp) => Number.isFinite(Number(kp.pos_x)) && Number.isFinite(Number(kp.pos_y)));
-  if (positioned.length !== nodes.length) return null;
-  const xs = positioned.map((kp) => Number(kp.pos_x));
-  const ys = positioned.map((kp) => Number(kp.pos_y));
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const rangeX = Math.max(maxX - minX, 1);
-  const rangeY = Math.max(maxY - minY, 1);
-  const left = 170;
-  const top = 150;
-  const width = mapWidth - 340;
-  const height = Math.max(620, nodes.length >= 8 ? 980 : 760);
-  return nodes.map((kp, index) => {
-    const hasPosition = Number.isFinite(Number(kp.pos_x)) && Number.isFinite(Number(kp.pos_y));
-    const fallback = middlePositions(nodes.length)[index] ?? { x: 520, y: 420 + index * 120 };
-    return {
-      kp,
-      index,
-      role: kp.is_terminal ? "terminal" : kp.id === recommendedNodeId.value ? "recommended" : index === 0 ? "start" : "option",
-      x: hasPosition ? left + ((Number(kp.pos_x) - minX) / rangeX) * width : fallback.x,
-      y: hasPosition ? top + ((Number(kp.pos_y) - minY) / rangeY) * height : fallback.y,
-    };
+function relationLayoutStops(nodes: KP[]): RouteStop[] {
+  const nodeIds = new Set(nodes.map((kp) => kp.id));
+  const order = new Map(nodes.map((kp, index) => [kp.id, index]));
+  const incoming = new Map<number, number[]>();
+  const outgoing = new Map<number, number[]>();
+  for (const edge of visibleEdges.value) {
+    if (edge.relation_type !== "prerequisite") continue;
+    if (!nodeIds.has(edge.prereq_id) || !nodeIds.has(edge.next_id)) continue;
+    incoming.set(edge.next_id, [...(incoming.get(edge.next_id) ?? []), edge.prereq_id]);
+    outgoing.set(edge.prereq_id, [...(outgoing.get(edge.prereq_id) ?? []), edge.next_id]);
+  }
+
+  const indegree = new Map(nodes.map((kp) => [kp.id, incoming.get(kp.id)?.length ?? 0]));
+  const level = new Map<number, number>();
+  const queue = nodes
+    .filter((kp) => (indegree.get(kp.id) ?? 0) === 0)
+    .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+    .map((kp) => kp.id);
+  if (!queue.length && nodes[0]) queue.push(nodes[0].id);
+  for (const id of queue) level.set(id, 0);
+
+  while (queue.length) {
+    const currentId = queue.shift()!;
+    const currentLevel = level.get(currentId) ?? 0;
+    for (const nextId of outgoing.get(currentId) ?? []) {
+      level.set(nextId, Math.max(level.get(nextId) ?? 0, currentLevel + 1));
+      indegree.set(nextId, (indegree.get(nextId) ?? 0) - 1);
+      if ((indegree.get(nextId) ?? 0) <= 0) queue.push(nextId);
+    }
+  }
+
+  nodes.forEach((kp, index) => {
+    if (!level.has(kp.id)) level.set(kp.id, Math.floor(index / 3));
   });
+
+  const groups = new Map<number, KP[]>();
+  nodes.forEach((kp) => {
+    const itemLevel = level.get(kp.id) ?? 0;
+    groups.set(itemLevel, [...(groups.get(itemLevel) ?? []), kp]);
+  });
+  for (const [itemLevel, group] of groups) {
+    groups.set(itemLevel, group.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)));
+  }
+
+  const levelGap = 210;
+  const top = 120;
+  const centerX = 520;
+  const branchGap = 330;
+  const stops: RouteStop[] = [];
+  for (const itemLevel of [...groups.keys()].sort((a, b) => a - b)) {
+    const group = groups.get(itemLevel) ?? [];
+    const selectedIndex = group.findIndex((kp) => kp.pathSelected || kp.id === recommendedNodeId.value || kp.id === currentKpId.value);
+    const positions = group.map((_, index) => {
+      if (group.length === 1) return centerX;
+      if (group.length === 2) return [centerX - branchGap / 2, centerX + branchGap / 2][index];
+      if (selectedIndex >= 0) {
+        const slots = [centerX - branchGap, centerX, centerX + branchGap];
+        const ordered = group.map((_, index) => index);
+        const selectedSlot = 1;
+        const slotByIndex = new Map<number, number>([[selectedIndex, slots[selectedSlot]]]);
+        const freeSlots = slots.filter((_, slotIndex) => slotIndex !== selectedSlot);
+        ordered.filter((index) => index !== selectedIndex).forEach((index, freeIndex) => {
+          slotByIndex.set(index, freeSlots[Math.min(freeIndex, freeSlots.length - 1)]);
+        });
+        return slotByIndex.get(index) ?? centerX;
+      }
+      const compactGap = Math.max(240, Math.min(310, 900 / Math.max(group.length - 1, 1)));
+      const start = centerX - ((group.length - 1) * compactGap) / 2;
+      return start + index * compactGap;
+    });
+    group.forEach((kp, groupIndex) => {
+      const x = pagePanPadding + (positions[groupIndex] ?? centerX);
+      const y = top + itemLevel * levelGap;
+      stops.push({
+        kp,
+        index: order.get(kp.id) ?? stops.length,
+        role: kp.is_terminal ? "terminal" : kp.id === recommendedNodeId.value ? "recommended" : (order.get(kp.id) ?? 0) === 0 ? "start" : "option",
+        x,
+        y,
+        page: 0,
+      });
+    });
+  }
+  return stops.sort((a, b) => a.index - b.index);
 }
 
-const routeStops = computed<RouteStop[]>(() => {
+const fullRouteStops = computed<RouteStop[]>(() => {
   const nodes = routeKps.value;
-  const graphStops = graphPositionStops(nodes);
-  if (graphStops) return graphStops;
+  if (nodes.length) return relationLayoutStops(nodes);
   const positions = middlePositions(nodes.length);
   const stops: RouteStop[] = [];
   nodes.forEach((kp, index) => {
@@ -234,12 +296,15 @@ const routeStops = computed<RouteStop[]>(() => {
       kp,
       index,
       role: kp.is_terminal ? "terminal" : kp.id === recommendedNodeId.value ? "recommended" : index === 0 ? "start" : "option",
-      x: position.x,
+      x: pagePanPadding + position.x,
       y: position.y,
+      page: 0,
     });
   });
   return stops;
 });
+
+const routeStops = computed<RouteStop[]>(() => fullRouteStops.value);
 const connectorLines = computed(() => {
   const stopById = new Map(routeStops.value.map((stop) => [stop.kp.id, stop]));
   const lines: ConnectorLine[] = [];
@@ -248,6 +313,8 @@ const connectorLines = computed(() => {
     const from = stopById.get(edge.prereq_id);
     const to = stopById.get(edge.next_id);
     if (!from || !to) continue;
+    if (isLockedKp(to.kp) || isLockedKp(from.kp)) continue;
+    if (to.kp.id === recommendedNodeId.value && !to.kp.pathSelected && !from.kp.pathSelected) continue;
     lines.push(makeConnector(`${edge.prereq_id}-${edge.next_id}`, from, to, nodeState(to.kp)));
   }
   return lines;
@@ -280,7 +347,7 @@ const pageLead = computed(() => {
   if (courseClosed.value) {
     return "老师已结束这门课程，当前可查看学习路径和学习报告。";
   }
-  return reco.value?.student_message || reco.value?.advice_text || reco.value?.reason_summary || "系统会展示当前可解锁的所有节点，你可以自主选择，也可以优先学习系统建议的节点。";
+  return reco.value?.student_message || reco.value?.advice_text || reco.value?.reason_summary || "系统会展示当前路径末端可选择的节点，你可以自主选择，也可以优先学习系统建议的节点。";
 });
 
 const selectedIsRecommendation = computed(() =>
@@ -296,7 +363,7 @@ const focusText = computed(() => {
   if (currentKpId.value && !selectedIsRecommendation.value && currentKp.value) {
     return isCompleted(currentKp.value)
       ? "该知识点已经完成，你仍然可以重新进入学习。"
-      : "你当前选择的是这个知识点，可以直接进入学习。";
+      : "你当前查看的是这个知识点，可以点击进入学习查看资源。";
   }
   return reco.value?.reason_summary || "系统会按你的掌握情况标记建议优先节点，你也可以从其他已解锁节点开始。";
 });
@@ -329,9 +396,9 @@ function findKpById(id?: number | null) {
 
 function nodeState(kp: KP) {
   if (isLockedKp(kp)) return "locked";
+  if (isCompleted(kp)) return "done";
   if (kp.id === currentKpId.value) return "selected";
   if (kp.id === recommendedNodeId.value) return "recommended";
-  if (isCompleted(kp)) return "done";
   if (isStartedKp(kp)) return "path";
   return "open";
 }
@@ -352,7 +419,7 @@ function statusLabel(kp: KP) {
   if (state === "locked") return "待解锁";
   if (state === "current") return "当前推荐";
   if (state === "done") return "已完成";
-  if (state === "path") return "已走路径";
+  if (state === "path") return "已选路径";
   return "可学习";
 }
 
@@ -374,6 +441,18 @@ function centerCurrentStop() {
   });
 }
 
+function centerCurrentPage() {
+  nextTick(() => {
+    const el = mapRef.value;
+    if (!el || !routeStops.value.length) return;
+    const left = Math.min(...routeStops.value.map((stop) => stop.x));
+    const right = Math.max(...routeStops.value.map((stop) => stop.x));
+    const top = Math.min(...routeStops.value.map((stop) => stop.y));
+    const bottom = Math.max(...routeStops.value.map((stop) => stop.y));
+    setPan(el.clientWidth / 2 - (left + right) / 2, el.clientHeight / 2 - (top + bottom) / 2);
+  });
+}
+
 function jumpToRecommendation() {
   const targetId = Number(recommendedKp.value?.id || currentKpId.value || 0);
   if (targetId) currentKpId.value = targetId;
@@ -382,21 +461,25 @@ function jumpToRecommendation() {
 }
 
 function cardSide(stop: RouteStop) {
-  if (stop.x > mapWidth - 300) return "is-card-left";
-  if (stop.x < 300) return "is-card-right";
+  const pageLeft = pagePanPadding;
+  if (stop.x < pageLeft + mapWidth / 2) return "is-card-left";
+  if (stop.x > pageLeft + mapWidth / 2) return "is-card-right";
   return stop.index % 2 === 0 ? "is-card-right" : "is-card-left";
 }
 
 function clampAxis(value: number, viewportSize: number, contentSize: number) {
-  if (viewportSize >= contentSize) return Math.round((viewportSize - contentSize) / 2);
-  return Math.min(0, Math.max(viewportSize - contentSize, value));
+  if (viewportSize >= contentSize) {
+    const centered = Math.round((viewportSize - contentSize) / 2);
+    return Math.min(centered + pagePanPadding, Math.max(centered - pagePanPadding, value));
+  }
+  return Math.min(pagePanPadding, Math.max(viewportSize - contentSize - pagePanPadding, value));
 }
 
 function clampPan(x: number, y: number) {
   const el = mapRef.value;
   if (!el) return { x, y };
   return {
-    x: clampAxis(x, el.clientWidth, mapWidth),
+    x: clampAxis(x, el.clientWidth, routeContentWidth.value),
     y: clampAxis(y, el.clientHeight, routeContentHeight.value),
   };
 }
@@ -460,7 +543,7 @@ function onMapPointerUp(event: PointerEvent) {
 function onMapWheel(event: WheelEvent) {
   const el = mapRef.value;
   if (!el) return;
-  const canPanX = mapWidth > el.clientWidth;
+  const canPanX = routeContentWidth.value > el.clientWidth;
   const canPanY = routeContentHeight.value > el.clientHeight;
   if (!canPanX && !canPanY) return;
   event.preventDefault();
@@ -524,12 +607,13 @@ async function loadCourses(useCache = true) {
   subject.value = String(candidates.find((item) => String(item || "").trim()) || "").trim();
 }
 
-async function loadVisibleKps(useCache = true) {
+async function loadVisibleKps(useCache = true, preferredSourceId?: number | null) {
   if (!subject.value) {
     resetState();
     return;
   }
-  const requestedSourceId = Number(currentKpId.value || route.query.kp || recommendationSourceKpId.value || 0);
+  const requestSeq = ++graphMapRequestSeq.value;
+  const requestedSourceId = Number(preferredSourceId || currentKpId.value || route.query.kp || recommendationSourceKpId.value || 0);
   const params = {
     subject: subject.value,
     grade: grade.value,
@@ -542,6 +626,7 @@ async function loadVisibleKps(useCache = true) {
       { skipGlobalLoading: true, ttlMs: FAST_ENTRY_CACHE_TTL },
     )
     : (await api.get("/graph/map", { params, skipGlobalLoading: true } as any)).data;
+  if (requestSeq !== graphMapRequestSeq.value) return;
   const overlayMap = new Map<number, any>((Array.isArray(data?.overlay) ? data.overlay : []).map((item: any) => [Number(item.kp_id), item]));
   const list = Array.isArray(data?.base?.kps) ? data.base.kps : [];
   visibleEdges.value = (Array.isArray(data?.base?.edges) ? data.base.edges : [])
@@ -583,8 +668,9 @@ async function loadVisibleKps(useCache = true) {
   currentKpId.value = nextCurrent?.id ?? null;
 }
 
-async function loadRecommendation() {
-  const sourceKpId = recommendationSourceKpId.value || currentKpId.value;
+async function loadRecommendation(preferredSourceId?: number | null) {
+  const requestSeq = ++recoRequestSeq.value;
+  const sourceKpId = preferredSourceId || recommendationSourceKpId.value || currentKpId.value;
   if (!sourceKpId) {
     reco.value = null;
     return;
@@ -595,11 +681,13 @@ async function loadRecommendation() {
       params: { kp_id: sourceKpId, ai: false },
       skipGlobalLoading: true,
     } as any);
+    if (requestSeq !== recoRequestSeq.value) return;
     reco.value = res.data ?? null;
   } catch {
+    if (requestSeq !== recoRequestSeq.value) return;
     reco.value = null;
   } finally {
-    recoLoading.value = false;
+    if (requestSeq === recoRequestSeq.value) recoLoading.value = false;
   }
 }
 
@@ -636,7 +724,7 @@ async function handleCourseChange() {
   });
 }
 
-async function selectKp(kp: KP) {
+function selectKp(kp: KP) {
   if (suppressNodeClick.value) return;
   if (isLockedKp(kp)) {
     ElMessage.info("先完成当前关卡，后续关卡会自动解锁");
@@ -646,9 +734,42 @@ async function selectKp(kp: KP) {
   recommendationSourceKpId.value = kp.id;
   syncQuery();
   centerCurrentStop();
-  void loadRecommendation().then(() => {
+  void loadVisibleKps(false, kp.id).then(() => {
+    syncQuery();
     centerCurrentStop();
   });
+  void loadRecommendation(kp.id).then(() => centerCurrentStop());
+}
+
+async function chooseKp(kp?: KP | null) {
+  if (!kp) {
+    ElMessage.warning("当前还没有可选择的节点");
+    return false;
+  }
+  if (isLockedKp(kp)) {
+    ElMessage.info("先完成前置节点，后续节点会自动解锁");
+    return false;
+  }
+  if (choosingKpId.value === kp.id) return false;
+  choosingKpId.value = kp.id;
+  try {
+    await api.post(`/graph/path-choice/${kp.id}`, {}, { skipGlobalLoading: true } as any);
+    currentKpId.value = kp.id;
+    recommendationSourceKpId.value = kp.id;
+    syncQuery();
+    centerCurrentStop();
+    void loadVisibleKps(false, kp.id).then(() => {
+      syncQuery();
+      centerCurrentStop();
+    });
+    void loadRecommendation(kp.id).then(() => centerCurrentStop());
+    return true;
+  } catch (e: any) {
+    ElMessage.warning(e?.response?.data?.detail ?? "当前节点暂时不能加入学习路径");
+    return false;
+  } finally {
+    choosingKpId.value = null;
+  }
 }
 
 async function openKp(id?: number | null) {
@@ -670,18 +791,11 @@ async function openKp(id?: number | null) {
     ElMessage.info("先完成前置节点，后续节点会自动解锁");
     return;
   }
-  try {
-    await api.post(`/graph/path-choice/${targetId}`, {}, { skipGlobalLoading: true } as any);
-  } catch (e: any) {
-    ElMessage.warning(e?.response?.data?.detail ?? "当前节点暂时不能加入学习路径");
-    return;
-  }
   router.push({
     path: `/student/kp-content/${targetId}`,
     query: { subject: subject.value || undefined, from: "learning-path" },
   });
 }
-
 function openReport() {
   router.push({ path: "/student/report", query: { subject: subject.value || undefined } });
 }
@@ -745,7 +859,7 @@ onMounted(() => refreshPage());
     <section v-else class="learning-route-layout">
       <main class="learning-route-board">
         <header class="learning-route-board__head">
-          <div>
+          <div class="learning-route-board__title">
             <span class="learning-route-badge">当前课程</span>
             <h2>{{ currentCourse?.title || subject }}</h2>
           </div>
@@ -753,7 +867,7 @@ onMounted(() => refreshPage());
             <div class="learning-route-legend">
               <span class="is-selected">当前选择</span>
               <span class="is-recommended">建议优先</span>
-              <span class="is-path">已走路径</span>
+              <span class="is-path">已选路径</span>
               <span class="is-done">已完成</span>
               <span class="is-current">当前</span>
               <span class="is-open">可学习</span>
@@ -777,9 +891,9 @@ onMounted(() => refreshPage());
           @wheel="onMapWheel"
           @dragstart.prevent
         >
-          <div class="learning-route-drag-hint">按住画布任意位置可拖动</div>
+          <div class="learning-route-drag-hint">按住画布可上下左右拖动</div>
           <div class="learning-route-canvas" :style="mapCanvasStyle">
-            <svg class="learning-route-lines" :viewBox="`0 0 ${mapWidth} ${routeContentHeight}`" aria-hidden="true">
+            <svg class="learning-route-lines" :viewBox="`0 0 ${routeContentWidth} ${routeContentHeight}`" aria-hidden="true">
               <path
                 v-for="line in connectorLines"
                 :key="line.key"
@@ -792,12 +906,24 @@ onMounted(() => refreshPage());
               v-for="stop in routeStops"
               :key="stop.kp.id"
               class="learning-route-stop"
-              :class="[`is-${nodeState(stop.kp)}`, `is-${stop.role}`, cardSide(stop)]"
+              :class="[
+                `is-${nodeState(stop.kp)}`,
+                `role-${stop.role}`,
+                cardSide(stop),
+                {
+                  'is-focus': stop.kp.id === currentKpId,
+                  'is-recommendation': stop.kp.id === recommendedNodeId,
+                },
+              ]"
               :style="{ left: `${stop.x}px`, top: `${stop.y}px` }"
               @pointerdown="onStopPointerDown"
               @click.stop="selectKp(stop.kp)"
             >
-              <button class="learning-route-node" type="button" :aria-label="`${stop.kp.title}`">
+              <button
+                class="learning-route-node"
+                type="button"
+                :aria-label="`选择${stop.kp.title}`"
+              >
                 <el-icon><component :is="nodeIcon(stop.kp)" /></el-icon>
               </button>
               <div class="learning-route-card">
@@ -854,7 +980,7 @@ onMounted(() => refreshPage());
         </section>
 
         <section class="learning-route-panel">
-          <span class="learning-route-badge">可学习节点</span>
+          <span class="learning-route-badge">路径与可选节点</span>
           <div class="learning-route-steps">
             <button
               v-for="item in routeStepItems"
@@ -1095,18 +1221,34 @@ onMounted(() => refreshPage());
 }
 
 .learning-route-board__head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(132px, 180px) minmax(0, 1fr);
   align-items: center;
-  gap: 18px;
+  gap: 16px 22px;
   padding-bottom: 18px;
   border-bottom: 1px solid #edf3ea;
 }
 
+.learning-route-board__title {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.learning-route-board__title h2 {
+  font-size: 28px;
+  line-height: 1.18;
+  word-break: keep-all;
+  white-space: nowrap;
+}
+
 .learning-route-board__tools {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  min-width: 0;
+  justify-content: end;
 }
 
 .learning-route-legend {
@@ -1114,7 +1256,7 @@ onMounted(() => refreshPage());
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
-  max-width: 360px;
+  min-width: 0;
 }
 
 .learning-route-legend span {
@@ -1127,6 +1269,7 @@ onMounted(() => refreshPage());
   color: #475569;
   font-size: 12px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .learning-route-legend .is-current {
@@ -1150,8 +1293,8 @@ onMounted(() => refreshPage());
 .learning-route-legend .is-locked::before { background: #94a3b8; }
 
 .learning-route-progress {
-  width: 92px;
-  height: 92px;
+  width: 78px;
+  height: 78px;
   border-radius: 999px;
   display: grid;
   place-items: center;
@@ -1162,7 +1305,7 @@ onMounted(() => refreshPage());
 }
 
 .learning-route-progress strong {
-  font-size: 26px;
+  font-size: 22px;
 }
 
 .learning-route-progress span {
@@ -1321,12 +1464,12 @@ onMounted(() => refreshPage());
 .learning-route-card {
   position: absolute;
   top: 0;
-  width: 190px;
+  width: 176px;
   min-height: 118px;
   display: grid;
   gap: 5px;
   place-items: center;
-  padding: 15px 16px;
+  padding: 13px 14px;
   border-radius: 12px;
   border: 1px solid #dbe7f3;
   background: #ffffff;
@@ -1336,12 +1479,13 @@ onMounted(() => refreshPage());
 }
 
 .learning-route-stop.is-card-right .learning-route-card {
-  left: 82px;
+  left: 112px;
   transform: translateY(-50%);
 }
 
 .learning-route-stop.is-card-left .learning-route-card {
-  right: 82px;
+  right: 112px;
+  left: auto;
   transform: translateY(-50%);
 }
 
@@ -1384,6 +1528,20 @@ onMounted(() => refreshPage());
   background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
   box-shadow: inset 0 -7px 0 #b45309, 0 18px 30px rgba(245, 158, 11, 0.28);
   animation: routePulse 2s ease-in-out infinite;
+}
+
+.learning-route-stop.is-focus .learning-route-node::before {
+  border-color: rgba(59, 130, 246, 0.42);
+  box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.08);
+}
+
+.learning-route-stop.is-focus .learning-route-card {
+  border-color: #93c5fd;
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.15);
+}
+
+.learning-route-stop.is-recommendation:not(.is-focus) .learning-route-node::before {
+  border-color: rgba(139, 92, 246, 0.3);
 }
 
 .learning-route-stop.is-selected .learning-route-node {
@@ -1702,6 +1860,10 @@ onMounted(() => refreshPage());
     align-items: start;
   }
 
+  .learning-route-board__head {
+    grid-template-columns: minmax(132px, 180px) minmax(0, 1fr);
+  }
+
   .learning-route-side {
     height: auto;
     position: static;
@@ -1714,16 +1876,32 @@ onMounted(() => refreshPage());
     align-items: flex-start;
   }
 
+  .learning-route-board__head {
+    grid-template-columns: 1fr;
+  }
+
+  .learning-route-board__title h2 {
+    white-space: normal;
+  }
+
   .learning-route-course,
   .learning-route-actions {
     width: 100%;
   }
 
   .learning-route-actions,
-  .learning-route-board__tools,
   .learning-route-focus-grid {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .learning-route-board__tools {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .learning-route-legend {
+    justify-content: flex-start;
   }
 
   .learning-route-hero__metrics {
