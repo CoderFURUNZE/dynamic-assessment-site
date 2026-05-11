@@ -895,6 +895,16 @@ def graph_map(
             for item in _active_student_path_ids(session, user_id=int(user.id), subject=subject, grade=grade)
             if int(item) in kp_id_set
         ]
+        for kp in kps:
+            if kp.id is None:
+                continue
+            kp_id = int(kp.id)
+            mastery = mastery_map.get(kp_id)
+            if mastery is None:
+                continue
+            if float(mastery.value) > 0 or str(mastery.status or "").strip().lower() not in {"", "not_started"}:
+                if kp_id not in selected_path_order:
+                    selected_path_order.append(kp_id)
         selected_path_ids = set(selected_path_order)
         unlocked_ids: set[int] = set()
         for kp in kps:
@@ -945,6 +955,13 @@ def graph_map(
         for source in option_sources:
             visible_ids.update(int(next_id) for next_id in next_map.get(source, []) if int(next_id) in unlocked_ids)
         visible_ids.update(kp_id for kp_id in root_ids if kp_id in unlocked_ids or not path_ids)
+
+        # Keep sibling branches stable while the student previews a different node.
+        # If an unlocked node is already visible, its immediate unlocked children should stay visible too;
+        # otherwise clicking one branch makes the other branch's next choice disappear.
+        frontier_sources = [kp_id for kp_id in visible_ids if kp_id in unlocked_ids]
+        for source in frontier_sources:
+            visible_ids.update(int(next_id) for next_id in next_map.get(source, []) if int(next_id) in unlocked_ids)
 
         original_order = {int(kp.id): index for index, kp in enumerate(kps) if kp.id is not None}
 

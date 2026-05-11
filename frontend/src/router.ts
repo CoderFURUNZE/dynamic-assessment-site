@@ -302,6 +302,7 @@ router.beforeEach((to) => {
   if (!getToken()) return "/login/student";
   const role = getRole();
   if (to.path === "/student/graph-fullscreen") {
+    if (role === "teacher" || role === "admin") return { path: "/teacher/graph-fullscreen", query: to.query };
     return true;
   }
   if (to.path === "/teacher/graph-fullscreen") {

@@ -1067,13 +1067,17 @@ function selectKp(id: number) {
   selectedId.value = id;
   const chapter = selectedKp.value?.chapter || kps.value.find((kp) => kp.id === id)?.chapter || null;
   selectedCategory.value = chapter;
-  if (!showAllKps.value) {
+  if (props.fullscreen) {
+    showAllKps.value = true;
+    activeChapter.value = "鍏ㄩ儴";
+    drawerOpen.value = false;
+  } else if (!showAllKps.value) {
     showAllKps.value = true;
     activeChapter.value = chapter || activeChapter.value;
   } else if (activeChapter.value !== "全部" && chapter) {
     activeChapter.value = chapter;
   }
-  drawerOpen.value = true;
+  if (!props.fullscreen) drawerOpen.value = true;
   detailTab.value = "overview";
   syncFormFromSelected();
   centerOnPoint(displayKpPoint(id));
@@ -1582,9 +1586,10 @@ async function load() {
       panY.value = 0;
       activeChapter.value = "全部";
       search.value = "";
+      showAllKps.value = true;
       selectedType.value = "category";
       selectedId.value = null;
-      selectedCategory.value = categoryNodes.value[0]?.key || null;
+      selectedCategory.value = null;
       drawerOpen.value = false;
       detailTab.value = "overview";
     }
@@ -1827,8 +1832,8 @@ watch(
       panY.value = 0;
       activeChapter.value = "全部";
       search.value = "";
-      showAllKps.value = false;
-      selectedType.value = "kp";
+      showAllKps.value = props.fullscreen;
+      selectedType.value = props.fullscreen ? "category" : "kp";
       drawerOpen.value = !props.fullscreen;
       detailTab.value = "overview";
     }

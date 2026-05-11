@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { Check, Lock, Star, Trophy, VideoPlay } from "@element-plus/icons-vue";
@@ -87,6 +87,9 @@ const suppressNodeClick = ref(false);
 const choosingKpId = ref<number | null>(null);
 const graphMapRequestSeq = ref(0);
 const recoRequestSeq = ref(0);
+const selectionQueryTimer = ref<ReturnType<typeof window.setTimeout> | null>(null);
+const selectionMapTimer = ref<ReturnType<typeof window.setTimeout> | null>(null);
+const selectionRecoTimer = ref<ReturnType<typeof window.setTimeout> | null>(null);
 const dragStart = ref({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
 const panOffset = ref({ x: 0, y: 0 });
 
@@ -199,6 +202,42 @@ function middlePositions(count: number) {
   });
 }
 
+function kpOrderScore(kp: KP) {
+  const numbers = String(kp.code || "")
+    .match(/\d+/g)
+    ?.map((item) => Number(item)) ?? [];
+  if (!numbers.length) return Number.MAX_SAFE_INTEGER;
+  return numbers.reduce((score, item) => score * 1000 + item, 0);
+}
+
+function chapterLaneMap(nodes: KP[], centerX: number) {
+  const bestScoreByChapter = new Map<string, number>();
+  for (const kp of nodes) {
+    const chapter = kp.chapter || "__default__";
+    const score = kpOrderScore(kp);
+    bestScoreByChapter.set(chapter, Math.min(bestScoreByChapter.get(chapter) ?? score, score));
+  }
+  const chapters = [...bestScoreByChapter.keys()].sort((a, b) => {
+    const diff = (bestScoreByChapter.get(a) ?? 0) - (bestScoreByChapter.get(b) ?? 0);
+    return diff || a.localeCompare(b);
+  });
+  const lanes = [centerX, centerX - 300, centerX + 300, centerX - 460, centerX + 460, centerX - 150, centerX + 150];
+  return new Map(chapters.map((chapter, index) => [chapter, lanes[index % lanes.length] ?? centerX]));
+}
+
+function levelLanePositions(group: KP[], laneByChapter: Map<string, number>, centerX: number) {
+  const usedByLane = new Map<number, number>();
+  const offsets = [0, -150, 150, -285, 285];
+  return group.map((kp, index) => {
+    const base = laneByChapter.get(kp.chapter || "__default__") ?? centerX;
+    const used = usedByLane.get(base) ?? 0;
+    usedByLane.set(base, used + 1);
+    const rawX = base + (offsets[used] ?? (used % 2 === 0 ? 1 : -1) * (320 + used * 24));
+    const extraSpread = group.length === 1 ? 0 : (index - (group.length - 1) / 2) * 18;
+    return Math.max(60, Math.min(980, rawX + extraSpread));
+  });
+}
+
 function relationLayoutStops(nodes: KP[]): RouteStop[] {
   const nodeIds = new Set(nodes.map((kp) => kp.id));
   const order = new Map(nodes.map((kp, index) => [kp.id, index]));
@@ -246,29 +285,11 @@ function relationLayoutStops(nodes: KP[]): RouteStop[] {
   const levelGap = 210;
   const top = 120;
   const centerX = 520;
-  const branchGap = 330;
+  const laneByChapter = chapterLaneMap(nodes, centerX);
   const stops: RouteStop[] = [];
   for (const itemLevel of [...groups.keys()].sort((a, b) => a - b)) {
     const group = groups.get(itemLevel) ?? [];
-    const selectedIndex = group.findIndex((kp) => kp.pathSelected || kp.id === recommendedNodeId.value || kp.id === currentKpId.value);
-    const positions = group.map((_, index) => {
-      if (group.length === 1) return centerX;
-      if (group.length === 2) return [centerX - branchGap / 2, centerX + branchGap / 2][index];
-      if (selectedIndex >= 0) {
-        const slots = [centerX - branchGap, centerX, centerX + branchGap];
-        const ordered = group.map((_, index) => index);
-        const selectedSlot = 1;
-        const slotByIndex = new Map<number, number>([[selectedIndex, slots[selectedSlot]]]);
-        const freeSlots = slots.filter((_, slotIndex) => slotIndex !== selectedSlot);
-        ordered.filter((index) => index !== selectedIndex).forEach((index, freeIndex) => {
-          slotByIndex.set(index, freeSlots[Math.min(freeIndex, freeSlots.length - 1)]);
-        });
-        return slotByIndex.get(index) ?? centerX;
-      }
-      const compactGap = Math.max(240, Math.min(310, 900 / Math.max(group.length - 1, 1)));
-      const start = centerX - ((group.length - 1) * compactGap) / 2;
-      return start + index * compactGap;
-    });
+    const positions = levelLanePositions(group, laneByChapter, centerX);
     group.forEach((kp, groupIndex) => {
       const x = pagePanPadding + (positions[groupIndex] ?? centerX);
       const y = top + itemLevel * levelGap;
@@ -313,8 +334,6 @@ const connectorLines = computed(() => {
     const from = stopById.get(edge.prereq_id);
     const to = stopById.get(edge.next_id);
     if (!from || !to) continue;
-    if (isLockedKp(to.kp) || isLockedKp(from.kp)) continue;
-    if (to.kp.id === recommendedNodeId.value && !to.kp.pathSelected && !from.kp.pathSelected) continue;
     lines.push(makeConnector(`${edge.prereq_id}-${edge.next_id}`, from, to, nodeState(to.kp)));
   }
   return lines;
@@ -575,6 +594,38 @@ function syncQuery() {
   }).catch(() => {});
 }
 
+function clearSelectionTimers() {
+  for (const timerRef of [selectionQueryTimer, selectionMapTimer, selectionRecoTimer]) {
+    if (timerRef.value != null) {
+      window.clearTimeout(timerRef.value);
+      timerRef.value = null;
+    }
+  }
+}
+
+function scheduleSelectionSideEffects(kpId: number) {
+  if (selectionQueryTimer.value != null) window.clearTimeout(selectionQueryTimer.value);
+  if (selectionMapTimer.value != null) window.clearTimeout(selectionMapTimer.value);
+  if (selectionRecoTimer.value != null) window.clearTimeout(selectionRecoTimer.value);
+
+  selectionQueryTimer.value = window.setTimeout(() => {
+    selectionQueryTimer.value = null;
+    syncQuery();
+  }, 100);
+
+  selectionMapTimer.value = window.setTimeout(() => {
+    selectionMapTimer.value = null;
+    void loadVisibleKps(false, kpId).then(() => {
+      syncQuery();
+    });
+  }, 180);
+
+  selectionRecoTimer.value = window.setTimeout(() => {
+    selectionRecoTimer.value = null;
+    void loadRecommendation(kpId);
+  }, 220);
+}
+
 async function loadCourses(useCache = true) {
   const raw = useCache
     ? await getWithCache<any[]>("/graph/courses", undefined, { skipGlobalLoading: true, ttlMs: FAST_ENTRY_CACHE_TTL })
@@ -613,30 +664,26 @@ async function loadVisibleKps(useCache = true, preferredSourceId?: number | null
     return;
   }
   const requestSeq = ++graphMapRequestSeq.value;
+  const previousKps = visibleKps.value;
+  const previousEdges = visibleEdges.value;
   const requestedSourceId = Number(preferredSourceId || currentKpId.value || route.query.kp || recommendationSourceKpId.value || 0);
   const params = {
     subject: subject.value,
     grade: grade.value,
     source_id: requestedSourceId || undefined,
   };
-  const data = useCache
-    ? await getWithCache<any>(
-      "/graph/map",
-      params,
-      { skipGlobalLoading: true, ttlMs: FAST_ENTRY_CACHE_TTL },
-    )
-    : (await api.get("/graph/map", { params, skipGlobalLoading: true } as any)).data;
+  const data = (await api.get("/graph/map", { params, skipGlobalLoading: true } as any)).data;
   if (requestSeq !== graphMapRequestSeq.value) return;
   const overlayMap = new Map<number, any>((Array.isArray(data?.overlay) ? data.overlay : []).map((item: any) => [Number(item.kp_id), item]));
   const list = Array.isArray(data?.base?.kps) ? data.base.kps : [];
-  visibleEdges.value = (Array.isArray(data?.base?.edges) ? data.base.edges : [])
+  const nextEdges = (Array.isArray(data?.base?.edges) ? data.base.edges : [])
     .map((item: any) => ({
       prereq_id: Number(item.prereq_id || 0),
       next_id: Number(item.next_id || 0),
       relation_type: String(item.relation_type || "prerequisite"),
     }))
     .filter((item: Edge) => item.prereq_id && item.next_id);
-  visibleKps.value = list.map((item: any) => {
+  const nextKps = list.map((item: any) => {
     const overlay = overlayMap.get(Number(item.id)) || {};
     return {
       id: Number(item.id),
@@ -652,6 +699,30 @@ async function loadVisibleKps(useCache = true, preferredSourceId?: number | null
       pos_y: item.pos_y == null ? null : Number(item.pos_y),
     };
   });
+  if (!useCache && previousKps.length) {
+    const kpById = new Map(nextKps.map((item) => [item.id, item]));
+    const nextIdSet = new Set(kpById.keys());
+    const stableEdges = [...nextEdges];
+    for (const edge of previousEdges) {
+      if (edge.relation_type !== "prerequisite") continue;
+      const parentStillVisible = nextIdSet.has(edge.prereq_id);
+      const childWasVisible = previousKps.some((item) => item.id === edge.next_id && !item.previewLocked);
+      if (!parentStillVisible || !childWasVisible) continue;
+      const previousChild = previousKps.find((item) => item.id === edge.next_id);
+      if (previousChild && !kpById.has(previousChild.id)) {
+        kpById.set(previousChild.id, { ...previousChild });
+        nextIdSet.add(previousChild.id);
+      }
+      if (!stableEdges.some((item) => item.prereq_id === edge.prereq_id && item.next_id === edge.next_id)) {
+        stableEdges.push({ ...edge });
+      }
+    }
+    visibleKps.value = Array.from(kpById.values());
+    visibleEdges.value = stableEdges.filter((edge) => nextIdSet.has(edge.prereq_id) && nextIdSet.has(edge.next_id));
+  } else {
+    visibleKps.value = nextKps;
+    visibleEdges.value = nextEdges;
+  }
 
   const routeKp = Number(route.query.kp || 0);
   const firstLearning = visibleKps.value.find((item) => item.status === "learning" && !item.previewLocked && !isCompleted(item))
@@ -732,13 +803,7 @@ function selectKp(kp: KP) {
   }
   currentKpId.value = kp.id;
   recommendationSourceKpId.value = kp.id;
-  syncQuery();
-  centerCurrentStop();
-  void loadVisibleKps(false, kp.id).then(() => {
-    syncQuery();
-    centerCurrentStop();
-  });
-  void loadRecommendation(kp.id).then(() => centerCurrentStop());
+  scheduleSelectionSideEffects(kp.id);
 }
 
 async function chooseKp(kp?: KP | null) {
@@ -812,6 +877,7 @@ watch(
 );
 
 onMounted(() => refreshPage());
+onBeforeUnmount(() => clearSelectionTimers());
 </script>
 
 <template>

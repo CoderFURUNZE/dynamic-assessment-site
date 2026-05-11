@@ -16,28 +16,30 @@ NOW = datetime.now().replace(microsecond=0)
 
 
 PATH_CODES = {
-    "student_demo_1": ["HM-V01-01", "HM-V01-02", "HM-V01-03", "HM-V01-04"],
+    "student_demo_1": ["HM-V01-01", "HM-V01-02", "HM-V01-03", "HM-V01-04", "HM-V01-05", "HM-V01-06"],
     "student_demo_2": [
         "HM-V01-01", "HM-V01-02", "HM-V01-03", "HM-V01-04", "HM-V01-05", "HM-V01-06", "HM-V01-07", "HM-V01-08",
         "HM-V02-01", "HM-V02-02", "HM-V02-03", "HM-V02-04", "HM-V02-05",
-        "HM-V03-01", "HM-V03-02", "HM-V03-03", "HM-V03-04", "HM-V03-05",
+        "HM-V03-01", "HM-V03-02", "HM-V03-03", "HM-V03-04", "HM-V03-05", "HM-V03-06", "HM-V03-07", "HM-V03-08",
+        "HM-V04-01",
     ],
     "student_demo_3": [
         "HM-V01-01", "HM-V01-02", "HM-V01-03", "HM-V01-04", "HM-V01-05", "HM-V01-06", "HM-V01-07", "HM-V01-08",
-        "HM-V02-01", "HM-V02-02", "HM-V03-01", "HM-V03-02",
+        "HM-V02-01", "HM-V02-02", "HM-V02-03", "HM-V02-04", "HM-V02-05",
+        "HM-V03-01", "HM-V03-02", "HM-V03-03", "HM-V03-04", "HM-V03-05", "HM-V03-06", "HM-V03-07", "HM-V03-08",
         "HM-V04-01", "HM-V04-02", "HM-V04-03",
     ],
 }
 
 
-MASTERY_OVERRIDES = {
+DEMO_MASTERY_BY_CODE = {
     "student_demo_1": {
-        "HM-V01-01": 0.82,
-        "HM-V01-02": 0.76,
-        "HM-V01-03": 0.72,
-        "HM-V01-04": 0.74,
-        "HM-V01-05": 0.62,
-        "HM-V02-01": 0.58,
+        "HM-V01-01": 1.00,
+        "HM-V01-02": 1.00,
+        "HM-V01-03": 1.00,
+        "HM-V01-04": 0.76,
+        "HM-V01-05": 0.71,
+        "HM-V01-06": 0.66,
     },
     "student_demo_2": {
         "HM-V01-01": 0.96,
@@ -58,25 +60,40 @@ MASTERY_OVERRIDES = {
         "HM-V03-03": 0.78,
         "HM-V03-04": 0.79,
         "HM-V03-05": 0.76,
+        "HM-V03-06": 0.74,
+        "HM-V03-07": 0.73,
+        "HM-V03-08": 0.72,
+        "HM-V04-01": 0.64,
     },
     "student_demo_3": {
         "HM-V01-01": 0.86,
         "HM-V01-02": 0.78,
         "HM-V01-03": 0.74,
         "HM-V01-04": 0.71,
-        "HM-V01-05": 0.68,
-        "HM-V01-06": 0.64,
+        "HM-V01-05": 0.72,
+        "HM-V01-06": 0.71,
         "HM-V01-07": 0.72,
         "HM-V01-08": 0.7,
-        "HM-V02-01": 0.61,
-        "HM-V02-02": 0.56,
-        "HM-V03-01": 0.52,
-        "HM-V03-02": 0.48,
-        "HM-V04-01": 0.66,
-        "HM-V04-02": 0.63,
-        "HM-V04-03": 0.58,
+        "HM-V02-01": 0.74,
+        "HM-V02-02": 0.72,
+        "HM-V02-03": 0.71,
+        "HM-V02-04": 0.70,
+        "HM-V02-05": 0.70,
+        "HM-V03-01": 0.72,
+        "HM-V03-02": 0.71,
+        "HM-V03-03": 0.70,
+        "HM-V03-04": 0.70,
+        "HM-V03-05": 0.72,
+        "HM-V03-06": 0.71,
+        "HM-V03-07": 0.70,
+        "HM-V03-08": 0.70,
+        "HM-V04-01": 0.72,
+        "HM-V04-02": 0.70,
+        "HM-V04-03": 0.52,
     },
 }
+
+MASTERY_OVERRIDES = DEMO_MASTERY_BY_CODE
 
 
 PROFILES = {
@@ -290,9 +307,10 @@ def main() -> None:
             cur.execute("delete from stageteacherfeedback where user_id=%s and course_id=%s", (user_id, course_id))
             cur.execute("delete from teacherfinalscoreconfirmation where user_id=%s and course_id=%s", (user_id, course_id))
 
+            profile_mastery = DEMO_MASTERY_BY_CODE.get(username, {})
             mastered_values = []
             for index, (kp_id, code, title, chapter) in enumerate(kps):
-                value = MASTERY_OVERRIDES.get(username, {}).get(code, mastery_for(profile, chapter, index))
+                value = profile_mastery.get(code, 0.0)
                 mastered_values.append(value)
                 upsert_mastery(cur, user_id, kp_id, value, profile["reason"])
 

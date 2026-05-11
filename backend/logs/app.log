@@ -826,3 +826,7 @@
 2026-05-06 11:28:15,026 INFO app.audit actor=teacher_demo role=teacher action=course_stage_delete detail=stage_id=20
 2026-05-06 11:28:15,079 INFO app.audit actor=teacher_demo role=teacher action=course_stage_create detail=course_id=5 stage_id=21
 2026-05-06 11:28:16,362 INFO app.audit actor=teacher_demo role=teacher action=course_stage_delete detail=stage_id=21
+2026-05-10 09:56:32,815 INFO app.audit actor=teacher_demo role=teacher action=stage_internal_summary_apply detail=course_id=5 stage_id=12 success=9 include_video=True include_practice=True include_mastery=True
+2026-05-10 09:56:46,534 INFO app.audit actor=teacher_demo role=teacher action=stage_internal_behavior_apply detail=course_id=5 stage_id=12 success=0
+2026-05-10 09:56:55,659 INFO app.audit actor=teacher_demo role=teacher action=stage_internal_behavior_apply detail=course_id=5 stage_id=19 success=15
+2026-05-10 09:57:18,425 INFO app.audit actor=teacher_demo role=teacher action=stage_internal_summary_apply detail=course_id=5 stage_id=12 success=9 include_video=True include_practice=True include_mastery=True

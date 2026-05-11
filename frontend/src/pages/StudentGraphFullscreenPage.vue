@@ -189,7 +189,6 @@ onMounted(refreshWorkspace);
           <el-option v-for="course in courses" :key="course.id" :label="course.title" :value="course.title" />
         </el-select>
         <button type="button" class="graph-fullscreen__ghost" @click="refreshWorkspace">刷新</button>
-        <button type="button" class="graph-fullscreen__primary" @click="openCurrentLearning">学习当前知识点</button>
       </div>
     </header>
 
