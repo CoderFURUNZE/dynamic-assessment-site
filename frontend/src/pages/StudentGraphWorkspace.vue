@@ -36,6 +36,12 @@ type Edge = {
   relation_type: string;
 };
 
+type GraphProgress = {
+  total_nodes: number;
+  completed_nodes: number;
+  visible_nodes: number;
+};
+
 type RecoData = {
   target_kp: { id: number; code: string; title: string; chapter?: string; mastery?: number; is_terminal?: boolean };
   reason_summary: string;
@@ -59,12 +65,14 @@ type RouteStop = {
   x: number;
   y: number;
   page: number;
+  cardSide: "bottom";
 };
 
 type ConnectorLine = {
   key: string;
   d: string;
   state: string;
+  relation: string;
 };
 
 const route = useRoute();
@@ -77,6 +85,7 @@ const subject = ref("");
 const grade = ref("通用");
 const visibleKps = ref<KP[]>([]);
 const visibleEdges = ref<Edge[]>([]);
+const graphProgress = ref<GraphProgress | null>(null);
 const currentKpId = ref<number | null>(null);
 const recommendationSourceKpId = ref<number | null>(null);
 const reco = ref<RecoData | null>(null);
@@ -123,9 +132,11 @@ const currentKp = computed(() => {
 
 const availableCount = computed(() => routeKps.value.filter((item) => !item.previewLocked).length);
 const completedCount = computed(() => routeKps.value.filter((item) => !item.previewLocked && isCompleted(item)).length);
+const courseProgressTotal = computed(() => Number(graphProgress.value?.total_nodes || routeKps.value.length || 0));
+const courseProgressCompleted = computed(() => Number(graphProgress.value?.completed_nodes || completedCount.value || 0));
 const progressPercent = computed(() => {
-  if (!availableCount.value) return 0;
-  return Math.round((completedCount.value / availableCount.value) * 100);
+  if (!courseProgressTotal.value) return 0;
+  return Math.round((courseProgressCompleted.value / courseProgressTotal.value) * 100);
 });
 const previewCount = computed(() => routeKps.value.filter((item) => item.previewLocked).length);
 const routeTerminalCount = computed(() => routeKps.value.filter((item) => item.is_terminal).length);
@@ -226,16 +237,40 @@ function chapterLaneMap(nodes: KP[], centerX: number) {
 }
 
 function levelLanePositions(group: KP[], laneByChapter: Map<string, number>, centerX: number) {
+  if (group.length === 2) {
+    return [centerX - 240, centerX + 240];
+  }
   const usedByLane = new Map<number, number>();
-  const offsets = [0, -150, 150, -285, 285];
-  return group.map((kp, index) => {
+  const offsets = [0, -280, 280, -480, 480, -140, 140];
+  const rawPositions = group.map((kp, index) => {
     const base = laneByChapter.get(kp.chapter || "__default__") ?? centerX;
     const used = usedByLane.get(base) ?? 0;
     usedByLane.set(base, used + 1);
     const rawX = base + (offsets[used] ?? (used % 2 === 0 ? 1 : -1) * (320 + used * 24));
-    const extraSpread = group.length === 1 ? 0 : (index - (group.length - 1) / 2) * 18;
-    return Math.max(60, Math.min(980, rawX + extraSpread));
+    const extraSpread = group.length === 1 ? 0 : (index - (group.length - 1) / 2) * 26;
+    return {
+      index,
+      x: Math.max(70, Math.min(970, rawX + extraSpread)),
+    };
   });
+  const minGap = group.length >= 4 ? 245 : 270;
+  const sorted = [...rawPositions].sort((a, b) => a.x - b.x);
+  for (let i = 1; i < sorted.length; i++) {
+    sorted[i].x = Math.max(sorted[i].x, sorted[i - 1].x + minGap);
+  }
+  const overflow = sorted.length ? sorted[sorted.length - 1].x - 1010 : 0;
+  if (overflow > 0) {
+    for (const item of sorted) item.x -= overflow;
+  }
+  for (let i = sorted.length - 2; i >= 0; i--) {
+    sorted[i].x = Math.min(sorted[i].x, sorted[i + 1].x - minGap);
+  }
+  const underflow = sorted.length ? 30 - sorted[0].x : 0;
+  if (underflow > 0) {
+    for (const item of sorted) item.x += underflow;
+  }
+  const byIndex = new Map(sorted.map((item) => [item.index, Math.max(30, Math.min(1010, item.x))]));
+  return group.map((_, index) => byIndex.get(index) ?? centerX);
 }
 
 function relationLayoutStops(nodes: KP[]): RouteStop[] {
@@ -243,9 +278,14 @@ function relationLayoutStops(nodes: KP[]): RouteStop[] {
   const order = new Map(nodes.map((kp, index) => [kp.id, index]));
   const incoming = new Map<number, number[]>();
   const outgoing = new Map<number, number[]>();
+  const semanticEdges: Edge[] = [];
   for (const edge of visibleEdges.value) {
-    if (edge.relation_type !== "prerequisite") continue;
     if (!nodeIds.has(edge.prereq_id) || !nodeIds.has(edge.next_id)) continue;
+    if (edge.relation_type === "related") {
+      semanticEdges.push(edge);
+      continue;
+    }
+    if (edge.relation_type !== "prerequisite") continue;
     incoming.set(edge.next_id, [...(incoming.get(edge.next_id) ?? []), edge.prereq_id]);
     outgoing.set(edge.prereq_id, [...(outgoing.get(edge.prereq_id) ?? []), edge.next_id]);
   }
@@ -273,6 +313,13 @@ function relationLayoutStops(nodes: KP[]): RouteStop[] {
     if (!level.has(kp.id)) level.set(kp.id, Math.floor(index / 3));
   });
 
+  for (const edge of semanticEdges) {
+    if (incoming.has(edge.next_id)) continue;
+    const sourceLevel = level.get(edge.prereq_id);
+    if (sourceLevel == null) continue;
+    level.set(edge.next_id, Math.max(level.get(edge.next_id) ?? 0, sourceLevel + 1));
+  }
+
   const groups = new Map<number, KP[]>();
   nodes.forEach((kp) => {
     const itemLevel = level.get(kp.id) ?? 0;
@@ -282,7 +329,7 @@ function relationLayoutStops(nodes: KP[]): RouteStop[] {
     groups.set(itemLevel, group.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)));
   }
 
-  const levelGap = 210;
+  const levelGap = 315;
   const top = 120;
   const centerX = 520;
   const laneByChapter = chapterLaneMap(nodes, centerX);
@@ -300,8 +347,18 @@ function relationLayoutStops(nodes: KP[]): RouteStop[] {
         x,
         y,
         page: 0,
+        cardSide: "bottom",
       });
     });
+  }
+  const stopById = new Map(stops.map((stop) => [stop.kp.id, stop]));
+  for (const edge of semanticEdges) {
+    const from = stopById.get(edge.prereq_id);
+    const to = stopById.get(edge.next_id);
+    if (!from || !to) continue;
+    const direction = from.x < pagePanPadding + mapWidth / 2 ? 1 : -1;
+    to.x = Math.max(pagePanPadding + 80, Math.min(pagePanPadding + mapWidth - 80, from.x + direction * 260));
+    to.y = Math.max(to.y, from.y + levelGap);
   }
   return stops.sort((a, b) => a.index - b.index);
 }
@@ -320,6 +377,7 @@ const fullRouteStops = computed<RouteStop[]>(() => {
       x: pagePanPadding + position.x,
       y: position.y,
       page: 0,
+      cardSide: "bottom",
     });
   });
   return stops;
@@ -330,16 +388,16 @@ const connectorLines = computed(() => {
   const stopById = new Map(routeStops.value.map((stop) => [stop.kp.id, stop]));
   const lines: ConnectorLine[] = [];
   for (const edge of visibleEdges.value) {
-    if (edge.relation_type !== "prerequisite") continue;
+    if (edge.relation_type !== "prerequisite" && edge.relation_type !== "related") continue;
     const from = stopById.get(edge.prereq_id);
     const to = stopById.get(edge.next_id);
     if (!from || !to) continue;
-    lines.push(makeConnector(`${edge.prereq_id}-${edge.next_id}`, from, to, nodeState(to.kp)));
+    lines.push(makeConnector(`${edge.prereq_id}-${edge.next_id}-${edge.relation_type}`, from, to, edge.relation_type === "related" ? "related" : nodeState(to.kp), edge.relation_type));
   }
   return lines;
 });
 
-function makeConnector(key: string, from: RouteStop, to: RouteStop, state: string): ConnectorLine {
+function makeConnector(key: string, from: RouteStop, to: RouteStop, state: string, relation: string): ConnectorLine {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const length = Math.hypot(dx, dy) || 1;
@@ -353,6 +411,7 @@ function makeConnector(key: string, from: RouteStop, to: RouteStop, state: strin
     key,
     d: `M ${x1.toFixed(1)} ${y1.toFixed(1)} L ${x2.toFixed(1)} ${y2.toFixed(1)}`,
     state,
+    relation,
   };
 }
 const pageTitle = computed(() => {
@@ -479,11 +538,8 @@ function jumpToRecommendation() {
   centerCurrentStop();
 }
 
-function cardSide(stop: RouteStop) {
-  const pageLeft = pagePanPadding;
-  if (stop.x < pageLeft + mapWidth / 2) return "is-card-left";
-  if (stop.x > pageLeft + mapWidth / 2) return "is-card-right";
-  return stop.index % 2 === 0 ? "is-card-right" : "is-card-left";
+function cardSide() {
+  return "is-card-bottom";
 }
 
 function clampAxis(value: number, viewportSize: number, contentSize: number) {
@@ -577,6 +633,7 @@ function onMapWheel(event: WheelEvent) {
 function resetState() {
   visibleKps.value = [];
   visibleEdges.value = [];
+  graphProgress.value = null;
   currentKpId.value = null;
   recommendationSourceKpId.value = null;
   reco.value = null;
@@ -674,6 +731,12 @@ async function loadVisibleKps(useCache = true, preferredSourceId?: number | null
   };
   const data = (await api.get("/graph/map", { params, skipGlobalLoading: true } as any)).data;
   if (requestSeq !== graphMapRequestSeq.value) return;
+  const progress = data?.progress || {};
+  graphProgress.value = {
+    total_nodes: Number(progress.total_nodes || 0),
+    completed_nodes: Number(progress.completed_nodes || 0),
+    visible_nodes: Number(progress.visible_nodes || 0),
+  };
   const overlayMap = new Map<number, any>((Array.isArray(data?.overlay) ? data.overlay : []).map((item: any) => [Number(item.kp_id), item]));
   const list = Array.isArray(data?.base?.kps) ? data.base.kps : [];
   const nextEdges = (Array.isArray(data?.base?.edges) ? data.base.edges : [])
@@ -964,7 +1027,7 @@ onBeforeUnmount(() => clearSelectionTimers());
                 v-for="line in connectorLines"
                 :key="line.key"
                 class="learning-route-line"
-                :class="`is-${line.state}`"
+                :class="[`is-${line.state}`, `relation-${line.relation}`]"
                 :d="line.d"
               />
             </svg>
@@ -1476,13 +1539,20 @@ onBeforeUnmount(() => clearSelectionTimers());
   stroke-dasharray: 8 8;
 }
 
+.learning-route-line.relation-related {
+  stroke: #60a5fa;
+  stroke-width: 4;
+  stroke-dasharray: none;
+}
+
 .learning-route-stop {
   position: absolute;
   transform: translate(-50%, -50%);
   width: 0;
   height: 0;
-  z-index: 3;
+  z-index: auto;
   cursor: pointer;
+  pointer-events: none;
 }
 
 .learning-route-node {
@@ -1499,7 +1569,8 @@ onBeforeUnmount(() => clearSelectionTimers());
   font-size: 30px;
   cursor: pointer;
   box-shadow: inset 0 -7px 0 #15803d, 0 10px 20px rgba(34, 197, 94, 0.24);
-  z-index: 3;
+  z-index: 12;
+  pointer-events: auto;
 }
 
 .learning-route-node::before {
@@ -1541,18 +1612,21 @@ onBeforeUnmount(() => clearSelectionTimers());
   background: #ffffff;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
   text-align: center;
-  z-index: 2;
+  z-index: 4;
+  pointer-events: none;
 }
 
-.learning-route-stop.is-card-right .learning-route-card {
-  left: 112px;
-  transform: translateY(-50%);
+.learning-route-stop.is-card-bottom .learning-route-card {
+  left: 0;
+  top: 58px;
+  transform: translateX(-50%);
 }
 
-.learning-route-stop.is-card-left .learning-route-card {
-  right: 112px;
-  left: auto;
-  transform: translateY(-50%);
+.learning-route-stop.is-card-top .learning-route-card {
+  left: 0;
+  top: auto;
+  bottom: 58px;
+  transform: translateX(-50%);
 }
 
 .learning-route-card span,

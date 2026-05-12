@@ -50,6 +50,7 @@ from app.schemas.graph import (
     GraphNodeNavOut,
     GraphOverlayNodeOut,
     GraphPathOut,
+    GraphProgressOut,
     GraphPracticeOut,
     GraphQuizExamOut,
     GraphRelationNodeOut,
@@ -885,11 +886,43 @@ def graph_map(
 
         prereq_map: dict[int, list[int]] = {}
         next_map: dict[int, list[int]] = {}
+        semantic_next_map: dict[int, list[int]] = {}
         for edge in edges:
-            if _relation_value(edge.relation_type) != RelationType.prerequisite.value:
+            relation = _relation_value(edge.relation_type)
+            if relation == RelationType.prerequisite.value:
+                prereq_map.setdefault(int(edge.next_id), []).append(int(edge.prereq_id))
+                next_map.setdefault(int(edge.prereq_id), []).append(int(edge.next_id))
+            elif relation in {RelationType.support.value, RelationType.related.value}:
+                semantic_next_map.setdefault(int(edge.prereq_id), []).append(int(edge.next_id))
+        original_prereq_next_map = {kp_id: list(next_ids) for kp_id, next_ids in next_map.items()}
+        code_ordered_kps = sorted(
+            [kp for kp in kps if kp.id is not None],
+            key=lambda kp: (str(kp.code or ""), int(kp.id or 0)),
+        )
+        for index, kp in enumerate(code_ordered_kps[:-1]):
+            kp_id = int(kp.id)
+            if original_prereq_next_map.get(kp_id):
                 continue
-            prereq_map.setdefault(int(edge.next_id), []).append(int(edge.prereq_id))
-            next_map.setdefault(int(edge.prereq_id), []).append(int(edge.next_id))
+            semantic_target_id = next(
+                (target_id for target_id in semantic_next_map.get(kp_id, []) if target_id in kp_id_set),
+                0,
+            )
+            next_kp = next((candidate for candidate in code_ordered_kps if int(candidate.id or 0) == semantic_target_id), None)
+            if next_kp is None:
+                next_kp = next(
+                (
+                    candidate
+                    for candidate in code_ordered_kps[index + 1 :]
+                    if candidate.id is not None
+                    and (
+                        mastery_map.get(int(candidate.id)) is None
+                        or float(mastery_map[int(candidate.id)].value) <= 0
+                    )
+                ),
+                code_ordered_kps[index + 1],
+            )
+            next_id = int(next_kp.id)
+            next_map.setdefault(kp_id, []).append(next_id)
         selected_path_order = [
             int(item)
             for item in _active_student_path_ids(session, user_id=int(user.id), subject=subject, grade=grade)
@@ -959,9 +992,20 @@ def graph_map(
         # Keep sibling branches stable while the student previews a different node.
         # If an unlocked node is already visible, its immediate unlocked children should stay visible too;
         # otherwise clicking one branch makes the other branch's next choice disappear.
-        frontier_sources = [kp_id for kp_id in visible_ids if kp_id in unlocked_ids]
-        for source in frontier_sources:
-            visible_ids.update(int(next_id) for next_id in next_map.get(source, []) if int(next_id) in unlocked_ids)
+        changed = True
+        while changed:
+            changed = False
+            frontier_sources = [kp_id for kp_id in visible_ids if kp_id in unlocked_ids]
+            for source in frontier_sources:
+                before = len(visible_ids)
+                visible_ids.update(int(next_id) for next_id in next_map.get(source, []) if int(next_id) in unlocked_ids)
+                changed = changed or len(visible_ids) > before
+
+        # Show one immediate successor layer after every visible path tail. Locked
+        # successors stay selectable as previews and carry blocked_reason in overlay.
+        preview_sources = list(visible_ids)
+        for source in preview_sources:
+            visible_ids.update(int(next_id) for next_id in next_map.get(source, []) if int(next_id) in kp_id_set)
 
         original_order = {int(kp.id): index for index, kp in enumerate(kps) if kp.id is not None}
 
@@ -981,7 +1025,11 @@ def graph_map(
             [kp for kp in kps if kp.id is not None and int(kp.id) in visible_ids],
             key=_student_visible_order,
         )
-        edges = [edge for edge in edges if int(edge.prereq_id) in visible_ids and int(edge.next_id) in visible_ids]
+        edges = [
+            edge
+            for edge in edges
+            if int(edge.prereq_id) in visible_ids and int(edge.next_id) in visible_ids
+        ]
 
     kp_title_map = {int(kp.id): kp.title for kp in kps if kp.id is not None}
     overlay: list[GraphOverlayNodeOut] = []
@@ -1062,6 +1110,17 @@ def graph_map(
             chapter_layout=_chapter_layout_map(session, subject, grade),
         ),
         overlay=overlay,
+        progress=GraphProgressOut(
+            total_nodes=len(kp_ids),
+            completed_nodes=len(
+                [
+                    kp_id
+                    for kp_id in kp_ids
+                    if kp_id in mastery_map and float(mastery_map[kp_id].value) >= 0.7
+                ]
+            ),
+            visible_nodes=len(kps),
+        ),
     )
 
 

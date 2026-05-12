@@ -116,6 +116,18 @@ def main() -> None:
             raise RuntimeError("未找到计算机网络课程")
         course_id = int(row[0])
 
+        stage_windows = [
+            (1, now - timedelta(days=89), now - timedelta(days=68)),
+            (2, now - timedelta(days=67), now - timedelta(days=45)),
+            (3, now - timedelta(days=44), now - timedelta(days=22)),
+            (4, now - timedelta(days=21), now),
+        ]
+        for order, starts_at, ends_at in stage_windows:
+            cur.execute(
+                "update coursestage set starts_at=%s, ends_at=%s where course_id=%s and stage_order=%s",
+                (starts_at, ends_at, course_id, order),
+            )
+
         cur.execute("select id,code,title,chapter from knowledgepoint where subject=%s and grade=%s order by code", (SUBJECT, GRADE))
         kps = cur.fetchall()
         if not kps:
@@ -323,6 +335,16 @@ def main() -> None:
             }[username]
             for idx, (stage_id, stage_title, stage_order) in enumerate(stages):
                 stage_mastery = stage_curve[idx]
+                stage_start = next(start for order, start, _ in stage_windows if order == stage_order)
+                stage_end = next(end for order, _, end in stage_windows if order == stage_order)
+                learning_start = course_start
+                learning_end = now
+                if learning_end < stage_start:
+                    snapshot_time = stage_end
+                elif learning_start > stage_end:
+                    snapshot_time = stage_end
+                else:
+                    snapshot_time = min(stage_end, max(stage_start, learning_start + (min(6, days) * timedelta(days=1) / max(1, min(6, days)))))
                 indicator = {
                     "学习路径": learned_codes[-1],
                     "学习天数": days,
@@ -360,7 +382,7 @@ def main() -> None:
                         json.dumps({"综合表现": stage_mastery}, ensure_ascii=False),
                         json.dumps(indicator, ensure_ascii=False),
                         json.dumps(["学习投入", "知识掌握", "学习效率", "风险预警"], ensure_ascii=False),
-                        course_start + timedelta(days=min(days - 1, idx * max(1, days // 4))),
+                        snapshot_time,
                     ),
                 )
 

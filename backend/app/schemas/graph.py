@@ -82,9 +82,16 @@ class GraphBaseOut(BaseModel):
     chapter_layout: dict[str, dict[str, float]] = Field(default_factory=dict)
 
 
+class GraphProgressOut(BaseModel):
+    total_nodes: int = 0
+    completed_nodes: int = 0
+    visible_nodes: int = 0
+
+
 class GraphMapOut(BaseModel):
     base: GraphBaseOut
     overlay: list[GraphOverlayNodeOut]
+    progress: GraphProgressOut | None = None
 
 
 class GraphResourceOut(BaseModel):
