@@ -147,31 +147,6 @@ def main() -> None:
     torch.save(ckpt, ckpt_path)
     print(f"Saved checkpoint: {ckpt_path}")
 
-    # ONNX export (optional)
-    export = os.environ.get("EXPORT_ONNX", "1") != "0"
-    if export:
-        onnx_path = out_dir / "emotion_custom.onnx"
-        dummy = torch.zeros(1, 1, 64, 64, device=device)
-        model.eval()
-        try:
-            torch.onnx.export(
-                model,
-                dummy,
-                onnx_path,
-                input_names=["input"],
-                output_names=["logits"],
-                opset_version=12,
-                dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}},
-            )
-            print(f"Exported ONNX: {onnx_path}")
-            print("Run backend with:")
-            print('  $env:VISION_BACKEND="dl"')
-            print(f'  $env:VISION_MODEL_PATH="{onnx_path}"')
-        except Exception as e:
-            print(f"ONNX export failed: {e!r}")
-            print("You can still use the .pt checkpoint, or install extra ONNX deps and retry.")
-
 
 if __name__ == "__main__":
     main()
-

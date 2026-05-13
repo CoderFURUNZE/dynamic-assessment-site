@@ -16,6 +16,3 @@ requests==2.32.3
 numpy==1.26.4
 opencv-python==4.10.0.84
 mediapipe==0.10.20
-
-# Optional DL-based expression classifier (auto-fallback when missing)
-onnxruntime==1.17.3

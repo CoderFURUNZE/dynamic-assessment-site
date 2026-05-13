@@ -189,6 +189,9 @@ const routeStepItems = computed(() => routeKps.value.map((kp, index) => ({
 const mapWidth = 1040;
 const pagePanPadding = 220;
 const routeNodeRadius = 43;
+const routeCardWidth = 176;
+const routeCardSafeX = routeCardWidth / 2 + 22;
+const maxStopsPerLayoutRow = 4;
 const FAST_ENTRY_CACHE_TTL = 60 * 1000;
 const mapHeight = computed(() => routeStops.value.length >= 8 ? 1180 : routeStops.value.length >= 6 ? 1040 : 860);
 function middlePositions(count: number) {
@@ -238,8 +241,10 @@ function chapterLaneMap(nodes: KP[], centerX: number) {
 
 function levelLanePositions(group: KP[], laneByChapter: Map<string, number>, centerX: number) {
   if (group.length === 2) {
-    return [centerX - 240, centerX + 240];
+    return [centerX - 250, centerX + 250];
   }
+  const minX = routeCardSafeX;
+  const maxX = mapWidth - routeCardSafeX;
   const usedByLane = new Map<number, number>();
   const offsets = [0, -280, 280, -480, 480, -140, 140];
   const rawPositions = group.map((kp, index) => {
@@ -250,27 +255,63 @@ function levelLanePositions(group: KP[], laneByChapter: Map<string, number>, cen
     const extraSpread = group.length === 1 ? 0 : (index - (group.length - 1) / 2) * 26;
     return {
       index,
-      x: Math.max(70, Math.min(970, rawX + extraSpread)),
+      x: Math.max(minX, Math.min(maxX, rawX + extraSpread)),
     };
   });
-  const minGap = group.length >= 4 ? 245 : 270;
+  const preferredGap = group.length >= 4 ? 245 : 270;
+  const maxPossibleGap = group.length > 1 ? Math.floor((maxX - minX) / (group.length - 1)) : preferredGap;
+  const minGap = Math.max(routeCardWidth + 18, Math.min(preferredGap, maxPossibleGap));
   const sorted = [...rawPositions].sort((a, b) => a.x - b.x);
   for (let i = 1; i < sorted.length; i++) {
     sorted[i].x = Math.max(sorted[i].x, sorted[i - 1].x + minGap);
   }
-  const overflow = sorted.length ? sorted[sorted.length - 1].x - 1010 : 0;
+  const overflow = sorted.length ? sorted[sorted.length - 1].x - maxX : 0;
   if (overflow > 0) {
     for (const item of sorted) item.x -= overflow;
   }
   for (let i = sorted.length - 2; i >= 0; i--) {
     sorted[i].x = Math.min(sorted[i].x, sorted[i + 1].x - minGap);
   }
-  const underflow = sorted.length ? 30 - sorted[0].x : 0;
+  const underflow = sorted.length ? minX - sorted[0].x : 0;
   if (underflow > 0) {
     for (const item of sorted) item.x += underflow;
   }
-  const byIndex = new Map(sorted.map((item) => [item.index, Math.max(30, Math.min(1010, item.x))]));
+  const byIndex = new Map(sorted.map((item) => [item.index, Math.max(minX, Math.min(maxX, item.x))]));
   return group.map((_, index) => byIndex.get(index) ?? centerX);
+}
+
+function resolveStopRowCollisions(stops: RouteStop[]) {
+  const minX = pagePanPadding + routeCardSafeX;
+  const maxX = pagePanPadding + mapWidth - routeCardSafeX;
+  const minGap = routeCardWidth + 18;
+  const rows = new Map<number, RouteStop[]>();
+  for (const stop of stops) {
+    rows.set(stop.y, [...(rows.get(stop.y) ?? []), stop]);
+  }
+  for (const row of rows.values()) {
+    if (row.length <= 1) {
+      if (row[0]) row[0].x = Math.max(minX, Math.min(maxX, row[0].x));
+      continue;
+    }
+    row.sort((a, b) => a.x - b.x);
+    for (let i = 1; i < row.length; i++) {
+      row[i].x = Math.max(row[i].x, row[i - 1].x + minGap);
+    }
+    const overflow = row[row.length - 1].x - maxX;
+    if (overflow > 0) {
+      for (const stop of row) stop.x -= overflow;
+    }
+    for (let i = row.length - 2; i >= 0; i--) {
+      row[i].x = Math.min(row[i].x, row[i + 1].x - minGap);
+    }
+    const underflow = minX - row[0].x;
+    if (underflow > 0) {
+      for (const stop of row) stop.x += underflow;
+    }
+    for (const stop of row) {
+      stop.x = Math.max(minX, Math.min(maxX, stop.x));
+    }
+  }
 }
 
 function relationLayoutStops(nodes: KP[]): RouteStop[] {
@@ -334,22 +375,27 @@ function relationLayoutStops(nodes: KP[]): RouteStop[] {
   const centerX = 520;
   const laneByChapter = chapterLaneMap(nodes, centerX);
   const stops: RouteStop[] = [];
+  let visualRow = 0;
   for (const itemLevel of [...groups.keys()].sort((a, b) => a - b)) {
     const group = groups.get(itemLevel) ?? [];
-    const positions = levelLanePositions(group, laneByChapter, centerX);
-    group.forEach((kp, groupIndex) => {
-      const x = pagePanPadding + (positions[groupIndex] ?? centerX);
-      const y = top + itemLevel * levelGap;
-      stops.push({
-        kp,
-        index: order.get(kp.id) ?? stops.length,
-        role: kp.is_terminal ? "terminal" : kp.id === recommendedNodeId.value ? "recommended" : (order.get(kp.id) ?? 0) === 0 ? "start" : "option",
-        x,
-        y,
-        page: 0,
-        cardSide: "bottom",
+    for (let start = 0; start < group.length; start += maxStopsPerLayoutRow) {
+      const row = group.slice(start, start + maxStopsPerLayoutRow);
+      const positions = levelLanePositions(row, laneByChapter, centerX);
+      row.forEach((kp, groupIndex) => {
+        const x = pagePanPadding + (positions[groupIndex] ?? centerX);
+        const y = top + visualRow * levelGap;
+        stops.push({
+          kp,
+          index: order.get(kp.id) ?? stops.length,
+          role: kp.is_terminal ? "terminal" : kp.id === recommendedNodeId.value ? "recommended" : (order.get(kp.id) ?? 0) === 0 ? "start" : "option",
+          x,
+          y,
+          page: 0,
+          cardSide: "bottom",
+        });
       });
-    });
+      visualRow += 1;
+    }
   }
   const stopById = new Map(stops.map((stop) => [stop.kp.id, stop]));
   for (const edge of semanticEdges) {
@@ -357,9 +403,10 @@ function relationLayoutStops(nodes: KP[]): RouteStop[] {
     const to = stopById.get(edge.next_id);
     if (!from || !to) continue;
     const direction = from.x < pagePanPadding + mapWidth / 2 ? 1 : -1;
-    to.x = Math.max(pagePanPadding + 80, Math.min(pagePanPadding + mapWidth - 80, from.x + direction * 260));
+    to.x = Math.max(pagePanPadding + routeCardSafeX, Math.min(pagePanPadding + mapWidth - routeCardSafeX, from.x + direction * 260));
     to.y = Math.max(to.y, from.y + levelGap);
   }
+  resolveStopRowCollisions(stops);
   return stops.sort((a, b) => a.index - b.index);
 }
 
@@ -1537,12 +1584,14 @@ onBeforeUnmount(() => clearSelectionTimers());
 
 .learning-route-line.is-locked {
   stroke-dasharray: 8 8;
+  opacity: 0.5;
 }
 
 .learning-route-line.relation-related {
   stroke: #60a5fa;
-  stroke-width: 4;
-  stroke-dasharray: none;
+  stroke-width: 3;
+  stroke-dasharray: 7 9;
+  opacity: 0.45;
 }
 
 .learning-route-stop {

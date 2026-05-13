@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python generate_thesis.py)",
+      "Bash(python -c \"compile\\(open\\('generate_thesis.py','r',encoding='utf-8'\\).read\\(\\), 'generate_thesis.py', 'exec'\\); print\\('Compile OK'\\)\")"
+    ]
+  }
+}
