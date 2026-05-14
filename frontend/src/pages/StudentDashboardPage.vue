@@ -294,7 +294,7 @@ async function loadReco() {
     return;
   }
   try {
-    const res = await api.get(`/reco?kp_id=${currentKpId.value}`);
+    const res = await api.get(`/reco?kp_id=${currentKpId.value}&ai=true`);
     reco.value = res.data ?? null;
   } catch (e: any) {
     if (e?.response?.status !== 401) ElMessage.error(e?.response?.data?.detail ?? "获取推荐失败");

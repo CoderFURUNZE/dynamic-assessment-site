@@ -96,6 +96,7 @@ const suppressNodeClick = ref(false);
 const choosingKpId = ref<number | null>(null);
 const graphMapRequestSeq = ref(0);
 const recoRequestSeq = ref(0);
+const componentAlive = ref(true);
 const selectionQueryTimer = ref<ReturnType<typeof window.setTimeout> | null>(null);
 const selectionMapTimer = ref<ReturnType<typeof window.setTimeout> | null>(null);
 const selectionRecoTimer = ref<ReturnType<typeof window.setTimeout> | null>(null);
@@ -687,6 +688,7 @@ function resetState() {
 }
 
 function syncQuery() {
+  if (!componentAlive.value || !route.path.startsWith("/student/graph-workspace")) return;
   saveStudentSubject(subject.value);
   router.replace({
     path: "/student/graph-workspace",
@@ -859,7 +861,7 @@ async function loadRecommendation(preferredSourceId?: number | null) {
   recoLoading.value = true;
   try {
     const res = await api.get("/reco", {
-      params: { kp_id: sourceKpId, ai: false },
+      params: { kp_id: sourceKpId, ai: true },
       skipGlobalLoading: true,
     } as any);
     if (requestSeq !== recoRequestSeq.value) return;
@@ -877,11 +879,14 @@ async function refreshPage(forceReload = false) {
   try {
     const useCache = !forceReload;
     await loadCourses(useCache);
+    if (!componentAlive.value) return;
     await loadVisibleKps(useCache);
+    if (!componentAlive.value) return;
     syncQuery();
     centerCurrentStop();
     loading.value = false;
     void loadRecommendation().then(() => {
+      if (!componentAlive.value) return;
       syncQuery();
       centerCurrentStop();
     });
@@ -897,9 +902,11 @@ async function handleCourseChange() {
   currentKpId.value = null;
   reco.value = null;
   await loadVisibleKps();
+  if (!componentAlive.value) return;
   syncQuery();
   centerCurrentStop();
   void loadRecommendation().then(() => {
+    if (!componentAlive.value) return;
     syncQuery();
     centerCurrentStop();
   });
@@ -934,10 +941,14 @@ async function chooseKp(kp?: KP | null) {
     syncQuery();
     centerCurrentStop();
     void loadVisibleKps(false, kp.id).then(() => {
+      if (!componentAlive.value) return;
       syncQuery();
       centerCurrentStop();
     });
-    void loadRecommendation(kp.id).then(() => centerCurrentStop());
+    void loadRecommendation(kp.id).then(() => {
+      if (!componentAlive.value) return;
+      centerCurrentStop();
+    });
     return true;
   } catch (e: any) {
     ElMessage.warning(e?.response?.data?.detail ?? "当前节点暂时不能加入学习路径");
@@ -986,8 +997,16 @@ watch(
   },
 );
 
-onMounted(() => refreshPage());
-onBeforeUnmount(() => clearSelectionTimers());
+onMounted(() => {
+  componentAlive.value = true;
+  void refreshPage();
+});
+onBeforeUnmount(() => {
+  componentAlive.value = false;
+  graphMapRequestSeq.value += 1;
+  recoRequestSeq.value += 1;
+  clearSelectionTimers();
+});
 </script>
 
 <template>

@@ -98,7 +98,7 @@ async function loadRecommendation() {
     return;
   }
   try {
-    const res = await api.get(`/reco?kp_id=${currentKpId.value}`);
+    const res = await api.get(`/reco?kp_id=${currentKpId.value}&ai=true`);
     reco.value = res.data ?? null;
   } catch {
     reco.value = null;

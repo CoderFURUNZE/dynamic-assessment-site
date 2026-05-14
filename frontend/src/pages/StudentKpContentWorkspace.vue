@@ -379,7 +379,7 @@ async function loadRecommendation(options: { notifyOnChange?: boolean } = {}) {
   try {
     const previousTargetId = reco.value?.target_kp?.id ?? lastRecommendedTargetId.value ?? null;
     const res = await api.get("/reco", {
-      params: { kp_id: kpId.value, ai: false },
+      params: { kp_id: kpId.value, ai: true },
       skipGlobalLoading: true,
     } as any);
     reco.value = res.data ?? null;

@@ -231,7 +231,7 @@ async function refreshMastery() {
 async function getReco() {
   if (!currentKpId.value) return;
   try {
-    const res = await api.get(`/reco?kp_id=${currentKpId.value}`);
+    const res = await api.get(`/reco?kp_id=${currentKpId.value}&ai=true`);
     reco.value = res.data;
   } catch (e: any) {
     if (e?.response?.status === 401) return;
