@@ -1124,7 +1124,7 @@ function toggleAllKps() {
   if (expandAll) activeChapter.value = "全部";
   ElMessage.success(expandAll ? "已展开全部节点" : "已仅显示章节节点");
   nextTick(() => {
-    fitViewportRetryCount = 0;
+    viewportFitRetryCount.value = 0;
     if (expandAll) {
       fitVisibleToViewport();
       return;
@@ -1164,6 +1164,10 @@ function openContentFromSelected() {
     return;
   }
   openContentWorkspaceInNewTab(selectedKp.value.id);
+}
+
+function openContentWorkspace() {
+  openContentFromSelected();
 }
 
 function openCreateWorkspaceInNewTab(chapter = "") {
@@ -2392,11 +2396,11 @@ onBeforeUnmount(() => {
               <button class="teacher-drawer__secondary" @click="startCategoryLinkSelection('related')">新增关联分类</button>
             </div>
             <div
-              v-if="chapterEdges.filter((edge) => edge.source_chapter === selectedCategoryNode.key || edge.target_chapter === selectedCategoryNode.key).length"
+              v-if="chapterEdges.filter((edge) => edge.source_chapter === selectedCategoryNode!.key || edge.target_chapter === selectedCategoryNode!.key).length"
               class="teacher-drawer__list"
             >
               <div
-                v-for="edge in chapterEdges.filter((item) => item.source_chapter === selectedCategoryNode.key || item.target_chapter === selectedCategoryNode.key)"
+                v-for="edge in chapterEdges.filter((item) => item.source_chapter === selectedCategoryNode!.key || item.target_chapter === selectedCategoryNode!.key)"
                 :key="`c-${edge.id}`"
                 class="teacher-drawer__relation-item"
               >

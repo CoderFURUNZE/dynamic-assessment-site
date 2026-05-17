@@ -177,15 +177,19 @@ async function openSupportResource(resource: Resource, action: "visit" | "downlo
   emit("progress-updated");
 }
 
-async function postProgress(payload: any) {
+async function postProgress(payload: any, options: { emitUpdate?: boolean } = {}) {
+  const previous = progressById.value[Number(payload.resource_id)];
   const res = await api.post("/content/video/progress", payload);
   const rid = Number(res.data.resource_id);
+  const completed = Boolean(res.data.completed);
   progressById.value[rid] = {
     watched_seconds: Number(res.data.watched_seconds ?? 0),
     duration_seconds: Number(res.data.duration_seconds ?? 0),
-    completed: Boolean(res.data.completed),
+    completed,
   };
-  emit("progress-updated");
+  if (options.emitUpdate || (!previous?.completed && completed)) {
+    emit("progress-updated");
+  }
 }
 
 async function tickMp4() {
@@ -207,7 +211,7 @@ async function tickMp4() {
       duration_seconds: Number.isFinite(v.duration) ? v.duration : 0,
       watched_delta_seconds: delta,
       playback_rate: v.playbackRate,
-    });
+    }, { emitUpdate: false });
   } catch {
     // ignore
   }
@@ -230,7 +234,7 @@ async function tickEmbed() {
       duration_seconds: 0,
       watched_delta_seconds: delta,
       playback_rate: 1.0,
-    });
+    }, { emitUpdate: false });
   } catch {
     // ignore
   }
@@ -289,7 +293,9 @@ watch(
   () => currentResource.value?.id,
   async (id, prevId) => {
     if (!id || id === prevId || currentResource.value?.preview_type === "video_inline") return;
-    await trackResource(currentResource.value);
+    const resource = currentResource.value;
+    if (!resource) return;
+    await trackResource(resource);
     emit("progress-updated");
   }
 );

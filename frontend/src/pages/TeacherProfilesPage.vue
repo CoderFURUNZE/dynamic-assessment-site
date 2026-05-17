@@ -110,14 +110,9 @@ onMounted(loadCourses);
 .teacher-profiles-panel {
   min-width: 0;
   border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 20px;
-  background:
-    radial-gradient(circle at top left, rgba(191, 219, 254, 0.18), transparent 24%),
-    radial-gradient(circle at bottom right, rgba(187, 247, 208, 0.18), transparent 24%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow:
-    0 12px 26px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: none;
   padding: 24px;
 }
 
@@ -131,12 +126,13 @@ onMounted(loadCourses);
 .teacher-profiles-panel :deep(.results-summary),
 .teacher-profiles-panel :deep(.results-toolbar) {
   border-color: rgba(148, 163, 184, 0.2) !important;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
 }
 
 .teacher-profiles-panel :deep(.persona-card) {
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06) !important;
+  box-shadow: none !important;
 }
 
 .teacher-profiles-panel :deep(.persona-block__title),
@@ -165,7 +161,8 @@ onMounted(loadCourses);
 }
 
 .teacher-profiles-panel :deep(.persona-preset-card.is-active) {
-  background: radial-gradient(circle at top left, rgba(187, 247, 208, 0.28), transparent 56%), #ffffff !important;
+  background: #f0fdf4 !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
 }
 
 .teacher-profiles-panel :deep(.results-toolbar .el-input__wrapper),

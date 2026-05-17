@@ -40,7 +40,7 @@ function syncQuery() {
   const currentSubject = String(route.query.subject || "").trim();
   const currentTab = String(route.query.tab || "class").trim();
   const currentUserId = String(route.query.user_id || "").trim();
-  const nextUserId = String(nextQuery.user_id || "").trim();
+  const nextUserId = String((nextQuery as Record<string, unknown>).user_id || "").trim();
   if (
     route.path === "/teacher/students"
     && currentSubject === String(nextQuery.subject || "").trim()
@@ -117,14 +117,31 @@ onMounted(loadCourses);
 .teacher-detail-panel {
   min-width: 0;
   padding: 20px;
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.24);
-  background:
-    radial-gradient(circle at top left, rgba(191, 219, 254, 0.18), transparent 24%),
-    radial-gradient(circle at bottom right, rgba(187, 247, 208, 0.18), transparent 24%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow:
-    0 12px 26px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.teacher-detail-panel :deep(.panel-card),
+.teacher-detail-panel :deep(.sub-card),
+.teacher-detail-panel :deep(.detail-header),
+.teacher-detail-panel :deep(.metric-card),
+.teacher-detail-panel :deep(.summary-metric),
+.teacher-detail-panel :deep(.record-card),
+.teacher-detail-panel :deep(.stage-card),
+.teacher-detail-panel :deep(.empty-strip),
+.teacher-detail-panel :deep(.teacher-tools-panel),
+.teacher-detail-panel :deep(.indicator-input-card) {
+  border-radius: 14px !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.teacher-detail-panel :deep(.detail-header__eyebrow),
+.teacher-detail-panel :deep(.section-label),
+.teacher-detail-panel :deep(.sub-card__title::before) {
+  box-shadow: none !important;
 }
 </style>

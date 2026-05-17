@@ -51,6 +51,13 @@ const lifecycleOptions = [
   { label: "已归档", value: "archived" },
 ];
 
+const enrollStatusOptions = [
+  { label: "可报名", value: "open" },
+  { label: "已满员", value: "full" },
+  { label: "已关闭", value: "closed" },
+  { label: "已过期", value: "expired" },
+];
+
 function normalizeIsoMinute(value?: string | null) {
   if (!value) return "";
   return String(value).replace(" ", "T").slice(0, 16);

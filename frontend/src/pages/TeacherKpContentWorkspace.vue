@@ -841,7 +841,8 @@ async function setUploadFile(file: File | null) {
   if (!file) return;
   try {
     await inspectUpload(file);
-    await inspectBrowserMeta(file, detectedUpload.value?.detected_resource_type);
+    const detected = detectedUpload.value as DetectedUpload | null;
+    await inspectBrowserMeta(file, detected?.detected_resource_type);
     if (!resourceForm.title.trim()) {
       resourceForm.title = file.name.replace(/\.[^.]+$/, "");
     }
@@ -1504,7 +1505,7 @@ watch(
                       <div class="content-item__actions resource-card__actions">
                         <el-button size="small" type="primary" plain @click="openResourceEdit(item, (item.category || 'learning') === 'recommend' ? 'recommend' : 'learning')">编辑</el-button>
                         <el-button size="small" @click="openResourceDetail(item.id)">详细配置</el-button>
-                        <el-dropdown trigger="click" @command="(cmd) => handleResourceMoreCommand(String(cmd), item)">
+                        <el-dropdown trigger="click" @command="(cmd: string | number | object) => handleResourceMoreCommand(String(cmd), item)">
                           <el-button size="small">
                             更多
                             <el-icon class="el-icon--right"><ArrowDown /></el-icon>

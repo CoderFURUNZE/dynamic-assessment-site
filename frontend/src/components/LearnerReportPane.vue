@@ -286,8 +286,10 @@ const dimensionScoreMap = computed(() => {
   for (const item of portraitDimensions.value) map.set(item.dimension_title, item.score);
   return map;
 });
+type MentorIndicator = NonNullable<StagePoint["portrait_indicators"]>[number];
+
 const mentorDimensionGroups = computed(() => {
-  const bucket = new Map<string, Array<{ title: string; score: number | null; available: boolean; source_type: string; weight: number }>>();
+  const bucket = new Map<string, MentorIndicator[]>();
   for (const item of portraitIndicatorRows.value) {
     const dim = indicatorDimensionMap[item.title] || "未归类";
     const arr = bucket.get(dim) ?? [];
@@ -341,7 +343,7 @@ const dimensions = computed(() => {
 
 const timelineCards = computed(() => {
   if (stageHistory.value.length) return stageHistory.value;
-  return (profile.value?.trend ?? []).map((item, index) => ({
+  return ([] as ProfileData["trend"]).map((item, index) => ({
     stage_id: index + 1,
     stage_title: item.stage_title || `第 ${index + 1} 次评价`,
     stage_order: index + 1,

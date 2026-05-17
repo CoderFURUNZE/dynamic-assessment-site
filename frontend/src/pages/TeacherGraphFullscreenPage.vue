@@ -23,7 +23,7 @@ type TeacherGraphWorkbenchExpose = {
 const route = useRoute();
 const router = useRouter();
 
-const canOpenTeacherGraph = computed(() => ["teacher", "admin"].includes(getRole()));
+const canOpenTeacherGraph = computed(() => ["teacher", "admin"].includes(String(getRole() || "")));
 const courses = ref<Course[]>([]);
 const subject = ref("");
 const grade = ref("通用");

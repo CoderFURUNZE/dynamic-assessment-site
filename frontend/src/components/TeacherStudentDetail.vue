@@ -69,6 +69,15 @@ type FeedbackHistoryItem = {
   updated_at: string;
 };
 
+type MasteryMapRecord = {
+  kp_id?: number | string;
+  code?: string | null;
+  title?: string | null;
+  status?: string | null;
+  mastery?: number | null;
+  reason_summary?: string | null;
+};
+
 const props = withDefaults(defineProps<{ subject: string; grade: string; initialUserId?: number | null }>(), {
   initialUserId: null,
 });
@@ -216,7 +225,35 @@ const weakPointAverage = computed(() => {
 
 const stageHistory = computed<StageHistoryItem[]>(() => detail.value?.stage_history ?? []);
 const finalPortraitDimensions = computed<PortraitDimensionItem[]>(() => detail.value?.profile?.final_portrait_dimensions ?? []);
-const termSummary = computed<TermSummary>(() => detail.value?.profile?.term_summary ?? {});
+const termSummary = computed<TermSummary>(() => {
+  const base = { ...(detail.value?.profile?.term_summary ?? {}) } as TermSummary;
+  const history = [...stageHistory.value].sort((a, b) => Number(a.stage_order || 0) - Number(b.stage_order || 0));
+  if (!history.length) return base;
+  let progress = 0;
+  let steady = 0;
+  let regress = 0;
+  for (let index = 1; index < history.length; index += 1) {
+    const delta = Number(history[index]?.dynamic_score ?? 0) - Number(history[index - 1]?.dynamic_score ?? 0);
+    if (delta > 0.01) progress += 1;
+    else if (delta < -0.01) regress += 1;
+    else steady += 1;
+  }
+  const scores = history.map((item) => Number(item.dynamic_score ?? 0)).filter((value) => Number.isFinite(value));
+  const avg = scores.length ? scores.reduce((sum, value) => sum + value, 0) / scores.length : Number(base.avg_dynamic_score ?? 0);
+  const latest = scores.length ? scores[scores.length - 1] : Number(base.latest_dynamic_score ?? 0);
+  return {
+    ...base,
+    stage_count: history.length,
+    progress_stages: progress,
+    steady_stages: steady,
+    regress_stages: regress,
+    avg_dynamic_score: avg,
+    latest_dynamic_score: latest,
+    final_score_reference: Number.isFinite(Number(base.final_score_reference))
+      ? Number(base.final_score_reference)
+      : Math.max(0, Math.min(1, 0.6 * avg + 0.4 * latest)),
+  };
+});
 const selectedStage = computed<StageHistoryItem | null>(() => {
   if (!selectedStageId.value) return stageHistory.value[stageHistory.value.length - 1] ?? null;
   return stageHistory.value.find((item) => item.stage_id === selectedStageId.value) ?? stageHistory.value[stageHistory.value.length - 1] ?? null;
@@ -486,7 +523,7 @@ const recommendationCards = computed(() =>
 
 const recentPracticeRecords = computed(() => detail.value?.recent_practice ?? []);
 const recentQuizRecords = computed(() => detail.value?.recent_quiz ?? []);
-const masteryMapRecords = computed(() => detail.value?.mastery_map ?? []);
+const masteryMapRecords = computed<MasteryMapRecord[]>(() => detail.value?.mastery_map ?? []);
 
 function pageSlice<T>(items: T[], key: string) {
   const page = Math.max(1, recordPages[key] || 1);
@@ -1196,27 +1233,6 @@ watch(
                     </div>
                   </div>
                   <div class="analysis-note">{{ selectedStage.reason_summary || "当前阶段暂无系统总结。" }}</div>
-                </section>
-
-                <section v-if="selectedStage" class="panel-card sub-card">
-                  <div class="sub-card__title">当前阶段结果图</div>
-                  <PortraitRadarChart
-                    title="当前阶段结果图"
-                    subtitle="展示当前阶段的画像概况"
-                    :items="selectedStage.portrait_dimensions ?? []"
-                    accent="#3b82f6"
-                    empty-text="当前阶段还没有足够数据生成结果图"
-                  />
-                  <div v-if="selectedStage.portrait_dimensions?.length" class="portrait-grid">
-                    <div v-for="item in selectedStage.portrait_dimensions" :key="item.dimension_title" class="portrait-card">
-                      <span>{{ item.dimension_title }}</span>
-                      <strong>{{ item.score == null ? "待补充" : `${percent(item.score)}%` }}</strong>
-                    </div>
-                  </div>
-                  <div v-else class="empty-strip empty-strip--panel">
-                    <div class="empty-strip__title">当前阶段暂无结果图</div>
-                    <div class="empty-strip__desc">阶段数据不足时，这里会自动弱化显示。</div>
-                  </div>
                 </section>
 
                 <section v-if="selectedStage" class="panel-card sub-card">

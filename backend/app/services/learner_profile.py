@@ -256,6 +256,16 @@ def _aggregate_stage_portrait_summary(
     indicator_bucket: dict[str, dict[str, Any]] = {}
     trend_counter = Counter((item.trend_label or "持平") for item in history)
     scores = [float(item.dynamic_score or 0.0) for item in history]
+    trend_counter = Counter(
+        (
+            "progress"
+            if str(item.trend_label or "").strip().lower() in {"进步", "上升", "提升", "progress", "up", "improved", "increase"}
+            else "regress"
+            if str(item.trend_label or "").strip().lower() in {"退步", "回落", "下降", "regress", "down", "declined", "decrease"}
+            else "steady"
+        )
+        for item in history
+    )
 
     for item in history:
         dimension_rows = _json_load(item.dimension_summary_json, {}).get("portrait_dimensions", [])
@@ -322,6 +332,24 @@ def _aggregate_stage_portrait_summary(
         "latest_dynamic_score": _clamp01(latest_score),
         "final_score_reference": final_score_reference,
     }
+    term_summary["progress_stages"] = int(trend_counter.get("progress", 0))
+    term_summary["steady_stages"] = int(trend_counter.get("steady", 0))
+    term_summary["regress_stages"] = int(trend_counter.get("regress", 0))
+    if len(scores) > 1:
+        progress_count = 0
+        steady_count = 0
+        regress_count = 0
+        for previous, current in zip(scores, scores[1:]):
+            delta = current - previous
+            if delta > 0.01:
+                progress_count += 1
+            elif delta < -0.01:
+                regress_count += 1
+            else:
+                steady_count += 1
+        term_summary["progress_stages"] = progress_count
+        term_summary["steady_stages"] = steady_count
+        term_summary["regress_stages"] = regress_count
     return final_dimensions, final_indicators, term_summary
 
 
@@ -881,7 +909,25 @@ def get_profile_trend(
     subject_text = str(subject or "").strip()
     grade_text = str(grade or "").strip()
     filtered = [row for row in rows if str(row.subject or "").strip() == subject_text and str(row.grade or "").strip() == grade_text]
-    return list(filtered[: max(1, limit)])
+    latest_by_stage: list[StageEvaluationSnapshot] = []
+    seen_stage_ids: set[int] = set()
+    seen_stage_orders: set[int] = set()
+    for row in filtered:
+        stage_id = int(row.stage_id or 0)
+        stage_order = int(row.stage_order or 0)
+        if stage_id > 0:
+            if stage_id in seen_stage_ids:
+                continue
+            seen_stage_ids.add(stage_id)
+        elif stage_order > 0:
+            if stage_order in seen_stage_orders:
+                continue
+        if stage_order > 0:
+            seen_stage_orders.add(stage_order)
+        latest_by_stage.append(row)
+        if len(latest_by_stage) >= max(1, limit):
+            break
+    return latest_by_stage
 
 
 def get_stage_snapshot_trend(

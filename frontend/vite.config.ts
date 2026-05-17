@@ -30,13 +30,14 @@ export default defineConfig({
     minify: "esbuild",
     // 启用 gzip 压缩
     cssCodeSplit: true,
-    // 配置代码分割
     rollupOptions: {
       output: {
-        manualChunks: {
-          // 将第三方库单独打包
-          vendor: ['vue', 'vue-router'],
-          axios: ['axios'],
+        manualChunks(id) {
+          if (id.includes("node_modules/axios")) return "axios";
+          if (id.includes("node_modules/vue") || id.includes("node_modules/vue-router")) {
+            return "vendor";
+          }
+          return undefined;
         },
       },
     },

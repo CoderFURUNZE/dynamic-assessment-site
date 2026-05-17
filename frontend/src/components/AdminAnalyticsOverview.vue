@@ -114,7 +114,7 @@ const maxStageMetric = computed(() => {
 const overallAccuracy = computed(() => Math.round((cohortAbility.value?.overall?.accuracy ?? 0) * 100));
 const highOrderAccuracy = computed(() => Math.round((cohortAbility.value?.high_order_overall?.accuracy ?? 0) * 100));
 
-const weakKnowledgeList = computed(() =>
+const weakKnowledgeList = computed<WeakKpRow[]>(() =>
   [...data.value.weak_kps]
     .sort((a, b) => (a.avg_mastery || 0) - (b.avg_mastery || 0))
     .slice(0, 5)
@@ -193,15 +193,23 @@ const progressRankingRows = computed(() =>
   [...data.value.progress_ranking].sort((a, b) => (b.dynamic_score || 0) - (a.dynamic_score || 0))
 );
 
-const progressRankingList = computed(() =>
+const progressRankingList = computed<StudentRow[]>(() =>
   progressRankingRows.value
     .filter((row) => !focusStudentIdSet.value.has(Number(row.user_id)))
     .map((row, index) => ({
-    ...row,
-    rank: index + 1,
-    masteryPercent: Math.round((row.course_mastery || 0) * 100),
+      ...row,
+      rank: index + 1,
+      masteryPercent: Math.round((row.course_mastery || 0) * 100),
     }))
 );
+
+const suggestionText = computed(() => {
+  const high = riskOverview.value.find((item) => item.key === "high")?.count ?? 0;
+  const medium = riskOverview.value.find((item) => item.key === "medium")?.count ?? 0;
+  if (high > 0) return `建议优先关注 ${high} 名高风险学生，并结合薄弱知识点安排补救任务。`;
+  if (medium > 0) return `建议跟进 ${medium} 名中风险学生的阶段表现，及时调整练习和反馈节奏。`;
+  return "当前班级风险整体可控，可继续观察学习进展和知识薄弱点变化。";
+});
 
 async function load() {
   if (!props.subject) return;

@@ -200,7 +200,7 @@ onMounted(loadSelection);
                   size="large"
                   class="indicator-toolbar__select indicator-toolbar__select--course"
                   placeholder="选择课程"
-                  @update:model-value="(value) => emit('subject-change', String(value || ''))"
+                  @update:model-value="(value: string | number | boolean | undefined) => emit('subject-change', String(value || ''))"
                 >
                   <el-option
                     v-for="course in courses"

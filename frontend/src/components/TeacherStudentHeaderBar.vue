@@ -28,7 +28,7 @@ const emit = defineEmits<{
         placeholder="请选择学生"
         style="width: 300px"
         filterable
-        @update:model-value="(value) => emit('update:selectedUserId', value as number | null)"
+        @update:model-value="(value: string | number | boolean | null | undefined) => emit('update:selectedUserId', value == null ? null : Number(value))"
       >
         <el-option
           v-for="student in students"

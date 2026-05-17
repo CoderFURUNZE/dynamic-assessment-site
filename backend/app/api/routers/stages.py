@@ -28,6 +28,7 @@ from app.db.models import (
     RecommendationLog,
     StageImportBatch,
     StageImportRecord,
+    StageEvaluationSnapshot,
     StageMetricType,
     User,
     UserRole,
@@ -608,6 +609,21 @@ def _behavior_stage_rows(session: Session, *, course: Course, stage: CourseStage
     expression_map: dict[int, list[ExpressionEvent]] = {}
     for row in expression_rows:
         expression_map.setdefault(int(row.user_id), []).append(row)
+    stage_snapshot_rows = session.exec(
+        select(StageEvaluationSnapshot).where(
+            StageEvaluationSnapshot.user_id.in_(student_ids),
+            StageEvaluationSnapshot.stage_id == int(stage.id),
+        )
+    ).all()
+    stage_snapshot_map = {int(row.user_id): row for row in stage_snapshot_rows if row.user_id is not None}
+    profile_rows = session.exec(
+        select(LearnerProfileSnapshot).where(
+            LearnerProfileSnapshot.user_id.in_(student_ids),
+            LearnerProfileSnapshot.subject == stage.subject,
+            LearnerProfileSnapshot.grade == stage.grade,
+        )
+    ).all()
+    profile_map = {int(row.user_id): row for row in profile_rows if row.user_id is not None}
 
     rows: list[dict[str, object]] = []
     for student_id in student_ids:
@@ -664,14 +680,14 @@ def _behavior_stage_rows(session: Session, *, course: Course, stage: CourseStage
         if total_events == 0:
             behavior_score = 0.0
         avg_confidence = sum(confidence_values) / len(confidence_values) if confidence_values else 0.0
-        snapshot = session.exec(
-            select(LearnerProfileSnapshot).where(
-                LearnerProfileSnapshot.user_id == student_id,
-                LearnerProfileSnapshot.subject == stage.subject,
-                LearnerProfileSnapshot.grade == stage.grade,
-            )
-        ).first()
-        dynamic_score = float(snapshot.dynamic_score or 0.0) if snapshot is not None else behavior_score
+        stage_snapshot = stage_snapshot_map.get(student_id)
+        profile_snapshot = profile_map.get(student_id)
+        if stage_snapshot is not None:
+            dynamic_score = float(stage_snapshot.dynamic_score or 0.0)
+        elif profile_snapshot is not None:
+            dynamic_score = float(profile_snapshot.dynamic_score or 0.0)
+        else:
+            dynamic_score = behavior_score
         rows.append(
             {
                 "user_id": student_id,

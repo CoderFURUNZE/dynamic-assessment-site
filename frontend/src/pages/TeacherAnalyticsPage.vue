@@ -294,6 +294,58 @@ onMounted(loadCourses);
   background: transparent;
 }
 
+.analytics-panel :deep(.analytics-shell) {
+  gap: 18px;
+  overflow: visible;
+}
+
+.analytics-panel :deep(.analytics-shell::before),
+.analytics-panel :deep(.analytics-shell::after),
+.analytics-panel :deep(.analytics-hero::after) {
+  display: none;
+}
+
+.analytics-panel :deep(.analytics-hero),
+.analytics-panel :deep(.analytics-card),
+.analytics-panel :deep(.summary-card),
+.analytics-panel :deep(.risk-card),
+.analytics-panel :deep(.weak-kp-card),
+.analytics-panel :deep(.stage-card),
+.analytics-panel :deep(.analytics-table-card),
+.analytics-panel :deep(.analytics-cockpit-card) {
+  border-radius: 16px !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.analytics-panel :deep(.analytics-hero) {
+  padding: 20px 22px !important;
+}
+
+.analytics-panel :deep(.analytics-hero__copy h2),
+.analytics-panel :deep(.analytics-card h3),
+.analytics-panel :deep(.analytics-cockpit-card h3) {
+  text-shadow: none !important;
+  letter-spacing: 0 !important;
+}
+
+.analytics-panel :deep(.analytics-hero__eyebrow),
+.analytics-panel :deep(.analytics-chip),
+.analytics-panel :deep(.card-header__eyebrow),
+.analytics-panel :deep(.analytics-cockpit-card__eyebrow) {
+  border-radius: 999px !important;
+  background: #f0fdf4 !important;
+  color: #166534 !important;
+  border-color: rgba(34, 197, 94, 0.18) !important;
+  box-shadow: none !important;
+}
+
+.analytics-panel :deep(.summary-card::before),
+.analytics-panel :deep(.risk-card::before) {
+  width: 3px !important;
+}
+
 :deep(.analytics-toolbar .el-select__wrapper) {
   min-height: 44px;
   border-radius: 14px;

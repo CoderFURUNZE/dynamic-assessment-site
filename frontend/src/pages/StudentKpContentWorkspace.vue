@@ -174,7 +174,7 @@ const masteryStatus = computed(() => {
   if (masteryPercent.value > 0) return "待巩固";
   return "未开始";
 });
-const taskLead = computed(() => detail.value?.kp?.description || "先完成资源学习和练习，再看下一步建议。");
+const taskLead = computed(() => (detail.value?.kp as { description?: string } | undefined)?.description || "先完成资源学习和练习，再看下一步建议。");
 const currentTaskSubtitle = computed(() => detail.value?.kp?.title || "当前知识点");
 const sidebarSuggestion = computed(() => {
   if (recommendationContext.value?.reason) return recommendationContext.value.reason;
@@ -439,7 +439,7 @@ watch(kpId, async () => {
   <div class="student-kp-page" v-loading="loading">
     <section class="student-kp-page__hero">
       <div class="student-kp-page__hero-copy">
-        <button class="student-kp-page__back" type="button" @click="goBack">返回图谱</button>
+        <button class="student-kp-page__back" type="button" @click="goBack">返回学习路径</button>
         <div class="student-kp-page__hero-text">
           <span class="student-kp-page__eyebrow">知识点学习</span>
           <h1>{{ detail?.kp?.title || "知识点学习" }}</h1>

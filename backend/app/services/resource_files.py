@@ -3,10 +3,12 @@ from __future__ import annotations
 import mimetypes
 import shutil
 import subprocess
+import tempfile
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
+from typing import BinaryIO
 
 from sqlmodel import Session
 
@@ -25,6 +27,11 @@ RESOURCE_UPLOAD_RULES = {
     "image": {"max_size_bytes": 10 * 1024 * 1024, "label": "图片资源"},
     "video": {"max_size_bytes": 300 * 1024 * 1024, "label": "视频资源"},
 }
+
+
+UPLOAD_CHUNK_SIZE = 1024 * 1024
+SIGNATURE_READ_SIZE = 4096
+MAX_RESOURCE_UPLOAD_BYTES = max(int(rule.get("max_size_bytes", 0) or 0) for rule in RESOURCE_UPLOAD_RULES.values())
 
 
 def _media_root() -> Path:
@@ -69,7 +76,7 @@ def _guess_extension(filename: str) -> str:
     return Path(filename or "").suffix.lower()
 
 
-def _signature_detect(payload: bytes, filename: str, content_type: str | None) -> tuple[str, str]:
+def _signature_detect(payload: bytes, filename: str, content_type: str | None, source_path: Path | None = None) -> tuple[str, str]:
     prefix = payload[:32]
     ext = _guess_extension(filename)
     guessed_mime = (content_type or mimetypes.guess_type(filename)[0] or "").lower()
@@ -101,9 +108,13 @@ def _signature_detect(payload: bytes, filename: str, content_type: str | None) -
     except Exception:
         pass
     try:
-        from io import BytesIO
+        if source_path is not None:
+            archive_source = source_path
+        else:
+            from io import BytesIO
 
-        with zipfile.ZipFile(BytesIO(payload), "r") as archive:
+            archive_source = BytesIO(payload)
+        with zipfile.ZipFile(archive_source, "r") as archive:
             names = set(archive.namelist())
             if "[Content_Types].xml" in names:
                 if any(name.startswith("ppt/") for name in names):
@@ -125,11 +136,18 @@ def _signature_detect(payload: bytes, filename: str, content_type: str | None) -
     raise ValueError("Unsupported file type")
 
 
-def detect_uploaded_file(*, filename: str, payload: bytes, content_type: str | None) -> dict:
-    detected_mime_type, detected_resource_type = _signature_detect(payload, filename, content_type)
+def detect_uploaded_file(
+    *,
+    filename: str,
+    payload: bytes,
+    content_type: str | None,
+    file_size_bytes: int | None = None,
+    source_path: Path | None = None,
+) -> dict:
+    detected_mime_type, detected_resource_type = _signature_detect(payload, filename, content_type, source_path)
     _validate_upload_constraints(
         filename=filename,
-        payload=payload,
+        file_size_bytes=len(payload) if file_size_bytes is None else file_size_bytes,
         detected_resource_type=detected_resource_type,
         detected_mime_type=detected_mime_type,
     )
@@ -160,12 +178,12 @@ def detect_uploaded_file(*, filename: str, payload: bytes, content_type: str | N
     }
 
 
-def _validate_upload_constraints(*, filename: str, payload: bytes, detected_resource_type: str, detected_mime_type: str) -> None:
+def _validate_upload_constraints(*, filename: str, file_size_bytes: int, detected_resource_type: str, detected_mime_type: str) -> None:
     normalized = (detected_resource_type or "").lower()
     rule = RESOURCE_UPLOAD_RULES.get(normalized)
     if rule:
         max_size_bytes = int(rule.get("max_size_bytes", 0) or 0)
-        if max_size_bytes and len(payload) > max_size_bytes:
+        if max_size_bytes and file_size_bytes > max_size_bytes:
             max_mb = max_size_bytes / 1024 / 1024
             raise ValueError(f"{rule.get('label', '资源')}大小不能超过 {max_mb:.0f} MB")
     if normalized == "video":
@@ -192,6 +210,118 @@ def store_uploaded_file(*, kp_id: int, filename: str, payload: bytes, detected_r
         "absolute_path": str(dest),
         "relative_url": f"{settings.media_url}/resources/original/{stored_name}",
         "file_size_bytes": len(payload),
+        "stored_name": stored_name,
+    }
+
+
+def _stream_to_path(
+    source: BinaryIO,
+    dest: Path,
+    *,
+    max_size_bytes: int,
+    max_size_label: str,
+) -> tuple[int, bytes]:
+    total = 0
+    signature = bytearray()
+    try:
+        with dest.open("wb") as target:
+            while True:
+                chunk = source.read(UPLOAD_CHUNK_SIZE)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if max_size_bytes and total > max_size_bytes:
+                    max_mb = max_size_bytes / 1024 / 1024
+                    raise ValueError(f"{max_size_label}大小不能超过 {max_mb:.0f} MB")
+                if len(signature) < SIGNATURE_READ_SIZE:
+                    signature.extend(chunk[: SIGNATURE_READ_SIZE - len(signature)])
+                target.write(chunk)
+    except Exception:
+        dest.unlink(missing_ok=True)
+        raise
+    return total, bytes(signature)
+
+
+def inspect_uploaded_file_stream(*, filename: str, source: BinaryIO, content_type: str | None) -> dict:
+    temp_root = _media_root() / "tmp"
+    temp_root.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(prefix="detect_", suffix=_guess_extension(filename), dir=temp_root, delete=False) as tmp:
+        temp_path = Path(tmp.name)
+    try:
+        file_size_bytes, signature = _stream_to_path(
+            source,
+            temp_path,
+            max_size_bytes=MAX_RESOURCE_UPLOAD_BYTES,
+            max_size_label="资源",
+        )
+        if file_size_bytes <= 0:
+            raise ValueError("file is empty")
+        return detect_uploaded_file(
+            filename=filename,
+            payload=signature,
+            content_type=content_type,
+            file_size_bytes=file_size_bytes,
+            source_path=temp_path,
+        )
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+def store_uploaded_file_stream(*, kp_id: int, filename: str, source: BinaryIO, content_type: str | None) -> dict:
+    ext = _guess_extension(filename)
+    ts = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    folder = _media_root() / "resources" / "original"
+    folder.mkdir(parents=True, exist_ok=True)
+    stored_name = f"kp_{kp_id}_{ts}{ext or ''}"
+    dest = folder / stored_name
+    try:
+        file_size_bytes, signature = _stream_to_path(
+            source,
+            dest,
+            max_size_bytes=MAX_RESOURCE_UPLOAD_BYTES,
+            max_size_label="资源",
+        )
+        if file_size_bytes <= 0:
+            raise ValueError("file is empty")
+        detected = detect_uploaded_file(
+            filename=filename,
+            payload=signature,
+            content_type=content_type,
+            file_size_bytes=file_size_bytes,
+            source_path=dest,
+        )
+    except Exception:
+        dest.unlink(missing_ok=True)
+        raise
+    return {
+        "absolute_path": str(dest),
+        "relative_url": f"{settings.media_url}/resources/original/{stored_name}",
+        "file_size_bytes": file_size_bytes,
+        "stored_name": stored_name,
+        "detected": detected,
+    }
+
+
+def store_video_file_stream(*, filename: str, source: BinaryIO, relative_folder: str = "videos") -> dict:
+    ts = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    folder = _media_root() / relative_folder
+    folder.mkdir(parents=True, exist_ok=True)
+    stored_name = f"{ts}_{filename}"
+    dest = folder / stored_name
+    max_size_bytes = int(RESOURCE_UPLOAD_RULES["video"]["max_size_bytes"])
+    file_size_bytes, _signature = _stream_to_path(
+        source,
+        dest,
+        max_size_bytes=max_size_bytes,
+        max_size_label="视频资源",
+    )
+    if file_size_bytes <= 0:
+        dest.unlink(missing_ok=True)
+        raise ValueError("file is empty")
+    return {
+        "absolute_path": str(dest),
+        "relative_url": f"{settings.media_url}/{relative_folder}/{stored_name}",
+        "file_size_bytes": file_size_bytes,
         "stored_name": stored_name,
     }
 

@@ -104,7 +104,10 @@ const totalBehaviorEvents = computed(() => rows.value.reduce((sum, row) => sum +
 const totalExpressions = computed(() => rows.value.reduce((sum, row) => sum + (row.expression_events || 0), 0));
 
 function normalizeRisk(level?: string) {
-  if (level === "高风险" || level === "中风险" || level === "低风险") return level;
+  const value = String(level || "").trim().toLowerCase();
+  if (value === "高风险" || value === "风险" || value === "risk" || value === "high") return "高风险";
+  if (value === "中风险" || value === "预警" || value === "warning" || value === "medium") return "中风险";
+  if (value === "低风险" || value === "良好" || value === "优秀" || value === "low" || value === "excellent") return "低风险";
   return "暂无";
 }
 
@@ -249,7 +252,7 @@ function syncQuery() {
   const currentSubject = String(route.query.subject || "").trim();
   const currentTab = String(route.query.tab || "class").trim();
   const currentStageId = String(route.query.stage_id || "").trim();
-  const nextStageId = String(nextQuery.stage_id || "").trim();
+  const nextStageId = String((nextQuery as Record<string, unknown>).stage_id || "").trim();
   if (
     route.path === "/teacher/students"
     && currentSubject === String(nextQuery.subject || "").trim()
@@ -537,11 +540,11 @@ onMounted(async () => {
           <el-table-column prop="student_no" label="学号" min-width="120" />
           <el-table-column prop="full_name" label="姓名" min-width="110"><template #default="{ row }">{{ getDisplayName(row) }}</template></el-table-column>
           <el-table-column prop="behavior_score" label="行为分" min-width="100"><template #default="{ row }">{{ formatPercent(row.behavior_score) }}</template></el-table-column>
-          <el-table-column prop="dynamic_score" label="画像分" min-width="100"><template #default="{ row }">{{ formatPercent(row.dynamic_score) }}</template></el-table-column>
+          <el-table-column prop="dynamic_score" label="阶段画像分" min-width="110"><template #default="{ row }">{{ formatPercent(row.dynamic_score) }}</template></el-table-column>
           <el-table-column prop="dominant_signal" label="主信号" min-width="120"><template #default="{ row }">{{ row.dominant_signal || "观察" }}</template></el-table-column>
           <el-table-column prop="risk_level" label="风险等级" min-width="120"><template #default="{ row }"><span class="risk-chip" :class="riskClass(row.risk_level)">{{ normalizeRisk(row.risk_level) }}</span></template></el-table-column>
-          <el-table-column prop="behavior_events" label="事件数" min-width="90" />
-          <el-table-column prop="active_days" label="活跃天数" min-width="100" />
+          <el-table-column prop="behavior_events" label="阶段事件数" min-width="110" />
+          <el-table-column prop="active_days" label="阶段活跃天数" min-width="120" />
         </el-table>
         <div v-else class="empty-panel empty-panel--table"><strong>暂无符合条件的学生明细</strong><p>请切换风险筛选，或先完成数据导入与阶段重算</p></div>
       </div>
@@ -655,6 +658,71 @@ onMounted(async () => {
 :deep(.report-toolbar .el-select__wrapper.is-focused) { box-shadow: 0 0 0 1px #60a5fa inset, 0 0 0 4px rgba(96, 165, 250, 0.14); }
 :deep(.report-toolbar .el-select__selected-item), :deep(.report-toolbar .el-select__placeholder), :deep(.report-toolbar .el-select__caret) { color: #5f6f85 !important; }
 :deep(.report-toolbar .el-button--primary) { border-color: rgba(31, 41, 55, 0.14); background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: #ffffff; }
+
+/* Simplified teacher-analysis surface */
+.report-toolbar,
+.overview-section,
+.analysis-main,
+.side-card,
+.focus-section,
+.detail-section {
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.summary-card,
+.rank-item,
+.watch-item,
+.focus-card,
+.risk-stack__item,
+.mini-stat,
+.recalc-summary__item {
+  border-width: 1px;
+  border-color: rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.summary-card__value,
+.mini-stat strong,
+.watch-item strong,
+.focus-card__head strong,
+.focus-card__stats strong,
+.rank-item__identity strong {
+  color: #0f172a;
+}
+
+.rank-item:hover,
+.watch-item:hover,
+.focus-card:hover,
+.risk-stack__item:hover,
+.risk-stack__item.is-active {
+  transform: none;
+  border-color: rgba(34, 197, 94, 0.34);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
+}
+
+.detail-table-shell,
+.empty-panel {
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.filter-pill {
+  border-width: 1px;
+  background: #ffffff;
+}
+
+.filter-pill.is-active,
+.filter-pill:hover {
+  background: #f0fdf4;
+  border-color: rgba(34, 197, 94, 0.34);
+  color: #166534;
+}
+
 @media (max-width: 1280px) { .summary-grid, .focus-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .analysis-section { grid-template-columns: 1fr; } }
 @media (max-width: 900px) { .report-toolbar, .report-toolbar__context, .section-heading, .panel-heading { align-items: stretch; } .summary-grid, .focus-grid, .recalc-summary { grid-template-columns: 1fr; } .mini-stats { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .report-page { gap: 18px; } .report-toolbar, .overview-section, .analysis-main, .side-card, .focus-section, .detail-section { padding: 18px; } .mini-stats, .focus-card__stats { grid-template-columns: 1fr; } .metric-line { grid-template-columns: 1fr; } }

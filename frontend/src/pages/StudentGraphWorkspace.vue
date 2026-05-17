@@ -97,9 +97,9 @@ const choosingKpId = ref<number | null>(null);
 const graphMapRequestSeq = ref(0);
 const recoRequestSeq = ref(0);
 const componentAlive = ref(true);
-const selectionQueryTimer = ref<ReturnType<typeof window.setTimeout> | null>(null);
-const selectionMapTimer = ref<ReturnType<typeof window.setTimeout> | null>(null);
-const selectionRecoTimer = ref<ReturnType<typeof window.setTimeout> | null>(null);
+const selectionQueryTimer = ref<number | null>(null);
+const selectionMapTimer = ref<number | null>(null);
+const selectionRecoTimer = ref<number | null>(null);
 const dragStart = ref({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
 const panOffset = ref({ x: 0, y: 0 });
 
@@ -166,7 +166,6 @@ const currentStatusLabel = computed(() => {
   if (state === "selected") return "当前选择";
   if (state === "recommended") return "建议优先";
   if (state === "locked") return "待解锁";
-  if (state === "current") return "当前推荐";
   if (state === "done") return "已完成";
   if (state === "path") return "已选路径";
   return "可学习";
@@ -543,7 +542,6 @@ function statusLabel(kp: KP) {
   if (state === "selected") return "当前选择";
   if (state === "recommended") return "建议优先";
   if (state === "locked") return "待解锁";
-  if (state === "current") return "当前推荐";
   if (state === "done") return "已完成";
   if (state === "path") return "已选路径";
   return "可学习";
@@ -795,7 +793,7 @@ async function loadVisibleKps(useCache = true, preferredSourceId?: number | null
       relation_type: String(item.relation_type || "prerequisite"),
     }))
     .filter((item: Edge) => item.prereq_id && item.next_id);
-  const nextKps = list.map((item: any) => {
+  const nextKps: KP[] = list.map((item: any) => {
     const overlay = overlayMap.get(Number(item.id)) || {};
     return {
       id: Number(item.id),
@@ -812,7 +810,7 @@ async function loadVisibleKps(useCache = true, preferredSourceId?: number | null
     };
   });
   if (!useCache && previousKps.length) {
-    const kpById = new Map(nextKps.map((item) => [item.id, item]));
+    const kpById = new Map<number, KP>(nextKps.map((item: KP) => [item.id, item]));
     const nextIdSet = new Set(kpById.keys());
     const stableEdges = [...nextEdges];
     for (const edge of previousEdges) {
@@ -1104,7 +1102,7 @@ onBeforeUnmount(() => {
               :class="[
                 `is-${nodeState(stop.kp)}`,
                 `role-${stop.role}`,
-                cardSide(stop),
+                cardSide(),
                 {
                   'is-focus': stop.kp.id === currentKpId,
                   'is-recommendation': stop.kp.id === recommendedNodeId,

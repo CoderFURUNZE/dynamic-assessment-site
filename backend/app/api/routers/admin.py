@@ -93,6 +93,7 @@ from app.schemas.admin import (
 )
 from app.schemas.paging import PageOut
 from app.services.learner_profile import (
+    _aggregate_stage_portrait_summary,
     _json_load,
     build_cohort_ability_practice_summary,
     canonical_ability_subtags_str,
@@ -117,9 +118,10 @@ from app.services.resource_files import (
     _preview_type_for_detected,
     _resource_type_from_detected,
     build_resource_payload,
-    detect_uploaded_file,
+    inspect_uploaded_file_stream,
     maybe_prepare_preview,
-    store_uploaded_file,
+    store_uploaded_file_stream,
+    store_video_file_stream,
 )
 from app.services.kp_tagging import auto_tag_knowledge_points
 
@@ -548,6 +550,68 @@ def _check_teacher_subject_access(*, session: Session, admin: User, course: Cour
         raise HTTPException(status_code=403, detail="No permission for this subject")
 
 
+def _teacher_accessible_subjects(session: Session, admin: User) -> set[str] | None:
+    if admin.role != UserRole.teacher:
+        return None
+    rows = session.exec(select(Course).order_by(Course.id.desc())).all()
+    return {
+        str(course.title).strip()
+        for course in rows
+        if course.title and teacher_has_course_access(session, int(admin.id), course)
+    }
+
+
+def _require_teacher_subject_access(
+    *,
+    session: Session,
+    admin: User,
+    subject: str | None,
+    grade: str | None = None,
+) -> None:
+    if admin.role != UserRole.teacher:
+        return
+    normalized_subject = str(subject or "").strip()
+    if not normalized_subject:
+        raise HTTPException(status_code=403, detail="No permission for this subject")
+    course = _resolve_course_for_subject(session, subject=normalized_subject, grade=grade, admin=admin)
+    if course is None:
+        raise HTTPException(status_code=403, detail="No permission for this subject")
+    _check_teacher_subject_access(session=session, admin=admin, course=course)
+
+
+def _require_teacher_kp_access(*, session: Session, admin: User, kp: KnowledgePoint | None) -> None:
+    if kp is None:
+        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_subject_access(session=session, admin=admin, subject=kp.subject, grade=kp.grade)
+
+
+def _require_teacher_kp_id_access(*, session: Session, admin: User, kp_id: int) -> KnowledgePoint:
+    kp = session.get(KnowledgePoint, kp_id)
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
+    return kp
+
+
+def _require_teacher_resource_access(*, session: Session, admin: User, row: LearningResource | None) -> LearningResource:
+    if row is None:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    _require_teacher_subject_access(session=session, admin=admin, subject=row.subject, grade=row.grade)
+    return row
+
+
+def _require_teacher_task_access(*, session: Session, admin: User, row: KpTask | None) -> KpTask:
+    if row is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    _require_teacher_subject_access(session=session, admin=admin, subject=row.subject, grade=row.grade)
+    return row
+
+
+def _require_teacher_question_access(*, session: Session, admin: User, question: Question | None) -> Question:
+    if question is None:
+        raise HTTPException(status_code=404, detail="Question not found")
+    _require_teacher_subject_access(session=session, admin=admin, subject=question.subject, grade=question.grade)
+    return question
+
+
 def _active_course_student_ids(session: Session, *, course_id: int) -> list[int]:
     rows = session.exec(
         select(Enrollment.student_id).where(
@@ -852,6 +916,11 @@ def _build_student_detail_payload(
     top_event_types = [{"event_type": key, "count": int(count)} for key, count in event_type_counter.most_common(10) if key]
 
     portrait_summary = _json_load(snapshot.portrait_summary_json, {})
+    final_dimensions, final_indicators, term_summary = _aggregate_stage_portrait_summary(stage_snapshots)
+    if stage_snapshots:
+        portrait_summary["final_portrait_dimensions"] = final_dimensions
+        portrait_summary["final_portrait_indicators"] = final_indicators
+        portrait_summary["term_summary"] = term_summary
     final_confirmation = None
     if course is not None and course.id is not None:
         final_confirmation = session.exec(
@@ -1079,22 +1148,19 @@ def _task_type_value(value) -> str:
 def set_kp_bilibili_video(
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp_id = int(payload.get("kp_id"))
+    kp = _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     bvid = str(payload.get("bvid", "")).strip()
     page = int(payload.get("page", 1))
     title = str(payload.get("title", "")).strip() or f"B站视频 {bvid} P{page}"
     if not bvid:
         raise HTTPException(status_code=400, detail="bvid required")
 
-    kp = session.get(KnowledgePoint, kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
-
     url = _bilibili_embed_url(bvid=bvid, page=page)
     r = _replace_kp_video(session=session, kp=kp, title=title, url=url)
-    _log_action(session, _admin, "kp_video_bind_bilibili", f"kp_id={kp_id} bvid={bvid} page={page}")
+    _log_action(session, admin, "kp_video_bind_bilibili", f"kp_id={kp_id} bvid={bvid} page={page}")
     return {"ok": True, "resource_id": r.id, "url": r.url}
 
 
@@ -1102,15 +1168,16 @@ def set_kp_bilibili_video(
 def clear_kp_video(
     kp_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     existing = session.exec(
         select(LearningResource).where(LearningResource.kp_id == kp_id, LearningResource.type == ResourceType.video)
     ).all()
     for r in existing:
         session.delete(r)
     session.commit()
-    _log_action(session, _admin, "kp_video_clear", f"kp_id={kp_id} deleted={len(existing)}")
+    _log_action(session, admin, "kp_video_clear", f"kp_id={kp_id} deleted={len(existing)}")
     return {"ok": True, "deleted": len(existing)}
 
 
@@ -1120,31 +1187,26 @@ def upload_kp_video_local(
     title: str = Form(""),
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp = session.get(KnowledgePoint, kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
 
     filename = _safe_filename(file.filename or "video.mp4")
     ext = Path(filename).suffix.lower()
     if ext not in {".mp4", ".m3u8", ".m4v", ".mov"}:
         raise HTTPException(status_code=400, detail="Unsupported video format")
 
-    media_dir = Path(settings.media_dir)
-    video_dir = media_dir / "videos"
-    video_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        stored = store_video_file_stream(filename=f"{kp_id}_{filename}", source=file.file)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    stored_name = f"{kp_id}_{ts}_{filename}"
-    dest = video_dir / stored_name
-    with dest.open("wb") as f:
-        f.write(file.file.read())
-
+    stored_name = stored["stored_name"]
     final_title = title.strip() or f"本地视频：{stored_name}"
-    url = f"{settings.media_url}/videos/{stored_name}"
+    url = stored["relative_url"]
     r = _replace_kp_video(session=session, kp=kp, title=final_title, url=url)
-    _log_action(session, _admin, "kp_video_upload_local", f"kp_id={kp_id} file={stored_name}")
+    _log_action(session, admin, "kp_video_upload_local", f"kp_id={kp_id} file={stored['stored_name']} size={stored['file_size_bytes']}")
     return {"ok": True, "resource_id": r.id, "url": r.url}
 
 
@@ -1152,20 +1214,17 @@ def upload_kp_video_local(
 def set_kp_video_url(
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp_id = int(payload.get("kp_id"))
+    kp = _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     url = str(payload.get("url", "")).strip()
     title = str(payload.get("title", "")).strip() or "自托管视频"
     if not url:
         raise HTTPException(status_code=400, detail="url required")
 
-    kp = session.get(KnowledgePoint, kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
-
     r = _replace_kp_video(session=session, kp=kp, title=title, url=url)
-    _log_action(session, _admin, "kp_video_bind_url", f"kp_id={kp_id} url={url}")
+    _log_action(session, admin, "kp_video_bind_url", f"kp_id={kp_id} url={url}")
     return {"ok": True, "resource_id": r.id, "url": r.url}
 
 
@@ -1173,8 +1232,9 @@ def set_kp_video_url(
 def list_kp_resources(
     kp_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     rows = session.exec(select(LearningResource).where(LearningResource.kp_id == kp_id).order_by(LearningResource.id)).all()
     return [build_resource_payload(row) for row in rows if row.id is not None]
 
@@ -1183,11 +1243,10 @@ def list_kp_resources(
 def get_kp_resource_detail(
     resource_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     row = session.get(LearningResource, resource_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Resource not found")
+    _require_teacher_resource_access(session=session, admin=admin, row=row)
     kp = session.get(KnowledgePoint, int(row.kp_id))
     payload = build_resource_payload(row)
     payload.update(
@@ -1206,13 +1265,10 @@ def detect_kp_resource_upload(
     file: UploadFile = File(...),
     _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
-    payload = file.file.read()
-    if not payload:
-        raise HTTPException(status_code=400, detail="file is empty")
     try:
-        detected = detect_uploaded_file(
+        detected = inspect_uploaded_file_stream(
             filename=file.filename or "resource",
-            payload=payload,
+            source=file.file,
             content_type=file.content_type,
         )
     except ValueError as exc:
@@ -1242,25 +1298,17 @@ def upload_kp_resource(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp = session.get(KnowledgePoint, kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
-    raw = file.file.read()
-    if not raw:
-        raise HTTPException(status_code=400, detail="file is empty")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
     try:
-        detected = detect_uploaded_file(
+        stored = store_uploaded_file_stream(
+            kp_id=kp_id,
             filename=file.filename or "resource",
-            payload=raw,
             content_type=file.content_type,
+            source=file.file,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    stored = store_uploaded_file(
-        kp_id=kp_id,
-        filename=file.filename or "resource",
-        payload=raw,
-        detected_resource_type=detected["detected_resource_type"],
-    )
+    detected = stored["detected"]
     type_value = _resource_type_from_detected(detected["detected_resource_type"], category=category)
     preview_type = detected["preview_type"]
     preview_status = "processing" if preview_type == "pdf_after_convert" else "ready"
@@ -1293,48 +1341,6 @@ def upload_kp_resource(
     else:
         row.url = stored["relative_url"]
     session.add(row)
-    completion = session.exec(
-        select(CourseCompletionRecord).where(
-            CourseCompletionRecord.course_id == int(course.id),
-            CourseCompletionRecord.student_id == payload.user_id,
-        )
-    ).first()
-    if completion is None:
-        completion = CourseCompletionRecord(
-            course_id=int(course.id),
-            student_id=payload.user_id,
-            note="教师已确认学期最终成绩，课程学习已完成",
-        )
-    else:
-        completion.completed_at = datetime.utcnow()
-        completion.note = completion.note or "教师已确认学期最终成绩，课程学习已完成"
-    session.add(completion)
-
-    confirmed_user_ids = {
-        int(item)
-        for item in session.exec(
-            select(TeacherFinalScoreConfirmation.user_id).where(
-                TeacherFinalScoreConfirmation.course_id == int(course.id),
-                TeacherFinalScoreConfirmation.user_id.in_(list(active_student_ids)),
-            )
-        ).all()
-    }
-    confirmed_user_ids.add(int(payload.user_id))
-    all_active_students_confirmed = bool(active_student_ids) and confirmed_user_ids.issuperset(active_student_ids)
-    if all_active_students_confirmed:
-        activation_rows = session.exec(
-            select(CourseTeacherActivation).where(CourseTeacherActivation.course_id == int(course.id))
-        ).all()
-        now = datetime.utcnow()
-        for activation in activation_rows:
-            if activation.teaching_status != TeacherCourseStatus.finished:
-                activation.teaching_status = TeacherCourseStatus.finished
-                activation.finished_at = now
-                activation.updated_at = now
-                session.add(activation)
-        course.enroll_status = CourseEnrollStatus.closed
-        session.add(course)
-
     session.commit()
     session.refresh(row)
     maybe_prepare_preview(resource=row)
@@ -1355,8 +1361,7 @@ def create_kp_resource(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp = session.get(KnowledgePoint, payload.kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
     try:
         resource_type = ResourceType(str(payload.type or "note").strip())
     except ValueError as exc:
@@ -1398,8 +1403,7 @@ def update_kp_resource(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     row = session.get(LearningResource, resource_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Resource not found")
+    _require_teacher_resource_access(session=session, admin=admin, row=row)
     if payload.title is not None:
         title = payload.title.strip()
         if not title:
@@ -1448,8 +1452,7 @@ def delete_kp_resource(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     row = session.get(LearningResource, resource_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Resource not found")
+    _require_teacher_resource_access(session=session, admin=admin, row=row)
     session.delete(row)
     session.commit()
     _log_action(session, admin, "kp_resource_delete", f"resource_id={resource_id}")
@@ -1460,8 +1463,9 @@ def delete_kp_resource(
 def list_kp_tasks(
     kp_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     rows = session.exec(select(KpTask).where(KpTask.kp_id == kp_id).order_by(KpTask.sort_order, KpTask.id)).all()
     return [
         {
@@ -1485,8 +1489,7 @@ def create_kp_task(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp = session.get(KnowledgePoint, payload.kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
     try:
         task_type = KpTaskType(str(payload.type or "task").strip())
     except ValueError as exc:
@@ -1519,8 +1522,7 @@ def update_kp_task(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     row = session.get(KpTask, task_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+    _require_teacher_task_access(session=session, admin=admin, row=row)
     if payload.title is not None:
         title = payload.title.strip()
         if not title:
@@ -1550,8 +1552,7 @@ def delete_kp_task(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     row = session.get(KpTask, task_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+    _require_teacher_task_access(session=session, admin=admin, row=row)
     session.delete(row)
     session.commit()
     _log_action(session, admin, "kp_task_delete", f"task_id={task_id}")
@@ -1993,9 +1994,13 @@ def practice_report(
     kp_id: int | None = None,
     days: int = 14,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     days = max(1, min(180, int(days)))
+    if admin.role == UserRole.teacher and kp_id is None:
+        raise HTTPException(status_code=400, detail="kp_id required for teacher practice report")
+    if kp_id is not None:
+        _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     since = datetime.utcnow() - timedelta(days=days)
 
     q = (
@@ -2141,13 +2146,21 @@ def list_kps_admin(
     page: int = 1,
     page_size: int = 15,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     page = max(1, page)
     page_size = max(1, min(100, page_size))
     q = select(KnowledgePoint).order_by(KnowledgePoint.id.desc())
     q_total = select(func.count()).select_from(KnowledgePoint)
+    allowed_subjects = _teacher_accessible_subjects(session, admin)
+    if allowed_subjects is not None:
+        if not allowed_subjects:
+            return {"items": [], "total": 0, "page": page, "page_size": page_size}
+        allowed_subject_list = sorted(allowed_subjects)
+        q = q.where(KnowledgePoint.subject.in_(allowed_subject_list))
+        q_total = q_total.where(KnowledgePoint.subject.in_(allowed_subject_list))
     if subject:
+        _require_teacher_subject_access(session=session, admin=admin, subject=subject, grade=grade)
         q = q.where(KnowledgePoint.subject == subject)
         q_total = q_total.where(KnowledgePoint.subject == subject)
     if grade:
@@ -2179,8 +2192,9 @@ def list_kps_admin(
 def create_kp(
     payload: KnowledgePointIn,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_subject_access(session=session, admin=admin, subject=payload.subject, grade=payload.grade)
     code = payload.code.strip()
     if not code:
         raise HTTPException(status_code=400, detail="code required")
@@ -2214,11 +2228,10 @@ def update_kp(
     kp_id: int,
     payload: KnowledgePointUpdateIn,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp = session.get(KnowledgePoint, kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
     if payload.code is not None:
         code = payload.code.strip()
         if not code:
@@ -2260,11 +2273,10 @@ def update_kp_position(
     kp_id: int,
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp = session.get(KnowledgePoint, kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
     if "x" not in payload or "y" not in payload:
         raise HTTPException(status_code=400, detail="x/y required")
     try:
@@ -2281,7 +2293,7 @@ def update_kp_position(
 def save_graph_chapter_layout(
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     """Persist chapter (category) anchor positions so student and teacher share the same graph layout."""
     subject = payload.get("subject")
@@ -2289,6 +2301,7 @@ def save_graph_chapter_layout(
     chapters = payload.get("chapters")
     if not subject or not grade:
         raise HTTPException(status_code=400, detail="subject and grade required")
+    _require_teacher_subject_access(session=session, admin=admin, subject=subject, grade=grade)
     if not isinstance(chapters, dict):
         raise HTTPException(status_code=400, detail="chapters must be an object")
     normalized: dict[str, dict[str, float]] = {}
@@ -2327,11 +2340,10 @@ def update_kp_practice_total(
     kp_id: int,
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp = session.get(KnowledgePoint, kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
     raw = payload.get("practice_total", None)
     if raw is None:
         kp.practice_total = None
@@ -2356,8 +2368,7 @@ def delete_kp(
     admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp = session.get(KnowledgePoint, kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
     # 级联清理所有可能引用此知识点的数据，避免“表面无引用但仍删除失败”的情况。
     question_ids = [
         int(qid)
@@ -2606,14 +2617,22 @@ def list_edges_admin(
     page: int = 1,
     page_size: int = 15,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     page = max(1, page)
     # 教师图谱工作台一次拉取较多边（前端 page_size=500），上限过低会导致画布与保存结果不一致
     page_size = max(1, min(500, page_size))
     q = select(KnowledgeEdge).order_by(KnowledgeEdge.id.desc())
     q_total = select(func.count()).select_from(KnowledgeEdge)
+    allowed_subjects = _teacher_accessible_subjects(session, admin)
+    if allowed_subjects is not None:
+        if not allowed_subjects:
+            return {"items": [], "total": 0, "page": page, "page_size": page_size}
+        allowed_subject_list = sorted(allowed_subjects)
+        q = q.where(KnowledgeEdge.subject.in_(allowed_subject_list))
+        q_total = q_total.where(KnowledgeEdge.subject.in_(allowed_subject_list))
     if subject:
+        _require_teacher_subject_access(session=session, admin=admin, subject=subject, grade=grade)
         q = q.where(KnowledgeEdge.subject == subject)
         q_total = q_total.where(KnowledgeEdge.subject == subject)
     if grade:
@@ -2637,8 +2656,13 @@ def list_edges_admin(
 def create_edge(
     payload: KnowledgeEdgeIn,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_subject_access(session=session, admin=admin, subject=payload.subject, grade=payload.grade)
+    prereq = _require_teacher_kp_id_access(session=session, admin=admin, kp_id=payload.prereq_id)
+    next_kp = _require_teacher_kp_id_access(session=session, admin=admin, kp_id=payload.next_id)
+    if prereq.subject != payload.subject or next_kp.subject != payload.subject:
+        raise HTTPException(status_code=400, detail="Edge knowledge points must belong to the same subject")
     if payload.prereq_id == payload.next_id:
         raise HTTPException(status_code=400, detail="Invalid edge")
     try:
@@ -2684,11 +2708,12 @@ def create_edge(
 def delete_edge(
     edge_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     edge = session.get(KnowledgeEdge, edge_id)
     if edge is None:
         raise HTTPException(status_code=404, detail="Edge not found")
+    _require_teacher_subject_access(session=session, admin=admin, subject=edge.subject, grade=edge.grade)
     session.delete(edge)
     session.commit()
     return {"ok": True}
@@ -2699,8 +2724,9 @@ def list_chapter_edges(
     subject: str,
     grade: str,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_subject_access(session=session, admin=admin, subject=subject, grade=grade)
     rows = session.exec(
         select(ChapterEdge)
         .where(ChapterEdge.subject == subject, ChapterEdge.grade == grade)
@@ -2722,7 +2748,7 @@ def list_chapter_edges(
 def create_chapter_edge(
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     subject = str(payload.get("subject", "")).strip()
     grade = str(payload.get("grade", "")).strip()
@@ -2731,6 +2757,7 @@ def create_chapter_edge(
     relation_type_raw = str(payload.get("relation_type", RelationType.related.value)).strip() or RelationType.related.value
     if not subject or not grade or not source_chapter or not target_chapter:
         raise HTTPException(status_code=400, detail="subject/grade/source_chapter/target_chapter required")
+    _require_teacher_subject_access(session=session, admin=admin, subject=subject, grade=grade)
     if source_chapter == target_chapter:
         raise HTTPException(status_code=400, detail="source_chapter and target_chapter cannot be same")
     try:
@@ -2774,11 +2801,12 @@ def create_chapter_edge(
 def delete_chapter_edge(
     edge_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     row = session.get(ChapterEdge, edge_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Chapter edge not found")
+    _require_teacher_subject_access(session=session, admin=admin, subject=row.subject, grade=row.grade)
     session.delete(row)
     session.commit()
     return {"ok": True}
@@ -2794,13 +2822,21 @@ def list_questions(
     page: int = 1,
     page_size: int = 15,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     page = max(1, page)
     page_size = max(1, min(100, page_size))
     q = select(Question).order_by(Question.id.desc())
     q_total = select(func.count()).select_from(Question)
+    allowed_subjects = _teacher_accessible_subjects(session, admin)
+    if allowed_subjects is not None:
+        if not allowed_subjects:
+            return {"items": [], "total": 0, "page": page, "page_size": page_size}
+        allowed_subject_list = sorted(allowed_subjects)
+        q = q.where(Question.subject.in_(allowed_subject_list))
+        q_total = q_total.where(Question.subject.in_(allowed_subject_list))
     if kp_id is not None:
+        _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
         q = q.where(Question.kp_id == kp_id)
         q_total = q_total.where(Question.kp_id == kp_id)
     if keyword:
@@ -2869,10 +2905,16 @@ def export_questions(
     min_difficulty: float | None = None,
     max_difficulty: float | None = None,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     q = select(Question).order_by(Question.id.desc())
+    allowed_subjects = _teacher_accessible_subjects(session, admin)
+    if allowed_subjects is not None:
+        if not allowed_subjects:
+            return Response(content="id,kp_id,type,prompt,options,answer,explanation,difficulty,source,tags,version,cognitive_level,ability_subtags", media_type="text/csv")
+        q = q.where(Question.subject.in_(sorted(allowed_subjects)))
     if kp_id is not None:
+        _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
         q = q.where(Question.kp_id == kp_id)
     if keyword:
         kw = keyword.strip()
@@ -2910,7 +2952,7 @@ def export_questions(
 def recalibrate_question_difficulty(
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp_id = payload.get("kp_id")
     kp_id = int(kp_id) if kp_id is not None else None
@@ -2922,7 +2964,13 @@ def recalibrate_question_difficulty(
     step = max(0.01, min(0.5, step))
 
     q = select(Question)
+    allowed_subjects = _teacher_accessible_subjects(session, admin)
+    if allowed_subjects is not None:
+        if not allowed_subjects:
+            return {"ok": True, "updated": 0}
+        q = q.where(Question.subject.in_(sorted(allowed_subjects)))
     if kp_id is not None:
+        _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
         q = q.where(Question.kp_id == kp_id)
     questions = session.exec(q).all()
     if not questions:
@@ -2966,8 +3014,9 @@ def recalibrate_question_difficulty(
 def list_assigned_questions(
     kp_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     assigns = session.exec(
         select(KpQuestionAssignment).where(KpQuestionAssignment.kp_id == kp_id).order_by(KpQuestionAssignment.order)
     ).all()
@@ -2994,21 +3043,23 @@ def list_assigned_questions(
 def assign_questions(
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp_id = int(payload.get("kp_id"))
     question_ids = payload.get("question_ids") or []
     if not isinstance(question_ids, list) or not question_ids:
         raise HTTPException(status_code=400, detail="question_ids required")
     kp = session.get(KnowledgePoint, kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
     existing = session.exec(select(KpQuestionAssignment).where(KpQuestionAssignment.kp_id == kp_id)).all()
     existing_ids = {e.question_id for e in existing}
     max_order = max([e.order for e in existing], default=0)
     created = 0
     for qid in question_ids:
         qid_i = int(qid)
+        q = _require_teacher_question_access(session=session, admin=admin, question=session.get(Question, qid_i))
+        if q.kp_id != kp_id:
+            raise HTTPException(status_code=400, detail="Question not found for this knowledge point")
         if qid_i in existing_ids:
             continue
         max_order += 1
@@ -3022,9 +3073,10 @@ def assign_questions(
 def reorder_questions(
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp_id = int(payload.get("kp_id"))
+    _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     ordered_ids = payload.get("ordered_question_ids") or []
     if not isinstance(ordered_ids, list) or not ordered_ids:
         raise HTTPException(status_code=400, detail="ordered_question_ids required")
@@ -3047,11 +3099,12 @@ def reorder_questions(
 def remove_assignment(
     assignment_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     a = session.get(KpQuestionAssignment, assignment_id)
     if a is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
+    _require_teacher_kp_id_access(session=session, admin=admin, kp_id=int(a.kp_id))
     session.delete(a)
     session.commit()
     return {"ok": True}
@@ -3061,11 +3114,10 @@ def remove_assignment(
 def create_question(
     payload: QuestionIn,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp = session.get(KnowledgePoint, payload.kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
     qtype = payload.type.strip()
     if qtype not in {"mcq", "blank"}:
         raise HTTPException(status_code=400, detail="Invalid question type")
@@ -3115,7 +3167,7 @@ def create_question(
 def import_questions_docx(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     try:
         from docx import Document
@@ -3253,6 +3305,11 @@ def import_questions_docx(
         if kp is None:
             errors.append(f"第{idx}题知识点编码不存在: {kp_code}")
             continue
+        try:
+            _require_teacher_kp_access(session=session, admin=admin, kp=kp)
+        except HTTPException:
+            errors.append(f"第{idx}题无权导入到知识点: {kp_code}")
+            continue
 
         if qtype == "mcq":
             if len(options) < 2:
@@ -3316,7 +3373,7 @@ def import_questions_docx(
         created += 1
 
     session.commit()
-    _log_action(session, _admin, "questions_import_docx", f"created={created} skipped={skipped} errors={len(errors)}")
+    _log_action(session, admin, "questions_import_docx", f"created={created} skipped={skipped} errors={len(errors)}")
     return {"ok": True, "created": created, "skipped": skipped, "errors": errors[:50]}
 
 
@@ -3325,11 +3382,10 @@ def update_question(
     question_id: int,
     payload: QuestionIn,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     q = session.get(Question, question_id)
-    if q is None:
-        raise HTTPException(status_code=404, detail="Question not found")
+    _require_teacher_question_access(session=session, admin=admin, question=q)
     qtype = payload.type.strip()
     if qtype not in {"mcq", "blank"}:
         raise HTTPException(status_code=400, detail="Invalid question type")
@@ -3340,8 +3396,7 @@ def update_question(
     ability_subtags = canonical_ability_subtags_str(payload.ability_subtags)
     q.kp_id = payload.kp_id
     kp = session.get(KnowledgePoint, payload.kp_id)
-    if kp is None:
-        raise HTTPException(status_code=404, detail="Knowledge point not found")
+    _require_teacher_kp_access(session=session, admin=admin, kp=kp)
     q.subject = kp.subject
     q.grade = kp.grade
     q.type = qtype
@@ -3380,11 +3435,10 @@ def update_question(
 def delete_question(
     question_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     q = session.get(Question, question_id)
-    if q is None:
-        raise HTTPException(status_code=404, detail="Question not found")
+    _require_teacher_question_access(session=session, admin=admin, question=q)
     session.delete(q)
     session.commit()
     return {"ok": True}
@@ -3394,8 +3448,9 @@ def delete_question(
 def get_quiz_admin(
     kp_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     quiz = session.exec(select(Quiz).where(Quiz.kp_id == kp_id)).first()
     if quiz is None:
         return {"quiz_id": None, "pass_accuracy": 0.8, "items": []}
@@ -3423,13 +3478,11 @@ def update_quiz_pass_accuracy(
     kp_id: int,
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    kp = _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     quiz = session.exec(select(Quiz).where(Quiz.kp_id == kp_id)).first()
     if quiz is None:
-        kp = session.get(KnowledgePoint, kp_id)
-        if kp is None:
-            raise HTTPException(status_code=404, detail="Knowledge point not found")
         quiz = Quiz(subject=kp.subject, grade=kp.grade, kp_id=kp_id, pass_accuracy=0.8)
     pass_accuracy = float(payload.get("pass_accuracy", quiz.pass_accuracy))
     quiz.pass_accuracy = max(0.0, min(1.0, pass_accuracy))
@@ -3442,9 +3495,10 @@ def update_quiz_pass_accuracy(
 def create_quiz_item(
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp_id = int(payload.get("kp_id"))
+    kp = _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     qtype = str(payload.get("type", "")).strip()
     prompt = str(payload.get("prompt", "")).strip()
     answer = str(payload.get("answer", "")).strip()
@@ -3460,9 +3514,6 @@ def create_quiz_item(
 
     quiz = session.exec(select(Quiz).where(Quiz.kp_id == kp_id)).first()
     if quiz is None:
-        kp = session.get(KnowledgePoint, kp_id)
-        if kp is None:
-            raise HTTPException(status_code=404, detail="Knowledge point not found")
         quiz = Quiz(subject=kp.subject, grade=kp.grade, kp_id=kp_id, pass_accuracy=0.8)
         session.add(quiz)
         session.commit()
@@ -3487,19 +3538,18 @@ def create_quiz_item(
 def create_quiz_item_from_question(
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     kp_id = int(payload.get("kp_id"))
+    kp = _require_teacher_kp_id_access(session=session, admin=admin, kp_id=kp_id)
     question_id = int(payload.get("question_id"))
     q = session.get(Question, question_id)
     if q is None or q.kp_id != kp_id:
         raise HTTPException(status_code=400, detail="Question not found for this knowledge point")
+    _require_teacher_question_access(session=session, admin=admin, question=q)
 
     quiz = session.exec(select(Quiz).where(Quiz.kp_id == kp_id)).first()
     if quiz is None:
-        kp = session.get(KnowledgePoint, kp_id)
-        if kp is None:
-            raise HTTPException(status_code=404, detail="Knowledge point not found")
         quiz = Quiz(subject=kp.subject, grade=kp.grade, kp_id=kp_id, pass_accuracy=0.8)
         session.add(quiz)
         session.commit()
@@ -3531,11 +3581,15 @@ def update_quiz_item(
     item_id: int,
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     item = session.get(QuizItem, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Quiz item not found")
+    quiz = session.get(Quiz, int(item.quiz_id))
+    if quiz is None:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    _require_teacher_kp_id_access(session=session, admin=admin, kp_id=int(quiz.kp_id))
     qtype = str(payload.get("type", item.type)).strip()
     prompt = str(payload.get("prompt", item.prompt)).strip()
     answer = str(payload.get("answer", item.answer)).strip()
@@ -3564,11 +3618,15 @@ def update_quiz_item(
 def delete_quiz_item(
     item_id: int,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
     item = session.get(QuizItem, item_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Quiz item not found")
+    quiz = session.get(Quiz, int(item.quiz_id))
+    if quiz is None:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    _require_teacher_kp_id_access(session=session, admin=admin, kp_id=int(quiz.kp_id))
     session.delete(item)
     session.commit()
     return {"ok": True}
@@ -3577,7 +3635,7 @@ def delete_quiz_item(
 @router.post("/seed")
 def seed_derivative_demo(
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    _admin=Depends(require_role(UserRole.admin)),
 ):
     subject = "\u6570\u636e\u7ed3\u6784"
     grade = "\u901a\u7528"
@@ -3664,7 +3722,7 @@ def seed_derivative_demo(
 @router.post("/seed/full")
 def seed_full_system(
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    _admin=Depends(require_role(UserRole.admin)),
 ):
     """
     Seed a CS-only dataset (4 subjects, no grade) with full question banks.
@@ -4093,8 +4151,9 @@ def get_config(
     subject: str,
     grade: str,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_subject_access(session=session, admin=admin, subject=subject, grade=grade)
     cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == subject, EvalConfig.grade == grade)).first()
     if cfg is None:
         cfg = EvalConfig(subject=subject, grade=grade)
@@ -4120,8 +4179,9 @@ def update_config(
     grade: str,
     payload: dict,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_subject_access(session=session, admin=admin, subject=subject, grade=grade)
     cfg = session.exec(select(EvalConfig).where(EvalConfig.subject == subject, EvalConfig.grade == grade)).first()
     if cfg is None:
         cfg = EvalConfig(subject=subject, grade=grade)
@@ -4148,8 +4208,9 @@ def get_persona_rules(
     subject: str,
     grade: str,
     session: Session = Depends(get_session),
-    _admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
+    admin=Depends(require_role(UserRole.admin, UserRole.teacher)),
 ):
+    _require_teacher_subject_access(session=session, admin=admin, subject=subject, grade=grade)
     rule = get_or_create_persona_rule(session, subject=subject, grade=grade)
     return PersonaRuleOut(
         subject=subject,

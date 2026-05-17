@@ -191,7 +191,9 @@ function toggleDimension(key: DimensionKey, enabled: boolean) {
 function fillState<T extends Record<string, any>>(target: T, source?: Record<string, any>) {
   if (!source) return;
   Object.keys(target).forEach((key) => {
-    if (source[key] !== undefined) target[key] = source[key];
+    if (source[key] !== undefined) {
+      (target as Record<string, any>)[key] = source[key];
+    }
   });
 }
 
