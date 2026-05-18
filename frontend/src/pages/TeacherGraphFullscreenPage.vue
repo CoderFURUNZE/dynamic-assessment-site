@@ -28,8 +28,11 @@ const courses = ref<Course[]>([]);
 const subject = ref("");
 const grade = ref("通用");
 const workbenchRef = ref<TeacherGraphWorkbenchExpose | null>(null);
+const authChecked = ref(false);
+const serverRole = ref("");
 
 const currentCourse = computed(() => courses.value.find((item) => item.title === subject.value) ?? null);
+const canUseTeacherGraph = computed(() => ["teacher", "admin"].includes(serverRole.value));
 const isReadonlyCourse = computed(() => {
   const course = currentCourse.value;
   if (!course) return false;
@@ -64,6 +67,25 @@ async function refreshWorkspace() {
   }
 }
 
+async function verifyTeacherAccess() {
+  try {
+    const res = await api.get("/auth/me");
+    serverRole.value = String(res.data?.role || "");
+    if (!canUseTeacherGraph.value) {
+      ElMessage.warning("请使用教师或管理员账号进入全屏图谱");
+      router.push("/login/staff");
+      return false;
+    }
+    return true;
+  } catch {
+    ElMessage.warning("登录状态已失效，请重新登录");
+    router.push("/login/staff");
+    return false;
+  } finally {
+    authChecked.value = true;
+  }
+}
+
 function backToWorkspace() {
   router.push({ path: "/teacher/workspace", query: buildTeacherSubjectQuery(subject.value) });
 }
@@ -86,12 +108,13 @@ onMounted(async () => {
     router.push("/login/staff");
     return;
   }
+  if (!(await verifyTeacherAccess())) return;
   await refreshWorkspace();
 });
 </script>
 
 <template>
-  <main v-if="canOpenTeacherGraph" class="teacher-graph-fullscreen">
+  <main v-if="authChecked && canUseTeacherGraph" class="teacher-graph-fullscreen">
     <header class="teacher-graph-fullscreen__bar">
       <button type="button" class="teacher-graph-fullscreen__back" @click="backToWorkspace">返回主工作台</button>
       <div class="teacher-graph-fullscreen__title">

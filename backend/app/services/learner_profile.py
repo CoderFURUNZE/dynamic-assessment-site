@@ -909,25 +909,7 @@ def get_profile_trend(
     subject_text = str(subject or "").strip()
     grade_text = str(grade or "").strip()
     filtered = [row for row in rows if str(row.subject or "").strip() == subject_text and str(row.grade or "").strip() == grade_text]
-    latest_by_stage: list[StageEvaluationSnapshot] = []
-    seen_stage_ids: set[int] = set()
-    seen_stage_orders: set[int] = set()
-    for row in filtered:
-        stage_id = int(row.stage_id or 0)
-        stage_order = int(row.stage_order or 0)
-        if stage_id > 0:
-            if stage_id in seen_stage_ids:
-                continue
-            seen_stage_ids.add(stage_id)
-        elif stage_order > 0:
-            if stage_order in seen_stage_orders:
-                continue
-        if stage_order > 0:
-            seen_stage_orders.add(stage_order)
-        latest_by_stage.append(row)
-        if len(latest_by_stage) >= max(1, limit):
-            break
-    return latest_by_stage
+    return list(filtered[: max(1, limit)])
 
 
 def get_stage_snapshot_trend(

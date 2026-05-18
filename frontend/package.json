@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "predev": "node ./scripts/ensure-backend.mjs",
     "dev": "vite",
+    "dev:with-backend": "node ./scripts/ensure-backend.mjs && vite",
     "build": "vite build",
     "preview": "vite preview",
     "e2e": "playwright test",

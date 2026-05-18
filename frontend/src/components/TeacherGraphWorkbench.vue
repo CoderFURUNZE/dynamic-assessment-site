@@ -1468,8 +1468,12 @@ async function stopDragging() {
       try {
         await api.put(`/admin/kps/${kpId}/position`, { x: point.x, y: point.y });
         saveManualKpPositionIds();
-      } catch {
-        ElMessage.warning("节点位置保存失败，请重试");
+      } catch (error: any) {
+        if (error?.response?.status === 403) {
+          ElMessage.warning("当前账号没有保存图谱位置的权限，请使用本课程教师或管理员账号");
+        } else {
+          ElMessage.warning("节点位置保存失败，请重试");
+        }
       }
     }
   }
