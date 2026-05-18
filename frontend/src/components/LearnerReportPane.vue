@@ -720,7 +720,7 @@ watch(
           accent="#2f8cff"
           empty-text="这门课当前还没有足够数据生成雷达图"
         />
-        <div v-if="stageResultRows.length" class="dimension-list">
+        <div v-if="false && stageResultRows.length" class="dimension-list">
           <div v-for="item in stageResultRows" :key="item.dimension_title" class="dimension-item">
             <div class="dimension-top">
               <span>{{ item.dimension_title }}</span>
@@ -735,7 +735,7 @@ watch(
             </div>
           </div>
         </div>
-        <div v-else class="empty-help">
+        <div v-else-if="false" class="empty-help">
           <el-empty description="这门课还没有生成阶段结果" />
           <div class="empty-help__text">一般是因为老师还没导入阶段数据，或者这门课还没配置完成。</div>
         </div>
@@ -750,7 +750,7 @@ watch(
           accent="#2cb67d"
           empty-text="当前还没有可展示的学期结果图"
         />
-        <div class="dimension-list">
+        <div v-if="false" class="dimension-list">
           <div v-for="item in finalPortraitDimensions" :key="item.dimension_title" class="dimension-item">
             <div class="dimension-top">
               <span>{{ item.dimension_title }}</span>
@@ -818,7 +818,7 @@ watch(
             </div>
           </el-tab-pane>
 
-          <el-tab-pane label="详细结果" name="indicators">
+          <el-tab-pane v-if="false" label="详细结果" name="indicators">
             <div class="detail-grid">
               <section class="config-board">
                 <div class="board-title">老师当前参考的内容</div>
@@ -860,7 +860,7 @@ watch(
             </div>
           </el-tab-pane>
 
-          <el-tab-pane label="我来补充" name="questionnaire">
+          <el-tab-pane v-if="false" label="我来补充" name="questionnaire">
             <section class="config-board" v-loading="questionnaireLoading">
               <div class="board-title">补充学习情况</div>
               <div v-if="hasQuestionnaireItems" class="config-list">
@@ -898,7 +898,7 @@ watch(
             </section>
           </el-tab-pane>
 
-          <el-tab-pane label="分类查看" name="mi-map">
+          <el-tab-pane v-if="false" label="分类查看" name="mi-map">
             <section class="config-board">
               <div class="board-title">按类别查看结果</div>
               <div class="mi-intro">
@@ -940,7 +940,7 @@ watch(
             </section>
           </el-tab-pane>
 
-          <el-tab-pane label="学习行为记录" name="behavior">
+          <el-tab-pane v-if="false" label="学习行为记录" name="behavior">
             <section class="config-board">
               <div class="board-title">学习行为记录（多视图）</div>
               <div class="mi-intro">先看总览，再按“登录/时长/视频/答题/时间线”逐步查看，操作更清晰。</div>
@@ -1253,19 +1253,12 @@ watch(
   grid-column: 1 / -1;
 }
 
-.detail-tabs :deep(.el-tabs__nav-scroll) {
-  padding: 2px 6px;
+.detail-tabs :deep(.el-tabs__header) {
+  display: none;
 }
 
-.detail-tabs :deep(.el-tabs__item) {
-  min-height: 38px;
-  font-weight: 700;
-  border-radius: 10px;
-  border: 1px solid #dbe7f3;
-  background: #f8fafc;
-  color: #52647a;
-  padding: 6px 14px;
-  transition: all 0.2s ease;
+.detail-tabs :deep(.el-tabs) {
+  --el-tabs-header-height: 40px;
 }
 
 .detail-tabs :deep(.el-tabs__header) {
@@ -1273,19 +1266,57 @@ watch(
   border-bottom: none;
 }
 
-.detail-tabs :deep(.el-tabs__active-bar) {
-  display: none;
+.detail-tabs :deep(.el-tabs__nav-wrap) {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 4px;
+  border: 1px solid rgba(203, 213, 225, 0.76);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.84);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .detail-tabs :deep(.el-tabs__nav-wrap)::after {
   display: none;
 }
 
+.detail-tabs :deep(.el-tabs__nav-scroll) {
+  padding: 0;
+}
+
+.detail-tabs :deep(.el-tabs__nav) {
+  display: inline-flex;
+  gap: 2px;
+  border: 0;
+}
+
+.detail-tabs :deep(.el-tabs__item) {
+  height: 32px;
+  line-height: 32px;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #52647a;
+  font-size: 14px;
+  font-weight: 800;
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+.detail-tabs :deep(.el-tabs__active-bar) {
+  display: none;
+}
+
+.detail-tabs :deep(.el-tabs__item:hover) {
+  background: rgba(219, 234, 254, 0.72);
+  color: #1d4ed8;
+}
+
 .detail-tabs :deep(.el-tabs__item.is-active) {
-  background: #ecfdf5;
-  border-color: rgba(34, 197, 94, 0.32);
-  color: #166534;
-  box-shadow: 0 8px 16px rgba(34, 197, 94, 0.1);
+  background: #ffffff;
+  color: #0f766e;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
 }
 
 .detail-grid {

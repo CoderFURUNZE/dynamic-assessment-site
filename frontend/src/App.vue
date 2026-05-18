@@ -245,7 +245,7 @@ function goBackToMain() {
           >
             <div class="student-shell__logo">学</div>
             <div class="student-shell__brand-copy">
-              <strong>动态评价系统</strong>
+              <strong>知行达成评价系统</strong>
               <span>{{ routeGroup === "student" ? "学生学习空间" : routeGroup === "teacher" ? "教师教学工作台" : "管理控制中心" }}</span>
             </div>
           </button>

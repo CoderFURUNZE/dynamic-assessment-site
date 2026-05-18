@@ -109,7 +109,7 @@ def _write_report(results: list[CheckResult], output: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="动态评价系统三端主链路冒烟验收脚本")
+    parser = argparse.ArgumentParser(description="知行达成评价系统三端主链路冒烟验收脚本")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="后端地址")
     parser.add_argument("--admin-user", default="admin", help="管理员账号")
     parser.add_argument("--admin-pass", default="admin123", help="管理员密码")

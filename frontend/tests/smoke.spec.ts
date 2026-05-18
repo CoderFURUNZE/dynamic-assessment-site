@@ -26,7 +26,7 @@ test.describe("public shell", () => {
     await page.goto("/start");
     await expect(page).toHaveURL(/\/start$/);
     await expect(page.locator("button.start-brand")).toBeVisible();
-    await expect(page.getByRole("heading", { name: /动态评价模型研究及应用|让学习过程/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /知行达成评价系统|让学习过程/ })).toBeVisible();
     await page.getByRole("button", { name: /学生登录|进入学生端/ }).click();
 
     await expect(page).toHaveURL(/\/login\/student$/);

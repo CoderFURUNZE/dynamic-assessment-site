@@ -69,6 +69,18 @@ function normalizeStatus(status?: string | null) {
   return String(status || "").trim().toLowerCase();
 }
 
+function isJoinedCourse(course: EnrollableCourse) {
+  const status = normalizeStatus(course.application_status);
+  return status === "linked" || status === "approved";
+}
+
+function canApplyCourse(course: EnrollableCourse) {
+  return !isPreviewMode.value
+    && !course.application_status
+    && normalizeStatus(course.enroll_status) === "open"
+    && normalizeStatus(course.enrollment_mode) !== "class_auto";
+}
+
 function statusLabel(status: string) {
   const value = normalizeStatus(status);
   if (value === "open") return "可报名";
@@ -76,6 +88,12 @@ function statusLabel(status: string) {
   if (value === "closed") return "已关闭";
   if (value === "expired") return "已过期";
   return status;
+}
+
+function courseStatusLabel(course: EnrollableCourse) {
+  if (isJoinedCourse(course)) return "已报名";
+  if (normalizeStatus(course.application_status) === "pending") return "审核中";
+  return statusLabel(course.enroll_status);
 }
 
 function appStatusLabel(status?: string | null) {
@@ -106,7 +124,7 @@ const filteredCourses = computed(() => {
 });
 
 const stats = computed(() => ({
-  available: courses.value.filter((course) => normalizeStatus(course.enroll_status) === "open").length,
+  available: courses.value.filter((course) => !course.application_status && normalizeStatus(course.enroll_status) === "open").length,
   pending: applications.value.filter((item) => normalizeStatus(item.status) === "pending").length,
   unread: notices.value.filter((item) => normalizeStatus(item.status) !== "read").length,
 }));
@@ -285,7 +303,7 @@ onMounted(loadAll);
           </div>
 
           <div class="enroll-course-card__chips">
-            <span>{{ statusLabel(course.enroll_status) }}</span>
+            <span>{{ courseStatusLabel(course) }}</span>
             <span>名额 {{ course.enrolled_count }}/{{ course.max_students }}</span>
             <span v-if="course.target_class">班级 {{ course.target_class }}</span>
           </div>
@@ -302,16 +320,16 @@ onMounted(loadAll);
               <el-input
                 v-model="applyReasonMap[course.id]"
                 placeholder="可填写申请原因，例如补修、跟班学习或课程需要"
-                :disabled="isPreviewMode || !!course.application_status || normalizeStatus(course.enrollment_mode) === 'class_auto'"
+                :disabled="!canApplyCourse(course)"
               />
               <el-button
                 type="primary"
                 plain
                 :loading="applying === course.id"
-                :disabled="isPreviewMode || !!course.application_status || normalizeStatus(course.enroll_status) !== 'open' || normalizeStatus(course.enrollment_mode) === 'class_auto'"
+                :disabled="!canApplyCourse(course)"
                 @click="applyCourse(course)"
               >
-                {{ normalizeStatus(course.enrollment_mode) === "class_auto" ? "自动关联课程" : "申请加入" }}
+                {{ isJoinedCourse(course) ? "已报名" : normalizeStatus(course.enrollment_mode) === "class_auto" ? "自动关联课程" : "申请加入" }}
               </el-button>
             </div>
           </div>

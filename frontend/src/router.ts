@@ -353,7 +353,7 @@ router.beforeEach((to) => {
 router.afterEach((to) => {
   if (typeof document === "undefined") return;
   const pageTitle = String(to.meta?.title || "").trim();
-  document.title = pageTitle ? `${pageTitle} | 动态评价系统` : "动态评价系统";
+  document.title = pageTitle ? `${pageTitle} | 知行达成评价系统` : "知行达成评价系统";
 });
 
 

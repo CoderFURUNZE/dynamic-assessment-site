@@ -856,6 +856,7 @@ def graph_map(
     full_kp_title_map = {int(kp.id): kp.title for kp in kps if kp.id is not None}
 
     kp_ids = [int(kp.id) for kp in kps if kp.id is not None]
+    terminal_kp_ids = {int(kp.id) for kp in kps if kp.id is not None and bool(kp.is_terminal)}
     mastery_map: dict[int, Mastery] = {}
     selected_path_ids: set[int] = set()
     if user.role == UserRole.student:
@@ -1095,6 +1096,24 @@ def graph_map(
             )
         )
 
+    completed_node_count = len(
+        [
+            kp_id
+            for kp_id in kp_ids
+            if kp_id in mastery_map and float(mastery_map[kp_id].value) >= 0.7
+        ]
+    )
+    terminal_mastered = any(
+        terminal_id in mastery_map
+        and (
+            float(mastery_map[terminal_id].value) >= 0.7
+            or str(mastery_map[terminal_id].status or "").strip().lower() == "mastered"
+        )
+        for terminal_id in terminal_kp_ids
+    )
+    if terminal_mastered:
+        completed_node_count = len(kp_ids)
+
     return GraphMapOut(
         base=GraphBaseOut(
             course=course.model_dump() if course is not None else None,
@@ -1112,13 +1131,7 @@ def graph_map(
         overlay=overlay,
         progress=GraphProgressOut(
             total_nodes=len(kp_ids),
-            completed_nodes=len(
-                [
-                    kp_id
-                    for kp_id in kp_ids
-                    if kp_id in mastery_map and float(mastery_map[kp_id].value) >= 0.7
-                ]
-            ),
+            completed_nodes=completed_node_count,
             visible_nodes=len(kps),
         ),
     )

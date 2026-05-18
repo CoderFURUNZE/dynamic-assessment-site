@@ -336,6 +336,35 @@ def my_applications(
                 "reviewed_at": row.reviewed_at.isoformat() if row.reviewed_at else None,
             }
         )
+    if status is None:
+        linked_enrollments = session.exec(
+            select(Enrollment).where(
+                Enrollment.student_id == user.id,
+                Enrollment.status == EnrollmentStatus.active,
+                Enrollment.application_id == None,  # noqa: E711
+            )
+        ).all()
+        linked_course_ids = [int(item.course_id) for item in linked_enrollments if item.course_id is not None]
+        linked_course_map = {}
+        if linked_course_ids:
+            linked_courses = session.exec(select(Course).where(Course.id.in_(linked_course_ids))).all()
+            linked_course_map = {int(item.id): item for item in linked_courses if item.id is not None}
+        for enrollment in linked_enrollments:
+            course = linked_course_map.get(int(enrollment.course_id))
+            items.append(
+                {
+                    "id": -int(enrollment.id or 0),
+                    "course_id": int(enrollment.course_id),
+                    "course_title": course.title if course else "",
+                    "status": "linked",
+                    "apply_reason": "班级自动关联或课程直接加入",
+                    "review_remark": "已生成有效选课记录，可直接进入学习。",
+                    "reject_reason": "",
+                    "created_at": enrollment.enrolled_at.isoformat(),
+                    "reviewed_at": enrollment.enrolled_at.isoformat(),
+                }
+            )
+        items.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
     return {"items": items, "page": page, "page_size": page_size}
 
 

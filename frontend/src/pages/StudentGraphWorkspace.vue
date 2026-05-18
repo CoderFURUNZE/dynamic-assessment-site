@@ -133,9 +133,17 @@ const currentKp = computed(() => {
 
 const availableCount = computed(() => routeKps.value.filter((item) => !item.previewLocked).length);
 const completedCount = computed(() => routeKps.value.filter((item) => !item.previewLocked && isCompleted(item)).length);
+const terminalCompleted = computed(() =>
+  Boolean(reco.value?.course_completion?.completed)
+  || routeKps.value.some((item) => Boolean(item.is_terminal) && isCompleted(item)),
+);
 const courseProgressTotal = computed(() => Number(graphProgress.value?.total_nodes || routeKps.value.length || 0));
-const courseProgressCompleted = computed(() => Number(graphProgress.value?.completed_nodes || completedCount.value || 0));
+const courseProgressCompleted = computed(() => {
+  if (terminalCompleted.value && courseProgressTotal.value > 0) return courseProgressTotal.value;
+  return Number(graphProgress.value?.completed_nodes || completedCount.value || 0);
+});
 const progressPercent = computed(() => {
+  if (terminalCompleted.value) return 100;
   if (!courseProgressTotal.value) return 0;
   return Math.round((courseProgressCompleted.value / courseProgressTotal.value) * 100);
 });

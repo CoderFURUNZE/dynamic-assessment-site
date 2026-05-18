@@ -184,6 +184,8 @@ const filteredRiskStudents = computed(() => {
   return list.filter((row) => normalizeRisk(row.risk_level) === target);
 });
 
+const hasRiskStudents = computed(() => (data.value.risk_students ?? []).length > 0);
+
 const pagedRiskStudents = computed(() => {
   const start = (currentRiskPage.value - 1) * riskPageSize;
   return filteredRiskStudents.value.slice(start, start + riskPageSize);
@@ -395,7 +397,7 @@ watch(
             background
           />
         </div>
-        <div v-else class="empty-panel empty-panel--compact">
+        <div v-else-if="!hasRiskStudents" class="empty-panel empty-panel--compact">
           <strong>暂无符合条件的学生</strong>
           <p>请切换筛选条件后查看</p>
         </div>
